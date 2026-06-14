@@ -1,4 +1,6 @@
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase'; // Nhớ check đúng đường dẫn file supabase của ông nhé
 import { 
   TrendingUp, 
   Printer, 
@@ -10,6 +12,43 @@ import {
 
 export default function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
+  
+  // === STATE LƯU THÔNG TIN USER ===
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    // 1. Lấy thông tin user realtime ngay khi vừa vào trang
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    };
+    fetchUser();
+
+    // 2. Lắng nghe nếu có biến động trạng thái (Đăng xuất/Hết hạn session)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        navigate('/login'); // Nếu mất session thì đá văng về trang đăng nhập
+      } else {
+        setUser(session.user);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  // === HÀM XỬ LÝ ĐĂNG XUẤT ===
+  const handleLogout = async () => {
+    if (confirm("Ông có chắc chắn muốn đăng xuất không?")) {
+      await supabase.auth.signOut();
+      navigate('/login');
+    }
+  };
+
+  // Thuật toán bóc tách tên hiển thị: Ưu tiên full_name ở metadata -> Nếu không có thì cắt lấy chữ trước @ của Email
+  const userEmail = user?.email || '';
+  const displayName = user?.user_metadata?.full_name || userEmail.split('@')[0] || 'Đang tải...';
+  const avatarLetter = displayName.charAt(0).toUpperCase();
 
   const reportMenus = [
     { path: '/', icon: TrendingUp, label: 'Đơn đi hàng ngày' },
@@ -18,7 +57,6 @@ export default function Layout() {
   ];
 
   return (
-    // THAY ĐỔI TẠI ĐÂY: Ép font chữ dày dặn, mịn màng (antialiased) và chuyên nghiệp hơn
     <div className="flex h-screen bg-slate-50 font-sans antialiased text-slate-800 tracking-normal selection:bg-blue-500 selection:text-white">
       
       {/* SIDEBAR - TONE DARK PRO */}
@@ -76,18 +114,25 @@ export default function Layout() {
           </nav>
         </div>
         
-        {/* User Profile Block */}
+        {/* ⚡️ USER PROFILE BLOCK - ĐÃ ĐỔI SANG REALTIME DATA TỪ SUPABASE */}
         <div className="p-4 bg-slate-950/40 border-t border-slate-800/60 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-sm shadow-md ring-2 ring-slate-800">
-              V
+          <div className="flex items-center gap-3 max-w-[80%]">
+            <div className="w-9 h-9 min-w-[36px] rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-sm shadow-md ring-2 ring-slate-800 uppercase">
+              {avatarLetter}
             </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-bold text-white leading-tight">Vinh</span>
-              <span className="text-[11px] text-slate-400 font-semibold mt-0.5">Admin Kho</span>
+            <div className="flex flex-col overflow-hidden">
+              <span className="text-sm font-bold text-white leading-tight truncate capitalize">{displayName}</span>
+              <span className="text-[10px] text-slate-400 font-semibold mt-0.5 truncate" title={userEmail}>
+                {userEmail || 'Admin hệ thống'}
+              </span>
             </div>
           </div>
-          <button className="p-2 text-slate-400 hover:text-red-400 transition-colors rounded-lg hover:bg-slate-800">
+          {/* NÚT ĐĂNG XUẤT HOẠT ĐỘNG THỰC TẾ */}
+          <button 
+            onClick={handleLogout}
+            title="Đăng xuất"
+            className="p-2 text-slate-400 hover:text-red-400 transition-colors rounded-lg hover:bg-slate-800 cursor-pointer"
+          >
             <LogOut size={16} />
           </button>
         </div>
