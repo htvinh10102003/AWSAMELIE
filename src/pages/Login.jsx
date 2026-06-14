@@ -150,6 +150,11 @@ export default function Login() {
                         </form>
                     </>
                 )}
+
+                {/* 🆕 DÙNG PHIÊN BẢN CŨ – ĐẶT Ở CUỐI CARD */}
+                <div className="mt-6 pt-4 border-t border-gray-100/70 text-center">
+                    <a href="https://htvinh10102003.github.io/ameliebaocaokho/" className="text-xs text-gray-400 hover:text-gray-600 font-medium transition-colors">Dùng phiên bản cũ</a>
+                </div>
             </div>
         </div>
     );
