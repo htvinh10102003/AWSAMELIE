@@ -368,8 +368,8 @@ export default function OrderReport() {
                     </div>
                 </div>
 
-                {/* BỘ LỌC VÀ IN ĐƠN HÀNG LOẠT */}
-                <div className="bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] p-6 space-y-5 transition-shadow hover:shadow-[0_8px_40px_rgba(0,0,0,0.08)]">
+                {/* BỘ LỌC VÀ IN ĐƠN HÀNG LOẠT - ĐÃ THÊM relative z-10 */}
+                <div className="relative z-10 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] p-6 space-y-5 transition-shadow hover:shadow-[0_8px_40px_rgba(0,0,0,0.08)]">
                     {/* Hàng 1: filter cơ bản + nút in */}
                     <div className="flex flex-wrap gap-4 items-end justify-between">
                         <div className="flex flex-wrap gap-4 items-end">
