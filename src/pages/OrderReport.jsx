@@ -44,7 +44,6 @@ const STATUS_COLORS = {
     '42': 'bg-green-100 text-green-700',
 };
 
-// Component MultiSelect hỗ trợ chọn nhiều
 const MultiSelect = ({ options, selected, onChange, placeholder }) => {
     const [isOpen, setIsOpen] = useState(false);
     const ref = useRef(null);
@@ -59,6 +58,10 @@ const MultiSelect = ({ options, selected, onChange, placeholder }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // Lấy value và label từ option (có thể là string hoặc object)
+    const getValue = (opt) => typeof opt === 'string' ? opt : opt.value;
+    const getLabel = (opt) => typeof opt === 'string' ? opt : opt.label;
+
     const toggleOption = (value) => {
         if (selected.includes(value)) {
             onChange(selected.filter(v => v !== value));
@@ -67,13 +70,14 @@ const MultiSelect = ({ options, selected, onChange, placeholder }) => {
         }
     };
 
-    const isAllSelected = options.length > 0 && selected.length === options.length;
+    const allValues = options.map(getValue);
+    const isAllSelected = allValues.length > 0 && allValues.every(v => selected.includes(v));
 
     const handleSelectAll = () => {
         if (isAllSelected) {
             onChange([]);
         } else {
-            onChange([...options]);
+            onChange([...allValues]);
         }
     };
 
@@ -100,17 +104,21 @@ const MultiSelect = ({ options, selected, onChange, placeholder }) => {
                         />
                         <span className="text-sm font-medium">Chọn tất cả</span>
                     </label>
-                    {options.map(opt => (
-                        <label key={opt} className="flex items-center gap-2 px-4 py-2 hover:bg-blue-50 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={selected.includes(opt)}
-                                onChange={() => toggleOption(opt)}
-                                className="rounded border-gray-300 text-blue-600"
-                            />
-                            <span className="text-sm">{opt}</span>
-                        </label>
-                    ))}
+                    {options.map(opt => {
+                        const val = getValue(opt);
+                        const label = getLabel(opt);
+                        return (
+                            <label key={val} className="flex items-center gap-2 px-4 py-2 hover:bg-blue-50 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={selected.includes(val)}
+                                    onChange={() => toggleOption(val)}
+                                    className="rounded border-gray-300 text-blue-600"
+                                />
+                                <span className="text-sm">{label}</span>
+                            </label>
+                        );
+                    })}
                 </div>
             )}
         </div>
@@ -145,9 +153,17 @@ export default function OrderReport() {
     const [pageSize, setPageSize] = useState(20);
 
     useEffect(() => {
-        fetchSystemData();
-        fetchAllocation();
-    }, []);
+    const init = async () => {
+        try {
+            const dict = await fetchSystemData();
+            await fetchAllocation(dict);
+        } catch (err) {
+            console.error('Init error:', err);
+            setLoading(false); // nếu lỗi thì cũng phải tắt loading
+        }
+    };
+    init();
+}, []);
 
     // Reset trang và tick chọn khi đổi bất kỳ bộ lọc hoặc Tab
     useEffect(() => {
@@ -157,33 +173,41 @@ export default function OrderReport() {
     }, [activeTab, searchId, selectedStatus, selectedCarrier, searchNote, sortOrder, minAgingDays, maxAgingDays, pageSize]);
 
     const fetchSystemData = async () => {
-        const { data: stData } = await supabase.from('order_statuses').select('*');
-        const dict = {};
-        stData?.forEach(s => dict[s.id] = s.name);
-        setStatusDict(dict);
+    const { data: stData } = await supabase.from('order_statuses').select('*');
+    const dict = {};
+    stData?.forEach(s => dict[s.id] = s.name);
+    setStatusDict(dict);
 
-        const { data: confData } = await supabase.from('system_configs').select('*').eq('key', 'nhanh_business_id').single();
-        if (confData) setBusinessId(confData.value);
-    };
+    const { data: confData } = await supabase.from('system_configs').select('*').eq('key', 'nhanh_business_id').single();
+    if (confData) setBusinessId(confData.value);
+    
+    return dict;
+};
 
-    const fetchAllocation = async () => {
-        setLoading(true);
-        try {
-            const { data, error } = await supabase.functions.invoke('wms-allocation');
-            if (error) throw error;
+    const fetchAllocation = async (statusDict) => {
+    setLoading(true);
+    try {
+        const { data, error } = await supabase.functions.invoke('wms-allocation');
+        if (error) throw error;
 
-            setData(data || { printable: [], holding: [], outOfStock: [], invalidCount: 0 });
+        setData(data || { printable: [], holding: [], outOfStock: [], invalidCount: 0 });
 
-            const allOrders = [...(data.printable || []), ...(data.holding || []), ...(data.outOfStock || [])];
-            setCarrierOptions([...new Set(allOrders.map(o => o.carrier_name).filter(Boolean))]);
-            setStatusOptions([...new Set(allOrders.map(o => o.status).filter(Boolean))]);
-            setSelectedOrders([]);
-        } catch (error) {
-            console.error("Lỗi đồng bộ:", error);
-        } finally {
-            setLoading(false);
-        }
-    };
+        const allOrders = [...(data.printable || []), ...(data.holding || []), ...(data.outOfStock || [])];
+        setCarrierOptions([...new Set(allOrders.map(o => o.carrier_name).filter(Boolean))]);
+
+        const uniqueStatusCodes = [...new Set(allOrders.map(o => o.status).filter(Boolean))];
+        setStatusOptions(uniqueStatusCodes.map(code => ({
+            value: String(code),
+            label: statusDict[code] || `Mã ${code}`
+        })));
+
+        setSelectedOrders([]);
+    } catch (error) {
+        console.error("Lỗi đồng bộ:", error);
+    } finally {
+        setLoading(false);
+    }
+};
 
     // Tích hợp tất cả bộ lọc (bao gồm multi select, ghi chú, ngày tồn) và sắp xếp
     const getFilteredOrders = (orderList) => {
@@ -273,7 +297,10 @@ export default function OrderReport() {
                     <p className="text-blue-100 text-sm mt-1">Danh sách các đơn hàng đủ điều kiện in phiếu xuất kho</p>
                 </div>
                 <button
-                    onClick={fetchAllocation}
+                    onClick={async () => {
+                fetchAllocation(statusDict);
+
+    }}
                     disabled={loading}
                     className="bg-white/20 backdrop-blur-md border border-white/30 text-white px-5 py-2.5 rounded-xl font-medium hover:bg-white/30 shadow-lg transition-all flex items-center gap-2 disabled:opacity-60"
                 >
@@ -329,7 +356,7 @@ export default function OrderReport() {
                     </div>
                     <div>
                         <div className="text-3xl font-extrabold text-gray-800">{data.outOfStock?.length || 0}</div>
-                        <div className="text-sm font-semibold text-gray-500">Hết sạch hàng</div>
+                        <div className="text-sm font-semibold text-gray-500">Hết hàng</div>
                     </div>
                 </div>
             </div>
@@ -356,7 +383,7 @@ export default function OrderReport() {
                                 options={carrierOptions}
                                 selected={selectedCarrier}
                                 onChange={setSelectedCarrier}
-                                placeholder="🚚 Hãng vận chuyển"
+                                placeholder="ĐVVC"
                             />
                         </div>
                         <div className="w-52">
@@ -364,7 +391,7 @@ export default function OrderReport() {
                                 options={statusOptions}
                                 selected={selectedStatus}
                                 onChange={setSelectedStatus}
-                                placeholder="📌 Trạng thái Nhanh.vn"
+                                placeholder="Trạng thái"
                             />
                         </div>
                     </div>
@@ -417,9 +444,9 @@ export default function OrderReport() {
                             onChange={(e) => setSortOrder(e.target.value)}
                             className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl bg-gray-50 hover:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
                         >
-                            <option value="">⏳ Sắp xếp: Mặc định</option>
-                            <option value="asc">📅 Cũ nhất trước</option>
-                            <option value="desc">📅 Mới nhất trước</option>
+                            <option value="">Sắp xếp: Mặc định</option>
+                            <option value="asc">Cũ nhất trước</option>
+                            <option value="desc">Mới nhất trước</option>
                         </select>
                     </div>
                     {/* <div className="flex items-center gap-2">
@@ -466,15 +493,15 @@ export default function OrderReport() {
                                             className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
                                         />
                                     </th>
-                                    <th className="py-4 px-4 whitespace-nowrap">ID Đơn</th>
-                                    <th className="py-4 px-4 whitespace-nowrap">Hãng Vận Chuyển</th>
-                                    <th className="py-4 px-4 w-64">Ghi Chú</th>
-                                    <th className="py-4 px-4">Sản Phẩm</th>
-                                    <th className="py-4 px-4 text-center whitespace-nowrap">Số Lượng</th>
+                                    <th className="py-4 px-4 whitespace-nowrap">ID đơn hàng</th>
+                                    <th className="py-4 px-4 whitespace-nowrap">ĐVVC</th>
+                                    <th className="py-4 px-4 w-64">Ghi chú</th>
+                                    <th className="py-4 px-4">Sản phẩm</th>
+                                    <th className="py-4 px-4 text-center whitespace-nowrap">Số lượng</th>
                                     <th className="py-4 px-4 whitespace-nowrap">
-                                        {activeTab === 'printable' ? 'Ngày Tồn (Tuổi Đơn)' : 'Sản Phẩm Thiếu / Tồn Kho'}
+                                        {activeTab === 'printable' ? 'Ngày tồn' : 'Sản phẩm thiếu / Tồn kho'}
                                     </th>
-                                    <th className="py-4 px-4 text-center whitespace-nowrap">Người Tạo Đơn</th>
+                                    <th className="py-4 px-4 text-center whitespace-nowrap">Người tạo đơn</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -508,7 +535,7 @@ export default function OrderReport() {
                                                         </td>
                                                         <td rowSpan={rowCount} className="py-4 px-4 align-top border-r border-gray-100">
                                                             <div className="font-extrabold text-blue-600 text-base mb-1 cursor-pointer hover:underline hover:text-blue-800 transition-colors" onClick={() => handleSelectOne(order.id)}>
-                                                                #{order.id}
+                                                                {order.id}
                                                             </div>
                                                             <div className="text-xs text-gray-400 mb-2 font-normal">
                                                                 {new Date(order.created_at).toLocaleString('vi-VN')}
@@ -566,7 +593,7 @@ export default function OrderReport() {
                                                             <CheckCircle size={14} /> Đã giữ hàng
                                                         </div>
                                                     )}
-                                                </td>
+                                                </td>   
 
                                                 {index === 0 && (
                                                     <td rowSpan={rowCount} className="py-4 px-4 align-top text-center border-l border-gray-100">
