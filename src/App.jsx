@@ -4,8 +4,9 @@ import Dashboard from './pages/Dashboard';
 import Admin from './pages/Admin';
 import OrderReport from './pages/OrderReport';
 import PackingSpeed from './pages/PackingSpeed';
-import Login from './pages/Login'; // Import trang Login mới
-import ProtectedRoute from './components/ProtectedRoute'; // Import bộ hộ vệ chặn cửa
+import Login from './pages/Login';
+import ProtectedRoute from './components/ProtectedRoute';
+import UnderDevelopment from './pages/UnderDevelopment'; // ⚡️ IMPORT TRANG ĐANG PHÁT TRIỂN MỚI
 
 export default function App() {
   return (
@@ -16,11 +17,16 @@ export default function App() {
 
         {/* Bộ định tuyến chính của hệ thống */}
         <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<UnderDevelopment />} />
           <Route path="bao-cao-don" element={<OrderReport />} />
           <Route path="toc-do-dong-goi" element={<PackingSpeed />} /> 
           
-          {/* ⚡️ KHÓA CỔNG ADMIN: Bọc ProtectedRoute bảo vệ nghiêm ngặt */}
+          {/* ⚡️ ĐƯỜNG DẪN CHO 3 TAB MỚI ĐỒNG BỘ THEO LAYOUT SIDEBAR */}
+          <Route path="bao-cao-hoan" element={<UnderDevelopment />} />
+          <Route path="bao-cao-kiem-ke" element={<UnderDevelopment />} />
+          <Route path="bao-cao-ton-kho" element={<UnderDevelopment />} />
+          
+          {/* 🔒 KHÓA CỔNG ADMIN: Bọc ProtectedRoute bảo vệ nghiêm ngặt */}
           <Route 
             path="admin" 
             element={

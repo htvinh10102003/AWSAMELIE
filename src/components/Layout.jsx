@@ -7,25 +7,24 @@ import {
   Timer, 
   Settings, 
   PackageSearch,
-  LogOut
+  LogOut,
+  Undo2,
+  ClipboardCheck,
+  Boxes
 } from 'lucide-react';
 
 export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
-  
-  // === STATE LƯU THÔNG TIN USER ===
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    // 1. Lấy thông tin user realtime ngay khi vừa vào trang
     const fetchUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
     };
     fetchUser();
 
-    // 2. Lắng nghe biến động trạng thái đăng nhập
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
         navigate('/login');
@@ -37,7 +36,6 @@ export default function Layout() {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  // === HÀM XỬ LÝ ĐĂNG XUẤT ===
   const handleLogout = async () => {
     if (confirm("Ông có chắc chắn muốn đăng xuất không?")) {
       await supabase.auth.signOut();
@@ -45,18 +43,19 @@ export default function Layout() {
     }
   };
 
-  // --- CẤU HÌNH ĐỊNH DANH USER & PHÂN QUYỀN ---
   const userEmail = user?.email || '';
   const displayName = user?.user_metadata?.full_name || userEmail.split('@')[0] || 'Đang tải...';
   const avatarLetter = displayName.charAt(0).toUpperCase();
-
-  // ⚡️ ĐOẠN CHECK QUYỀN ADMIN: Nếu metadata có role là 'admin' thì true
   const isAdmin = user?.user_metadata?.role === 'admin';
 
+  // ⚡️ CẬP NHẬT DANH SÁCH MENU BÁO CÁO TOÀN DIỆN
   const reportMenus = [
     { path: '/', icon: TrendingUp, label: 'Đơn đi hàng ngày' },
     { path: '/bao-cao-don', icon: Printer, label: 'Đơn có thể in' },
     { path: '/toc-do-dong-goi', icon: Timer, label: 'Tốc độ đóng gói' },
+    { path: '/bao-cao-hoan', icon: Undo2, label: 'Báo cáo đơn hoàn' },
+    { path: '/bao-cao-kiem-ke', icon: ClipboardCheck, label: 'Báo cáo kiểm kê' },
+    { path: '/bao-cao-ton-kho', icon: Boxes, label: 'Báo cáo tồn kho' },
   ];
 
   return (
@@ -99,7 +98,7 @@ export default function Layout() {
             })}
           </nav>
 
-          {/* ⚡️ PHÂN QUYỀN ĐỈNH CAO: Chỉ hiển thị khối hệ thống này nếu tài khoản là ADMIN */}
+          {/* PHÂN QUYỀN ADMIN */}
           {isAdmin && (
             <>
               <div className="px-5 mb-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
@@ -130,17 +129,12 @@ export default function Layout() {
             </div>
             <div className="flex flex-col overflow-hidden">
               <span className="text-sm font-bold text-white leading-tight truncate capitalize">{displayName}</span>
-              {/* Hiển thị chức danh động dựa trên Role của user */}
               <span className="text-[10px] text-slate-400 font-semibold mt-0.5 truncate">
                 {isAdmin ? '🛡️ Admin Hệ thống' : '📦 Nhân viên Vận hành'}
               </span>
             </div>
           </div>
-          <button 
-            onClick={handleLogout}
-            title="Đăng xuất"
-            className="p-2 text-slate-400 hover:text-red-400 transition-colors rounded-lg hover:bg-slate-800 cursor-pointer"
-          >
+          <button onClick={handleLogout} title="Đăng xuất" className="p-2 text-slate-400 hover:text-red-400 transition-colors rounded-lg hover:bg-slate-800 cursor-pointer">
             <LogOut size={16} />
           </button>
         </div>
