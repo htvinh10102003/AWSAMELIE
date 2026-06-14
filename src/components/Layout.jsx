@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase'; // Nhớ check đúng đường dẫn file supabase của ông nhé
+import { supabase } from '../lib/supabase';
 import { 
   TrendingUp, 
   Printer, 
@@ -25,10 +25,10 @@ export default function Layout() {
     };
     fetchUser();
 
-    // 2. Lắng nghe nếu có biến động trạng thái (Đăng xuất/Hết hạn session)
+    // 2. Lắng nghe biến động trạng thái đăng nhập
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
-        navigate('/login'); // Nếu mất session thì đá văng về trang đăng nhập
+        navigate('/login');
       } else {
         setUser(session.user);
       }
@@ -45,10 +45,13 @@ export default function Layout() {
     }
   };
 
-  // Thuật toán bóc tách tên hiển thị: Ưu tiên full_name ở metadata -> Nếu không có thì cắt lấy chữ trước @ của Email
+  // --- CẤU HÌNH ĐỊNH DANH USER & PHÂN QUYỀN ---
   const userEmail = user?.email || '';
   const displayName = user?.user_metadata?.full_name || userEmail.split('@')[0] || 'Đang tải...';
   const avatarLetter = displayName.charAt(0).toUpperCase();
+
+  // ⚡️ ĐOẠN CHECK QUYỀN ADMIN: Nếu metadata có role là 'admin' thì true
+  const isAdmin = user?.user_metadata?.role === 'admin';
 
   const reportMenus = [
     { path: '/', icon: TrendingUp, label: 'Đơn đi hàng ngày' },
@@ -96,25 +99,30 @@ export default function Layout() {
             })}
           </nav>
 
-          <div className="px-5 mb-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
-            Hệ thống
-          </div>
-          <nav className="space-y-1.5 px-3">
-            <Link 
-              to="/admin" 
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group ${
-                location.pathname === '/admin' 
-                  ? 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-900/40' 
-                  : 'hover:bg-slate-800 hover:text-white font-medium'
-              }`}
-            >
-              <Settings size={18} strokeWidth={location.pathname === '/admin' ? 2.5 : 2} className={location.pathname === '/admin' ? 'text-white' : 'text-slate-400 group-hover:text-blue-400'} />
-              <span className="text-sm">Cài đặt Liên kết</span>
-            </Link>
-          </nav>
+          {/* ⚡️ PHÂN QUYỀN ĐỈNH CAO: Chỉ hiển thị khối hệ thống này nếu tài khoản là ADMIN */}
+          {isAdmin && (
+            <>
+              <div className="px-5 mb-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest">
+                Hệ thống
+              </div>
+              <nav className="space-y-1.5 px-3">
+                <Link 
+                  to="/admin" 
+                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-150 group ${
+                    location.pathname === '/admin' 
+                      ? 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-900/40' 
+                      : 'hover:bg-slate-800 hover:text-white font-medium'
+                  }`}
+                >
+                  <Settings size={18} strokeWidth={location.pathname === '/admin' ? 2.5 : 2} className={location.pathname === '/admin' ? 'text-white' : 'text-slate-400 group-hover:text-blue-400'} />
+                  <span className="text-sm">Cài đặt Liên kết</span>
+                </Link>
+              </nav>
+            </>
+          )}
         </div>
         
-        {/* ⚡️ USER PROFILE BLOCK - ĐÃ ĐỔI SANG REALTIME DATA TỪ SUPABASE */}
+        {/* User Profile Block */}
         <div className="p-4 bg-slate-950/40 border-t border-slate-800/60 flex justify-between items-center">
           <div className="flex items-center gap-3 max-w-[80%]">
             <div className="w-9 h-9 min-w-[36px] rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-sm shadow-md ring-2 ring-slate-800 uppercase">
@@ -122,12 +130,12 @@ export default function Layout() {
             </div>
             <div className="flex flex-col overflow-hidden">
               <span className="text-sm font-bold text-white leading-tight truncate capitalize">{displayName}</span>
-              <span className="text-[10px] text-slate-400 font-semibold mt-0.5 truncate" title={userEmail}>
-                {userEmail || 'Admin hệ thống'}
+              {/* Hiển thị chức danh động dựa trên Role của user */}
+              <span className="text-[10px] text-slate-400 font-semibold mt-0.5 truncate">
+                {isAdmin ? '🛡️ Admin Hệ thống' : '📦 Nhân viên Vận hành'}
               </span>
             </div>
           </div>
-          {/* NÚT ĐĂNG XUẤT HOẠT ĐỘNG THỰC TẾ */}
           <button 
             onClick={handleLogout}
             title="Đăng xuất"
