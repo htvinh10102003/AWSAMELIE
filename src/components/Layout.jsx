@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   X
 } from 'lucide-react';
+import TestingNoticeBanner from './TestingNoticeBanner';
 
 export default function Layout() {
   const location = useLocation();
@@ -161,6 +162,7 @@ export default function Layout() {
         <div className="absolute inset-0 bg-gradient-to-b from-blue-50/20 via-white to-transparent pointer-events-none" />
         <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-blue-50/40 to-transparent pointer-events-none" />
         <div className="relative z-10 p-8 h-full">
+          <TestingNoticeBanner />
           <Outlet />
         </div>
       </div>
