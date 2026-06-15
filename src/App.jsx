@@ -8,6 +8,7 @@ import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import UnderDevelopment from './pages/UnderDevelopment'; 
 import DeclaredFeeReport from './pages/DeclaredFeeReport';
+import InventoryReport from './pages/InventoryReport'
 
 export default function App() {
   return (
