@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, CalendarClock } from 'lucide-react';
 
 export default function Admin() {
   // ==========================================
@@ -155,6 +156,61 @@ export default function Admin() {
     finally { setFilterLoading(false); }
   };
 
+  const [syncDays, setSyncDays] = useState(1); // Mặc định kéo 1 ngày
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [syncStatus, setSyncStatus] = useState('idle'); // idle | success | error
+
+const handleSyncNhanhData = async () => {
+    setIsSyncing(true);
+    setSyncStatus('idle');
+    setSyncMessage(`Đang kết nối Nhanh.vn cào dữ liệu ${syncDays} ngày qua...`);
+
+    try {
+      // ⚡️ Đóng cứng URL và Anon Key của ông vào đây để loại trừ hoàn toàn lỗi do file .env
+      const projectUrl = "https://infljrayvhidhfimksfp.supabase.co";
+      const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluZmxqcmF5dmhpZGhmaW1rc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzAyNjksImV4cCI6MjA5NjkwNjI2OX0.ap1UnciJ5OccAvC-l5sm-JGqObTkEC038Kjf2L_IFr0";
+
+      // Đưa thẻ VIP lại cho thằng bảo vệ Kong Gateway
+      const res = await fetch(`${projectUrl}/functions/v1/sync-nhanh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${anonKey}`,
+          'apikey': anonKey
+        },
+        body: JSON.stringify({ daysToSync: Number(syncDays) })
+      });
+
+      const textData = await res.text();
+      let data;
+      try {
+        data = JSON.parse(textData);
+      } catch(e) {
+        throw new Error(`Máy chủ sập không trả về JSON: ${textData}`);
+      }
+
+      // ⚡️ NẾU LỖI, IN THẲNG MÃ LỖI VÀ LÝ DO TỪ MÁY CHỦ RA MÀN HÌNH
+      if (!res.ok) {
+        throw new Error(`[Lỗi Server ${res.status}] ${data.error || data.message || textData}`);
+      }
+      
+      if (data && data.success) {
+        setSyncStatus('success');
+        setSyncMessage(`🎉 Hoàn tất! Đã đồng bộ thành công ${data.totalSynced} đơn hàng.`);
+      } else {
+        throw new Error(data?.error || 'Lỗi logic không xác định từ Edge Function');
+      }
+
+    } catch (err) {
+      console.error("Chi tiết lỗi:", err);
+      setSyncStatus('error');
+      setSyncMessage(`❌ ${err.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   // LƯU CẤU HÌNH LIÊN KẾT GOOGLE SHEETS VÀO DATABASE
   const handleSaveConfig = async () => {
     setSyncLoading(true);
@@ -300,6 +356,65 @@ export default function Admin() {
           </div>
         </div>
       </div>
+
+{/* ⚡️ KHỐI GIAO DIỆN CÔNG CỤ CÀO DỮ LIỆU THỦ CÔNG */}
+      <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm max-w-2xl">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="p-2 bg-blue-50 text-blue-600 rounded-xl">
+            <DownloadCloud size={20} />
+          </div>
+          <div>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">Cào dữ liệu API Nhanh.vn</h3>
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">Xử lý các đơn bị miss webhook bằng cách kéo lại toàn bộ data</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          {/* Nút chọn số ngày */}
+          <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 w-full sm:w-48">
+            <CalendarClock size={16} className="text-slate-400 mr-2" />
+            <select 
+              value={syncDays}
+              onChange={(e) => setSyncDays(e.target.value)}
+              disabled={isSyncing}
+              className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full cursor-pointer appearance-none"
+            >
+              <option value={1}>1 ngày qua (Hôm nay)</option>
+              <option value={3}>3 ngày qua</option>
+              <option value={7}>1 tuần qua</option>
+              <option value={15}>15 ngày qua</option>
+              <option value={30}>1 tháng qua</option>
+            </select>
+          </div>
+
+          {/* Nút bấm Kích hoạt */}
+          <button
+            onClick={handleSyncNhanhData}
+            disabled={isSyncing}
+            className="flex-1 w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-sm"
+          >
+            {isSyncing ? (
+              <><Loader2 size={16} className="animate-spin" /> Đang cào data...</>
+            ) : (
+              <><DownloadCloud size={16} /> Đồng bộ ngay</>
+            )}
+          </button>
+        </div>
+
+        {/* Khối hiển thị thông báo kết quả */}
+        {syncMessage && (
+          <div className={`mt-4 p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+            syncStatus === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 
+            syncStatus === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 
+            'bg-blue-50 border-blue-200 text-blue-700 animate-pulse'
+          }`}>
+            {syncStatus === 'success' && <CheckCircle2 size={16} />}
+            {syncStatus === 'error' && <AlertCircle size={16} />}
+            {syncMessage}
+          </div>
+        )}
+      </div>
+
 
     </div>
   );

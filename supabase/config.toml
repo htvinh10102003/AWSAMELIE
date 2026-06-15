@@ -1,22 +1,22 @@
 
-[functions.nhanh-auth]
+[functions.sync-nhanh]
 enabled = true
 verify_jwt = false
-import_map = "./functions/nhanh-auth/deno.json"
+import_map = "./functions/sync-nhanh/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/nhanh-auth/index.ts"
+entrypoint = "./functions/sync-nhanh/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/nhanh-auth/*.html" ]
+# static_files = [ "./functions/sync-nhanh/*.html" ]
 
-[functions.cron-sync]
+[functions.sync-packer]
 enabled = true
 verify_jwt = false
-import_map = "./functions/cron-sync/deno.json"
+import_map = "./functions/sync-packer/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
-entrypoint = "./functions/cron-sync/index.ts"
+entrypoint = "./functions/sync-packer/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
-# static_files = [ "./functions/cron-sync/*.html" ]
+# static_files = [ "./functions/sync-packer/*.html" ]
