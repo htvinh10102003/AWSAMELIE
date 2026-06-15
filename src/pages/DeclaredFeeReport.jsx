@@ -50,16 +50,17 @@ export default function DeclaredFeeReport() {
   const fetchUnorderedFees = async () => {
     setLoading(true);
     try {
-      // Thiết lập câu lệnh truy vấn tìm kiếm các đơn không khai giá (false hoặc null)
-      let query = supabase
-        .from('orders')
-        .select(`
-          id, created_at, carrier_code, status, is_declared_fee,
-          order_products (product_name, quantity)
-        `, { count: 'exact' })
-        .or('is_declared_fee.eq.false,is_declared_fee.is.null') // Lọc không khai giá
-        .gte('created_at', `${startDate}T00:00:00Z`)
-        .lte('created_at', `${endDate}T23:59:59Z`);
+      // --- SỬA LẠI ĐOẠN TRUY VẤN TRONG HÀM fetchUnorderedFees ---
+ let query = supabase
+  .from('orders')
+  .select(`
+    id, created_at, carrier_code, status, is_declared_fee,
+    order_products (product_name, quantity)
+  `, { count: 'exact' })
+  // ⚡️ ĐỔI TẠI ĐÂY: Chuyển .eq.false thành .eq.0 vì kiểu dữ liệu là số nguyên int4
+  .or('is_declared_fee.eq.0,is_declared_fee.is.null') 
+  .gte('created_at', `${startDate}T00:00:00Z`)
+  .lte('created_at', `${endDate}T23:59:59Z`);
 
       // Nếu người dùng nhập từ khóa tìm kiếm (ID đơn hoặc mã vận đơn)
       if (searchTerm.trim()) {
@@ -152,7 +153,7 @@ export default function DeclaredFeeReport() {
             <thead>
               <tr className="bg-slate-50 text-slate-400 font-bold uppercase border-b border-slate-200/80">
                 <th className="p-4 w-28">ID Đơn Nhanh</th>
-                <th className="p-4 w-44">Mã vận đơn (Nhà xe)</th>
+                <th className="p-4 w-44">Mã vận đơn</th>
                 <th className="p-4 w-40">Ngày tạo đơn</th>
                 <th className="p-4 w-36">Trạng thái sàn</th>
                 <th className="p-4">Chi tiết sản phẩm</th>
@@ -170,7 +171,7 @@ export default function DeclaredFeeReport() {
                 <tr>
                   <td colSpan={5} className="p-20 text-center text-slate-400 font-medium">
                     <FileX size={36} className="mx-auto mb-2 text-slate-300" />
-                    Chúc mừng ông! Không tìm thấy đơn hàng rủi ro nào trong khoảng thời gian này.
+                    Không tìm thấy đơn hàng rủi ro nào trong khoảng thời gian này.
                   </td>
                 </tr>
               ) : (
