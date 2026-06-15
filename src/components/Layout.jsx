@@ -109,7 +109,7 @@ export default function Layout() {
               <div className="bg-blue-600 p-1.5 rounded-xl mr-3 shadow-lg shadow-blue-500/20">
                 <PackageSearch className="text-white" size={22} />
               </div>
-              <h1 className="text-xl font-black text-gray-900 tracking-tight">AMELIE<span className="text-blue-600 font-semibold">WMS</span></h1>
+              <h1 className="text-xl font-black text-gray-900 tracking-tight">Vinh<span className="text-blue-600 font-semibold">WMS</span></h1>
             </div>
           ) : (
             <div className="p-1.5 rounded-xl bg-blue-600 shadow-lg shadow-blue-500/20">
