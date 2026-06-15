@@ -28,7 +28,7 @@ export default function App() {
           {/* 🛠 ĐƯỜNG DẪN CHO 3 TAB MỚI: Hiện giao diện Đang phát triển */}
           <Route path="bao-cao-hoan" element={<UnderDevelopment />} />
           <Route path="bao-cao-kiem-ke" element={<UnderDevelopment />} />
-          <Route path="bao-cao-ton-kho" element={<UnderDevelopment />} />
+          <Route path="bao-cao-ton-kho" element={<InventoryReport />} />
           <Route path="don-khong-khai-gia" element={<DeclaredFeeReport />} />
           
           {/* 🔒 KHÓA CỔNG ADMIN: Bọc ProtectedRoute bảo vệ nghiêm ngặt */}
