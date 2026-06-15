@@ -7,6 +7,7 @@ import PackingSpeed from './pages/PackingSpeed';
 import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import UnderDevelopment from './pages/UnderDevelopment'; 
+import DeclaredFeeReport from './pages/DeclaredFeeReport';
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="bao-cao-hoan" element={<UnderDevelopment />} />
           <Route path="bao-cao-kiem-ke" element={<UnderDevelopment />} />
           <Route path="bao-cao-ton-kho" element={<UnderDevelopment />} />
+          <Route path="don-khong-khai-gia" element={<DeclaredFeeReport />} />
           
           {/* 🔒 KHÓA CỔNG ADMIN: Bọc ProtectedRoute bảo vệ nghiêm ngặt */}
           <Route 

@@ -11,6 +11,7 @@ import {
   Undo2,
   ClipboardCheck,
   Boxes,
+  AlertTriangle,
   X
 } from 'lucide-react';
 
@@ -55,6 +56,7 @@ export default function Layout() {
     { path: '/bao-cao-hoan', icon: Undo2, label: 'Báo cáo đơn hoàn' },
     { path: '/bao-cao-kiem-ke', icon: ClipboardCheck, label: 'Báo cáo kiểm kê' },
     { path: '/bao-cao-ton-kho', icon: Boxes, label: 'Báo cáo tồn kho' },
+    { path: '/don-khong-khai-gia', icon: AlertTriangle, label: 'Đơn không khai giá' },
   ];
 
   return (
