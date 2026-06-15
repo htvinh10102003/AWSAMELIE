@@ -41,9 +41,10 @@ export default function OrderReconciliation() {
       const { data, error } = await supabase
         .from('orders')
         .select(`
-          id, created_at, carrier_code, status,
+          id, created_at, carrier_code, status, printed_at, packed_at, carrier_date,
           order_products (product_code, product_name, quantity)
         `)
+        // ⚡️ QUAY TRỞ LẠI LỌC THEO PRINTED_AT CHUẨN HÓA
         .gte('printed_at', `${auditDate}T00:00:00Z`)
         .lte('printed_at', `${auditDate}T23:59:59Z`);
 
@@ -53,7 +54,7 @@ export default function OrderReconciliation() {
       setSurplusOrders([]);
       setIsConfirmed(false);
     } catch (err) {
-      console.error("❌ Lỗi tải đơn hàng:", err.message);
+      console.error("❌ Lỗi tải đơn hàng đối soát:", err.message);
     } finally {
       setLoading(false);
     }
