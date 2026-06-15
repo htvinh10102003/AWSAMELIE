@@ -8,7 +8,8 @@ import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
 import UnderDevelopment from './pages/UnderDevelopment'; 
 import DeclaredFeeReport from './pages/DeclaredFeeReport';
-import InventoryReport from './pages/InventoryReport'
+import InventoryReport from './pages/InventoryReport';
+import OrderReconciliation from './pages/OrderReconciliation';
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="bao-cao-kiem-ke" element={<UnderDevelopment />} />
           <Route path="bao-cao-ton-kho" element={<InventoryReport />} />
           <Route path="don-khong-khai-gia" element={<DeclaredFeeReport />} />
+          <Route path="doi-soat-kho" element={<OrderReconciliation />} />
           
           {/* 🔒 KHÓA CỔNG ADMIN: Bọc ProtectedRoute bảo vệ nghiêm ngặt */}
           <Route 
