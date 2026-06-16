@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
-  ScanBarcode, Calendar, Trash2, PackagePlus, PackageMinus, AlertCircle, CheckCircle2, XCircle, CheckCircle, Download
+  ScanBarcode, Calendar, Trash2, PackagePlus, PackageMinus, AlertCircle, CheckCircle2, XCircle, CheckCircle, Download, Camera, CameraOff
 } from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
 
 const STATUS_MAP = {
   40: 'Đã đóng gói', 42: 'Đang đóng gói', 43: 'Chờ thu gom',
@@ -29,16 +30,26 @@ export default function OrderReconciliation() {
   const [loading, setLoading] = useState(false);
   const [alertBanner, setAlertBanner] = useState(null);
 
-  const inputRef = useRef(null);
+  // Camera
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const scannerRef = useRef(null);
+  const cameraContainerRef = useRef(null);
 
+  // Popup trùng mã
+  const [showDuplicatePopup, setShowDuplicatePopup] = useState(false);
+  const [duplicateCode, setDuplicateCode] = useState('');
+
+  const inputRef = useRef(null);
+  const audioCtxRef = useRef(null); // Dùng cho Web Audio
+
+  // Tập trung input khi không mở camera
   useEffect(() => {
-    if (inputRef.current) inputRef.current.focus();
-  }, [scannedCodes, inputCode, alertBanner]);
+    if (inputRef.current && !isCameraOpen) inputRef.current.focus();
+  }, [scannedCodes, inputCode, alertBanner, isCameraOpen]);
 
   const fetchTodayOrders = async () => {
     setLoading(true);
     try {
-      // ⚡️ VÁ LỖI MÚI GIỜ CHÍ MẠNG: Ép chuẩn giờ Local (Việt Nam) thay vì UTC
       const startOfDay = new Date(`${auditDate}T00:00:00`).toISOString();
       const endOfDay = new Date(`${auditDate}T23:59:59.999`).toISOString();
 
@@ -57,6 +68,7 @@ export default function OrderReconciliation() {
       setSurplusOrders([]);
       setIsConfirmed(false);
       setAlertBanner(null);
+      setShowDuplicatePopup(false);
     } catch (err) {
       console.error("❌ Lỗi tải đơn hàng đối soát:", err.message);
     } finally {
@@ -68,28 +80,59 @@ export default function OrderReconciliation() {
     fetchTodayOrders();
   }, [auditDate]);
 
-  // ⚡️ PHÂN LOẠI DANH SÁCH DỰ KIẾN (CHECKLIST)
   const expectedCorrect = todayOrders.filter(o => !EXCLUDED_STATUS_CODES.includes(Number(o.status)) && !CANCELED_STATUS_CODES.includes(Number(o.status)));
   const expectedCanceled = todayOrders.filter(o => CANCELED_STATUS_CODES.includes(Number(o.status)));
 
-  // Hàm kiểm tra xem đơn đã được súng bắn quét chưa
   const isScanned = (order) => scannedCodes.includes(order.id) || (order.carrier_code && scannedCodes.includes(order.carrier_code));
 
-  // --- XỬ LÝ KHI SÚNG BẮN QUÉT MÃ ---
-  const handleBarcodeSubmit = async (e) => {
-    e.preventDefault();
-    const code = inputCode.trim();
+  // Phát âm thanh bằng Web Audio API
+  const playSound = (type) => {
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      if (type === 'success') {
+        osc.frequency.value = 880;
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.15);
+      } else if (type === 'error') {
+        osc.frequency.value = 330;
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.4);
+      }
+    } catch (e) {
+      // Bỏ qua lỗi âm thanh
+    }
+  };
+
+  // Xử lý khi quét được một mã (từ input hoặc camera)
+  const processBarcode = useCallback(async (code) => {
     if (!code) return;
 
+    // Kiểm tra trùng lặp
     if (scannedCodes.includes(code)) {
-      alert(`⚠️ Mã [${code}] này ông đã bắn quét rồi!`);
+      setDuplicateCode(code);
+      setShowDuplicatePopup(true);
+      playSound('error');
       setInputCode('');
       return;
     }
 
     setAlertBanner(null);
-    
-    // Tìm đơn trong cục in hôm nay
+    playSound('success');
+
     const matchedOrder = todayOrders.find(o => o.id === code || o.carrier_code === code);
 
     if (matchedOrder) {
@@ -98,14 +141,11 @@ export default function OrderReconciliation() {
       if (CANCELED_STATUS_CODES.includes(statusCode)) {
         setAlertBanner({ type: 'danger', message: `🚨 ĐƠN HÀNG HỦY! Mã ${matchedOrder.id} đã bị [${STATUS_MAP[statusCode]}]. Lọc ra rã hàng ngay!` });
       } else if (EXCLUDED_STATUS_CODES.includes(statusCode)) {
-        // Nếu quét trúng đơn đã đóng gói rồi (Status 40, 59...) -> Là hàng thừa vì đáng lẽ nó không được nằm trong đống hàng kẹt
         setSurplusOrders(prev => [...prev, matchedOrder]);
         setAlertBanner({ type: 'warning', message: `⚠️ ĐƠN ĐÃ ĐÓNG GÓI RỒI! Mã ${matchedOrder.id} bị kẹt nhầm. Bỏ ra giao đi!` });
       }
-      // Lưu vết đã quét (Tự động Check xanh trên UI)
       setScannedCodes(prev => [...prev, code]);
     } else {
-      // Nếu quét không thấy trong tệp in hôm nay -> Chắc chắn là hàng Thừa/Lạc từ ngày khác
       const { data } = await supabase
         .from('orders')
         .select(`id, carrier_code, status, order_products (product_code, product_name, quantity)`)
@@ -124,14 +164,88 @@ export default function OrderReconciliation() {
     }
     
     setInputCode('');
+  }, [scannedCodes, todayOrders]);
+
+  // Submit từ input tay
+  const handleBarcodeSubmit = (e) => {
+    e.preventDefault();
+    processBarcode(inputCode.trim());
   };
 
-  // ⚡️ XỬ LÝ HÀNG THIẾU: Những đơn dự kiến chưa được quét
-  const missingCorrect = expectedCorrect.filter(o => !isScanned(o));
-  const missingCanceled = expectedCanceled.filter(o => !isScanned(o));
-  const allMissing = [...missingCorrect, ...missingCanceled];
+  // Đóng popup trùng mã
+  const closeDuplicatePopup = () => {
+    setShowDuplicatePopup(false);
+    setDuplicateCode('');
+  };
 
-  // ⚡️ LUỒNG XUẤT EXCEL: Chỉ xuất các ĐƠN ĐÚNG MÀ ÔNG ĐÃ QUÉT ĐƯỢC
+  // Camera
+  const startCamera = async () => {
+    setIsCameraOpen(true);
+    try {
+      const html5QrCode = new Html5Qrcode("camera-container");
+      scannerRef.current = html5QrCode;
+      
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+        },
+        (decodedText) => {
+          // Gọi xử lý mã
+          processBarcode(decodedText);
+        },
+        (errorMessage) => {
+          // Lỗi quét, có thể bỏ qua
+        }
+      );
+    } catch (err) {
+      console.error("Không thể mở camera:", err);
+      alert("Không thể truy cập camera. Vui lòng kiểm tra quyền hoặc thiết bị.");
+      setIsCameraOpen(false);
+    }
+  };
+
+  const stopCamera = async () => {
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.stop();
+        scannerRef.current.clear();
+      } catch (e) {
+        console.warn("Lỗi khi dừng camera:", e);
+      }
+      scannerRef.current = null;
+    }
+    setIsCameraOpen(false);
+  };
+
+  // Khi popup trùng hiển thị => tạm dừng camera
+  useEffect(() => {
+    if (showDuplicatePopup && scannerRef.current && isCameraOpen) {
+      scannerRef.current.pause();
+    } else if (!showDuplicatePopup && scannerRef.current && isCameraOpen) {
+      scannerRef.current.resume();
+    }
+  }, [showDuplicatePopup, isCameraOpen]);
+
+  // Cleanup
+  useEffect(() => {
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current.stop().catch(() => {});
+      }
+    };
+  }, []);
+
+  const handleToggleCamera = () => {
+    if (isCameraOpen) {
+      stopCamera();
+    } else {
+      startCamera();
+    }
+  };
+
+  // Xuất Excel
   const handleExportCorrectOrdersExcel = () => {
     const scannedCorrectOrders = expectedCorrect.filter(o => isScanned(o));
     if (scannedCorrectOrders.length === 0) {
@@ -171,12 +285,19 @@ export default function OrderReconciliation() {
       setSurplusOrders([]);
       setIsConfirmed(false);
       setAlertBanner(null);
+      setShowDuplicatePopup(false);
+      if (isCameraOpen) stopCamera();
     }
   };
+
+  const missingCorrect = expectedCorrect.filter(o => !isScanned(o));
+  const missingCanceled = expectedCanceled.filter(o => !isScanned(o));
+  const allMissing = [...missingCorrect, ...missingCanceled];
 
   return (
     <div className="space-y-6 pb-10">
       
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
@@ -199,20 +320,62 @@ export default function OrderReconciliation() {
         </div>
       )}
 
+      {/* Popup trùng mã */}
+      {showDuplicatePopup && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full text-center space-y-4">
+            <div className="text-4xl">⚠️</div>
+            <h3 className="text-lg font-black text-red-600">Mã đã quét rồi!</h3>
+            <p className="text-sm text-slate-600 font-medium">
+              Mã <span className="font-black text-slate-800">{duplicateCode}</span> đã được quét trước đó.<br/>
+              Vui lòng kiểm tra lại hàng hoặc bỏ qua.
+            </p>
+            <button
+              onClick={closeDuplicatePopup}
+              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition"
+            >
+              Đã hiểu
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Khu vực quét mã */}
       <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm text-center max-w-xl mx-auto space-y-4">
         <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Giao diện súng bắn quét đối soát</label>
         
-        <form onSubmit={handleBarcodeSubmit} className="relative max-w-md mx-auto">
+        <form onSubmit={handleBarcodeSubmit} className="relative max-w-md mx-auto flex items-center gap-2">
           <input 
             ref={inputRef}
             type="text"
             placeholder="Bắn mã vạch đơn kẹt kho vào đây..."
             value={inputCode}
             onChange={e => setInputCode(e.target.value)}
-            disabled={isConfirmed}
-            className="w-full text-center text-sm font-bold tracking-wide py-3 px-4 bg-slate-50 border-2 border-dashed border-blue-400 rounded-xl outline-none focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition disabled:opacity-50"
+            disabled={isConfirmed || isCameraOpen}
+            className="flex-1 text-center text-sm font-bold tracking-wide py-3 px-4 bg-slate-50 border-2 border-dashed border-blue-400 rounded-xl outline-none focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition disabled:opacity-50"
           />
+          <button
+            type="button"
+            onClick={handleToggleCamera}
+            disabled={isConfirmed || showDuplicatePopup}
+            className={`p-3 rounded-xl border-2 font-bold text-xs flex items-center gap-1.5 transition ${
+              isCameraOpen 
+                ? 'bg-red-50 border-red-300 text-red-600 hover:bg-red-100' 
+                : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100'
+            } disabled:opacity-50`}
+            title={isCameraOpen ? "Tắt camera" : "Quét bằng camera"}
+          >
+            {isCameraOpen ? <CameraOff size={18} /> : <Camera size={18} />}
+            <span className="hidden sm:inline">{isCameraOpen ? 'Tắt' : 'Camera'}</span>
+          </button>
         </form>
+
+        {isCameraOpen && (
+          <div className="mt-4 flex flex-col items-center">
+            <div id="camera-container" ref={cameraContainerRef} className="w-full max-w-sm rounded-xl overflow-hidden border-2 border-blue-200 shadow-lg" style={{ minHeight: '250px' }} />
+            <p className="text-xs text-slate-400 mt-2">Đưa mã vạch vào khung để quét tự động</p>
+          </div>
+        )}
 
         <div className="flex justify-center gap-3 pt-2">
           <button 
@@ -231,7 +394,7 @@ export default function OrderReconciliation() {
         </div>
       </div>
 
-      {/* 3. BẢNG KHỐI KPIs */}
+      {/* KPI */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm text-center">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tổng đơn in hôm nay</span>
@@ -255,10 +418,10 @@ export default function OrderReconciliation() {
         </div>
       </div>
 
-      {/* 4. GIAO DIỆN CHECKLIST CỰC ĐỈNH */}
+      {/* Checklist */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Ô 1: DANH SÁCH ĐƠN ĐÚNG CẦN TRẢ */}
+        {/* Đơn đúng cần trả */}
         <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[350px]">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-sm font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
@@ -309,7 +472,7 @@ export default function OrderReconciliation() {
           </div>
         </div>
 
-        {/* Ô 2: DANH SÁCH ĐƠN HÀNG HỦY CHỜ RÃ HÀNG */}
+        {/* Đơn hủy */}
         <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[350px]">
           <h3 className="text-sm font-bold text-red-600 uppercase tracking-wider mb-4 flex items-center gap-1.5">
             <span className="p-1 bg-red-50 rounded-md"><XCircle size={14} /></span>
@@ -344,7 +507,7 @@ export default function OrderReconciliation() {
           </div>
         </div>
 
-        {/* Ô 3: DANH SÁCH ĐƠN HÀNG THỪA */}
+        {/* Hàng thừa */}
         <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[350px]">
           <h3 className="text-sm font-bold text-slate-600 uppercase tracking-wider mb-4 flex items-center gap-1.5">
             <span className="p-1 bg-slate-50 rounded-md"><PackagePlus size={14} /></span>
@@ -373,7 +536,7 @@ export default function OrderReconciliation() {
           </div>
         </div>
 
-        {/* Ô 4: DANH SÁCH ĐƠN HÀNG THIẾU (CHỐT SỔ) */}
+        {/* Hàng thiếu */}
         <div className="p-6 bg-amber-50/50 border border-amber-200/50 rounded-2xl shadow-sm flex flex-col min-h-[350px]">
           <h3 className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-4 flex items-center gap-1.5">
             <span className="p-1 bg-amber-100 rounded-md"><PackageMinus size={14} /></span>

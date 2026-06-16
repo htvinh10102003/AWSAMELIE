@@ -135,12 +135,14 @@ export default function OrderReport() {
     const [searchId, setSearchId] = useState('');
     const [selectedStatus, setSelectedStatus] = useState([]); // đổi thành mảng
     const [selectedCarrier, setSelectedCarrier] = useState([]); // đổi thành mảng
+    const [selectedChannel, setSelectedChannel] = useState([]); // bộ lọc kênh bán
 
     const [selectedOrders, setSelectedOrders] = useState([]);
     const [showPrintMenu, setShowPrintMenu] = useState(false);
 
     const [carrierOptions, setCarrierOptions] = useState([]);
     const [statusOptions, setStatusOptions] = useState([]);
+    const [channelOptions, setChannelOptions] = useState([]); // options kênh bán
 
     // --- Bộ lọc mới ---
     const [searchNote, setSearchNote] = useState('');
@@ -173,7 +175,7 @@ export default function OrderReport() {
         setSelectedOrders([]);
         setShowPrintMenu(false);
         setCurrentPage(1);
-    }, [activeTab, searchId, selectedStatus, selectedCarrier, searchNote, sortOrder, minAgingDays, maxAgingDays, pageSize]);
+    }, [activeTab, searchId, selectedStatus, selectedCarrier, selectedChannel, searchNote, sortOrder, minAgingDays, maxAgingDays, pageSize]);
 
     const fetchSystemData = async () => {
     const { data: stData } = await supabase.from('order_statuses').select('*');
@@ -204,6 +206,13 @@ export default function OrderReport() {
             label: statusDict[code] || `Mã ${code}`
         })));
 
+        // Thêm channel options
+        const uniqueChannels = [...new Set(allOrders.map(o => o.sale_channel).filter(Boolean))];
+        setChannelOptions(uniqueChannels.map(ch => ({
+            value: String(ch),
+            label: SALE_CHANNELS[ch] || `Kênh ${ch}`
+        })));
+
         setSelectedOrders([]);
     } catch (error) {
         console.error("Lỗi đồng bộ:", error);
@@ -219,6 +228,7 @@ export default function OrderReport() {
             if (searchId && !String(order.id).toLowerCase().includes(searchId.trim().toLowerCase())) return false;
             if (selectedStatus.length > 0 && !selectedStatus.includes(String(order.status))) return false;
             if (selectedCarrier.length > 0 && !selectedCarrier.includes(order.carrier_name)) return false;
+            if (selectedChannel.length > 0 && !selectedChannel.includes(String(order.sale_channel))) return false; // lọc kênh bán
             if (searchNote) {
                 const note = (order.description || '') + ' ' + (order.private_description || '');
                 if (!note.toLowerCase().includes(searchNote.toLowerCase())) return false;
@@ -419,6 +429,15 @@ export default function OrderReport() {
                                     selected={selectedStatus}
                                     onChange={setSelectedStatus}
                                     placeholder="Trạng thái"
+                                />
+                            </div>
+                            {/* Thêm bộ lọc Kênh bán */}
+                            <div className="w-52">
+                                <MultiSelect
+                                    options={channelOptions}
+                                    selected={selectedChannel}
+                                    onChange={setSelectedChannel}
+                                    placeholder="Kênh bán"
                                 />
                             </div>
                         </div>
