@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
     Calendar, Package, Gauge, Clock, Users, User as UserIcon, 
-    Clock3, TrendingUp, Loader2, AlertCircle, Download
+    Clock3, TrendingUp, Loader2, AlertCircle, Download,
 } from 'lucide-react';
 import { 
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer 
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+    LineChart, Line 
 } from 'recharts';
 
 const formatDateToInput = (date) => {
