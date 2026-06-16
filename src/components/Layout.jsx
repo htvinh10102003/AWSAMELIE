@@ -199,9 +199,11 @@ export default function Layout() {
             <>
               <div className="px-5 mb-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Hệ thống</div>
               <nav className="space-y-1.5 px-3">
+                
+                {/* ⚡️ SỬA TÊN MENU NÀY THÀNH "QUẢN TRỊ HỆ THỐNG" */}
                 <Link to="/admin" className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 group ${location.pathname === '/admin' ? 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
                   <Settings size={18} strokeWidth={location.pathname === '/admin' ? 2.5 : 2} className={`transition-colors duration-200 ${location.pathname === '/admin' ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
-                  <span className="text-sm">Cài đặt Liên kết</span>
+                  <span className="text-sm">Quản trị Hệ thống</span>
                 </Link>
 
                 {/* Dropdown Cập nhật & Hiệu chỉnh */}
