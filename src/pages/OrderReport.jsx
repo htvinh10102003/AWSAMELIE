@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, CheckCircle, AlertTriangle, XCircle, RefreshCw, MessageSquare, Lock, User, ChevronDown, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, CheckCircle, AlertTriangle, XCircle, RefreshCw, MessageSquare, Lock, User, ChevronDown, Printer, ChevronLeft, ChevronRight, Copy } from 'lucide-react';
 
 const SALE_CHANNELS = {
     '1': 'Admin', '2': 'Website', '10': 'API', '20': 'Facebook', '21': 'Instagram',
@@ -152,6 +152,9 @@ export default function OrderReport() {
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
 
+    // 🆕 State cho thông báo copy
+    const [copyMessage, setCopyMessage] = useState('');
+
     useEffect(() => {
     const init = async () => {
         try {
@@ -279,6 +282,23 @@ export default function OrderReport() {
         if (printUrl) { window.open(printUrl, '_blank'); setShowPrintMenu(false); }
     };
 
+    // 🆕 Hàm copy các đơn hàng đã lọc
+    const handleCopyOrders = async () => {
+        if (filteredOrders.length === 0) {
+            setCopyMessage('Không có đơn hàng nào để sao chép.');
+            setTimeout(() => setCopyMessage(''), 2000);
+            return;
+        }
+        const ids = filteredOrders.map(order => order.id).join('\n');
+        try {
+            await navigator.clipboard.writeText(ids);
+            setCopyMessage(`✅ Đã sao chép ${filteredOrders.length} đơn hàng.`);
+        } catch (err) {
+            setCopyMessage('⚠️ Sao chép thất bại, vui lòng thử lại.');
+        }
+        setTimeout(() => setCopyMessage(''), 3000);
+    };
+
     const renderAgingBadge = (dateStr) => {
         if (!dateStr) return <span className="px-2.5 py-1.5 bg-green-100/80 backdrop-blur-sm text-green-700 border border-green-200/30 rounded-full text-xs font-semibold">🟢 Hôm nay</span>;
         const diffTime = new Date() - new Date(dateStr);
@@ -368,9 +388,9 @@ export default function OrderReport() {
                     </div>
                 </div>
 
-                {/* BỘ LỌC VÀ IN ĐƠN HÀNG LOẠT - ĐÃ THÊM relative z-10 */}
+                {/* BỘ LỌC VÀ IN ĐƠN HÀNG LOẠT */}
                 <div className="relative z-10 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] p-6 space-y-5 transition-shadow hover:shadow-[0_8px_40px_rgba(0,0,0,0.08)]">
-                    {/* Hàng 1: filter cơ bản + nút in */}
+                    {/* Hàng 1: filter cơ bản + nút in + nút copy */}
                     <div className="flex flex-wrap gap-4 items-end justify-between">
                         <div className="flex flex-wrap gap-4 items-end">
                             <div className="w-64">
@@ -403,36 +423,59 @@ export default function OrderReport() {
                             </div>
                         </div>
 
-                        <div className="relative" onMouseLeave={() => setShowPrintMenu(false)}>
+                        <div className="flex items-center gap-3">
+                            {/* Nút Copy đơn hàng */}
                             <button
-                                onClick={() => setShowPrintMenu(!showPrintMenu)}
-                                disabled={selectedOrders.length === 0}
-                                className={`px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg ${
-                                    selectedOrders.length > 0
-                                        ? 'bg-blue-600/90 backdrop-blur-md text-white hover:bg-blue-700 shadow-blue-500/20'
+                                onClick={handleCopyOrders}
+                                disabled={filteredOrders.length === 0}
+                                className={`px-4 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg ${
+                                    filteredOrders.length > 0
+                                        ? 'bg-gray-600/90 backdrop-blur-md text-white hover:bg-gray-700 shadow-gray-500/20'
                                         : 'bg-white/50 text-gray-400 cursor-not-allowed border border-white/20'
                                 }`}
                             >
-                                <Printer size={18} /> In đơn ({selectedOrders.length}) <ChevronDown size={16} />
+                                <Copy size={16} /> Copy ({filteredOrders.length})
                             </button>
-                            {showPrintMenu && selectedOrders.length > 0 && (
-                                <div className="absolute right-0 top-[105%] w-48 bg-white/90 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fade-in">
-                                    <button
-                                        onClick={() => executePrint('A4')}
-                                        className="w-full text-left px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-blue-50/50 hover:text-blue-700 transition-colors flex items-center gap-2"
-                                    >
-                                        <Printer size={16} /> In khổ A4/A5
-                                    </button>
-                                    <button
-                                        onClick={() => executePrint('K80')}
-                                        className="w-full text-left px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-blue-50/50 hover:text-blue-700 transition-colors border-t border-gray-100/50 flex items-center gap-2"
-                                    >
-                                        <Printer size={16} /> In khổ K80
-                                    </button>
-                                </div>
-                            )}
+
+                            {/* Nút In đơn */}
+                            <div className="relative" onMouseLeave={() => setShowPrintMenu(false)}>
+                                <button
+                                    onClick={() => setShowPrintMenu(!showPrintMenu)}
+                                    disabled={selectedOrders.length === 0}
+                                    className={`px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg ${
+                                        selectedOrders.length > 0
+                                            ? 'bg-blue-600/90 backdrop-blur-md text-white hover:bg-blue-700 shadow-blue-500/20'
+                                            : 'bg-white/50 text-gray-400 cursor-not-allowed border border-white/20'
+                                    }`}
+                                >
+                                    <Printer size={18} /> In đơn ({selectedOrders.length}) <ChevronDown size={16} />
+                                </button>
+                                {showPrintMenu && selectedOrders.length > 0 && (
+                                    <div className="absolute right-0 top-[105%] w-48 bg-white/90 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fade-in">
+                                        <button
+                                            onClick={() => executePrint('A4')}
+                                            className="w-full text-left px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-blue-50/50 hover:text-blue-700 transition-colors flex items-center gap-2"
+                                        >
+                                            <Printer size={16} /> In khổ A4/A5
+                                        </button>
+                                        <button
+                                            onClick={() => executePrint('K80')}
+                                            className="w-full text-left px-5 py-3.5 text-sm font-semibold text-gray-700 hover:bg-blue-50/50 hover:text-blue-700 transition-colors border-t border-gray-100/50 flex items-center gap-2"
+                                        >
+                                            <Printer size={16} /> In khổ K80
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
+
+                    {/* Thông báo copy */}
+                    {copyMessage && (
+                        <div className="text-xs font-medium text-green-700 bg-green-50/70 backdrop-blur-sm border border-green-200/30 rounded-2xl px-4 py-2 animate-fade-in">
+                            {copyMessage}
+                        </div>
+                    )}
 
                     {/* Hàng 2: bộ lọc mới (ghi chú, sắp xếp, ngày tồn) */}
                     <div className="flex flex-wrap gap-4 items-end">
