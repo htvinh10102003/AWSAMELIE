@@ -15,6 +15,7 @@ import UpdateSchedule from './pages/UpdateSchedule';
 import KiemTraDonHoan from './pages/KiemTraDonHoan';
 import UpdatePacker from './pages/UpdatePacker';
 import UpdateProduct from './pages/UpdateProduct';
+import ReturnProcessing from './pages/ReturnProcessing';
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
           <Route path="bao-cao-ton-kho" element={<InventoryReport />} />
           <Route path="don-khong-khai-gia" element={<DeclaredFeeReport />} />
           <Route path="doi-soat-kho" element={<OrderReconciliation />} />
+          <Route path="xu-ly-don-hoan" element={<ReturnProcessing />} />
           
           {/* 🔒 KHÓA CỔNG CÀI ĐẶT ADMIN: Bọc ProtectedRoute bảo vệ nghiêm ngặt */}
           <Route path="admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />

@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { 
   TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
-  BarChart3, User, Pin, PinOff, ClipboardCheck
+  BarChart3, User, Pin, PinOff, ClipboardCheck,PackageMinus
 } from 'lucide-react';
 import TestingNoticeBanner from './TestingNoticeBanner';
 
@@ -164,6 +164,10 @@ export default function Layout() {
                         <Link to="/bao-cao-hoan-tong-hop" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/bao-cao-hoan-tong-hop' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
                           <BarChart3 size={16} className={location.pathname === '/bao-cao-hoan-tong-hop' ? 'text-blue-600' : 'text-gray-400'} />
                           <span className="text-sm">Tổng hợp đơn hoàn</span>
+                        </Link>
+                        <Link to="/xu-ly-don-hoan" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${location.pathname === '/xu-ly-don-hoan' ? 'bg-blue-600 shadow-md text-white font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium'}`}>
+                        <PackageMinus size={18} className={location.pathname === '/xu-ly-don-hoan' ? 'text-white' : 'text-gray-400'} />
+                        <span className="text-sm">Xử lý Đơn hoàn</span>
                         </Link>
                         <Link to="/kiem-tra-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/kiem-tra-don-hoan' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
                           <ScanLine size={16} className={location.pathname === '/kiem-tra-don-hoan' ? 'text-blue-600' : 'text-gray-400'} />

@@ -202,17 +202,17 @@ export default function KiemTraDonHoan() {
             <span className="p-2 bg-blue-50 text-blue-600 rounded-xl"><ScanBarcode size={22} /></span>
             Kiểm tra và Chốt số lượng Hoàn
           </h2>
-          <p className="text-xs text-slate-400 font-medium mt-1">Cross-match tự động Barcode & SKU, Pivot cộng dồn mã trùng</p>
+          <p className="text-xs text-slate-400 font-medium mt-1">Đối chiếu lại số lượng sản phẩm hoàn</p>
         </div>
 
         <div className="flex gap-2">
           {checklist.length > 0 && (
             <>
               <button onClick={resetAudit} className="px-4 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer">
-                <RotateCcw size={14} /> Xóa làm lại
+                <RotateCcw size={14} /> Bắt đầu lại
               </button>
               <button onClick={exportFinalReport} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer">
-                <Download size={14} /> Tải biên bản chốt
+                <Download size={14} /> Tải biên bản
               </button>
             </>
           )}
@@ -272,7 +272,7 @@ export default function KiemTraDonHoan() {
             {/* Bảng trạng thái nhanh */}
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-center text-center">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tiến độ quét đúng</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Số sản phẩm đúng</span>
                 <div className="text-2xl font-black text-slate-800 mt-1">
                   <span className="text-blue-600">{totalScannedValid}</span> <span className="text-sm text-slate-300">/ {totalExpected}</span>
                 </div>
