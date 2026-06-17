@@ -2,27 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { 
-  TrendingUp, 
-  Printer, 
-  Timer, 
-  Settings, 
-  PackageSearch,
-  LogOut,
-  Undo2,
-  ScanLine,
-  Boxes,
-  AlertTriangle,
-  X,
-  Wrench,
-  ChevronDown,
-  ChevronRight,
-  UserCog,
-  CalendarDays,
-  BarChart3,
-  User,
-  Pin,
-  PinOff,
-  ClipboardCheck
+  TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
+  Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
+  BarChart3, User, Pin, PinOff, ClipboardCheck
 } from 'lucide-react';
 import TestingNoticeBanner from './TestingNoticeBanner';
 
@@ -32,23 +14,21 @@ export default function Layout() {
   const [user, setUser] = useState(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   
-  // ⚡️ States quản lý sidebar thu gọn / ghim
-  const [isSidebarPinned, setIsSidebarPinned] = useState(true); // mặc định ghim
+  // States quản lý sidebar thu gọn / ghim
+  const [isSidebarPinned, setIsSidebarPinned] = useState(true);
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
   const sidebarExpanded = isSidebarPinned || isSidebarHovered;
 
-  // ⚡️ STATES QUẢN LÝ ĐÓNG/MỞ CÁC MENU DROPDOWN TRÊN SIDEBAR
+  // STATES QUẢN LÝ ĐÓNG/MỞ CÁC MENU DROPDOWN
   const [isPackingSpeedOpen, setIsPackingSpeedOpen] = useState(false);
+  const [isReturnOrdersOpen, setIsReturnOrdersOpen] = useState(false);
   const [isAdjustMenuOpen, setIsAdjustMenuOpen] = useState(false);
 
-  // Tự động giữ trạng thái mở cho dropdown nếu người dùng đang đứng ở trang con của nó
+  // Tự động mở dropdown nếu đang ở trang con
   useEffect(() => {
-    if (location.pathname.includes('/toc-do-dong-goi-')) {
-      setIsPackingSpeedOpen(true);
-    }
-    if (location.pathname.includes('/cap-nhat-')) {
-      setIsAdjustMenuOpen(true);
-    }
+    if (location.pathname.includes('/toc-do-dong-goi-')) setIsPackingSpeedOpen(true);
+    if (location.pathname.includes('/bao-cao-hoan-') || location.pathname.includes('/kiem-tra-don-hoan')) setIsReturnOrdersOpen(true);
+    if (location.pathname.includes('/cap-nhat-')) setIsAdjustMenuOpen(true);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -59,11 +39,8 @@ export default function Layout() {
     fetchUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        navigate('/login');
-      } else {
-        setUser(session.user);
-      }
+      if (!session) navigate('/login');
+      else setUser(session.user);
     });
 
     return () => subscription.unsubscribe();
@@ -79,11 +56,12 @@ export default function Layout() {
   const avatarLetter = displayName.charAt(0).toUpperCase();
   const isAdmin = user?.user_metadata?.role === 'admin';
 
-  // Mảng menu dạng phẳng (Bỏ mục Tốc độ đóng gói ra làm dropdown riêng bên dưới)
+  // ⚡️ ĐÃ TÁI CẤU TRÚC: Định nghĩa menu gọn gàng bằng ID cho các mục có Dropdown
   const reportMenus = [
     { path: '/', icon: TrendingUp, label: 'Đơn đi hàng ngày' },
     { path: '/bao-cao-don', icon: Printer, label: 'Đơn có thể in' },
-    { path: '/bao-cao-hoan', icon: Undo2, label: 'Báo cáo đơn hoàn' },
+    { id: 'packing_speed', icon: Timer, label: 'Tốc độ đóng gói' },
+    { id: 'return_orders', icon: Undo2, label: 'Báo cáo đơn hoàn' },
     { path: '/bao-cao-kiem-ke', icon: ClipboardCheck, label: 'Báo cáo kiểm kê' },
     { path: '/doi-soat-kho', icon: ScanLine, label: 'Đối soát đơn cuối ngày' },
     { path: '/bao-cao-ton-kho', icon: Boxes, label: 'Báo cáo tồn kho' },
@@ -109,26 +87,19 @@ export default function Layout() {
               <div className="bg-blue-600 p-1.5 rounded-xl mr-3 shadow-lg shadow-blue-500/20">
                 <PackageSearch className="text-white" size={22} />
               </div>
-              <h1 className="text-xl font-black text-gray-900 tracking-tight">Vinh<span className="text-blue-600 font-semibold">WMS</span></h1>
+              <h1 className="text-xl font-black text-gray-900 tracking-tight">Amelie<span className="text-blue-600 font-semibold">WMS</span></h1>
             </div>
           ) : (
             <div className="p-1.5 rounded-xl bg-blue-600 shadow-lg shadow-blue-500/20">
               <PackageSearch className="text-white" size={20} />
             </div>
           )}
-          {/* Nút ghim / bỏ ghim */}
           <button
             onClick={() => setIsSidebarPinned(!isSidebarPinned)}
-            className={`absolute p-1 rounded-lg hover:bg-white/60 transition-colors ${
-              sidebarExpanded ? 'right-2 top-4' : 'right-1 top-1'
-            }`}
+            className={`absolute p-1 rounded-lg hover:bg-white/60 transition-colors ${sidebarExpanded ? 'right-2 top-4' : 'right-1 top-1'}`}
             title={isSidebarPinned ? 'Bỏ ghim sidebar' : 'Ghim sidebar'}
           >
-            {isSidebarPinned ? (
-              <PinOff size={14} className="text-gray-500" />
-            ) : (
-              <Pin size={14} className="text-gray-500" />
-            )}
+            {isSidebarPinned ? <PinOff size={14} className="text-gray-500" /> : <Pin size={14} className="text-gray-500" />}
           </button>
         </div>
 
@@ -139,57 +110,83 @@ export default function Layout() {
           )}
           <nav className="space-y-1.5 px-3 mb-8">
             
-            {/* Render các menu đơn lẻ */}
-            {reportMenus.map((item, idx) => {
-              const isActive = location.pathname === item.path;
+            {reportMenus.map((item) => {
               const Icon = item.icon;
               
+              // 1. RENDER DROPDOWN TỐC ĐỘ ĐÓNG GÓI
+              if (item.id === 'packing_speed') {
+                const isChildActive = location.pathname.includes('/toc-do-dong-goi-');
+                return (
+                  <div key={item.id} className="space-y-1.5">
+                    <button 
+                      onClick={() => setIsPackingSpeedOpen(!isPackingSpeedOpen)}
+                      className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isPackingSpeedOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon size={18} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
+                        {sidebarExpanded && <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>}
+                      </div>
+                      {sidebarExpanded && (isPackingSpeedOpen ? <ChevronDown size={16} className="text-gray-400"/> : <ChevronRight size={16} className="text-gray-400"/>)}
+                    </button>
+                    {sidebarExpanded && isPackingSpeedOpen && (
+                      <div className="mt-1 mb-2 ml-4 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                        <Link to="/toc-do-dong-goi-chung" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/toc-do-dong-goi-chung' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <BarChart3 size={16} className={location.pathname === '/toc-do-dong-goi-chung' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Đóng gói chung</span>
+                        </Link>
+                        <Link to="/toc-do-dong-goi-nhan-su" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/toc-do-dong-goi-nhan-su' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <User size={16} className={location.pathname === '/toc-do-dong-goi-nhan-su' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Theo nhân sự</span>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // 2. RENDER DROPDOWN BÁO CÁO ĐƠN HOÀN (MỚI)
+              if (item.id === 'return_orders') {
+                const isChildActive = location.pathname === '/bao-cao-hoan-tong-hop' || location.pathname === '/kiem-tra-don-hoan';
+                return (
+                  <div key={item.id} className="space-y-1.5">
+                    <button 
+                      onClick={() => setIsReturnOrdersOpen(!isReturnOrdersOpen)}
+                      className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isReturnOrdersOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon size={18} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
+                        {sidebarExpanded && <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>}
+                      </div>
+                      {sidebarExpanded && (isReturnOrdersOpen ? <ChevronDown size={16} className="text-gray-400"/> : <ChevronRight size={16} className="text-gray-400"/>)}
+                    </button>
+                    {sidebarExpanded && isReturnOrdersOpen && (
+                      <div className="mt-1 mb-2 ml-4 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                        <Link to="/bao-cao-hoan-tong-hop" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/bao-cao-hoan-tong-hop' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <BarChart3 size={16} className={location.pathname === '/bao-cao-hoan-tong-hop' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Tổng hợp đơn hoàn</span>
+                        </Link>
+                        <Link to="/kiem-tra-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/kiem-tra-don-hoan' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <ScanLine size={16} className={location.pathname === '/kiem-tra-don-hoan' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Kiểm tra & Chốt SL</span>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // 3. RENDER CÁC MỤC ĐƠN LẺ BÌNH THƯỜNG
+              const isActive = location.pathname === item.path;
               return (
                 <div key={item.path} className="space-y-1.5">
                   <Link 
                     to={item.path} 
-                    className={`flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group ${
-                      !sidebarExpanded ? 'justify-center px-0' : 'px-4'
-                    } ${
-                      isActive ? 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'
-                    }`}
+                    className={`flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group ${!sidebarExpanded ? 'justify-center px-0' : 'px-4'} ${isActive ? 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}
                   >
                     <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors duration-200 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
                     {sidebarExpanded && <span className="text-sm">{item.label}</span>}
                     {isActive && sidebarExpanded && <span className="ml-auto w-1.5 h-5 bg-white/40 rounded-full" />}
                   </Link>
-
-                  {/* VỊ TRÍ CHÈN DROPDOWN TỐC ĐỘ ĐÓNG GÓI (sau mục "Đơn có thể in" - idx=1) */}
-                  {idx === 1 && (
-                    <div className="pt-0.5">
-                      <button 
-                        onClick={() => setIsPackingSpeedOpen(!isPackingSpeedOpen)}
-                        className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600 cursor-pointer ${
-                          !sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Timer size={18} strokeWidth={2} className="text-gray-400 group-hover:text-blue-500 transition-colors" />
-                          {sidebarExpanded && <span className="text-sm">Tốc độ đóng gói</span>}
-                        </div>
-                        {sidebarExpanded && (isPackingSpeedOpen ? <ChevronDown size={16} className="text-gray-400"/> : <ChevronRight size={16} className="text-gray-400"/>)}
-                      </button>
-
-                      {/* Menu con của Tốc độ đóng gói */}
-                      {sidebarExpanded && isPackingSpeedOpen && (
-                        <div className="mt-1 mb-2 ml-4 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200">
-                          <Link to="/toc-do-dong-goi-chung" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/toc-do-dong-goi-chung' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                            <BarChart3 size={16} className={location.pathname === '/toc-do-dong-goi-chung' ? 'text-blue-600' : 'text-gray-400'} />
-                            <span className="text-sm">Đóng gói chung</span>
-                          </Link>
-                          <Link to="/toc-do-dong-goi-nhan-su" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/toc-do-dong-goi-nhan-su' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                            <User size={16} className={location.pathname === '/toc-do-dong-goi-nhan-su' ? 'text-blue-600' : 'text-gray-400'} />
-                            <span className="text-sm">Theo nhân sự</span>
-                          </Link>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               )
             })}
@@ -199,14 +196,11 @@ export default function Layout() {
             <>
               <div className="px-5 mb-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest">Hệ thống</div>
               <nav className="space-y-1.5 px-3">
-                
-                {/* ⚡️ SỬA TÊN MENU NÀY THÀNH "QUẢN TRỊ HỆ THỐNG" */}
                 <Link to="/admin" className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 group ${location.pathname === '/admin' ? 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
                   <Settings size={18} strokeWidth={location.pathname === '/admin' ? 2.5 : 2} className={`transition-colors duration-200 ${location.pathname === '/admin' ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
                   <span className="text-sm">Quản trị Hệ thống</span>
                 </Link>
 
-                {/* Dropdown Cập nhật & Hiệu chỉnh */}
                 <div className="pt-1">
                   <button 
                     onClick={() => setIsAdjustMenuOpen(!isAdjustMenuOpen)} 
@@ -229,6 +223,10 @@ export default function Layout() {
                         <CalendarDays size={16} className={location.pathname === '/cap-nhat-lich-lam-viec' ? 'text-blue-600' : 'text-gray-400'} />
                         <span className="text-sm">Lịch làm việc</span>
                       </Link>
+                      <Link to="/cap-nhat-san-pham" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-san-pham' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                        <PackageSearch size={16} className={location.pathname === '/cap-nhat-san-pham' ? 'text-blue-600' : 'text-gray-400'} />
+                        <span className="text-sm">Hiệu chỉnh sản phẩm</span>
+                      </Link>
                     </div>
                   )}
                 </div>
@@ -236,17 +234,12 @@ export default function Layout() {
             </>
           )}
 
-          {/* Khi sidebar thu gọn, vẫn hiển thị Admin menu icon (không text) */}
           {isAdmin && !sidebarExpanded && (
             <nav className="space-y-2 px-3 mt-2">
               <Link to="/admin" className="flex justify-center py-3 rounded-2xl hover:bg-white/60 group transition-colors">
                 <Settings size={18} strokeWidth={2} className="text-gray-400 group-hover:text-blue-500" />
               </Link>
-              {/* Wrench icon */}
-              <button
-                onClick={() => setIsAdjustMenuOpen(!isAdjustMenuOpen)} // vẫn cho phép mở submenu khi expand hover
-                className="flex justify-center py-3 rounded-2xl w-full hover:bg-white/60 group transition-colors"
-              >
+              <button onClick={() => setIsAdjustMenuOpen(!isAdjustMenuOpen)} className="flex justify-center py-3 rounded-2xl w-full hover:bg-white/60 group transition-colors">
                 <Wrench size={18} strokeWidth={2} className="text-gray-400 group-hover:text-blue-500" />
               </button>
             </nav>

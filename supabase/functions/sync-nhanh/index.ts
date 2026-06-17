@@ -28,28 +28,28 @@ serve(async (req) => {
     const CHUNK_DAYS = 15;
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-    // ⚡️ 1. BỐC SẠCH CONFIG TỪ DATABASE (LẤY ĐÍNH DANH ACCESS_TOKEN SỐNG 1 NĂM)
+    // 1. Lấy cấu hình từ system_configs
     const { data: configs, error: configError } = await supabase
       .from('system_configs')
       .select('key, value')
       .in('key', ['nhanh_app_id', 'nhanh_business_id', 'nhanh_access_token']);
 
-    if (configError) throw new Error("Lỗi khi đọc bảng cấu hình: " + configError.message);
+    if (configError) throw new Error("Lỗi đọc bảng cấu hình: " + configError.message);
 
     const configMap: Record<string, string> = {};
     configs?.forEach(c => configMap[c.key] = c.value);
 
     if (!configMap['nhanh_app_id'] || !configMap['nhanh_access_token']) {
-      throw new Error("Thiếu nhanh_app_id hoặc nhanh_access_token trong bảng system_configs!");
+      throw new Error("Thiếu nhanh_app_id hoặc nhanh_access_token trong system_configs!");
     }
 
-    // Gán thẳng Token hạn 1 năm của ông vào đây luôn
+    const appId = configMap['nhanh_app_id'];
+    const businessId = configMap['nhanh_business_id'];
     const accessToken = configMap['nhanh_access_token'];
     
     let totalSynced = 0;
     const totalChunks = Math.ceil(days / CHUNK_DAYS);
 
-    // ⚡️ 2. VÒNG LẶP CHIA NHỎ KHUNG GIỜ ĐỂ QUÉT ĐƠN
     for (let i = 0; i < totalChunks; i++) {
       const chunkEndDate = new Date();
       chunkEndDate.setDate(chunkEndDate.getDate() - (i * CHUNK_DAYS));
@@ -68,15 +68,28 @@ serve(async (req) => {
         };
         if (nextCursor) payload.paginator.next = nextCursor;
 
-        // Gọi thẳng API danh sách đơn với Token có sẵn
-        const res = await fetch(`https://pos.open.nhanh.vn/v3.0/order/list?appId=${configMap['nhanh_app_id']}&businessId=${configMap['nhanh_business_id']}`, {
-          method: 'POST',
-          headers: { 'Authorization': accessToken, 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({ data: JSON.stringify(payload) })
-        });
+        // Gọi API Nhanh.vn với JSON (giống file local)
+        const res = await fetch(
+          `https://pos.open.nhanh.vn/v3.0/order/list?appId=${appId}&businessId=${businessId}`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': accessToken,
+              'Content-Type': 'application/json'  // Sửa thành JSON
+            },
+            body: JSON.stringify(payload)         // Gửi thẳng JSON object
+          }
+        );
+
         const result = await res.json();
 
-        if (result.code === 1 && result.data && result.data.length > 0) {
+        // Nếu API trả lỗi, ném ra message để giao diện hiển thị
+        if (result.code !== 1) {
+          const errMsg = result.messages?.[0] || result.message || 'Lỗi không xác định từ Nhanh.vn';
+          throw new Error(`Nhanh.vn báo lỗi: ${errMsg}`);
+        }
+
+        if (result.data && result.data.length > 0) {
           const rawOrders = result.data;
           const ordersToUpsert: any[] = [];
           const productInsertions: any[] = [];

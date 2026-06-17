@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
-  Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, CalendarClock,
-  Users, UserPlus, ShieldAlert, ShieldCheck, UserX, Eye, EyeOff, KeyRound, Pencil, X
+  Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, CalendarClock,PackageSearch,
+  Users, UserPlus, ShieldAlert, ShieldCheck, UserX, Eye, EyeOff, KeyRound, Pencil, X,Zap
 } from 'lucide-react';
 
 export default function Admin() {
@@ -294,6 +294,54 @@ export default function Admin() {
     } finally { setIsSyncing(false); }
   };
 
+  // ⚡️ STATE & HÀM CÀO TỒN KHO SIÊU TỐC
+  const [isSyncingInventory, setIsSyncingInventory] = useState(false);
+  const [syncInventoryStatus, setSyncInventoryStatus] = useState('idle');
+
+  const handleSyncInventoryOnly = async () => {
+    setIsSyncingInventory(true); setSyncInventoryStatus('idle'); 
+    setSyncProductMessage(`Đang kéo Tồn Kho Siêu Tốc từ Nhanh.vn...`);
+    try {
+      const res = await fetch(`${projectUrl}/functions/v1/sync-products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey },
+        body: JSON.stringify({ mode: 'inventory' }) // Gọi luồng nhẹ
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Lỗi server');
+      
+      setSyncInventoryStatus('success');
+      setSyncProductMessage(`⚡️ Đã cập nhật Tồn Kho (On Hand) cho ${data.totalSynced} sản phẩm.`);
+    } catch (err) {
+      setSyncInventoryStatus('error'); setSyncProductMessage(`❌ ${err.message}`);
+    } finally { setIsSyncingInventory(false); }
+  };
+
+  // ⚡️ STATE & HÀM CÀO MASTER DATA (FULL)
+  const [isSyncingMaster, setIsSyncingMaster] = useState(false);
+  const [syncMasterStatus, setSyncMasterStatus] = useState('idle');
+  const [syncProductMessage, setSyncProductMessage] = useState(''); // Dùng chung thông báo
+
+  const handleSyncMasterData = async () => {
+    if (!confirm("Việc cào toàn bộ Data (Tên, Mã Vạch) sẽ mất nhiều thời gian hơn. Xác nhận chạy?")) return;
+    setIsSyncingMaster(true); setSyncMasterStatus('idle'); 
+    setSyncProductMessage(`Đang cào toàn bộ Data (Rất nặng, vui lòng đợi)...`);
+    try {
+      const res = await fetch(`${projectUrl}/functions/v1/sync-products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey },
+        body: JSON.stringify({ mode: 'master' }) // Gọi luồng nặng
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Lỗi server');
+      
+      setSyncMasterStatus('success');
+      setSyncProductMessage(`🎉 Tuyệt vời! Đã làm mới toàn bộ ${data.totalSynced} sản phẩm trong kho.`);
+    } catch (err) {
+      setSyncMasterStatus('error'); setSyncProductMessage(`❌ ${err.message}`);
+    } finally { setIsSyncingMaster(false); }
+  };
+
   const handleSaveConfig = async () => {
     setSyncLoading(true); setSheetMessage('');
     try {
@@ -339,10 +387,10 @@ export default function Admin() {
 
         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60">
           <button onClick={() => { setActiveTab('configs'); setUserMessage(''); }} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'configs' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 cursor-pointer'}`}>
-            ⚙️ Cấu hình Hệ thống
+            Cấu hình hệ thống
           </button>
           <button onClick={() => { setActiveTab('users_management'); setUserMessage(''); }} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'users_management' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 cursor-pointer'}`}>
-            👥 Quản lý User
+            Quản lý User
           </button>
         </div>
       </div>
@@ -454,42 +502,40 @@ export default function Admin() {
             </div>
           </div>
 
-          {/* CÀO DỮ LIỆU THỦ CÔNG */}
-          <div className="bg-white p-6 border border-slate-200 rounded-xl shadow-sm border-l-4 border-l-blue-500">
-            <div className="flex items-center gap-2 mb-4">
-              <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><DownloadCloud size={20} /></div>
+          {/* TẦNG 2: CÀO SẢN PHẨM (2 CHẾ ĐỘ) */}
               <div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">Cào dữ liệu API Nhanh.vn</h3>
-                <p className="text-[11px] text-slate-400 font-medium mt-0.5">Xử lý các đơn bị miss webhook bằng cách kéo lại toàn bộ data</p>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-slate-700">Đồng bộ Dữ liệu Sản Phẩm</p>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Chọn chế độ "Siêu Tốc" để cập nhật Tồn Kho hàng ngày, hoặc "Master Data" khi vừa tạo/sửa Tên, Mã Vạch.</p>
+                  </div>
+                  
+                  <div className="flex w-full sm:w-auto gap-2">
+                    <button onClick={handleSyncInventoryOnly} disabled={isSyncingInventory || isSyncingMaster} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-sm">
+                      {isSyncingInventory ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />} 
+                      Tồn kho
+                    </button>
+                    
+                    <button onClick={handleSyncMasterData} disabled={isSyncingInventory || isSyncingMaster} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-sm">
+                      {isSyncingMaster ? <Loader2 size={16} className="animate-spin" /> : <PackageSearch size={16} />} 
+                      Toàn bộ data sản phẩm
+                    </button>
+                  </div>
+                </div>
+                
+                {syncProductMessage && (
+                  <div className={`mt-3 p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                    syncInventoryStatus === 'success' || syncMasterStatus === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 
+                    syncInventoryStatus === 'error' || syncMasterStatus === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 
+                    'bg-slate-100 border-slate-200 text-slate-700 animate-pulse'
+                  }`}>
+                    {(syncInventoryStatus === 'success' || syncMasterStatus === 'success') && <CheckCircle2 size={16} />}
+                    {(syncInventoryStatus === 'error' || syncMasterStatus === 'error') && <AlertCircle size={16} />}
+                    {syncProductMessage}
+                  </div>
+                )}
               </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 w-full sm:w-48">
-                <CalendarClock size={16} className="text-slate-400 mr-2" />
-                <select value={syncDays} onChange={(e) => setSyncDays(e.target.value)} disabled={isSyncing} className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full cursor-pointer appearance-none">
-                  <option value={1}>1 ngày qua (Hôm nay)</option>
-                  <option value={3}>3 ngày qua</option>
-                  <option value={7}>1 tuần qua</option>
-                  <option value={15}>15 ngày qua</option>
-                  <option value={30}>1 tháng qua</option>
-                </select>
-              </div>
-
-              <button onClick={handleSyncNhanhData} disabled={isSyncing} className="flex-1 w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-sm">
-                {isSyncing ? <><Loader2 size={16} className="animate-spin" /> Đang cào data...</> : <><DownloadCloud size={16} /> Đồng bộ ngay</>}
-              </button>
-            </div>
-
-            {syncMessage && (
-              <div className={`mt-4 p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${syncStatus === 'success' ? 'bg-green-50 border-green-200 text-green-700' : syncStatus === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-blue-50 border-blue-200 text-blue-700 animate-pulse'}`}>
-                {syncStatus === 'success' && <CheckCircle2 size={16} />}
-                {syncStatus === 'error' && <AlertCircle size={16} />}
-                {syncMessage}
-              </div>
-            )}
           </div>
-        </div>
       )}
 
       {/* RENDER TAB 2: QUẢN LÝ TÀI KHOẢN KÈM NÚT SỬA THÔNG TIN */}
@@ -499,16 +545,16 @@ export default function Admin() {
           {/* FORM KHỞI TẠO USER */}
           <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm h-fit space-y-4">
             <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b pb-2">
-              <UserPlus size={16} className="text-blue-600" /> Khởi tạo thành viên mới
+              <UserPlus size={16} className="text-blue-600" /> Thêm tài khoản mới
             </h3>
             <form onSubmit={handleCreateUser} className="space-y-3 text-xs font-bold text-slate-600">
               <div>
-                <label className="block mb-1">Họ và Tên nhân sự</label>
+                <label className="block mb-1">Họ và tên</label>
                 <input type="text" placeholder="Ví dụ: Nguyễn Văn A" value={userForm.fullName} onChange={e => setUserForm({...userForm, fullName: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white focus:border-blue-500" />
               </div>
               <div>
                 <label className="block mb-1">Địa chỉ Email đăng nhập</label>
-                <input type="email" placeholder="username@amelie.com" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white focus:border-blue-500" />
+                <input type="email" placeholder="username@gmail.com" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white focus:border-blue-500" />
               </div>
               <div>
                 <label className="block mb-1">Mật khẩu khởi tạo</label>
@@ -522,8 +568,8 @@ export default function Admin() {
               <div>
                 <label className="block mb-1">Cấp bậc hệ thống ban đầu</label>
                 <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none cursor-pointer focus:bg-white">
-                  <option value="user">📦 Nhân viên kho thường (User)</option>
-                  <option value="admin">🛡️ Quản trị viên điều phối (Admin)</option>
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
                 </select>
               </div>
               <button type="submit" disabled={loading} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer mt-2 flex items-center justify-center gap-1.5">
@@ -543,7 +589,7 @@ export default function Admin() {
 
             {loading && users.length === 0 ? (
               <div className="py-20 flex flex-col items-center justify-center text-xs font-bold text-slate-400 gap-2">
-                <Loader2 size={24} className="animate-spin text-blue-500" /> Đang truy vấn danh sách Auth...
+                <Loader2 size={24} className="animate-spin text-blue-500" /> Đang truy vấn danh sách tài khoản
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -551,7 +597,7 @@ export default function Admin() {
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                       <th className="py-3 px-4">Họ tên & Email</th>
-                      <th className="py-3 px-4 text-center">Cấp bậc</th>
+                      <th className="py-3 px-4 text-center">Phân quyền</th>
                       <th className="py-3 px-6 text-center">Hành động</th>
                     </tr>
                   </thead>
@@ -564,12 +610,12 @@ export default function Admin() {
                       return (
                         <tr key={u.id} className="hover:bg-slate-50/50 transition">
                           <td className="py-3 px-4">
-                            <div className="font-bold text-slate-800">{uName} {isTargetOwner && <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded font-black ml-1">OWNER CHỦ</span>}</div>
+                            <div className="font-bold text-slate-800">{uName} {isTargetOwner && <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded font-black ml-1">OWNER</span>}</div>
                             <div className="text-[10px] text-slate-400 mt-0.5">{u.email}</div>
                           </td>
                           <td className="py-3 px-4 text-center">
                             <span className={`px-2.5 py-0.5 border rounded-md text-[10px] font-black uppercase ${uRole === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                              {uRole === 'admin' ? '🛡️ Admin' : '📦 User'}
+                              {uRole === 'admin' ? 'Admin' : 'User'}
                             </span>
                           </td>
                           <td className="py-3 px-6">

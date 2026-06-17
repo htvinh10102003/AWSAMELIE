@@ -143,7 +143,7 @@ export default function OrderReconciliation() {
         setAlertBanner({ type: 'danger', message: `🚨 ĐƠN HÀNG HỦY! Mã ${matchedOrder.id} đã bị [${STATUS_MAP[statusCode]}]. Lọc ra rã hàng ngay!` });
       } else if (EXCLUDED_STATUS_CODES.includes(statusCode)) {
         setSurplusOrders(prev => [...prev, matchedOrder]);
-        setAlertBanner({ type: 'warning', message: `⚠️ ĐƠN ĐÃ ĐÓNG GÓI RỒI! Mã ${matchedOrder.id} bị kẹt nhầm. Bỏ ra giao đi!` });
+        setAlertBanner({ type: 'warning', message: `⚠️ ĐƠN ĐÃ ĐÓNG GÓI RỒI! Mã ${matchedOrder.id} bị in nhầm.` });
       }
       setScannedCodes(prev => [...prev, code]);
     } else {
@@ -307,7 +307,7 @@ export default function OrderReconciliation() {
             <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><ScanBarcode size={18} /></span>
             ĐỐI SOÁT PHIẾU IN TRẢ VỀ CUỐI NGÀY
           </h2>
-          <p className="text-xs text-slate-400 font-medium mt-0.5">Checklist đối soát hàng kẹt, hàng hủy và rác kho tự động</p>
+          <p className="text-xs text-slate-400 font-medium mt-0.5">Checklist đối soát hàng tồn, hàng hủy và thừa kho tự động</p>
         </div>
 
         <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 p-2 rounded-xl shadow-inner w-full sm:w-auto">
@@ -345,13 +345,13 @@ export default function OrderReconciliation() {
 
       {/* Khu vực quét mã */}
       <div className="bg-white p-4 sm:p-6 border border-slate-200 rounded-2xl shadow-sm text-center max-w-xl mx-auto space-y-4">
-        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Giao diện súng bắn quét đối soát</label>
+        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Quét mã vạch tại đây </label>
         
         <form onSubmit={handleBarcodeSubmit} className="relative max-w-md mx-auto flex items-center gap-2">
           <input 
             ref={inputRef}
             type="text"
-            placeholder="Bắn mã vạch đơn kẹt kho..."
+            placeholder="Bắn mã vạch đơn trả về ..."
             value={inputCode}
             onChange={e => setInputCode(e.target.value)}
             disabled={isConfirmed || isCameraOpen}
@@ -398,13 +398,13 @@ export default function OrderReconciliation() {
             disabled={isConfirmed || scannedCodes.length === 0}
             className="px-4 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer"
           >
-            ✓ Chốt sổ đối soát
+            ✓ Đối soát
           </button>
           <button 
             onClick={handleResetAudit}
             className="px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5"
           >
-            <Trash2 size={13} /> Bắn lại
+            <Trash2 size={13} /> Quét lại
           </button>
         </div>
       </div>
@@ -416,19 +416,19 @@ export default function OrderReconciliation() {
           <span className="text-base sm:text-lg font-black text-slate-900 block mt-0.5">{loading ? "..." : todayOrders.length}</span>
         </div>
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl shadow-sm text-center">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Hàng Đúng</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Đơn cần trả</span>
           <span className="text-base sm:text-lg font-black text-emerald-600 block mt-0.5">{expectedCorrect.filter(o=>isScanned(o)).length} / {expectedCorrect.length}</span>
         </div>
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl shadow-sm text-center">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Hàng Hủy</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Đơn bị hủy</span>
           <span className="text-base sm:text-lg font-black text-red-600 block mt-0.5">{expectedCanceled.filter(o=>isScanned(o)).length} / {expectedCanceled.length}</span>
         </div>
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl shadow-sm text-center">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Hàng Thừa</span>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Đơn thừa</span>
           <span className="text-base sm:text-lg font-black text-slate-500 block mt-0.5">{surplusOrders.length}</span>
         </div>
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl shadow-sm text-center bg-amber-50">
-          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Hàng Thiếu</span>
+          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Đơn thiếu</span>
           <span className="text-base sm:text-lg font-black text-amber-700 block mt-0.5">{isConfirmed ? allMissing.length : '?'}</span>
         </div>
       </div>
@@ -441,7 +441,7 @@ export default function OrderReconciliation() {
           <div className="flex justify-between items-center mb-3 sm:mb-4">
             <h3 className="text-xs sm:text-sm font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1.5">
               <span className="p-1 bg-emerald-50 rounded-md"><CheckCircle size={14} /></span>
-              Đơn kẹt ({expectedCorrect.length})
+              Đơn tồn ({expectedCorrect.length})
             </h3>
             <button
               onClick={handleExportCorrectOrdersExcel}
@@ -455,7 +455,7 @@ export default function OrderReconciliation() {
           
           <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-3 pr-1 max-h-[350px]">
             {expectedCorrect.length === 0 ? (
-              <div className="text-center text-slate-400 text-xs py-10">Hôm nay in đơn nào đi đơn nấy, không kẹt đơn nào!</div>
+              <div className="text-center text-slate-400 text-xs py-10">Tất cả đơn in đã được đóng và bàn giao!</div>
             ) : (
               expectedCorrect.map((order, idx) => {
                 const scanned = isScanned(order);
@@ -557,18 +557,18 @@ export default function OrderReconciliation() {
             <span className="p-1 bg-amber-100 rounded-md"><PackageMinus size={14} /></span>
             Hàng thiếu ({isConfirmed ? allMissing.length : '?'})
           </h3>
-          <p className="text-[10px] sm:text-[11px] text-amber-700/60 font-medium -mt-1 mb-3">Tổng hợp các đơn dự kiến kẹt hoặc hủy nhưng kho không đem nộp lại</p>
+          <p className="text-[10px] sm:text-[11px] text-amber-700/60 font-medium -mt-1 mb-3">Tổng hợp các đơn dự kiến tồn hoặc hủy nhưng kho không đem nộp lại</p>
           
           <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-3 pr-1 max-h-[350px]">
             {!isConfirmed ? (
               <div className="text-center text-amber-500 text-xs py-10 flex flex-col items-center justify-center gap-2 font-medium">
                 <AlertCircle size={28} className="text-amber-300" />
-                <span>Bấm nút "Chốt sổ đối soát" ở trên để khoanh vùng hàng thiếu.</span>
+                <span>Bấm nút "Đối soát" ở trên để xem danh sách hàng thiếu.</span>
               </div>
             ) : allMissing.length === 0 ? (
               <div className="text-center text-emerald-600 font-bold text-xs py-10 flex flex-col items-center justify-center gap-1.5">
                 <CheckCircle2 size={32} className="text-emerald-500" />
-                <span>Kho làm việc 100% chuẩn xác, không bị lạc mất đơn nào!</span>
+                <span>Đã nhận đủ đơn !</span>
               </div>
             ) : (
               allMissing.map(order => (
