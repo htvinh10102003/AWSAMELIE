@@ -110,7 +110,6 @@ export default function OrderReport() {
     const [selectedChannel, setSelectedChannel] = useState([]);
     const [selectedOrders, setSelectedOrders] = useState([]);
     
-    // Đổi state quản lý menu từ "showPrintMenu" thành "showActionMenu"
     const [showActionMenu, setShowActionMenu] = useState(false);
 
     const [carrierOptions, setCarrierOptions] = useState([]);
@@ -123,7 +122,10 @@ export default function OrderReport() {
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [copyMessage, setCopyMessage] = useState('');
-    const [sendingOrder, setSendingOrder] = useState(false); // State khi đang gửi đơn
+    const [sendingOrder, setSendingOrder] = useState(false);
+
+    // Bộ lọc đơn tồn >2 ngày (chỉ áp dụng cho tab "Có thể in")
+    const [agingFilter, setAgingFilter] = useState(false);
 
     useEffect(() => {
         const init = async () => {
@@ -138,11 +140,19 @@ export default function OrderReport() {
         init();
     }, []);
 
+    // Reset bộ lọc aging khi chuyển tab (chỉ có ý nghĩa ở tab printable)
+    useEffect(() => {
+        if (activeTab !== 'printable') {
+            setAgingFilter(false);
+        }
+    }, [activeTab]);
+
+    // Reset trang và action menu khi thay đổi bộ lọc
     useEffect(() => {
         setSelectedOrders([]);
-        setShowActionMenu(false); // Reset menu khi đổi tab/bộ lọc
+        setShowActionMenu(false);
         setCurrentPage(1);
-    }, [activeTab, searchId, selectedStatus, selectedCarrier, selectedChannel, searchNote, sortOrder, minAgingDays, maxAgingDays, pageSize]);
+    }, [activeTab, searchId, selectedStatus, selectedCarrier, selectedChannel, searchNote, sortOrder, minAgingDays, maxAgingDays, pageSize, agingFilter]);
 
     const fetchSystemData = async () => {
         const { data: stData } = await supabase.from('order_statuses').select('*');
@@ -198,6 +208,8 @@ export default function OrderReport() {
                 const note = (order.description || '') + ' ' + (order.private_description || '');
                 if (!note.toLowerCase().includes(searchNote.toLowerCase())) return false;
             }
+            
+            // Bộ lọc ngày tồn thủ công (min/maxAgingDays)
             if (minAgingDays || maxAgingDays) {
                 const days = order.printable_date
                     ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24))
@@ -205,6 +217,15 @@ export default function OrderReport() {
                 if (minAgingDays && days < Number(minAgingDays)) return false;
                 if (maxAgingDays && days > Number(maxAgingDays)) return false;
             }
+            
+            // Bộ lọc "đơn tồn >2 ngày" – chỉ áp dụng khi bật và đang ở tab printable
+            if (agingFilter && activeTab === 'printable') {
+                const days = order.printable_date
+                    ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24))
+                    : 0;
+                if (days <= 2) return false;
+            }
+            
             return true;
         });
 
@@ -246,16 +267,14 @@ export default function OrderReport() {
         if (printUrl) { window.open(printUrl, '_blank'); setShowActionMenu(false); }
     };
 
-    // Hàm gọi API gửi hãng vận chuyển thông qua Edge Function
     const handleSendCarrier = async () => {
         if (selectedOrders.length === 0) return;
         setSendingOrder(true);
-        setShowActionMenu(false); // Ẩn menu
+        setShowActionMenu(false);
         
         try {
             const { data: { session } } = await supabase.auth.getSession();
             
-            // Gọi Edge Function làm cầu nối với API Nhanh.vn
             const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/nhanh-carrier`, {
                 method: 'POST',
                 headers: { 
@@ -272,7 +291,6 @@ export default function OrderReport() {
             
             if (result.success) {
                 setCopyMessage(`✅ Đã gửi thành công ${selectedOrders.length} đơn sang hãng vận chuyển.`);
-                // Bỏ chọn đơn và có thể làm mới lại dữ liệu nếu cần
                 setSelectedOrders([]);
                 fetchAllocation(statusDict); 
             } else {
@@ -303,13 +321,15 @@ export default function OrderReport() {
         setTimeout(() => setCopyMessage(''), 3000);
     };
 
+    // Hàm render badge tuổi đơn – phiên bản nổi bật hơn cho đơn >2 ngày
     const renderAgingBadge = (dateStr) => {
         if (!dateStr) return <span className="px-2.5 py-1.5 bg-green-100/80 backdrop-blur-sm text-green-700 border border-green-200/30 rounded-full text-xs font-semibold">🟢 Hôm nay</span>;
         const diffTime = new Date() - new Date(dateStr);
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
         if (diffDays === 0) return <span className="px-2.5 py-1.5 bg-green-100/80 backdrop-blur-sm text-green-700 border border-green-200/30 rounded-full text-xs font-semibold inline-flex items-center gap-1">🟢Mới</span>;
         else if (diffDays <= 2) return <span className="px-2.5 py-1.5 bg-amber-100/80 backdrop-blur-sm text-amber-700 border border-amber-200/30 rounded-full text-xs font-semibold inline-flex items-center gap-1">🟡{diffDays} ngày</span>;
-        return <span className="px-2.5 py-1.5 bg-red-100/80 backdrop-blur-sm text-red-600 border border-red-200/30 rounded-full text-xs font-extrabold inline-flex items-center gap-1 animate-pulse">🔴{diffDays} ngày</span>;
+        // Đơn tồn >2 ngày: đỏ rực, có hiệu ứng nổi bật
+        return <span className="px-2.5 py-1.5 bg-red-500/90 backdrop-blur-sm text-white border-2 border-red-300 rounded-full text-xs font-extrabold inline-flex items-center gap-1 shadow-[0_0_12px_rgba(239,68,68,0.8)] animate-pulse">🔴{diffDays} ngày</span>;
     };
 
     return (
@@ -385,7 +405,7 @@ export default function OrderReport() {
                                 <Copy size={16} /> Copy ({filteredOrders.length})
                             </button>
 
-                            {/* Menu Thao Tác Mới */}
+                            {/* Menu Thao Tác */}
                             <div className="relative" onMouseLeave={() => setShowActionMenu(false)}>
                                 <button onClick={() => setShowActionMenu(!showActionMenu)} disabled={selectedOrders.length === 0 || sendingOrder} className={`px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg ${selectedOrders.length > 0 ? 'bg-blue-600/90 backdrop-blur-md text-white hover:bg-blue-700 shadow-blue-500/20' : 'bg-white/50 text-gray-400 cursor-not-allowed border border-white/20'}`}>
                                     {sendingOrder ? <RefreshCw size={18} className="animate-spin" /> : "Thao tác"} ({selectedOrders.length}) <ChevronDown size={16} />
@@ -426,6 +446,18 @@ export default function OrderReport() {
                                 <option value="desc">Mới nhất trước</option>
                             </select>
                         </div>
+                        {/* Bộ lọc đơn tồn >2 ngày – chỉ hiển thị khi ở tab printable */}
+                        {activeTab === 'printable' && (
+                            <label className="flex items-center gap-2 px-4 py-3 bg-white/60 backdrop-blur-xl border border-white/30 rounded-2xl cursor-pointer hover:bg-white/80 transition-all shadow-sm select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={agingFilter}
+                                    onChange={(e) => setAgingFilter(e.target.checked)}
+                                    className="w-4 h-4 text-red-600 bg-red-100 border-red-300 rounded focus:ring-red-500 focus:ring-offset-1"
+                                />
+                                <span className="text-sm font-semibold text-gray-700 whitespace-nowrap">Chỉ đơn tồn &gt;2 ngày</span>
+                            </label>
+                        )}
                     </div>
                 </div>
 
@@ -461,11 +493,24 @@ export default function OrderReport() {
                                         const channelColorClass = CHANNEL_COLORS[order.sale_channel] || 'bg-gray-100/80 text-gray-600';
                                         const statusColorClass = STATUS_COLORS[order.status] || 'bg-gray-100/80 text-gray-600';
 
+                                        // Xác định đơn tồn lâu (>2 ngày) để tô màu hàng
+                                        const agingDays = order.printable_date
+                                            ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24))
+                                            : 0;
+                                        const isAgingOrder = activeTab === 'printable' && agingDays > 2;
+
                                         return products.map((prod, index) => {
                                             const shortItem = data.holding?.concat(data.outOfStock)?.find(o => o.id === order.id)?.debug_shortItems?.find(i => i.name === prod.product_name);
 
                                             return (
-                                                <tr key={`${order.id}-${index}`} className={`${isChecked ? 'bg-blue-50/50 backdrop-blur-sm' : 'hover:bg-white/50'} transition-colors duration-200 font-medium`}>
+                                                <tr key={`${order.id}-${index}`} 
+                                                    className={`${isChecked 
+                                                        ? 'bg-blue-50/50 backdrop-blur-sm' 
+                                                        : isAgingOrder 
+                                                            ? 'bg-red-50/30 border-l-4 border-red-500 shadow-[inset_0_0_10px_rgba(239,68,68,0.1)]' 
+                                                            : 'hover:bg-white/50'
+                                                    } transition-colors duration-200 font-medium`}
+                                                >
                                                     {index === 0 && (
                                                         <>
                                                             <td rowSpan={rowCount} className="py-4 px-4 align-top border-r border-gray-100/50 text-center">
