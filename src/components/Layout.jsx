@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { 
   TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
-  BarChart3, User, Pin, PinOff, ClipboardCheck,PackageMinus
+  BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2
 } from 'lucide-react';
 import TestingNoticeBanner from './TestingNoticeBanner';
 
@@ -20,14 +20,16 @@ export default function Layout() {
   const sidebarExpanded = isSidebarPinned || isSidebarHovered;
 
   // STATES QUẢN LÝ ĐÓNG/MỞ CÁC MENU DROPDOWN
+  const [isPrintOrdersOpen, setIsPrintOrdersOpen] = useState(false); // Thêm state cho menu Đơn in
   const [isPackingSpeedOpen, setIsPackingSpeedOpen] = useState(false);
   const [isReturnOrdersOpen, setIsReturnOrdersOpen] = useState(false);
   const [isAdjustMenuOpen, setIsAdjustMenuOpen] = useState(false);
 
   // Tự động mở dropdown nếu đang ở trang con
   useEffect(() => {
+    if (location.pathname.includes('/bao-cao-don') || location.pathname.includes('/don-da-in-hom-nay')) setIsPrintOrdersOpen(true);
     if (location.pathname.includes('/toc-do-dong-goi-')) setIsPackingSpeedOpen(true);
-    if (location.pathname.includes('/bao-cao-hoan-') || location.pathname.includes('/kiem-tra-don-hoan')) setIsReturnOrdersOpen(true);
+    if (location.pathname.includes('/bao-cao-hoan-') || location.pathname.includes('/kiem-tra-don-hoan') || location.pathname.includes('/xu-ly-don-hoan')) setIsReturnOrdersOpen(true);
     if (location.pathname.includes('/cap-nhat-')) setIsAdjustMenuOpen(true);
   }, [location.pathname]);
 
@@ -56,10 +58,10 @@ export default function Layout() {
   const avatarLetter = displayName.charAt(0).toUpperCase();
   const isAdmin = user?.user_metadata?.role === 'admin';
 
-  // ⚡️ ĐÃ TÁI CẤU TRÚC: Định nghĩa menu gọn gàng bằng ID cho các mục có Dropdown
+  // ⚡️ Chuyển menu Đơn có thể in thành nhóm "Đơn in"
   const reportMenus = [
     { path: '/', icon: TrendingUp, label: 'Đơn đi hàng ngày' },
-    { path: '/bao-cao-don', icon: Printer, label: 'Đơn có thể in' },
+    { id: 'print_orders', icon: Printer, label: 'Đơn in' }, // Đã chuyển thành menu cha
     { id: 'packing_speed', icon: Timer, label: 'Tốc độ đóng gói' },
     { id: 'return_orders', icon: Undo2, label: 'Báo cáo đơn hoàn' },
     { path: '/bao-cao-kiem-ke', icon: ClipboardCheck, label: 'Báo cáo kiểm kê' },
@@ -112,8 +114,39 @@ export default function Layout() {
             
             {reportMenus.map((item) => {
               const Icon = item.icon;
+
+              // ⚡️ 1. RENDER DROPDOWN ĐƠN IN
+              if (item.id === 'print_orders') {
+                const isChildActive = location.pathname === '/bao-cao-don' || location.pathname === '/don-da-in-hom-nay';
+                return (
+                  <div key={item.id} className="space-y-1.5">
+                    <button 
+                      onClick={() => setIsPrintOrdersOpen(!isPrintOrdersOpen)}
+                      className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isPrintOrdersOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Icon size={18} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
+                        {sidebarExpanded && <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>}
+                      </div>
+                      {sidebarExpanded && (isPrintOrdersOpen ? <ChevronDown size={16} className="text-gray-400"/> : <ChevronRight size={16} className="text-gray-400"/>)}
+                    </button>
+                    {sidebarExpanded && isPrintOrdersOpen && (
+                      <div className="mt-1 mb-2 ml-4 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                        <Link to="/bao-cao-don" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/bao-cao-don' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <Printer size={16} className={location.pathname === '/bao-cao-don' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Đơn có thể in</span>
+                        </Link>
+                        <Link to="/don-da-in-hom-nay" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/don-da-in-hom-nay' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <CheckCircle2 size={16} className={location.pathname === '/don-da-in-hom-nay' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Đơn đã in hôm nay</span>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
               
-              // 1. RENDER DROPDOWN TỐC ĐỘ ĐÓNG GÓI
+              // 2. RENDER DROPDOWN TỐC ĐỘ ĐÓNG GÓI
               if (item.id === 'packing_speed') {
                 const isChildActive = location.pathname.includes('/toc-do-dong-goi-');
                 return (
@@ -144,9 +177,9 @@ export default function Layout() {
                 );
               }
 
-              // 2. RENDER DROPDOWN BÁO CÁO ĐƠN HOÀN (MỚI)
+              // 3. RENDER DROPDOWN BÁO CÁO ĐƠN HOÀN 
               if (item.id === 'return_orders') {
-                const isChildActive = location.pathname === '/bao-cao-hoan-tong-hop' || location.pathname === '/kiem-tra-don-hoan';
+                const isChildActive = location.pathname === '/bao-cao-hoan-tong-hop' || location.pathname === '/kiem-tra-don-hoan' || location.pathname === '/xu-ly-don-hoan';
                 return (
                   <div key={item.id} className="space-y-1.5">
                     <button 
@@ -165,8 +198,8 @@ export default function Layout() {
                           <BarChart3 size={16} className={location.pathname === '/bao-cao-hoan-tong-hop' ? 'text-blue-600' : 'text-gray-400'} />
                           <span className="text-sm">Tổng hợp đơn hoàn</span>
                         </Link>
-                        <Link to="/xu-ly-don-hoan" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 ${location.pathname === '/xu-ly-don-hoan' ? 'bg-blue-600 shadow-md text-white font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium'}`}>
-                        <PackageMinus size={18} className={location.pathname === '/xu-ly-don-hoan' ? 'text-white' : 'text-gray-400'} />
+                        <Link to="/xu-ly-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/xu-ly-don-hoan' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                        <PackageMinus size={16} className={location.pathname === '/xu-ly-don-hoan' ? 'text-blue-600' : 'text-gray-400'} />
                         <span className="text-sm">Xử lý Đơn hoàn</span>
                         </Link>
                         <Link to="/kiem-tra-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/kiem-tra-don-hoan' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
@@ -179,7 +212,7 @@ export default function Layout() {
                 );
               }
 
-              // 3. RENDER CÁC MỤC ĐƠN LẺ BÌNH THƯỜNG
+              // 4. RENDER CÁC MỤC ĐƠN LẺ BÌNH THƯỜNG
               const isActive = location.pathname === item.path;
               return (
                 <div key={item.path} className="space-y-1.5">
