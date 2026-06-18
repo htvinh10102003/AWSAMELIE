@@ -18,12 +18,11 @@ export default function Admin() {
   const [userMessage, setUserMessage] = useState('');
   const [loading, setLoading] = useState(false); 
 
-  // States phục vụ tính năng chỉnh sửa thông tin tài khoản có sẵn
-  const [editingUser, setEditingUser] = useState(null); // Lưu thông tin user đang chọn sửa
+  const [editingUser, setEditingUser] = useState(null); 
   const [editForm, setEditForm] = useState({ fullName: '', role: 'user' });
 
   // ==========================================
-  // 2. KHỞI TẠO CÁC STATES CẤU HÌNH (CŨ CỦA ÔNG)
+  // 2. KHỞI TẠO CÁC STATES CẤU HÌNH & SYNC
   // ==========================================
   const [apiConfigs, setApiConfigs] = useState({ nhanh_app_id: '', nhanh_business_id: '', nhanh_secret_key: '', nhanh_access_code: '' });
   const [apiLoading, setApiLoading] = useState(false);
@@ -43,10 +42,18 @@ export default function Admin() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [sheetMessage, setSheetMessage] = useState('');
 
+  // States cho tính năng cào ĐƠN HÀNG
   const [syncDays, setSyncDays] = useState(1); 
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncMessage, setSyncMessage] = useState('');
-  const [syncStatus, setSyncStatus] = useState('idle');
+  const [isSyncingOrder, setIsSyncingOrder] = useState(false);
+  const [syncOrderMessage, setSyncOrderMessage] = useState('');
+  const [syncOrderStatus, setSyncOrderStatus] = useState('idle');
+
+  // States cho tính năng cào SẢN PHẨM (Tồn kho & Master)
+  const [isSyncingInventory, setIsSyncingInventory] = useState(false);
+  const [syncInventoryStatus, setSyncInventoryStatus] = useState('idle');
+  const [isSyncingMaster, setIsSyncingMaster] = useState(false);
+  const [syncMasterStatus, setSyncMasterStatus] = useState('idle');
+  const [syncProductMessage, setSyncProductMessage] = useState(''); 
 
   const projectUrl = "https://infljrayvhidhfimksfp.supabase.co";
   const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluZmxqcmF5dmhpZGhmaW1rc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzAyNjksImV4cCI6MjA5NjkwNjI2OX0.ap1UnciJ5OccAvC-l5sm-JGqObTkEC038Kjf2L_IFr0";
@@ -69,9 +76,7 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'users_management') {
-      fetchSystemUsers();
-    }
+    if (activeTab === 'users_management') fetchSystemUsers();
   }, [activeTab]);
 
   const loadCurrentUserData = async () => {
@@ -165,7 +170,6 @@ export default function Admin() {
     } finally { setLoading(false); }
   };
 
-  // Kích hoạt đổ thông tin user vào form modal để chuẩn bị sửa
   const handleOpenEditModal = (targetUser) => {
     setEditingUser(targetUser);
     setEditForm({
@@ -174,7 +178,6 @@ export default function Admin() {
     });
   };
 
-  // Thực thi lưu thông tin vừa sửa đổi vào Database
   const handleSaveEditedInfo = async (e) => {
     e.preventDefault();
     if (!editForm.fullName.trim()) {
@@ -186,7 +189,7 @@ export default function Admin() {
         action: 'update_info',
         userId: editingUser.id,
         fullName: editForm.fullName,
-        role: isOwner ? editForm.role : undefined // Chỉ gửi role lên nếu người thực hiện là Chủ
+        role: isOwner ? editForm.role : undefined
       });
       setUserMessage(`✅ Đã cập nhật thông tin thành công cho tài khoản.`);
       setEditingUser(null);
@@ -273,8 +276,9 @@ export default function Admin() {
     finally { setFilterLoading(false); }
   };
 
-  const handleSyncNhanhData = async () => {
-    setIsSyncing(true); setSyncStatus('idle'); setSyncMessage(`Đang kết nối Nhanh.vn cào dữ liệu ${syncDays} ngày qua...`);
+  // ⚡️ LUỒNG ĐỒNG BỘ ĐƠN HÀNG (ĐÃ KHÔI PHỤC)
+  const handleSyncOrdersData = async () => {
+    setIsSyncingOrder(true); setSyncOrderStatus('idle'); setSyncOrderMessage(`Đang kết nối Nhanh.vn cào dữ liệu Đơn hàng ${syncDays} ngày qua...`);
     try {
       const res = await fetch(`${projectUrl}/functions/v1/sync-nhanh`, {
         method: 'POST',
@@ -286,18 +290,15 @@ export default function Admin() {
       try { data = JSON.parse(textData); } catch(e) { throw new Error(`Máy chủ sập: ${textData}`); }
       if (!res.ok) throw new Error(`[Lỗi Server ${res.status}] ${data.error || data.message || textData}`);
       if (data && data.success) {
-        setSyncStatus('success');
-        setSyncMessage(`🎉 Hoàn tất! Đã đồng bộ thành công ${data.totalSynced} đơn hàng.`);
+        setSyncOrderStatus('success');
+        setSyncOrderMessage(`🎉 Hoàn tất! Đã đồng bộ thành công ${data.totalSynced} đơn hàng.`);
       } else { throw new Error(data?.error || 'Lỗi logic Edge Function'); }
     } catch (err) {
-      setSyncStatus('error'); setSyncMessage(`❌ ${err.message}`);
-    } finally { setIsSyncing(false); }
+      setSyncOrderStatus('error'); setSyncOrderMessage(`❌ ${err.message}`);
+    } finally { setIsSyncingOrder(false); }
   };
 
-  // ⚡️ STATE & HÀM CÀO TỒN KHO SIÊU TỐC
-  const [isSyncingInventory, setIsSyncingInventory] = useState(false);
-  const [syncInventoryStatus, setSyncInventoryStatus] = useState('idle');
-
+  // ⚡️ LUỒNG ĐỒNG BỘ TỒN KHO SẢN PHẨM
   const handleSyncInventoryOnly = async () => {
     setIsSyncingInventory(true); setSyncInventoryStatus('idle'); 
     setSyncProductMessage(`Đang kéo Tồn Kho Siêu Tốc từ Nhanh.vn...`);
@@ -305,7 +306,7 @@ export default function Admin() {
       const res = await fetch(`${projectUrl}/functions/v1/sync-products`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey },
-        body: JSON.stringify({ mode: 'inventory' }) // Gọi luồng nhẹ
+        body: JSON.stringify({ mode: 'inventory' }) 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Lỗi server');
@@ -317,11 +318,7 @@ export default function Admin() {
     } finally { setIsSyncingInventory(false); }
   };
 
-  // ⚡️ STATE & HÀM CÀO MASTER DATA (FULL)
-  const [isSyncingMaster, setIsSyncingMaster] = useState(false);
-  const [syncMasterStatus, setSyncMasterStatus] = useState('idle');
-  const [syncProductMessage, setSyncProductMessage] = useState(''); // Dùng chung thông báo
-
+  // ⚡️ LUỒNG ĐỒNG BỘ MASTER DATA SẢN PHẨM
   const handleSyncMasterData = async () => {
     if (!confirm("Việc cào toàn bộ Data (Tên, Mã Vạch) sẽ mất nhiều thời gian hơn. Xác nhận chạy?")) return;
     setIsSyncingMaster(true); setSyncMasterStatus('idle'); 
@@ -330,7 +327,7 @@ export default function Admin() {
       const res = await fetch(`${projectUrl}/functions/v1/sync-products`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey },
-        body: JSON.stringify({ mode: 'master' }) // Gọi luồng nặng
+        body: JSON.stringify({ mode: 'master' }) 
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Lỗi server');
@@ -401,9 +398,90 @@ export default function Admin() {
         </div>
       )}
 
-      {/* RENDER TAB 1: CẤU HÌNH HỆ THỐNG CŨ */}
+      {/* RENDER TAB 1: CẤU HÌNH HỆ THỐNG */}
       {activeTab === 'configs' && (
         <div className="space-y-8 animate-in fade-in duration-300">
+
+          {/* ================= KHỐI ĐỒNG BỘ DỮ LIỆU ĐỘC LẬP ================= */}
+          <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 space-y-6">
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-4">
+              <DownloadCloud size={20}/> Đồng bộ Dữ liệu Cục bộ (Tránh Miss Webhook)
+            </h2>
+
+            {/* 1. Tầng cào Đơn hàng (Đã khôi phục) */}
+            <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-slate-800">Đồng bộ dữ liệu Đơn Hàng</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Sử dụng tính năng này khi hệ thống Webhook bị ngắt quãng khiến đơn hàng trên Nhanh không đẩy về được bảng phân bổ cục bộ.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select 
+                    value={syncDays} 
+                    onChange={e => setSyncDays(e.target.value)} 
+                    disabled={isSyncingOrder}
+                    className="w-24 px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 disabled:opacity-50"
+                  >
+                    <option value={1}>1 ngày</option>
+                    <option value={3}>3 ngày</option>
+                    <option value={7}>7 ngày</option>
+                  </select>
+                  <button 
+                    onClick={handleSyncOrdersData} 
+                    disabled={isSyncingOrder} 
+                    className="flex-shrink-0 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-xl shadow-sm hover:bg-blue-700 transition disabled:opacity-50"
+                  >
+                    {isSyncingOrder ? <Loader2 size={16} className="animate-spin" /> : <DownloadCloud size={16} />} Kéo Đơn Về
+                  </button>
+                </div>
+              </div>
+              
+              {syncOrderMessage && (
+                <div className={`mt-3 p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                  syncOrderStatus === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 
+                  syncOrderStatus === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 
+                  'bg-white border-blue-200 text-blue-700 animate-pulse shadow-sm'
+                }`}>
+                  {syncOrderStatus === 'success' && <CheckCircle2 size={16} />}
+                  {syncOrderStatus === 'error' && <AlertCircle size={16} />}
+                  {syncOrderMessage}
+                </div>
+              )}
+            </div>
+
+            {/* 2. Tầng cào Sản Phẩm */}
+            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex-1">
+                  <p className="text-sm font-bold text-slate-800">Đồng bộ danh bạ Sản Phẩm & Tồn Kho</p>
+                  <p className="text-[11px] text-slate-500 mt-1">Bấm "Tồn kho" để cập nhật số lượng nhanh. Bấm "Master Data" khi thêm mã vạch hoặc đổi tên áo quần mới (Thời gian chạy Master sẽ lâu hơn).</p>
+                </div>
+                
+                <div className="flex w-full sm:w-auto gap-2">
+                  <button onClick={handleSyncInventoryOnly} disabled={isSyncingInventory || isSyncingMaster} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 text-white text-sm font-bold rounded-xl shadow-sm transition">
+                    {isSyncingInventory ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />} Tồn kho
+                  </button>
+                  <button onClick={handleSyncMasterData} disabled={isSyncingInventory || isSyncingMaster} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white text-sm font-bold rounded-xl shadow-sm transition">
+                    {isSyncingMaster ? <Loader2 size={16} className="animate-spin" /> : <PackageSearch size={16} />} Master Data
+                  </button>
+                </div>
+              </div>
+              
+              {syncProductMessage && (
+                <div className={`mt-3 p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
+                  syncInventoryStatus === 'success' || syncMasterStatus === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 
+                  syncInventoryStatus === 'error' || syncMasterStatus === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 
+                  'bg-white border-slate-300 text-slate-700 animate-pulse shadow-sm'
+                }`}>
+                  {(syncInventoryStatus === 'success' || syncMasterStatus === 'success') && <CheckCircle2 size={16} />}
+                  {(syncInventoryStatus === 'error' || syncMasterStatus === 'error') && <AlertCircle size={16} />}
+                  {syncProductMessage}
+                </div>
+              )}
+            </div>
+          </div>
+
+
           {/* CÀI ĐẶT API NHANH.VN */}
           <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold mb-6 text-gray-800 flex items-center gap-2"><Settings size={20}/> Cài đặt kết nối Nhanh.vn</h2>
@@ -501,41 +579,7 @@ export default function Admin() {
               </div>
             </div>
           </div>
-
-          {/* TẦNG 2: CÀO SẢN PHẨM (2 CHẾ ĐỘ) */}
-              <div>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-slate-700">Đồng bộ Dữ liệu Sản Phẩm</p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">Chọn chế độ "Siêu Tốc" để cập nhật Tồn Kho hàng ngày, hoặc "Master Data" khi vừa tạo/sửa Tên, Mã Vạch.</p>
-                  </div>
-                  
-                  <div className="flex w-full sm:w-auto gap-2">
-                    <button onClick={handleSyncInventoryOnly} disabled={isSyncingInventory || isSyncingMaster} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-amber-500 hover:bg-amber-600 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-sm">
-                      {isSyncingInventory ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />} 
-                      Tồn kho
-                    </button>
-                    
-                    <button onClick={handleSyncMasterData} disabled={isSyncingInventory || isSyncingMaster} className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 disabled:bg-slate-300 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-sm">
-                      {isSyncingMaster ? <Loader2 size={16} className="animate-spin" /> : <PackageSearch size={16} />} 
-                      Toàn bộ data sản phẩm
-                    </button>
-                  </div>
-                </div>
-                
-                {syncProductMessage && (
-                  <div className={`mt-3 p-3 rounded-xl border text-xs font-bold flex items-center gap-2 ${
-                    syncInventoryStatus === 'success' || syncMasterStatus === 'success' ? 'bg-green-50 border-green-200 text-green-700' : 
-                    syncInventoryStatus === 'error' || syncMasterStatus === 'error' ? 'bg-red-50 border-red-200 text-red-700' : 
-                    'bg-slate-100 border-slate-200 text-slate-700 animate-pulse'
-                  }`}>
-                    {(syncInventoryStatus === 'success' || syncMasterStatus === 'success') && <CheckCircle2 size={16} />}
-                    {(syncInventoryStatus === 'error' || syncMasterStatus === 'error') && <AlertCircle size={16} />}
-                    {syncProductMessage}
-                  </div>
-                )}
-              </div>
-          </div>
+        </div>
       )}
 
       {/* RENDER TAB 2: QUẢN LÝ TÀI KHOẢN KÈM NÚT SỬA THÔNG TIN */}
@@ -655,7 +699,7 @@ export default function Admin() {
       )}
 
       {/* ========================================================== */}
-      {/* ⚡️ KHỐI POP-UP MODAL CHỈNH SỬA THÔNG TIN THÀNH VIÊN LIQUID-GLASS */}
+      {/* ⚡️ KHỐI POP-UP MODAL CHỈNH SỬA THÔNG TIN THÀNH VIÊN */}
       {/* ========================================================== */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
@@ -690,7 +734,7 @@ export default function Admin() {
                 <select 
                   value={editForm.role} 
                   onChange={e => setEditForm({...editForm, role: e.target.value})}
-                  disabled={!isOwner} // Chỉ tài khoản chủ mới có quyền bấm chọn đổi cấp bậc Admin
+                  disabled={!isOwner} 
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <option value="user">📦 Nhân viên kho thường (User)</option>
