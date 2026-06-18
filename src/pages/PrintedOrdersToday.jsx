@@ -120,20 +120,17 @@ export default function PrintedOrdersToday() {
     const fetchPrintedOrdersToday = async () => {
         setLoading(true);
         try {
-            // 1. Lấy từ điển Status
             const { data: stData } = await supabase.from('order_statuses').select('*');
             const dict = {};
             stData?.forEach(s => dict[s.id] = s.name);
             setStatusDict(dict);
 
-            // 2. Lấy giới hạn thời gian trong ngày hôm nay
             const startOfDay = new Date();
             startOfDay.setHours(0, 0, 0, 0);
             
             const endOfDay = new Date();
             endOfDay.setHours(23, 59, 59, 999);
 
-            // 3. ⚡️ VÁ LỖI: Lọc chính xác bằng cột printed_at thay vì updated_at
             const { data, error } = await supabase
                 .from('orders')
                 .select(`
@@ -153,7 +150,6 @@ export default function PrintedOrdersToday() {
 
             setOrders(data || []);
 
-            // Trích xuất options cho bộ lọc
             if (data) {
                 const uniqueStatuses = [...new Set(data.map(o => o.status).filter(Boolean))];
                 setStatusOptions(uniqueStatuses.map(code => ({ value: String(code), label: dict[code] || `Mã ${code}` })));
@@ -171,7 +167,6 @@ export default function PrintedOrdersToday() {
         }
     };
 
-    // Áp dụng bộ lọc
     const filteredOrders = orders.filter(order => {
         const matchSearch = !searchQuery || 
             String(order.id).includes(searchQuery) || 
@@ -183,20 +178,15 @@ export default function PrintedOrdersToday() {
         return matchSearch && matchStatus && matchChannel && matchCarrier;
     });
 
-    // Phân trang
     const totalPages = Math.ceil(filteredOrders.length / pageSize) || 1;
     const paginatedOrders = filteredOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-    // ==========================================
-    // ⚡️ XUẤT DỮ LIỆU RA EXCEL (CSV)
-    // ==========================================
     const handleExportData = () => {
         if (filteredOrders.length === 0) {
             alert("Không có dữ liệu để xuất!");
             return;
         }
 
-        // Bỏ cột Thời gian xuất Excel theo yêu cầu "Bỏ cái ngày giờ đi"
         const headers = ['Mã Đơn Nhanh', 'Mã Vận Đơn', 'Hãng Vận Chuyển', 'Kênh Bán', 'Trạng Thái', 'Mã Sản Phẩm', 'Tên Sản Phẩm', 'Số Lượng'];
         
         const rows = [];
@@ -222,7 +212,6 @@ export default function PrintedOrdersToday() {
             }
         });
 
-        // Đóng gói CSV
         const csvContent = "\uFEFF" + [
             headers.join(","),
             ...rows.map(e => e.map(item => `"${String(item).replace(/"/g, '""')}"`).join(","))
@@ -272,7 +261,8 @@ export default function PrintedOrdersToday() {
             </div>
 
             {/* BỘ LỌC */}
-            <div className="bg-white/70 backdrop-blur-xl border border-white/30 p-6 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] flex flex-wrap items-end gap-4">
+            {/* ⚡️ VÁ LỖI HIỂN THỊ: Thêm relative z-20 để khung lọc luôn nổi lên trên bảng dữ liệu */}
+            <div className="relative z-20 bg-white/70 backdrop-blur-xl border border-white/30 p-6 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] flex flex-wrap items-end gap-4">
                 <div className="flex-1 min-w-[200px]">
                     <div className="relative">
                         <input 
@@ -297,7 +287,8 @@ export default function PrintedOrdersToday() {
             </div>
 
             {/* BẢNG DỮ LIỆU */}
-            <div className="bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
+            {/* ⚡️ VÁ LỖI HIỂN THỊ: Khống chế z-index xuống mức 10 để nhường lớp kính cho bộ lọc thả xuống */}
+            <div className="relative z-10 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
                 <div className="overflow-x-auto">
                     {loading ? (
                         <div className="p-20 text-center flex flex-col items-center justify-center gap-3">
@@ -336,7 +327,6 @@ export default function PrintedOrdersToday() {
                                                 <>
                                                     <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-gray-100/50">
                                                         <div className="font-extrabold text-blue-600 text-base">{order.id}</div>
-                                                        {/* ⚡️ ĐÃ XÓA NGÀY GIỜ Ở ĐÂY THEO YÊU CẦU */}
                                                     </td>
                                                     <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-gray-100/50">
                                                         <div className="font-bold text-gray-800">{order.carrier_code || <span className="text-gray-400 italic font-normal">Chưa có mã</span>}</div>
