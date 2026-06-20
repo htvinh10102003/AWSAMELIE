@@ -27,9 +27,11 @@ serve(async (req) => {
     const appId = configMap['nhanh_app_id'];
     const bizId = configMap['nhanh_business_id'] || '';
 
-    // =========================================================
-    // HÀM GỌI API NHANH.VN (CHUẨN JSON, TOKEN TRONG HEADER)
-    // =========================================================
+    if (!accessToken || !appId) {
+        return new Response(JSON.stringify({ success: false, message: 'Chưa cấu hình API Nhanh.vn' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Hàm gọi API Nhanh chuẩn V3
     const callNhanhApi = async (endpoint: string, dataObj: any) => {
       const url = `https://pos.open.nhanh.vn/v3.0${endpoint}?appId=${appId}&businessId=${bizId}`;
       const res = await fetch(url, {
@@ -41,160 +43,149 @@ serve(async (req) => {
         body: JSON.stringify(dataObj)
       });
       const text = await res.text();
-      try {
-        return JSON.parse(text);
-      } catch (e) {
-        return { code: 0, messages: [text.substring(0, 200)] };
-      }
+      try { return JSON.parse(text); } 
+      catch (e) { return { code: 0, messages: [text.substring(0, 200)] }; }
     };
 
     // ==========================================
-    // ACTION: SEARCH
+    // ⚡️ ACTION: SEARCH (TÌM MÃ ĐƠN HOÀN)
     // ==========================================
     if (action === 'search') {
-      const searchCode = String(payload.code).trim();
+      const searchCode = String(payload?.code || '').trim();
       const debugLogs: string[] = [];
       let finalOrder: any = null;
+      let targetNhanhId: string | null = null; 
+      let localStatus: number | null = null;
 
-      console.log(`[START] Tìm kiếm với mã: ${searchCode}`);
+      console.log(`[START] Săn đơn hoàn cho mã: ${searchCode}`);
 
       // ----------------------------
-      // TẦNG 1: DB LOCAL
+      // 🔍 TẦNG 1: QUÉT DB NHÀ (TÌM THEO MÃ VẬN ĐƠN ĐI HOẶC ID NHANH)
       // ----------------------------
-      const { data: byCarrier } = await supabase
-        .from('orders')
-        .select('id, created_at')
-        .like('carrier_code', `%${searchCode}%`)
-        .limit(1);
+      const { data: byCarrier } = await supabase.from('orders').select('id, status').eq('carrier_code', searchCode).limit(1);
       
       if (byCarrier && byCarrier.length > 0) {
-        const targetId = String(byCarrier[0].id);
-        const { data: prods } = await supabase
-          .from('order_products')
-          .select('product_id, product_code, product_name, quantity')
-          .eq('order_id', targetId);
-        finalOrder = {
-          id: targetId,
-          customerName: "Khách hàng hệ thống",
-          customerMobile: "",
-          products: (prods || []).map((p: any) => ({
-            id: p.product_id,
-            productCode: p.product_code,
-            productName: p.product_name,
-            quantity: p.quantity
-          }))
-        };
-        debugLogs.push(`✅ T1-Carrier: tìm thấy ID=${targetId}`);
-        return new Response(JSON.stringify({ success: true, order: finalOrder, debug: debugLogs }), {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
-      }
-
-      if (/^\d+$/.test(searchCode)) {
-        const { data: byId } = await supabase
-          .from('orders')
-          .select('id, created_at')
-          .eq('id', parseInt(searchCode, 10))
-          .limit(1);
+        targetNhanhId = String(byCarrier[0].id);
+        localStatus = byCarrier[0].status;
+        debugLogs.push(`✅ T1: Khớp mã vận đơn xuất đi -> ID: ${targetNhanhId}`);
+      } else if (/^\d+$/.test(searchCode)) {
+        const { data: byId } = await supabase.from('orders').select('id, status').eq('id', searchCode).limit(1);
         if (byId && byId.length > 0) {
-          const targetId = String(byId[0].id);
-          const { data: prods } = await supabase
-            .from('order_products')
-            .select('product_id, product_code, product_name, quantity')
-            .eq('order_id', targetId);
-          finalOrder = {
-            id: targetId,
-            customerName: "Khách hàng hệ thống",
-            customerMobile: "",
-            products: (prods || []).map((p: any) => ({
-              id: p.product_id,
-              productCode: p.product_code,
-              productName: p.product_name,
-              quantity: p.quantity
-            }))
-          };
-          debugLogs.push(`✅ T1-ID: tìm thấy ID=${targetId}`);
-          return new Response(JSON.stringify({ success: true, order: finalOrder, debug: debugLogs }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          targetNhanhId = String(byId[0].id);
+          localStatus = byId[0].status;
+          debugLogs.push(`✅ T1: Khớp ID Nhanh -> ID: ${targetNhanhId}`);
         }
       }
 
       // ----------------------------
-      // TẦNG 2: ECOM RETURN -> LẤY originalEcomOrderId
+      // 🔍 TẦNG 2: QUÉT SÀN -> ĐỐI CHIẾU CỘT MỚI ECOM_ORDER_ID
       // ----------------------------
-      const ecomAppIds = [8195, 8198, 8193]; // Shopee, TikTok, Lazada
-      for (const eId of ecomAppIds) {
-        try {
-          debugLogs.push(`T2: Thử sàn appId=${eId}`);
-          const ecomRes = await callNhanhApi("/ecom/return", {
-            filters: {
-              appId: eId,
-              returnIdOrReturnTrackingNumber: searchCode
-            }
-          });
-          console.log(`[T2] appId=${eId} resp:`, JSON.stringify(ecomRes).substring(0, 300));
-          debugLogs.push(`T2 appId=${eId}: code=${ecomRes?.code}`);
+      if (!targetNhanhId) {
+        const ecomAppIds = [8195, 8198, 8193, 1, 2, 3]; 
+        for (const eId of ecomAppIds) {
+          try {
+            const ecomRes = await callNhanhApi("/ecom/return", {
+              filters: { appId: eId, returnIdOrReturnTrackingNumber: searchCode }
+            });
+            
+            if (ecomRes?.code === 1 && ecomRes.data) {
+                const returnList = Array.isArray(ecomRes.data) ? ecomRes.data : Object.values(ecomRes.data);
+                if (returnList.length > 0) {
+                    const originalEcomOrderId = (returnList[0] as any).originalEcomOrderId;
+                    debugLogs.push(`✅ T2: Lấy được Mã Đơn Sàn từ Nhanh: ${originalEcomOrderId}`);
+                    
+                    if (originalEcomOrderId) {
+                        // ⚡️ ĐỘT PHÁ TẠI ĐÂY: Quét thẳng vào cột mới của DB nhà, không thèm gọi order/list nữa!
+                        const { data: localMatch } = await supabase
+                            .from('orders')
+                            .select('id, status')
+                            .eq('ecom_order_id', originalEcomOrderId)
+                            .limit(1);
 
-          if (ecomRes?.code === 1 && Array.isArray(ecomRes.data) && ecomRes.data.length > 0) {
-            const originalEcomOrderId = ecomRes.data[0].originalEcomOrderId;
-            debugLogs.push(`✅ T2: originalEcomOrderId = ${originalEcomOrderId}`);
-            if (!originalEcomOrderId) {
-              debugLogs.push("⚠️ Không có originalEcomOrderId");
-              break;
+                        if (localMatch && localMatch.length > 0) {
+                            targetNhanhId = String(localMatch[0].id);
+                            localStatus = localMatch[0].status;
+                            debugLogs.push(`✅ T2.5: Khớp cột ecom_order_id trong DB -> ID chuẩn: ${targetNhanhId}`);
+                            break;
+                        } else {
+                            debugLogs.push(`⚠️ T2.5: DB chưa có cột ecom_order_id cho đơn này, chuyển hướng gọi API backup...`);
+                            // Luồng dự phòng nếu đơn quá cũ chưa được map cột mới
+                            const listRes = await callNhanhApi("/order/list", { 
+    filters: { appOrderId: originalEcomOrderId }, // ⚡️ Sửa privateId thành appOrderId
+    paginator: { size: 1 } 
+});
+                        }
+                    }
+                }
             }
-
-            // ----------------------------
-            // TẦNG 3: DÙNG order/list VỚI privateId
-            // ----------------------------
-            const listPayload = {
-              filters: { privateId: originalEcomOrderId },
-              paginator: { size: 1 },
-              dataOptions: {}
-            };
-            const listRes = await callNhanhApi("/order/list", listPayload);
-            console.log(`[T3] order/list resp:`, JSON.stringify(listRes).substring(0, 300));
-            debugLogs.push(`T3 order/list: code=${listRes?.code}`);
-
-            if (listRes?.code === 1 && Array.isArray(listRes.data) && listRes.data.length > 0) {
-              const orderData = listRes.data[0];
-              // Chuyển đổi cấu trúc về dạng dễ dùng cho client
-              finalOrder = {
-                id: orderData.info?.id,
-                type: orderData.info?.type,
-                status: orderData.info?.status,
-                customerName: orderData.shippingAddress?.name || "",
-                customerMobile: orderData.shippingAddress?.mobile || "",
-                carrierCode: orderData.carrier?.carrierCode || "",
-                products: (orderData.products || []).map((p: any) => ({
-                  id: p.id,
-                  code: p.code,
-                  name: p.name,
-                  quantity: p.quantity,
-                  price: p.price,
-                  discount: p.discount
-                })),
-                // Giữ lại toàn bộ để client có thêm thông tin nếu cần
-                raw: orderData
-              };
-              debugLogs.push(`✅ T3: Đã lấy đơn hàng từ order/list`);
-              break;
-            } else {
-              debugLogs.push(`❌ T3: Không tìm thấy đơn với privateId = ${originalEcomOrderId}`);
-            }
-            break; // Dừng quét sàn khác
+          } catch (e: any) {
+            console.error(`Lỗi quét sàn ${eId}:`, e.message);
           }
-        } catch (e: any) {
-          debugLogs.push(`❌ Lỗi T2 appId=${eId}: ${e.message}`);
         }
       }
 
+      // ----------------------------
+      // 🔍 TẦNG 3: CHECK TRẠNG THÁI (71, 74) & ĐỔ DATA
+      // ----------------------------
+      const parsedId = parseInt(targetNhanhId || '', 10);
+      
+      if (targetNhanhId && !isNaN(parsedId)) {
+        let currentStatus = localStatus;
+        let prodsList = null;
+        let customerName = "Khách hàng hệ thống";
+
+        // Đồng bộ trạng thái real-time từ Nhanh phòng trường hợp webhook bị chậm
+        if (currentStatus !== 71 && currentStatus !== 74) {
+            debugLogs.push(`⚠️ Trạng thái local là ${currentStatus}. Đang check real-time trên Nhanh...`);
+            const listRes = await callNhanhApi("/order/list", { filters: { id: parsedId }, paginator: { size: 1 } });
+            if (listRes?.code === 1 && Array.isArray(listRes.data) && listRes.data.length > 0) {
+                const orderData = listRes.data[0];
+                currentStatus = orderData.statusCode || orderData.status || orderData.info?.status;
+                customerName = orderData.shippingAddress?.name || "Khách Hàng Nhanh";
+                prodsList = (orderData.products || []).map((p: any) => ({
+                    id: p.id,
+                    productCode: p.code,
+                    productName: p.name,
+                    quantity: p.quantity
+                }));
+            }
+        }
+
+        // Kiểm tra điều kiện trạng thái hợp lệ
+        if (currentStatus === 71 || currentStatus === 74) {
+            if (!prodsList) {
+                const { data: localProds } = await supabase.from('order_products').select('product_id, product_code, product_name, quantity').eq('order_id', targetNhanhId);
+                prodsList = (localProds || []).map((p: any) => ({
+                    id: p.product_id,
+                    productCode: p.product_code,
+                    productName: p.product_name,
+                    quantity: p.quantity
+                }));
+            }
+
+            finalOrder = {
+              id: targetNhanhId,
+              customerName: customerName, 
+              customerMobile: "",
+              products: prodsList
+            };
+            debugLogs.push(`✅ T3: Đơn hợp lệ (${currentStatus}).`);
+        } else {
+            return new Response(JSON.stringify({ 
+                success: false, 
+                message: `Đơn hàng mang mã trạng thái: ${currentStatus}. Hệ thống chỉ chấp nhận xử lý đơn hoàn ở trạng thái 71 (Xác nhận hoàn) hoặc 74 (Đang hoàn)!`, 
+                debug: debugLogs 
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 });
+        }
+      }
+
+      // TRẢ KẾT QUẢ
       if (finalOrder) {
         return new Response(JSON.stringify({ success: true, order: finalOrder, debug: debugLogs }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       } else {
-        return new Response(JSON.stringify({ success: false, message: 'Không tìm thấy đơn gốc', debug: debugLogs }), {
+        return new Response(JSON.stringify({ success: false, message: 'Không tìm thấy mã đơn gốc trên hệ thống.', debug: debugLogs }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 200
         });
@@ -202,56 +193,44 @@ serve(async (req) => {
     }
 
     // ==========================================
-    // ACTION: SUBMIT (giữ nguyên)
+    // ACTION: SUBMIT (Hoàn thành đơn)
     // ==========================================
     if (action === 'submit') {
-      const { returnType, orderId, trackingCode, customerName, customerMobile, returnedProducts } = payload;
+      const submitPayload = payload.payload || payload; 
+      const { returnType, orderId, trackingCode, customerName, customerMobile, returnedProducts } = submitPayload;
 
       if (returnType === 'FULL') {
-        const result = await callNhanhApi("/order/update", { id: orderId, status: 72 });
+        const updatePayload = { info: { id: parseInt(orderId, 10), status: 72 } };
+        const result = await callNhanhApi("/order/edit", updatePayload);
         if (result.code === 1) {
-          return new Response(JSON.stringify({ success: true, message: 'Đã hoàn toàn bộ.' }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          return new Response(JSON.stringify({ success: true, message: 'Đã hoàn toàn bộ đơn hàng thành công.' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         } else {
           throw new Error(Array.isArray(result.messages) ? result.messages.join(', ') : 'Lỗi API Nhanh');
         }
       }
 
       if (returnType === 'PARTIAL' || returnType === 'EXTERNAL') {
-        const nhanhProducts = returnedProducts.map((p: any) => ({
-          id: p.id,
-          quantity: p.qty,
-          price: 0
-        }));
+        const nhanhProducts = returnedProducts.map((p: any) => ({ id: p.id, quantity: p.qty, price: 0 }));
         const addPayload = {
           type: 16,
           status: 'Confirmed',
           customerName: customerName || "Khách Trả Hàng Vô Danh",
           customerMobile: customerMobile || "0999999999",
-          description: `Hệ thống xử lý hoàn cho mã: ${trackingCode}`,
+          description: `Hệ thống Amelie xử lý hoàn một phần cho mã: ${trackingCode}`,
           products: nhanhProducts
         };
         const result = await callNhanhApi("/order/add", addPayload);
         if (result.code === 1) {
-          return new Response(JSON.stringify({ success: true, message: `Đã tạo Đơn hoàn 1 phần.` }), {
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-          });
+          return new Response(JSON.stringify({ success: true, message: `Đã tạo Đơn hoàn 1 phần.` }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         } else {
           throw new Error(Array.isArray(result.messages) ? result.messages.join(', ') : 'Lỗi API tạo đơn');
         }
       }
     }
 
-    return new Response(JSON.stringify({ success: false, message: 'Invalid Action' }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 400
-    });
+    return new Response(JSON.stringify({ success: false, message: 'Invalid Action' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 });
 
   } catch (error: any) {
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 500
-    });
+    return new Response(JSON.stringify({ success: false, error: error.message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 });
   }
 });

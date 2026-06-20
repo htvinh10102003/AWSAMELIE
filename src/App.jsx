@@ -30,7 +30,7 @@ export default function App() {
           
           <Route path="bao-cao-don" element={<OrderReport />} />
           <Route path="toc-do-dong-goi-chung" element={<PackingSpeed mode="general" />} />
-          <Route path="toc-do-dong-goi-nhan-su" element={<PackingSpeed mode="employee" />} />
+          <Route path="toc-do-dong-goi-nhan-su" element={<UnderDevelopment />} />
           
           {/* ⚡️ FIX LỖI: Tự động bẻ lái link cũ sang tính năng kiểm tra đơn hoàn mới */}
           <Route path="bao-cao-hoan" element={<Navigate to="/kiem-tra-don-hoan" replace />} />
