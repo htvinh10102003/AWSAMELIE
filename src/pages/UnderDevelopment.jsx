@@ -83,13 +83,13 @@ export default function UnderDevelopment() {
 
         {/* Progress Bar */}
         <div className="w-full bg-slate-200/50 rounded-full h-2 mt-8 mb-2 overflow-hidden border border-slate-200">
-          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 h-2 rounded-full w-[70%] relative">
+          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 h-2 rounded-full w-[99%] relative">
             <div className="absolute inset-0 bg-white/30 animate-pulse" />
           </div>
         </div>
         <div className="flex justify-between text-[11px] font-bold text-slate-400 tracking-wide uppercase px-0.5">
           <span>Giai đoạn kiểm thử</span>
-          <span className="text-blue-600">70% Hoàn thành</span>
+          <span className="text-blue-600">99% Hoàn thành</span>
         </div>
       </div>
 
