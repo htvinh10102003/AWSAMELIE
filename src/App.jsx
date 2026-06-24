@@ -1,4 +1,3 @@
-// ⚡️ ĐÃ SỬA: Import thêm thuộc tính Navigate từ thư viện react-router-dom
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -16,7 +15,9 @@ import KiemTraDonHoan from './pages/KiemTraDonHoan';
 import UpdatePacker from './pages/UpdatePacker';
 import UpdateProduct from './pages/UpdateProduct';
 import ReturnProcessing from './pages/ReturnProcessing';
-import PrintedOrdersToday from './pages/PrintedOrdersToday'
+import PrintedOrdersToday from './pages/PrintedOrdersToday';
+import UpdateWarehouseMap from './pages/UpdateWarehouseMap';
+import ProductLocation from './pages/ProductLocation';
 
 export default function App() {
   return (
@@ -26,32 +27,51 @@ export default function App() {
 
         <Route path="/" element={<Layout />}>
 
-          <Route index element={<Dashboard />} />
+          {/* 📊 TAB DASHBOARD (TỔNG QUAN) */}
+          <Route index element={<Dashboard />} /> {/* Đơn đi hàng ngày */}
+          <Route path="dashboard-don-hoan" element={<UnderDevelopment />} />
+          <Route path="dashboard-kpi" element={<UnderDevelopment />} />
           
+          {/* 🖨️ TAB ĐƠN IN */}
           <Route path="bao-cao-don" element={<OrderReport />} />
+          <Route path="don-da-in-hom-nay" element={<PrintedOrdersToday />} />
+
+          {/* 📦 TAB ĐÓNG GÓI */}
+          <Route path="dong-goi-don-hang" element={<UnderDevelopment />} />
           <Route path="toc-do-dong-goi-chung" element={<PackingSpeed mode="general" />} />
           <Route path="toc-do-dong-goi-nhan-su" element={<UnderDevelopment />} />
           
-          {/* ⚡️ FIX LỖI: Tự động bẻ lái link cũ sang tính năng kiểm tra đơn hoàn mới */}
+          {/* 🔄 TAB ĐƠN HOÀN */}
+          {/* Bẻ lái link cũ sang tính năng kiểm tra đơn hoàn mới */}
           <Route path="bao-cao-hoan" element={<Navigate to="/kiem-tra-don-hoan" replace />} />
-          
-          {/* 🛠 ĐƯỜNG DẪN CHO CÁC TAB BÁO CÁO VÀ VẬN HÀNH */}
           <Route path="bao-cao-hoan-tong-hop" element={<UnderDevelopment />} />
           <Route path="kiem-tra-don-hoan" element={<KiemTraDonHoan />} />
-          <Route path="bao-cao-kiem-ke" element={<UnderDevelopment />} />
+          <Route path="xu-ly-don-hoan" element={<ReturnProcessing />} />
+
+          {/* 📋 TAB BÁO CÁO KIỂM KÊ */}
+          {/* Bẻ lái link gốc sang thống kê */}
+          <Route path="bao-cao-kiem-ke" element={<Navigate to="/thong-ke-kiem-ke" replace />} />
+          <Route path="thong-ke-kiem-ke" element={<UnderDevelopment />} />
+          <Route path="danh-sach-kiem-ke" element={<UnderDevelopment />} />
+
+          {/* 🏢 TAB TỒN KHO */}
           <Route path="bao-cao-ton-kho" element={<InventoryReport />} />
+          <Route path="vi-tri-san-pham" element={<ProductLocation />} />
+          <Route path="chi-dan-nhat-hang" element={<UnderDevelopment />} />
+
+          {/* ⚠️ CÁC BÁO CÁO ĐƠN LẺ */}
           <Route path="don-khong-khai-gia" element={<DeclaredFeeReport />} />
           <Route path="doi-soat-kho" element={<OrderReconciliation />} />
-          <Route path="xu-ly-don-hoan" element={<ReturnProcessing />} />
-          <Route path="/don-da-in-hom-nay" element={<PrintedOrdersToday />} />
           
           {/* 🔒 KHÓA CỔNG CÀI ĐẶT ADMIN: Bọc ProtectedRoute bảo vệ nghiêm ngặt */}
           <Route path="admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
 
-          {/* 🔒 KHÓA CỔNG HIỆU CHỈNH: Xếp đồng cấp và được bảo vệ nghiêm ngặt */}
+          {/* 🔒 KHÓA CỔNG HIỆU CHỈNH: Được bảo vệ nghiêm ngặt bằng ProtectedRoute */}
           <Route path="cap-nhat-nguoi-dong-goi" element={<ProtectedRoute><UpdatePacker /></ProtectedRoute>} />
           <Route path="cap-nhat-lich-lam-viec" element={<ProtectedRoute><UpdateSchedule /></ProtectedRoute>} /> 
           <Route path="cap-nhat-san-pham" element={<ProtectedRoute><UpdateProduct /></ProtectedRoute>} />
+          <Route path="cap-nhat-so-do-kho" element={<ProtectedRoute><UpdateWarehouseMap /></ProtectedRoute>} />
+          
         </Route>
       </Routes>
     </BrowserRouter>

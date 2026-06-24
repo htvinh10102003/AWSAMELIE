@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase';
 import { 
   TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
-  BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2
+  BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2, 
+  LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2, Menu
 } from 'lucide-react';
 import TestingNoticeBanner from './TestingNoticeBanner';
 
@@ -19,17 +20,26 @@ export default function Layout() {
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
   const sidebarExpanded = isSidebarPinned || isSidebarHovered;
 
+  // STATE MOBILE MENU
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   // STATES QUẢN LÝ ĐÓNG/MỞ CÁC MENU DROPDOWN
-  const [isPrintOrdersOpen, setIsPrintOrdersOpen] = useState(false); // Thêm state cho menu Đơn in
-  const [isPackingSpeedOpen, setIsPackingSpeedOpen] = useState(false);
+  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+  const [isPrintOrdersOpen, setIsPrintOrdersOpen] = useState(false);
+  const [isPackingOpen, setIsPackingOpen] = useState(false);
   const [isReturnOrdersOpen, setIsReturnOrdersOpen] = useState(false);
+  const [isInventoryCheckOpen, setIsInventoryCheckOpen] = useState(false);
+  const [isInventoryReportOpen, setIsInventoryReportOpen] = useState(false);
   const [isAdjustMenuOpen, setIsAdjustMenuOpen] = useState(false);
 
   // Tự động mở dropdown nếu đang ở trang con
   useEffect(() => {
+    if (location.pathname === '/' || location.pathname.includes('/dashboard-')) setIsDashboardOpen(true);
     if (location.pathname.includes('/bao-cao-don') || location.pathname.includes('/don-da-in-hom-nay')) setIsPrintOrdersOpen(true);
-    if (location.pathname.includes('/toc-do-dong-goi-')) setIsPackingSpeedOpen(true);
+    if (location.pathname.includes('/dong-goi-') || location.pathname.includes('/toc-do-dong-goi-')) setIsPackingOpen(true);
     if (location.pathname.includes('/bao-cao-hoan-') || location.pathname.includes('/kiem-tra-don-hoan') || location.pathname.includes('/xu-ly-don-hoan')) setIsReturnOrdersOpen(true);
+    if (location.pathname.includes('/thong-ke-kiem-ke') || location.pathname.includes('/danh-sach-kiem-ke')) setIsInventoryCheckOpen(true);
+    if (location.pathname.includes('/bao-cao-ton-kho') || location.pathname.includes('/vi-tri-san-pham')) setIsInventoryReportOpen(true);
     if (location.pathname.includes('/cap-nhat-')) setIsAdjustMenuOpen(true);
   }, [location.pathname]);
 
@@ -58,15 +68,15 @@ export default function Layout() {
   const avatarLetter = displayName.charAt(0).toUpperCase();
   const isAdmin = user?.user_metadata?.role === 'admin';
 
-  // ⚡️ Chuyển menu Đơn có thể in thành nhóm "Đơn in"
+  // ⚡️ KHAI BÁO CẤU TRÚC MENU MỚI
   const reportMenus = [
-    { path: '/', icon: TrendingUp, label: 'Đơn đi hàng ngày' },
-    { id: 'print_orders', icon: Printer, label: 'Đơn in' }, // Đã chuyển thành menu cha
-    { id: 'packing_speed', icon: Timer, label: 'Tốc độ đóng gói' },
+    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { id: 'print_orders', icon: Printer, label: 'Đơn in' },
+    { id: 'packing', icon: Timer, label: 'Đóng gói' },
     { id: 'return_orders', icon: Undo2, label: 'Báo cáo đơn hoàn' },
-    { path: '/bao-cao-kiem-ke', icon: ClipboardCheck, label: 'Báo cáo kiểm kê' },
+    { id: 'inventory_check', icon: ClipboardCheck, label: 'Báo cáo kiểm kê' },
     { path: '/doi-soat-kho', icon: ScanLine, label: 'Đối soát đơn cuối ngày' },
-    { path: '/bao-cao-ton-kho', icon: Boxes, label: 'Báo cáo tồn kho' },
+    { id: 'inventory_report', icon: Boxes, label: 'Báo cáo tồn kho' },
     { path: '/don-khong-khai-gia', icon: AlertTriangle, label: 'Đơn không khai giá' },
   ];
 
@@ -77,8 +87,16 @@ export default function Layout() {
       <div
         onMouseEnter={() => setIsSidebarHovered(true)}
         onMouseLeave={() => setIsSidebarHovered(false)}
+        onClick={(e) => {
+          // Đóng mobile menu khi click vào Link (thẻ a)
+          if (e.target.closest('a')) {
+            setMobileMenuOpen(false);
+          }
+        }}
         className={`flex-shrink-0 bg-white/70 backdrop-blur-2xl border-r border-white/30 shadow-[0_8px_32px_rgba(0,0,0,0.04)] flex flex-col z-10 transition-all duration-300 ease-in-out relative ${
           sidebarExpanded ? 'w-64' : 'w-16'
+        } max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:transform max-md:transition-all max-md:duration-300 max-md:ease-in-out max-md:w-64 max-md:shadow-2xl ${
+          mobileMenuOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'
         }`}
       >
         
@@ -115,15 +133,44 @@ export default function Layout() {
             {reportMenus.map((item) => {
               const Icon = item.icon;
 
-              // ⚡️ 1. RENDER DROPDOWN ĐƠN IN
+              // 1. DROPDOWN DASHBOARD
+              if (item.id === 'dashboard') {
+                const isChildActive = location.pathname === '/' || location.pathname === '/dashboard-don-hoan' || location.pathname === '/dashboard-kpi';
+                return (
+                  <div key={item.id} className="space-y-1.5">
+                    <button onClick={() => setIsDashboardOpen(!isDashboardOpen)} className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isDashboardOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
+                      <div className="flex items-center gap-3">
+                        <Icon size={18} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
+                        {sidebarExpanded && <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>}
+                      </div>
+                      {sidebarExpanded && (isDashboardOpen ? <ChevronDown size={16} className="text-gray-400"/> : <ChevronRight size={16} className="text-gray-400"/>)}
+                    </button>
+                    {sidebarExpanded && isDashboardOpen && (
+                      <div className="mt-1 mb-2 ml-4 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                        <Link to="/" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <TrendingUp size={16} className={location.pathname === '/' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Đơn đi hàng ngày</span>
+                        </Link>
+                        <Link to="/dashboard-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/dashboard-don-hoan' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <BarChart2 size={16} className={location.pathname === '/dashboard-don-hoan' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">SL Đơn hoàn theo ngày</span>
+                        </Link>
+                        <Link to="/dashboard-kpi" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/dashboard-kpi' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <Target size={16} className={location.pathname === '/dashboard-kpi' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Tổng quan KPI tháng</span>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // 2. DROPDOWN ĐƠN IN
               if (item.id === 'print_orders') {
                 const isChildActive = location.pathname === '/bao-cao-don' || location.pathname === '/don-da-in-hom-nay';
                 return (
                   <div key={item.id} className="space-y-1.5">
-                    <button 
-                      onClick={() => setIsPrintOrdersOpen(!isPrintOrdersOpen)}
-                      className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isPrintOrdersOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}
-                    >
+                    <button onClick={() => setIsPrintOrdersOpen(!isPrintOrdersOpen)} className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isPrintOrdersOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
                       <div className="flex items-center gap-3">
                         <Icon size={18} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
                         {sidebarExpanded && <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>}
@@ -146,23 +193,27 @@ export default function Layout() {
                 );
               }
               
-              // 2. RENDER DROPDOWN TỐC ĐỘ ĐÓNG GÓI
-              if (item.id === 'packing_speed') {
-                const isChildActive = location.pathname.includes('/toc-do-dong-goi-');
+              // 3. DROPDOWN ĐÓNG GÓI
+              if (item.id === 'packing') {
+                const isChildActive = location.pathname.includes('/dong-goi-') || location.pathname.includes('/toc-do-dong-goi-');
                 return (
                   <div key={item.id} className="space-y-1.5">
-                    <button 
-                      onClick={() => setIsPackingSpeedOpen(!isPackingSpeedOpen)}
-                      className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isPackingSpeedOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}
-                    >
+                    <button onClick={() => setIsPackingOpen(!isPackingOpen)} className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isPackingOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
                       <div className="flex items-center gap-3">
                         <Icon size={18} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
                         {sidebarExpanded && <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>}
                       </div>
-                      {sidebarExpanded && (isPackingSpeedOpen ? <ChevronDown size={16} className="text-gray-400"/> : <ChevronRight size={16} className="text-gray-400"/>)}
+                      {sidebarExpanded && (isPackingOpen ? <ChevronDown size={16} className="text-gray-400"/> : <ChevronRight size={16} className="text-gray-400"/>)}
                     </button>
-                    {sidebarExpanded && isPackingSpeedOpen && (
+                    {sidebarExpanded && isPackingOpen && (
                       <div className="mt-1 mb-2 ml-4 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                        <Link to="/dong-goi-don-hang" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/dong-goi-don-hang' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                            <Box size={16} className={location.pathname === '/dong-goi-don-hang' ? 'text-blue-600' : 'text-gray-400'} />
+                            <div className="flex flex-col">
+                              <span className="text-sm">Đóng gói đơn hàng</span>
+                              <span className="text-[10px] text-red-500 font-normal leading-tight mt-0.5">Tab đóng gói dành cho NVĐG</span>
+                            </div>
+                        </Link>
                         <Link to="/toc-do-dong-goi-chung" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/toc-do-dong-goi-chung' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
                           <BarChart3 size={16} className={location.pathname === '/toc-do-dong-goi-chung' ? 'text-blue-600' : 'text-gray-400'} />
                           <span className="text-sm">Đóng gói chung</span>
@@ -177,15 +228,12 @@ export default function Layout() {
                 );
               }
 
-              // 3. RENDER DROPDOWN BÁO CÁO ĐƠN HOÀN 
+              // 4. DROPDOWN BÁO CÁO ĐƠN HOÀN 
               if (item.id === 'return_orders') {
                 const isChildActive = location.pathname === '/bao-cao-hoan-tong-hop' || location.pathname === '/kiem-tra-don-hoan' || location.pathname === '/xu-ly-don-hoan';
                 return (
                   <div key={item.id} className="space-y-1.5">
-                    <button 
-                      onClick={() => setIsReturnOrdersOpen(!isReturnOrdersOpen)}
-                      className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isReturnOrdersOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}
-                    >
+                    <button onClick={() => setIsReturnOrdersOpen(!isReturnOrdersOpen)} className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isReturnOrdersOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
                       <div className="flex items-center gap-3">
                         <Icon size={18} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
                         {sidebarExpanded && <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>}
@@ -212,14 +260,67 @@ export default function Layout() {
                 );
               }
 
-              // 4. RENDER CÁC MỤC ĐƠN LẺ BÌNH THƯỜNG
+              // 5. DROPDOWN BÁO CÁO KIỂM KÊ
+              if (item.id === 'inventory_check') {
+                const isChildActive = location.pathname === '/thong-ke-kiem-ke' || location.pathname === '/danh-sach-kiem-ke';
+                return (
+                  <div key={item.id} className="space-y-1.5">
+                    <button onClick={() => setIsInventoryCheckOpen(!isInventoryCheckOpen)} className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isInventoryCheckOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
+                      <div className="flex items-center gap-3">
+                        <Icon size={18} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
+                        {sidebarExpanded && <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>}
+                      </div>
+                      {sidebarExpanded && (isInventoryCheckOpen ? <ChevronDown size={16} className="text-gray-400"/> : <ChevronRight size={16} className="text-gray-400"/>)}
+                    </button>
+                    {sidebarExpanded && isInventoryCheckOpen && (
+                      <div className="mt-1 mb-2 ml-4 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                        <Link to="/thong-ke-kiem-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/thong-ke-kiem-ke' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <BarChart3 size={16} className={location.pathname === '/thong-ke-kiem-ke' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Thống kê kiểm kê kho</span>
+                        </Link>
+                        <Link to="/danh-sach-kiem-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/danh-sach-kiem-ke' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <ListChecks size={16} className={location.pathname === '/danh-sach-kiem-ke' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Danh sách cần kiểm kê</span>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // 6. DROPDOWN BÁO CÁO TỒN KHO
+              if (item.id === 'inventory_report') {
+                const isChildActive = location.pathname === '/bao-cao-ton-kho' || location.pathname === '/vi-tri-san-pham';
+                return (
+                  <div key={item.id} className="space-y-1.5">
+                    <button onClick={() => setIsInventoryReportOpen(!isInventoryReportOpen)} className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isInventoryReportOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
+                      <div className="flex items-center gap-3">
+                        <Icon size={18} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
+                        {sidebarExpanded && <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>}
+                      </div>
+                      {sidebarExpanded && (isInventoryReportOpen ? <ChevronDown size={16} className="text-gray-400"/> : <ChevronRight size={16} className="text-gray-400"/>)}
+                    </button>
+                    {sidebarExpanded && isInventoryReportOpen && (
+                      <div className="mt-1 mb-2 ml-4 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                        <Link to="/bao-cao-ton-kho" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/bao-cao-ton-kho' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <Boxes size={16} className={location.pathname === '/bao-cao-ton-kho' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Tồn kho thực tế</span>
+                        </Link>
+                        <Link to="/vi-tri-san-pham" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/vi-tri-san-pham' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <MapPin size={16} className={location.pathname === '/vi-tri-san-pham' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Vị trí sản phẩm</span>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // 7. RENDER CÁC MỤC ĐƠN LẺ BÌNH THƯỜNG (Ví dụ: Đối soát kho, Đơn không khai giá)
               const isActive = location.pathname === item.path;
               return (
                 <div key={item.path} className="space-y-1.5">
-                  <Link 
-                    to={item.path} 
-                    className={`flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group ${!sidebarExpanded ? 'justify-center px-0' : 'px-4'} ${isActive ? 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}
-                  >
+                  <Link to={item.path} className={`flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group ${!sidebarExpanded ? 'justify-center px-0' : 'px-4'} ${isActive ? 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
                     <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors duration-200 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
                     {sidebarExpanded && <span className="text-sm">{item.label}</span>}
                     {isActive && sidebarExpanded && <span className="ml-auto w-1.5 h-5 bg-white/40 rounded-full" />}
@@ -239,10 +340,7 @@ export default function Layout() {
                 </Link>
 
                 <div className="pt-1">
-                  <button 
-                    onClick={() => setIsAdjustMenuOpen(!isAdjustMenuOpen)} 
-                    className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 group hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600 cursor-pointer"
-                  >
+                  <button onClick={() => setIsAdjustMenuOpen(!isAdjustMenuOpen)} className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 group hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600 cursor-pointer">
                     <div className="flex items-center gap-3">
                       <Wrench size={18} strokeWidth={2} className="text-gray-400 group-hover:text-blue-500 transition-colors" />
                       <span className="text-sm">Cập nhật & Hiệu chỉnh</span>
@@ -263,6 +361,10 @@ export default function Layout() {
                       <Link to="/cap-nhat-san-pham" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-san-pham' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
                         <PackageSearch size={16} className={location.pathname === '/cap-nhat-san-pham' ? 'text-blue-600' : 'text-gray-400'} />
                         <span className="text-sm">Hiệu chỉnh sản phẩm</span>
+                      </Link>
+                      <Link to="/cap-nhat-so-do-kho" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-so-do-kho' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                        <MapPin size={16} className={location.pathname === '/cap-nhat-so-do-kho' ? 'text-blue-600' : 'text-gray-400'} />
+                        <span className="text-sm">Sơ đồ Kho hàng</span>
                       </Link>
                     </div>
                   )}
@@ -308,6 +410,14 @@ export default function Layout() {
 
       {/* MAIN CONTENT */}
       <div className="flex-1 overflow-auto relative bg-transparent">
+        {/* Hamburger menu mobile */}
+        <button 
+          onClick={() => setMobileMenuOpen(true)}
+          className="md:hidden absolute top-4 left-4 z-30 p-2 bg-white/80 backdrop-blur-md rounded-xl shadow-lg hover:bg-white/90 transition-colors"
+        >
+          <Menu size={20} className="text-gray-700" />
+        </button>
+
         <div className="absolute inset-0 bg-gradient-to-b from-blue-50/20 via-white to-transparent pointer-events-none" />
         <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-blue-50/40 to-transparent pointer-events-none" />
         <div className="relative z-10 p-8 h-full">
@@ -315,6 +425,14 @@ export default function Layout() {
           <Outlet />
         </div>
       </div>
+
+      {/* OVERLAY MOBILE */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 md:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
 
       {/* LOGOUT MODAL */}
       {showLogoutModal && (

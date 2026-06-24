@@ -1,14 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
-  Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, CalendarClock,PackageSearch,
-  Users, UserPlus, ShieldAlert, ShieldCheck, UserX, Eye, EyeOff, KeyRound, Pencil, X,Zap
+  Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
+  Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, MapPin, UploadCloud
 } from 'lucide-react';
+import * as Papa from 'papaparse'; // Thư viện đọc CSV
 
 export default function Admin() {
-  // ==========================================
-  // 1. KHỞI TẠO STATES QUẢN LÝ USER & MODAL SỬA
-  // ==========================================
   const [activeTab, setActiveTab] = useState('configs'); 
   const [currentUserMeta, setCurrentUserMeta] = useState({});
   const [users, setUsers] = useState([]);
@@ -21,9 +19,6 @@ export default function Admin() {
   const [editingUser, setEditingUser] = useState(null); 
   const [editForm, setEditForm] = useState({ fullName: '', role: 'user' });
 
-  // ==========================================
-  // 2. KHỞI TẠO CÁC STATES CẤU HÌNH & SYNC
-  // ==========================================
   const [apiConfigs, setApiConfigs] = useState({ nhanh_app_id: '', nhanh_business_id: '', nhanh_secret_key: '', nhanh_access_code: '' });
   const [apiLoading, setApiLoading] = useState(false);
   const [apiMessage, setApiMessage] = useState('');
@@ -42,25 +37,28 @@ export default function Admin() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [sheetMessage, setSheetMessage] = useState('');
 
-  // States cho tính năng cào ĐƠN HÀNG
   const [syncDays, setSyncDays] = useState(1); 
   const [isSyncingOrder, setIsSyncingOrder] = useState(false);
   const [syncOrderMessage, setSyncOrderMessage] = useState('');
   const [syncOrderStatus, setSyncOrderStatus] = useState('idle');
 
-  // States cho tính năng cào SẢN PHẨM (Tồn kho & Master)
   const [isSyncingInventory, setIsSyncingInventory] = useState(false);
   const [syncInventoryStatus, setSyncInventoryStatus] = useState('idle');
   const [isSyncingMaster, setIsSyncingMaster] = useState(false);
   const [syncMasterStatus, setSyncMasterStatus] = useState('idle');
   const [syncProductMessage, setSyncProductMessage] = useState(''); 
 
+  // ==========================================
+  // ⚡️ MỚI: QUẢN LÝ VỊ TRÍ KHO HÀNG (LOCATION)
+  // ==========================================
+  const [csvFile, setCsvFile] = useState(null);
+  const [isUploadingCsv, setIsUploadingCsv] = useState(false);
+  const [locationMessage, setLocationMessage] = useState({ text: '', type: '' });
+  const fileInputRef = useRef(null);
+
   const projectUrl = "https://infljrayvhidhfimksfp.supabase.co";
   const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluZmxqcmF5dmhpZGhmaW1rc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzAyNjksImV4cCI6MjA5NjkwNjI2OX0.ap1UnciJ5OccAvC-l5sm-JGqObTkEC038Kjf2L_IFr0";
 
-  // ==========================================
-  // 3. THUẬT TOÁN ĐỘNG & LOAD DATA
-  // ==========================================
   const getDynamicPriorityOptions = () => {
     const options = filterConfigs.allowed_statuses.map(statusId => {
       const st = statusList.find(s => String(s.id) === String(statusId));
@@ -125,9 +123,6 @@ export default function Admin() {
     }
   };
 
-  // ==========================================
-  // 4. LUỒNG QUẢN LÝ USER QUA EDGE FUNCTION
-  // ==========================================
   const callUserManagementApi = async (payload) => {
     const { data: { session } } = await supabase.auth.getSession();
     const res = await fetch(`${projectUrl}/functions/v1/manage-users`, {
@@ -211,9 +206,6 @@ export default function Admin() {
     } finally { setActionLoadingId(null); }
   };
 
-  // ==========================================
-  // 5. CÁC HANDLERS CẤU HÌNH CŨ
-  // ==========================================
   const handleApiChange = (e) => setApiConfigs({ ...apiConfigs, [e.target.name]: e.target.value });
   
   const handleSaveApi = async (e) => {
@@ -276,9 +268,8 @@ export default function Admin() {
     finally { setFilterLoading(false); }
   };
 
-  // ⚡️ LUỒNG ĐỒNG BỘ ĐƠN HÀNG (ĐÃ KHÔI PHỤC)
   const handleSyncOrdersData = async () => {
-    setIsSyncingOrder(true); setSyncOrderStatus('idle'); setSyncOrderMessage(`Đang kết nối Nhanh.vn cào dữ liệu Đơn hàng ${syncDays} ngày qua...`);
+    setIsSyncingOrder(true); setSyncOrderStatus('idle'); setSyncOrderMessage(`Đang cào dữ liệu Đơn hàng ${syncDays} ngày qua...`);
     try {
       const res = await fetch(`${projectUrl}/functions/v1/sync-nhanh`, {
         method: 'POST',
@@ -288,20 +279,18 @@ export default function Admin() {
       const textData = await res.text();
       let data;
       try { data = JSON.parse(textData); } catch(e) { throw new Error(`Máy chủ sập: ${textData}`); }
-      if (!res.ok) throw new Error(`[Lỗi Server ${res.status}] ${data.error || data.message || textData}`);
+      if (!res.ok) throw new Error(`[Lỗi Server] ${data.error || data.message || textData}`);
       if (data && data.success) {
         setSyncOrderStatus('success');
-        setSyncOrderMessage(`🎉 Hoàn tất! Đã đồng bộ thành công ${data.totalSynced} đơn hàng.`);
+        setSyncOrderMessage(`🎉 Đã đồng bộ thành công ${data.totalSynced} đơn hàng.`);
       } else { throw new Error(data?.error || 'Lỗi logic Edge Function'); }
     } catch (err) {
       setSyncOrderStatus('error'); setSyncOrderMessage(`❌ ${err.message}`);
     } finally { setIsSyncingOrder(false); }
   };
 
-  // ⚡️ LUỒNG ĐỒNG BỘ TỒN KHO SẢN PHẨM
   const handleSyncInventoryOnly = async () => {
-    setIsSyncingInventory(true); setSyncInventoryStatus('idle'); 
-    setSyncProductMessage(`Đang kéo Tồn Kho Siêu Tốc từ Nhanh.vn...`);
+    setIsSyncingInventory(true); setSyncInventoryStatus('idle'); setSyncProductMessage(`Đang kéo Tồn Kho Siêu Tốc...`);
     try {
       const res = await fetch(`${projectUrl}/functions/v1/sync-products`, {
         method: 'POST',
@@ -318,11 +307,9 @@ export default function Admin() {
     } finally { setIsSyncingInventory(false); }
   };
 
-  // ⚡️ LUỒNG ĐỒNG BỘ MASTER DATA SẢN PHẨM
   const handleSyncMasterData = async () => {
     if (!confirm("Việc cào toàn bộ Data (Tên, Mã Vạch) sẽ mất nhiều thời gian hơn. Xác nhận chạy?")) return;
-    setIsSyncingMaster(true); setSyncMasterStatus('idle'); 
-    setSyncProductMessage(`Đang cào toàn bộ Data (Rất nặng, vui lòng đợi)...`);
+    setIsSyncingMaster(true); setSyncMasterStatus('idle'); setSyncProductMessage(`Đang cào toàn bộ Master Data...`);
     try {
       const res = await fetch(`${projectUrl}/functions/v1/sync-products`, {
         method: 'POST',
@@ -333,7 +320,7 @@ export default function Admin() {
       if (!res.ok) throw new Error(data.error || 'Lỗi server');
       
       setSyncMasterStatus('success');
-      setSyncProductMessage(`🎉 Tuyệt vời! Đã làm mới toàn bộ ${data.totalSynced} sản phẩm trong kho.`);
+      setSyncProductMessage(`🎉 Đã làm mới toàn bộ ${data.totalSynced} sản phẩm.`);
     } catch (err) {
       setSyncMasterStatus('error'); setSyncProductMessage(`❌ ${err.message}`);
     } finally { setIsSyncingMaster(false); }
@@ -364,6 +351,64 @@ export default function Admin() {
     setSyncLoading(false);
   };
 
+
+  // ==========================================
+  // ⚡️ LUỒNG UPLOAD CSV IMPORT VỊ TRÍ SẢN PHẨM
+  // ==========================================
+  const handleUploadLocationCsv = () => {
+    if (!csvFile) {
+        setLocationMessage({ text: 'Vui lòng chọn một file CSV trước.', type: 'error' });
+        return;
+    }
+    
+    setIsUploadingCsv(true);
+    setLocationMessage({ text: 'Đang xử lý file...', type: 'processing' });
+
+    // Dùng PapaParse để đọc file Excel/CSV
+    Papa.parse(csvFile, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async function(results) {
+            const data = results.data;
+            let successCount = 0;
+            let errorCount = 0;
+
+            // Chạy vòng lặp cập nhật từng sản phẩm vào Database
+            for (const row of data) {
+                // Tìm Key dựa trên cả tiếng Việt hoặc tiếng Anh (Mã SP/Product Code, Vị trí/Location)
+                const productCode = row['Mã SP'] || row['Mã sản phẩm'] || row['product_code'];
+                const location = row['Vị trí'] || row['Vi tri'] || row['location_code'];
+
+                if (productCode && location) {
+                    // Update thẳng vào cột location_code của bảng product_inventories
+                    const { error } = await supabase
+                        .from('product_inventories')
+                        .update({ location_code: location })
+                        .eq('product_code', productCode); // So khớp với Mã sản phẩm
+
+                    if (!error) successCount++;
+                    else errorCount++;
+                } else {
+                    errorCount++;
+                }
+            }
+
+            setIsUploadingCsv(false);
+            if (successCount > 0) {
+                setLocationMessage({ text: `🎉 Đã gắn vị trí cho ${successCount} mã sản phẩm. (Thất bại/Bỏ qua: ${errorCount} mã).`, type: 'success' });
+            } else {
+                setLocationMessage({ text: '❌ Lỗi định dạng file. Vui lòng đảm bảo file có 2 cột "Mã SP" và "Vị trí".', type: 'error' });
+            }
+            setCsvFile(null);
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        },
+        error: (error) => {
+            setIsUploadingCsv(false);
+            setLocationMessage({ text: `❌ Lỗi đọc file: ${error.message}`, type: 'error' });
+        }
+    });
+  };
+
   const dynamicOptions = getDynamicPriorityOptions();
   const isOwner = currentUserMeta.is_owner === true;
 
@@ -382,12 +427,12 @@ export default function Admin() {
           </div>
         </div>
 
-        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60">
+        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60 flex-wrap">
           <button onClick={() => { setActiveTab('configs'); setUserMessage(''); }} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'configs' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 cursor-pointer'}`}>
-            Cấu hình hệ thống
+            Cấu hình
           </button>
           <button onClick={() => { setActiveTab('users_management'); setUserMessage(''); }} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'users_management' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 cursor-pointer'}`}>
-            Quản lý User
+            User
           </button>
         </div>
       </div>
@@ -397,6 +442,7 @@ export default function Admin() {
           <CheckCircle2 size={16} /> {userMessage}
         </div>
       )}
+
 
       {/* RENDER TAB 1: CẤU HÌNH HỆ THỐNG */}
       {activeTab === 'configs' && (
@@ -480,7 +526,6 @@ export default function Admin() {
               )}
             </div>
           </div>
-
 
           {/* CÀI ĐẶT API NHANH.VN */}
           <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
@@ -626,7 +671,7 @@ export default function Admin() {
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden lg:col-span-2">
             <div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
               <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                <Users size={14}/> Danh sách tài khoản biên chế ({users.length} người)
+                <Users size={14}/> Danh sách tài khoản ({users.length} người)
               </span>
               <button onClick={fetchSystemUsers} className="text-xs font-bold text-blue-600 hover:text-blue-700 cursor-pointer">🔄 Tải lại</button>
             </div>
@@ -737,8 +782,8 @@ export default function Admin() {
                   disabled={!isOwner} 
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed cursor-pointer"
                 >
-                  <option value="user">📦 Nhân viên kho thường (User)</option>
-                  <option value="admin">🛡️ Quản trị viên điều phối (Admin)</option>
+                  <option value="user">Nhân viên kho (User)</option>
+                  <option value="admin">Quản trị viên (Admin)</option>
                 </select>
                 {!isOwner && <p className="text-[10px] text-amber-600 font-medium mt-1">⚠️ Chỉ tài khoản Chủ mới được phép thay đổi cấp bậc quyền lực.</p>}
               </div>

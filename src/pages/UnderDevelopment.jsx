@@ -4,86 +4,75 @@ export default function UnderDevelopment() {
   return (
     <div className="h-[calc(100vh-4rem)] w-full flex items-center justify-center font-sans relative overflow-hidden bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/50">
       
-      {/* Họa tiết nền: bánh răng quay */}
+      {/* Họa tiết nền: bánh răng quay và chấm tròn nổi */}
       <div className="absolute inset-0 pointer-events-none">
-        <svg className="absolute top-10 left-10 w-24 h-24 text-slate-200/60 animate-[spin_20s_linear_infinite]" viewBox="0 0 100 100">
-          <path d="M50 10 L60 20 L90 20 L90 40 L100 50 L90 60 L90 80 L60 80 L50 90 L40 80 L10 80 L10 60 L0 50 L10 40 L10 20 L40 20 Z" fill="currentColor" />
-          <circle cx="50" cy="50" r="15" fill="white" />
+        <svg className="absolute top-10 left-10 w-28 h-28 text-slate-200/50 animate-[spin_20s_linear_infinite]" viewBox="0 0 100 100">
+          <path d="M50 8 L57 22 L72 22 L72 42 L88 50 L72 58 L72 78 L57 78 L50 92 L43 78 L28 78 L28 58 L12 50 L28 42 L28 22 L43 22 Z" fill="currentColor" />
+          <circle cx="50" cy="50" r="18" fill="white" />
         </svg>
-        <svg className="absolute bottom-20 right-16 w-20 h-20 text-slate-200/50 animate-[spin_15s_linear_infinite_reverse]" viewBox="0 0 100 100">
-          <path d="M50 10 L55 25 L70 25 L70 45 L85 50 L70 55 L70 75 L55 75 L50 90 L45 75 L30 75 L30 55 L15 50 L30 45 L30 25 L45 25 Z" fill="currentColor" />
-          <circle cx="50" cy="50" r="12" fill="white" />
+        <svg className="absolute bottom-16 right-12 w-24 h-24 text-slate-200/50 animate-[spin_15s_linear_infinite_reverse]" viewBox="0 0 100 100">
+          <path d="M50 10 L58 28 L76 28 L76 50 L90 58 L76 66 L76 88 L58 88 L50 100 L42 88 L24 88 L24 66 L10 58 L24 50 L24 28 L42 28 Z" fill="currentColor" />
+          <circle cx="50" cy="50" r="14" fill="white" />
         </svg>
+        <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-blue-300 rounded-full animate-float" />
+        <div className="absolute top-1/3 right-1/4 w-3 h-3 bg-purple-300 rounded-full animate-float-delayed" />
+        <div className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-pink-300 rounded-full animate-float" />
+        <div className="absolute bottom-1/3 right-1/4 text-xl text-yellow-300 animate-float">✦</div>
+        <div className="absolute top-1/2 left-[15%] text-lg text-blue-200 animate-float-delayed">⚙️</div>
+        <div className="absolute bottom-[20%] right-[15%] text-lg text-indigo-200 animate-float">🔧</div>
       </div>
 
-      {/* Khối Card Trung Tâm */}
-      <div className="w-full max-w-lg p-8 bg-white/80 backdrop-blur-xl border border-white/80 rounded-3xl shadow-2xl shadow-blue-500/5 text-center relative z-10">
+      {/* Card chính */}
+      <div className="w-full max-w-2xl p-8 md:p-12 bg-white/80 backdrop-blur-xl border border-white/80 rounded-[3rem] shadow-2xl shadow-blue-500/5 text-center relative z-10 mx-4">
         
-        {/* Badge thông báo */}
-        <div className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-r from-blue-600/10 to-indigo-600/10 border border-blue-200/60 rounded-full text-blue-700 text-xs font-bold uppercase tracking-wider mb-8 animate-pulse">
-          <Cpu size={14} className="text-blue-600" /> Feature Coming Soon
+        {/* Badge */}
+        <div className="inline-flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 border border-blue-200/60 rounded-full text-blue-600 text-xs font-bold uppercase tracking-wider mb-8">
+          <Cpu size={14} className="text-blue-500" /> Feature Coming Soon
         </div>
 
-        {/* Khu vực nhân vật chính */}
-        <div className="relative w-48 h-48 mx-auto mb-6">
-          {/* Nhân vật robot kỹ sư tự vẽ bằng SVG */}
-          <svg viewBox="0 0 200 200" className="w-full h-full drop-shadow-2xl">
-            {/* Bóng đổ dưới chân */}
-            <ellipse cx="100" cy="185" rx="40" ry="6" fill="#e2e8f0" />
-            
-            {/* Thân */}
-            <rect x="75" y="105" width="50" height="55" rx="12" fill="#3b82f6" />
-            <rect x="80" y="110" width="40" height="30" rx="6" fill="#1e3a8a" opacity="0.2" />
-            
-            {/* Chân */}
-            <rect x="80" y="155" width="14" height="25" rx="5" fill="#1e40af" />
-            <rect x="106" y="155" width="14" height="25" rx="5" fill="#1e40af" />
-            
-            {/* Tay trái (cố định) */}
-            <rect x="60" y="115" width="12" height="30" rx="6" fill="#2563eb" />
-            <circle cx="66" cy="148" r="6" fill="#3b82f6" />
-            
-            {/* Tay phải cầm cờ lê - có chuyển động */}
-            <g className="origin-top-right" style={{ animation: 'swingWrench 1.2s ease-in-out infinite' }}>
-              <rect x="128" y="115" width="12" height="30" rx="6" fill="#2563eb" />
-              {/* Cờ lê */}
-              <g transform="translate(135, 148) rotate(30)">
-                <rect x="-4" y="-2" width="40" height="6" rx="3" fill="#94a3b8" />
-                <circle cx="38" cy="-2" r="7" fill="none" stroke="#64748b" strokeWidth="4" />
-                <circle cx="38" cy="-2" r="3" fill="#cbd5e1" />
-                <circle cx="-6" cy="-2" r="5" fill="none" stroke="#64748b" strokeWidth="4" />
-              </g>
-            </g>
-            
-            {/* Đầu */}
-            <rect x="82" y="60" width="36" height="40" rx="10" fill="#3b82f6" />
-            {/* Kính bảo hộ */}
-            <rect x="75" y="68" width="50" height="18" rx="9" fill="#1e293b" />
-            <rect x="79" y="72" width="18" height="10" rx="5" fill="#38bdf8" opacity="0.8" />
-            <rect x="103" y="72" width="18" height="10" rx="5" fill="#38bdf8" opacity="0.8" />
-            {/* Nụ cười */}
-            <path d="M90 86 Q100 95 110 86" fill="none" stroke="#bfdbfe" strokeWidth="2" strokeLinecap="round" />
-            {/* Ăng-ten nhấp nháy */}
-            <g className="animate-bounce [animation-duration:2s]">
-              <line x1="100" y1="60" x2="100" y2="40" stroke="#64748b" strokeWidth="2" strokeLinecap="round" />
-              <circle cx="100" cy="37" r="5" fill="#ef4444" className="animate-ping [animation-duration:1.5s]" />
-              <circle cx="100" cy="37" r="5" fill="#f87171" />
-            </g>
-            {/* Mũ bảo hiểm */}
-            <path d="M74 68 Q82 50 100 48 Q118 50 126 68 Z" fill="#fbbf24" />
-            <rect x="78" y="65" width="44" height="4" rx="2" fill="#f59e0b" />
-          </svg>
+        {/* Robot chibi vẽ bằng CSS */}
+        <div className="relative w-48 h-48 mx-auto mb-8 flex items-center justify-center">
+          <div className="robot animate-float-slow">
+            {/* Antenna */}
+            <div className="antenna">
+              <div className="antenna-line"></div>
+              <div className="antenna-ball"></div>
+            </div>
+            {/* Head */}
+            <div className="head">
+              <div className="eye left-eye"></div>
+              <div className="eye right-eye"></div>
+              <div className="mouth"></div>
+            </div>
+            {/* Body */}
+            <div className="body">
+              <div className="chest-light"></div>
+            </div>
+            {/* Arms */}
+            <div className="arm left-arm"></div>
+            <div className="arm right-arm wrench-arm">
+              {/* Cờ lê nhỏ */}
+              <div className="wrench-icon">
+                <Wrench size={20} className="text-slate-500" />
+              </div>
+            </div>
+            {/* Legs */}
+            <div className="leg left-leg"></div>
+            <div className="leg right-leg"></div>
+          </div>
         </div>
 
         {/* Text */}
-        <h3 className="text-2xl font-black text-slate-800 tracking-tight mt-2">Đang trong giai đoạn phát triển</h3>
-        <p className="text-sm text-slate-500 font-medium mt-2 max-w-sm mx-auto leading-relaxed">
+        <h3 className="text-3xl font-black text-slate-800 tracking-tight mt-2 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+          Đang trong giai đoạn phát triển
+        </h3>
+        <p className="text-sm text-slate-500 font-medium mt-4 max-w-md mx-auto leading-relaxed">
           Vinh đang cố gắng hoàn thiện những bước cuối cùng. Hệ thống phân tích kho vận nâng cao sẽ sớm hoạt động trở lại.
         </p>
 
         {/* Progress Bar */}
-        <div className="w-full bg-slate-200/50 rounded-full h-2 mt-8 mb-2 overflow-hidden border border-slate-200">
-          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 h-2 rounded-full w-[99%] relative">
+        <div className="w-full bg-slate-200/50 rounded-full h-3 mt-8 mb-2 overflow-hidden border border-slate-200 shadow-inner">
+          <div className="bg-gradient-to-r from-blue-500 to-indigo-600 h-3 rounded-full w-[99%] relative">
             <div className="absolute inset-0 bg-white/30 animate-pulse" />
           </div>
         </div>
@@ -93,12 +82,166 @@ export default function UnderDevelopment() {
         </div>
       </div>
 
-      {/* Thêm keyframes cho animation cầm cờ lê */}
+      {/* CSS cho robot và animation */}
       <style>{`
-        @keyframes swingWrench {
-          0%, 100% { transform: rotate(0deg); }
-          25% { transform: rotate(12deg); }
-          75% { transform: rotate(-5deg); }
+        .robot {
+          position: relative;
+          width: 100px;
+          height: 120px;
+        }
+        /* Antenna */
+        .antenna {
+          position: absolute;
+          top: -20px;
+          left: 50%;
+          transform: translateX(-50%);
+        }
+        .antenna-line {
+          width: 4px;
+          height: 15px;
+          background: #64748b;
+          margin: 0 auto;
+          border-radius: 2px;
+        }
+        .antenna-ball {
+          width: 12px;
+          height: 12px;
+          background: #ef4444;
+          border-radius: 50%;
+          margin: 0 auto;
+          animation: blink 1s infinite;
+          box-shadow: 0 0 8px #ef4444;
+        }
+        /* Head */
+        .head {
+          width: 60px;
+          height: 60px;
+          background: #e0e7ff;
+          border-radius: 50%;
+          position: absolute;
+          top: 10px;
+          left: 50%;
+          transform: translateX(-50%);
+          box-shadow: inset -4px -4px 8px rgba(0,0,0,0.05);
+        }
+        .eye {
+          width: 10px;
+          height: 10px;
+          background: #1e293b;
+          border-radius: 50%;
+          position: absolute;
+          top: 22px;
+        }
+        .left-eye {
+          left: 15px;
+        }
+        .right-eye {
+          right: 15px;
+        }
+        .mouth {
+          width: 16px;
+          height: 4px;
+          background: #1e293b;
+          border-radius: 2px;
+          position: absolute;
+          bottom: 16px;
+          left: 50%;
+          transform: translateX(-50%);
+        }
+        /* Body */
+        .body {
+          width: 40px;
+          height: 35px;
+          background: #93c5fd;
+          border-radius: 12px;
+          position: absolute;
+          top: 72px;
+          left: 50%;
+          transform: translateX(-50%);
+          box-shadow: inset -3px -3px 6px rgba(0,0,0,0.05);
+        }
+        .chest-light {
+          width: 8px;
+          height: 8px;
+          background: #38bdf8;
+          border-radius: 50%;
+          margin: 12px auto 0;
+          box-shadow: 0 0 10px #38bdf8;
+          animation: pulse-light 1.5s infinite;
+        }
+        /* Arms */
+        .arm {
+          width: 12px;
+          height: 28px;
+          background: #93c5fd;
+          border-radius: 6px;
+          position: absolute;
+          top: 78px;
+        }
+        .left-arm {
+          left: 10px;
+          transform: rotate(20deg);
+        }
+        .right-arm {
+          right: 10px;
+          transform: rotate(-20deg);
+        }
+        .wrench-arm {
+          transform: rotate(-30deg);
+          animation: wrench-swing 1.2s ease-in-out infinite;
+          transform-origin: top center;
+        }
+        .wrench-icon {
+          position: absolute;
+          bottom: -24px;
+          left: -4px;
+          transform: rotate(90deg);
+        }
+        /* Legs */
+        .leg {
+          width: 14px;
+          height: 20px;
+          background: #64748b;
+          border-radius: 6px;
+          position: absolute;
+          bottom: 0;
+        }
+        .left-leg {
+          left: 28px;
+        }
+        .right-leg {
+          right: 28px;
+        }
+
+        /* Keyframes */
+        @keyframes blink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+        @keyframes pulse-light {
+          0%, 100% { transform: scale(1); opacity: 0.8; }
+          50% { transform: scale(1.3); opacity: 1; }
+        }
+        @keyframes wrench-swing {
+          0%, 100% { transform: rotate(-30deg); }
+          50% { transform: rotate(-15deg); }
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0) scale(1); opacity: 0.7; }
+          50% { transform: translateY(-15px) scale(1.2); opacity: 1; }
+        }
+        @keyframes float-delayed {
+          0%, 100% { transform: translateY(0) scale(1); opacity: 0.7; }
+          50% { transform: translateY(-20px) scale(1.3); opacity: 1; }
+        }
+        .animate-float {
+          animation: float 4s ease-in-out infinite;
+        }
+        .animate-float-delayed {
+          animation: float-delayed 5s ease-in-out infinite 1s;
+        }
+        .animate-float-slow {
+          animation: float 6s ease-in-out infinite;
         }
       `}</style>
     </div>
