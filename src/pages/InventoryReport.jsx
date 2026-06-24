@@ -160,7 +160,6 @@ const normalizeString = (str) => {
           throw new Error("File không có dòng dữ liệu nào ngoài tiêu đề.");
         }
 
-        // --- 🧠 TRÍ TUỆ NHÂN TẠO: ĐỊNH VỊ CỘT THEO TÊN HEADER ---
         let nameIdx = 0;
         let qtyIdx = 1;
         let barcodeIdx = -1;
@@ -168,22 +167,18 @@ const normalizeString = (str) => {
         if (rows[0] && Array.isArray(rows[0])) {
           const headers = rows[0].map(h => String(h).toLowerCase().trim());
           
-          // Dò tìm cột Tên sản phẩm
           const foundNameIdx = headers.findIndex(h => h.includes('tên') || h.includes('name') || h.includes('sản phẩm'));
           if (foundNameIdx !== -1) nameIdx = foundNameIdx;
 
-          // Dò tìm cột Số lượng
           const foundQtyIdx = headers.findIndex(h => h.includes('số lượng') || h.includes('sl') || h.includes('qty') || h.includes('quantity') || h.includes('in'));
           if (foundQtyIdx !== -1) qtyIdx = foundQtyIdx;
 
-          // Dò tìm cột Mã vạch / Barcode (Nếu dùng file xuất của Nhanh)
           const foundBarcodeIdx = headers.findIndex(h => h.includes('vạch') || h.includes('barcode') || h.includes('mã sản phẩm') || h.includes('code'));
           if (foundBarcodeIdx !== -1) barcodeIdx = foundBarcodeIdx;
         }
 
         const parsedMap = new Map();
 
-        // Đọc dữ liệu từ dòng 1 (bỏ qua dòng tiêu đề)
         for (let i = 1; i < rows.length; i++) {
           const cols = rows[i];
           if (!cols || cols.length === 0) continue; 
@@ -194,7 +189,6 @@ const normalizeString = (str) => {
           
           if (!name && !fileBarcode) continue;
           
-          // Dùng Barcode làm khóa gộp ưu tiên, nếu không có thì gộp theo Tên chuẩn hóa
           const pivotKey = fileBarcode || normalizeString(name);
           
           if (parsedMap.has(pivotKey)) {
@@ -217,16 +211,14 @@ const normalizeString = (str) => {
           if (error) throw error;
 
           if (chunk && chunk.length > 0) {
-            currentDB = [...currentDB, ...chunk]; // Gộp cục data mới vào rổ
+            currentDB = [...currentDB, ...chunk]; 
             fetchPage++;
-            if (chunk.length < 1000) hasMoreDB = false; // Nếu cục cuối cùng < 1000 dòng tức là đã vét sạch kho
+            if (chunk.length < 1000) hasMoreDB = false; 
           } else {
             hasMoreDB = false;
           }
         }
-        // ========================================================
 
-        // Xây dựng 3 tầng từ điển từ toàn bộ currentDB vừa vét được
         const dbByBarcode = new Map();
         const dbByNameStandard = new Map();
         const dbByNameStripped = new Map();
@@ -241,23 +233,19 @@ const normalizeString = (str) => {
           }
         });
 
-        // Tiến hành quét Cross-match bảo vệ 3 tầng
         const newPrintItems = [];
         
         parsedMap.forEach((val) => {
           let match = null;
 
-          // Tầng 1: Khớp bằng Barcode có sẵn trong file (Nếu có)
           if (val.fileBarcode) {
             match = dbByBarcode.get(val.fileBarcode);
           }
 
-          // Tầng 2: Khớp bằng Tên chuẩn hóa NFC tiếng Việt
           if (!match && val.originalName) {
             match = dbByNameStandard.get(normalizeString(val.originalName));
           }
 
-          // Tầng 3: Khớp mù (Xóa sạch khoảng trắng và gạch ngang)
           if (!match && val.originalName) {
             match = dbByNameStripped.get(stripToCompare(val.originalName));
           }
@@ -279,7 +267,6 @@ const normalizeString = (str) => {
           }
         });
 
-        // Trộn dữ liệu vào danh sách chờ in
         setPrintItems(prev => {
           const merged = [...prev];
           newPrintItems.forEach(newItem => {
@@ -335,8 +322,9 @@ const normalizeString = (str) => {
     const printWindow = window.open('', '_blank');
     const today = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
     
-    let barcodeHeight = 40;
-    if (printConfig.showShopName && printConfig.showProductName) barcodeHeight = 30; 
+    // ⚡️ ĐIỀU CHỈNH ĐỘ CAO BARCODE ĐỂ NHƯỜNG CHỖ CHO TÊN SP TO HƠN
+    let barcodeHeight = 35;
+    if (printConfig.showShopName && printConfig.showProductName) barcodeHeight = 26; 
     else if (!printConfig.showShopName && !printConfig.showProductName) barcodeHeight = 55; 
     
     let htmlContent = `
@@ -394,11 +382,13 @@ const normalizeString = (str) => {
             width: 100%;
             max-height: 12mm;
           }
+          /* ⚡️ TĂNG KÍCH THƯỚC VÀ IN ĐẬM TÊN SẢN PHẨM */
           .product-name {
-            font-size: 6px;
+            font-size: 8.5px;
+            font-weight: bold;
             line-height: 1.2;
             width: 100%;
-            height: 14px;
+            height: 11px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -427,11 +417,11 @@ const normalizeString = (str) => {
               <svg class="barcode" 
                    jsbarcode-value="${item.barcode}"
                    jsbarcode-displayvalue="true"
-                   jsbarcode-fontsize="16"
+                   jsbarcode-fontsize="08"
                    jsbarcode-height="${barcodeHeight}"
                    jsbarcode-width="1.8"
                    jsbarcode-margin="0"
-                   jsbarcode-textmargin="0">
+                   jsbarcode-textmargin="2">
               </svg>
             </div>
             
@@ -607,7 +597,6 @@ const normalizeString = (str) => {
                     <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2">1. Tìm và Thêm thủ công</label>
                     <form onSubmit={searchProductForPrint} className="relative flex gap-2">
                       
-                      {/* ⚡️ VÁ LỖI TRÀN MÀN HÌNH: Bao bọc Dropdown bên trong thẻ relative của Input */}
                       <div className="relative flex-1">
                         <Search className="absolute left-2.5 top-2 text-slate-400" size={14} />
                         <input 
@@ -617,7 +606,6 @@ const normalizeString = (str) => {
                           className="w-full text-xs font-bold pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:bg-white transition"
                         />
 
-                        {/* Thẻ Dropdown được đặt absolute ngay bên dưới và bám chặt theo width của Input */}
                         {printSearchResults.length > 0 && (
                           <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden divide-y divide-slate-100 max-h-48 overflow-y-auto z-50">
                             {printSearchResults.map(prod => (
@@ -654,7 +642,7 @@ const normalizeString = (str) => {
                   </div>
                 </div>
 
-                {/* Dòng 2: Danh sách in (Flex-1 để tự động chiếm hết chiều cao còn lại) */}
+                {/* Dòng 2: Danh sách in */}
                 <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col overflow-hidden">
                   <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                     <span className="font-black text-xs text-slate-700 uppercase tracking-wide">Danh sách chờ in ({printItems.length} mã)</span>
@@ -707,7 +695,6 @@ const normalizeString = (str) => {
                     <h3 className="font-black text-sm text-slate-800 uppercase tracking-wide">Cài đặt</h3>
                   </div>
 
-                  {/* Tùy chọn 1: Tên Shop */}
                   <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-700">Hiển thị Tên Shop</span>
@@ -727,7 +714,6 @@ const normalizeString = (str) => {
                     )}
                   </div>
 
-                  {/* Tùy chọn 2: Tên Sản Phẩm */}
                   <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <span className="text-xs font-bold text-slate-700">Hiển thị Tên Sản Phẩm</span>
                     <label className="relative inline-flex items-center cursor-pointer">
@@ -736,7 +722,6 @@ const normalizeString = (str) => {
                     </label>
                   </div>
 
-                  {/* Tùy chọn 3: Ngày In */}
                   <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <div className="flex flex-col">
                       <span className="text-xs font-bold text-slate-700">Ghi chú Ngày in lô</span>
@@ -749,7 +734,6 @@ const normalizeString = (str) => {
                   </div>
                 </div>
 
-                {/* Khối Button Print (Luôn dính dưới đáy cột Setting) */}
                 <div className="pt-6 mt-6 border-t border-slate-100">
                   <button 
                     onClick={generatePrintJob}
