@@ -30,36 +30,13 @@ export default function UnderDevelopment() {
           <Cpu size={14} className="text-blue-500" /> Feature Coming Soon
         </div>
 
-        {/* Robot chibi vẽ bằng CSS */}
+        {/* Ảnh GIF thay thế robot CSS */}
         <div className="relative w-48 h-48 mx-auto mb-8 flex items-center justify-center">
-          <div className="robot animate-float-slow">
-            {/* Antenna */}
-            <div className="antenna">
-              <div className="antenna-line"></div>
-              <div className="antenna-ball"></div>
-            </div>
-            {/* Head */}
-            <div className="head">
-              <div className="eye left-eye"></div>
-              <div className="eye right-eye"></div>
-              <div className="mouth"></div>
-            </div>
-            {/* Body */}
-            <div className="body">
-              <div className="chest-light"></div>
-            </div>
-            {/* Arms */}
-            <div className="arm left-arm"></div>
-            <div className="arm right-arm wrench-arm">
-              {/* Cờ lê nhỏ */}
-              <div className="wrench-icon">
-                <Wrench size={20} className="text-slate-500" />
-              </div>
-            </div>
-            {/* Legs */}
-            <div className="leg left-leg"></div>
-            <div className="leg right-leg"></div>
-          </div>
+         <img 
+  src="https://media0.giphy.com/media/v1.Y2lkPTc5MGI3NjExOWU3c2x0cnl3b2Q0bThnZ28wMHMzcDVkbXIwNnVwZXhvZmxtODNmNyZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/aCzTklXxTjF3NlzXlN/giphy.gif" 
+  alt="Robot dễ thương đang sửa chữa"
+  className="w-40 h-40 object-cover rounded-full shadow-xl shadow-blue-200/50 border-4 border-white animate-float-slow select-none"
+/>
         </div>
 
         {/* Text */}
@@ -67,7 +44,7 @@ export default function UnderDevelopment() {
           Đang trong giai đoạn phát triển
         </h3>
         <p className="text-sm text-slate-500 font-medium mt-4 max-w-md mx-auto leading-relaxed">
-          Vinh đang cố gắng hoàn thiện những bước cuối cùng. Hệ thống phân tích kho vận nâng cao sẽ sớm hoạt động trở lại.
+          Vinh đang cố gắng hoàn thiện những bước cuối cùng. Trong lúc chờ đợi thì hãy bật nhạc và quẩy lên đi nhé!
         </p>
 
         {/* Progress Bar */}
@@ -82,150 +59,8 @@ export default function UnderDevelopment() {
         </div>
       </div>
 
-      {/* CSS cho robot và animation */}
+      {/* CSS giữ lại animation nền, xóa robot cũ */}
       <style>{`
-        .robot {
-          position: relative;
-          width: 100px;
-          height: 120px;
-        }
-        /* Antenna */
-        .antenna {
-          position: absolute;
-          top: -20px;
-          left: 50%;
-          transform: translateX(-50%);
-        }
-        .antenna-line {
-          width: 4px;
-          height: 15px;
-          background: #64748b;
-          margin: 0 auto;
-          border-radius: 2px;
-        }
-        .antenna-ball {
-          width: 12px;
-          height: 12px;
-          background: #ef4444;
-          border-radius: 50%;
-          margin: 0 auto;
-          animation: blink 1s infinite;
-          box-shadow: 0 0 8px #ef4444;
-        }
-        /* Head */
-        .head {
-          width: 60px;
-          height: 60px;
-          background: #e0e7ff;
-          border-radius: 50%;
-          position: absolute;
-          top: 10px;
-          left: 50%;
-          transform: translateX(-50%);
-          box-shadow: inset -4px -4px 8px rgba(0,0,0,0.05);
-        }
-        .eye {
-          width: 10px;
-          height: 10px;
-          background: #1e293b;
-          border-radius: 50%;
-          position: absolute;
-          top: 22px;
-        }
-        .left-eye {
-          left: 15px;
-        }
-        .right-eye {
-          right: 15px;
-        }
-        .mouth {
-          width: 16px;
-          height: 4px;
-          background: #1e293b;
-          border-radius: 2px;
-          position: absolute;
-          bottom: 16px;
-          left: 50%;
-          transform: translateX(-50%);
-        }
-        /* Body */
-        .body {
-          width: 40px;
-          height: 35px;
-          background: #93c5fd;
-          border-radius: 12px;
-          position: absolute;
-          top: 72px;
-          left: 50%;
-          transform: translateX(-50%);
-          box-shadow: inset -3px -3px 6px rgba(0,0,0,0.05);
-        }
-        .chest-light {
-          width: 8px;
-          height: 8px;
-          background: #38bdf8;
-          border-radius: 50%;
-          margin: 12px auto 0;
-          box-shadow: 0 0 10px #38bdf8;
-          animation: pulse-light 1.5s infinite;
-        }
-        /* Arms */
-        .arm {
-          width: 12px;
-          height: 28px;
-          background: #93c5fd;
-          border-radius: 6px;
-          position: absolute;
-          top: 78px;
-        }
-        .left-arm {
-          left: 10px;
-          transform: rotate(20deg);
-        }
-        .right-arm {
-          right: 10px;
-          transform: rotate(-20deg);
-        }
-        .wrench-arm {
-          transform: rotate(-30deg);
-          animation: wrench-swing 1.2s ease-in-out infinite;
-          transform-origin: top center;
-        }
-        .wrench-icon {
-          position: absolute;
-          bottom: -24px;
-          left: -4px;
-          transform: rotate(90deg);
-        }
-        /* Legs */
-        .leg {
-          width: 14px;
-          height: 20px;
-          background: #64748b;
-          border-radius: 6px;
-          position: absolute;
-          bottom: 0;
-        }
-        .left-leg {
-          left: 28px;
-        }
-        .right-leg {
-          right: 28px;
-        }
-
-        /* Keyframes */
-        @keyframes blink {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-        @keyframes pulse-light {
-          0%, 100% { transform: scale(1); opacity: 0.8; }
-          50% { transform: scale(1.3); opacity: 1; }
-        }
-        @keyframes wrench-swing {
-          0%, 100% { transform: rotate(-30deg); }
-          50% { transform: rotate(-15deg); }
-        }
         @keyframes float {
           0%, 100% { transform: translateY(0) scale(1); opacity: 0.7; }
           50% { transform: translateY(-15px) scale(1.2); opacity: 1; }
@@ -234,6 +69,10 @@ export default function UnderDevelopment() {
           0%, 100% { transform: translateY(0) scale(1); opacity: 0.7; }
           50% { transform: translateY(-20px) scale(1.3); opacity: 1; }
         }
+        @keyframes float-slow {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-8px); }
+        }
         .animate-float {
           animation: float 4s ease-in-out infinite;
         }
@@ -241,7 +80,7 @@ export default function UnderDevelopment() {
           animation: float-delayed 5s ease-in-out infinite 1s;
         }
         .animate-float-slow {
-          animation: float 6s ease-in-out infinite;
+          animation: float-slow 6s ease-in-out infinite;
         }
       `}</style>
     </div>

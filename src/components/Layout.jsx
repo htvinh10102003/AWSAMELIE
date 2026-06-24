@@ -338,7 +338,10 @@ export default function Layout() {
                   <Settings size={18} strokeWidth={location.pathname === '/admin' ? 2.5 : 2} className={`transition-colors duration-200 ${location.pathname === '/admin' ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
                   <span className="text-sm">Quản trị Hệ thống</span>
                 </Link>
-
+                  <Link to="/quan-ly-kpi" className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition-all duration-200 group ${location.pathname === '/quan-ly-kpi' ? 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
+  <Target size={18} strokeWidth={location.pathname === '/quan-ly-kpi' ? 2.5 : 2} className={`transition-colors duration-200 ${location.pathname === '/quan-ly-kpi' ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
+  <span className="text-sm">Quản lý KPI & Lỗi</span>
+</Link>
                 <div className="pt-1">
                   <button onClick={() => setIsAdjustMenuOpen(!isAdjustMenuOpen)} className="w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-all duration-200 group hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600 cursor-pointer">
                     <div className="flex items-center gap-3">
@@ -347,7 +350,6 @@ export default function Layout() {
                     </div>
                     {isAdjustMenuOpen ? <ChevronDown size={16} className="text-gray-400"/> : <ChevronRight size={16} className="text-gray-400"/>}
                   </button>
-
                   {isAdjustMenuOpen && (
                     <div className="mt-1 mb-2 ml-4 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200">
                       <Link to="/cap-nhat-nguoi-dong-goi" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-nguoi-dong-goi' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>

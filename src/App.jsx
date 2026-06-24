@@ -18,7 +18,8 @@ import ReturnProcessing from './pages/ReturnProcessing';
 import PrintedOrdersToday from './pages/PrintedOrdersToday';
 import UpdateWarehouseMap from './pages/UpdateWarehouseMap';
 import ProductLocation from './pages/ProductLocation';
-
+import KPI_Management from './pages/KPI_Management';
+import KPI_Report from './pages/KPI_Report';
 export default function App() {
   return (
     <BrowserRouter>
@@ -30,7 +31,7 @@ export default function App() {
           {/* 📊 TAB DASHBOARD (TỔNG QUAN) */}
           <Route index element={<Dashboard />} /> {/* Đơn đi hàng ngày */}
           <Route path="dashboard-don-hoan" element={<UnderDevelopment />} />
-          <Route path="dashboard-kpi" element={<UnderDevelopment />} />
+          <Route path="dashboard-kpi" element={<KPI_Report />} />
           
           {/* 🖨️ TAB ĐƠN IN */}
           <Route path="bao-cao-don" element={<OrderReport />} />
@@ -57,7 +58,6 @@ export default function App() {
           {/* 🏢 TAB TỒN KHO */}
           <Route path="bao-cao-ton-kho" element={<InventoryReport />} />
           <Route path="vi-tri-san-pham" element={<ProductLocation />} />
-          <Route path="chi-dan-nhat-hang" element={<UnderDevelopment />} />
 
           {/* ⚠️ CÁC BÁO CÁO ĐƠN LẺ */}
           <Route path="don-khong-khai-gia" element={<DeclaredFeeReport />} />
@@ -71,6 +71,7 @@ export default function App() {
           <Route path="cap-nhat-lich-lam-viec" element={<ProtectedRoute><UpdateSchedule /></ProtectedRoute>} /> 
           <Route path="cap-nhat-san-pham" element={<ProtectedRoute><UpdateProduct /></ProtectedRoute>} />
           <Route path="cap-nhat-so-do-kho" element={<ProtectedRoute><UpdateWarehouseMap /></ProtectedRoute>} />
+          <Route path="quan-ly-kpi" element={<ProtectedRoute><KPI_Management /></ProtectedRoute>} />
           
         </Route>
       </Routes>
