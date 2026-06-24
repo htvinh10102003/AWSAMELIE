@@ -276,7 +276,7 @@ export default function Layout() {
                       <div className="mt-1 mb-2 ml-4 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200">
                         <Link to="/thong-ke-kiem-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/thong-ke-kiem-ke' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
                           <BarChart3 size={16} className={location.pathname === '/thong-ke-kiem-ke' ? 'text-blue-600' : 'text-gray-400'} />
-                          <span className="text-sm">Thống kê kiểm kê kho</span>
+                          <span className="text-sm">Báo cáo chung</span>
                         </Link>
                         <Link to="/danh-sach-kiem-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/danh-sach-kiem-ke' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
                           <ListChecks size={16} className={location.pathname === '/danh-sach-kiem-ke' ? 'text-blue-600' : 'text-gray-400'} />
