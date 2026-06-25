@@ -40,6 +40,12 @@ export default function KiemTraDonHoan() {
     fetchInventories();
   }, []);
 
+  // Hàm chuẩn hóa chuỗi tiếng Việt và loại bỏ khoảng trắng thừa để so sánh chính xác
+  const normalizeString = (str) => {
+    if (!str) return '';
+    return String(str).normalize('NFC').trim().toUpperCase();
+  };
+
   // 1. HÀM TẢI FILE MẪU VỀ
   const downloadTemplate = () => {
     const csvContent = "\uFEFFTên sản phẩm,Số lượng hoàn\nÁo thun MARIKA - Trắng - M,5\nQuần Jean SYRRA - Xanh - L,3";
@@ -51,7 +57,7 @@ export default function KiemTraDonHoan() {
     link.click();
   };
 
-  // 2. CẬP NHẬT LUỒNG XỬ LÝ ĐỌC FILE (Chỉ 2 cột)
+  // 2. CẬP NHẬT LUỒNG XỬ LÝ ĐỌC FILE (Đã fix lỗi map Unicode và dấu phẩy trong tên)
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -65,9 +71,18 @@ export default function KiemTraDonHoan() {
       const parsedMap = new Map();
 
       for (let i = 1; i < rows.length; i++) {
-        const cols = rows[i].split(',').map(c => c.replace(/^"|"$/g, '').trim());
-        const name = cols[0]; // Cột 1: Tên
-        const qty = parseInt(cols[1], 10) || 0; // Cột 2: Số lượng
+        const rowString = rows[i].trim();
+        
+        // Tìm dấu phẩy cuối cùng để tách Số lượng (Tránh lỗi tên SP có chứa dấu phẩy)
+        const lastCommaIndex = rowString.lastIndexOf(',');
+        if (lastCommaIndex === -1) continue;
+
+        let rawName = rowString.substring(0, lastCommaIndex);
+        let rawQty = rowString.substring(lastCommaIndex + 1);
+
+        // Xóa dấu ngoặc kép (nếu có do Excel tự sinh ra) và khoảng trắng
+        const name = rawName.replace(/^"|"$/g, '').trim();
+        const qty = parseInt(rawQty.replace(/^"|"$/g, '').trim(), 10) || 0;
 
         if (!name) continue;
 
@@ -75,8 +90,11 @@ export default function KiemTraDonHoan() {
         if (parsedMap.has(name)) {
           parsedMap.get(name).expectedQty += qty;
         } else {
-          // Map tên từ file sang ID/Code từ DB để quét Barcode được
-          const dbMatch = inventoryMap.find(item => item.product_name.toUpperCase() === name.toUpperCase());
+          // Map tên bằng cách sử dụng hàm normalizeString để trị dứt điểm lỗi Unicode tiếng Việt
+          const dbMatch = inventoryMap.find(item => 
+            normalizeString(item.product_name) === normalizeString(name)
+          );
+          
           parsedMap.set(name, {
             id: dbMatch ? dbMatch.product_id : 'N/A',
             code: dbMatch ? dbMatch.product_code : 'N/A',
@@ -90,32 +108,32 @@ export default function KiemTraDonHoan() {
     };
     reader.readAsText(file);
   };
+
   // ==========================================
   // ⚡️ LUỒNG CROSS-MATCHING (XÉ RÀO BARCODE/SKU)
   // ==========================================
   const handleBarcodeSubmit = (e) => {
     e.preventDefault();
-    const code = inputCode.trim().toUpperCase(); // Bắt buộc trim và IN HOA mã vừa quét
+    const code = inputCode.trim().toUpperCase(); 
     if (!code) return;
     
     setAlertMessage(null);
 
     // 1. TÌM KIẾM BẮC CẦU TRONG DATABASE:
-    // Tra xem mã quét có nằm ở cột product_code HOẶC product_id không
     const dbMatch = inventoryMap.find(item => 
       String(item.product_code).toUpperCase() === code || 
       String(item.product_id).toUpperCase() === code
     );
 
-    // Bóc tách mã chuẩn để đối chiếu (Bao phủ cả Barcode lẫn SKU)
+    // Bóc tách mã chuẩn để đối chiếu
     const actualCodeToMatch = dbMatch ? String(dbMatch.product_code).toUpperCase() : code;
     const actualIdToMatch = dbMatch ? String(dbMatch.product_id).toUpperCase() : code;
 
     // 2. TRA VÀO CHECKLIST CỦA FILE EXCEL
     const targetIndex = checklist.findIndex(item => 
-      item.code === code || item.id === code || // Quét khớp trực tiếp File
-      item.code === actualCodeToMatch || item.id === actualIdToMatch || // Quét ra Barcode, map DB ra SKU, SKU khớp File
-      item.id === actualCodeToMatch || item.code === actualIdToMatch // Đề phòng file và DB đảo ngược cột
+      item.code === code || item.id === code || 
+      item.code === actualCodeToMatch || item.id === actualIdToMatch || 
+      item.id === actualCodeToMatch || item.code === actualIdToMatch 
     );
 
     if (targetIndex !== -1) {
@@ -149,7 +167,7 @@ export default function KiemTraDonHoan() {
       setAlertMessage({ type: 'danger', text: `🚨 BÁO ĐỘNG ĐỎ: Quét trúng mã lạ hoặc dư thừa ngoài danh sách!` });
     }
 
-    setInputCode(''); // Reset súng quét
+    setInputCode(''); 
   };
 
   const totalExpected = checklist.reduce((sum, item) => sum + item.expectedQty, 0);
