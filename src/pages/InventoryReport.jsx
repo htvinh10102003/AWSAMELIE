@@ -84,7 +84,7 @@ export default function InventoryReport() {
   // LUỒNG XỬ LÝ CHỨC NĂNG IN MÃ VẠCH
   // ==========================================
 
-const normalizeString = (str) => {
+  const normalizeString = (str) => {
     if (!str) return '';
     return String(str)
       .normalize('NFC')
@@ -382,16 +382,16 @@ const normalizeString = (str) => {
             width: 100%;
             max-height: 12mm;
           }
-          /* ⚡️ TĂNG KÍCH THƯỚC VÀ IN ĐẬM TÊN SẢN PHẨM */
+          /* ⚡️ ĐÃ CHỈNH SỬA: BỎ NOWRAP ĐỂ XUỐNG DÒNG */
           .product-name {
             font-size: 8.5px;
             font-weight: bold;
             line-height: 1.2;
             width: 100%;
-            height: 11px;
+            max-height: 22px; /* Tương đương khoảng 2 dòng */
             overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            white-space: normal; /* Cho phép xuống dòng */
+            word-wrap: break-word;
             margin-top: 0.5mm;
           }
           .print-date {
