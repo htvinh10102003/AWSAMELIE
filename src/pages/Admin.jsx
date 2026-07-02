@@ -471,6 +471,7 @@ export default function Admin() {
                     <option value={1}>1 ngày</option>
                     <option value={3}>3 ngày</option>
                     <option value={7}>7 ngày</option>
+                    <option value={30}>30 ngày</option>
                   </select>
                   <button 
                     onClick={handleSyncOrdersData} 
