@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   ScanBarcode, FileSpreadsheet, UploadCloud, AlertCircle, CheckCircle2, 
-  Download, RotateCcw, XCircle, Package,Loader2
+  Download, RotateCcw, XCircle, Package, Loader2
 } from 'lucide-react';
 
 export default function KiemTraDonHoan() {
@@ -24,35 +24,56 @@ export default function KiemTraDonHoan() {
     }
   }, [checklist, scannedSurplus, alertMessage]);
 
+  // 1. FIX LỖI LIMIT 1000 DÒNG CỦA SUPABASE
   useEffect(() => {
-    const fetchInventories = async () => {
+    const fetchAllInventories = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase.from('product_inventories').select('product_id, product_code, product_name');
-        if (error) throw error;
-        setInventoryMap(data || []);
+        let allData = [];
+        let from = 0;
+        const step = 1000;
+        let keepFetching = true;
+
+        // Vòng lặp kéo toàn bộ data cho đến khi hết (vượt mốc 1000 mặc định)
+        while (keepFetching) {
+          const { data, error } = await supabase
+            .from('product_inventories')
+            .select('product_id, product_code, product_name')
+            .range(from, from + step - 1);
+
+          if (error) throw error;
+
+          if (data && data.length > 0) {
+            allData = [...allData, ...data];
+            from += step;
+            if (data.length < step) {
+              keepFetching = false; // Đã kéo hết
+            }
+          } else {
+            keepFetching = false;
+          }
+        }
+        setInventoryMap(allData);
       } catch (err) {
         console.error("Lỗi kéo dữ liệu tồn kho:", err.message);
       } finally {
         setLoading(false);
       }
     };
-    fetchInventories();
+    fetchAllInventories();
   }, []);
 
-  // 🛠 CẬP NHẬT: Hàm chuẩn hóa mạnh mẽ hơn để trị dứt điểm lỗi font, dấu câu và khoảng trắng
-  const normalizeString = (str) => {
+  // 2. FIX LỖI MATCHING: Ép chuỗi "MILOU 594 - Xanh" -> "milou594xanh"
+  const generateMatchKey = (str) => {
     if (!str) return '';
     return String(str)
-      .normalize('NFC')                   // Đồng nhất bộ gõ Unicode
-      .replace(/[\u200B-\u200D\uFEFF]/g, '') // Quét sạch các ký tự tàng hình (zero-width space, BOM)
-      .replace(/[–—]/g, '-')              // Quy đổi mọi loại dấu gạch nối (en-dash, em-dash) về chuẩn 1 dấu gạch ngang (-)
-      .replace(/\s+/g, ' ')               // Gộp tất cả các khoảng trắng kép, tab thành 1 dấu cách duy nhất
-      .trim()                             // Cắt khoảng trắng 2 đầu
-      .toUpperCase();                     // Viết hoa toàn bộ để so sánh
+      .normalize('NFC')                   // Đồng nhất bộ gõ
+      .toLowerCase()                      // Chuyển hết về chữ thường
+      .replace(/[\u200B-\u200D\uFEFF]/g, '') // Quét ký tự tàng hình BOM
+      .replace(/[–—\-]/g, '')             // XÓA SẠCH mọi loại dấu gạch ngang/nối
+      .replace(/\s+/g, '');               // XÓA SẠCH toàn bộ khoảng trắng
   };
 
-  // 1. HÀM TẢI FILE MẪU VỀ
   const downloadTemplate = () => {
     const csvContent = "\uFEFFTên sản phẩm,Số lượng hoàn\nÁo thun MARIKA - Trắng - M,5\nQuần Jean SYRRA - Xanh - L,3";
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -63,7 +84,6 @@ export default function KiemTraDonHoan() {
     link.click();
   };
 
-  // 2. CẬP NHẬT LUỒNG XỬ LÝ ĐỌC FILE
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -76,39 +96,43 @@ export default function KiemTraDonHoan() {
       
       const parsedMap = new Map();
 
+      // Tối ưu: Biến Database thành dạng TỪ ĐIỂN theo KEY để tra cứu cho nhanh
+      const dbDictionary = new Map();
+      inventoryMap.forEach(item => {
+        const key = generateMatchKey(item.product_name);
+        dbDictionary.set(key, item);
+      });
+
       for (let i = 1; i < rows.length; i++) {
         const rowString = rows[i].trim();
         
-        // Tìm dấu phẩy cuối cùng để tách Số lượng (Tránh lỗi tên SP có chứa dấu phẩy)
         const lastCommaIndex = rowString.lastIndexOf(',');
         if (lastCommaIndex === -1) continue;
 
         let rawName = rowString.substring(0, lastCommaIndex);
         let rawQty = rowString.substring(lastCommaIndex + 1);
 
-        // Xóa dấu ngoặc kép và khoảng trắng
         const name = rawName.replace(/^"|"$/g, '').trim();
         const qty = parseInt(rawQty.replace(/^"|"$/g, '').trim(), 10) || 0;
 
         if (!name) continue;
 
-        // 🛠 CẬP NHẬT: Sử dụng tên đã chuẩn hóa làm Key để gom nhóm chính xác tuyệt đối
-        const normalizedMatchName = normalizeString(name);
+        // Tạo KEY cho từng dòng trong CSV
+        const csvKey = generateMatchKey(name);
 
-        if (parsedMap.has(normalizedMatchName)) {
-          parsedMap.get(normalizedMatchName).expectedQty += qty;
+        if (parsedMap.has(csvKey)) {
+          parsedMap.get(csvKey).expectedQty += qty;
         } else {
-          // Tra cứu bằng tên chuẩn hóa
-          const dbMatch = inventoryMap.find(item => 
-            normalizeString(item.product_name) === normalizedMatchName
-          );
+          // Tra cứu siêu tốc thông qua Dictionary
+          const dbMatch = dbDictionary.get(csvKey);
           
-          parsedMap.set(normalizedMatchName, {
+          parsedMap.set(csvKey, {
             id: dbMatch ? dbMatch.product_id : 'N/A',
             code: dbMatch ? dbMatch.product_code : 'N/A',
-            name: name, // Vẫn giữ lại tên gốc để hiển thị UI cho đẹp
+            name: name, // Giữ lại tên gốc hiển thị cho đẹp
             expectedQty: qty,
-            scannedQty: 0
+            scannedQty: 0,
+            matchKey: csvKey // Lưu lại key để chạy map
           });
         }
       }
@@ -117,9 +141,6 @@ export default function KiemTraDonHoan() {
     reader.readAsText(file);
   };
 
-  // ==========================================
-  // ⚡️ LUỒNG CROSS-MATCHING (XÉ RÀO BARCODE/SKU)
-  // ==========================================
   const handleBarcodeSubmit = (e) => {
     e.preventDefault();
     const code = inputCode.trim().toUpperCase(); 
@@ -127,17 +148,14 @@ export default function KiemTraDonHoan() {
     
     setAlertMessage(null);
 
-    // 1. TÌM KIẾM BẮC CẦU TRONG DATABASE:
     const dbMatch = inventoryMap.find(item => 
       String(item.product_code).toUpperCase() === code || 
       String(item.product_id).toUpperCase() === code
     );
 
-    // Bóc tách mã chuẩn để đối chiếu
     const actualCodeToMatch = dbMatch ? String(dbMatch.product_code).toUpperCase() : code;
     const actualIdToMatch = dbMatch ? String(dbMatch.product_id).toUpperCase() : code;
 
-    // 2. TRA VÀO CHECKLIST CỦA FILE EXCEL
     const targetIndex = checklist.findIndex(item => 
       item.code === code || item.id === code || 
       item.code === actualCodeToMatch || item.id === actualIdToMatch || 
@@ -145,7 +163,6 @@ export default function KiemTraDonHoan() {
     );
 
     if (targetIndex !== -1) {
-      // 🟢 QUÉT TRÚNG: Cập nhật số lượng
       const updatedChecklist = [...checklist];
       const targetItem = updatedChecklist[targetIndex];
       
@@ -159,7 +176,6 @@ export default function KiemTraDonHoan() {
 
       setChecklist(updatedChecklist);
     } else {
-      // 🔴 QUÉT TRƯỢT: Nhảy vào mảng dư thừa
       const existingSurplusIndex = scannedSurplus.findIndex(item => item.code === actualCodeToMatch);
       if (existingSurplusIndex !== -1) {
         const updatedSurplus = [...scannedSurplus];
@@ -221,7 +237,6 @@ export default function KiemTraDonHoan() {
   return (
     <div className="space-y-6 pb-12 font-sans text-slate-800 animate-in fade-in duration-300">
       
-      {/* 1. HEADER CHUYÊN NGHIỆP */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
@@ -247,11 +262,10 @@ export default function KiemTraDonHoan() {
 
       {loading && (
         <div className="p-4 bg-blue-50 text-blue-600 text-xs font-bold rounded-xl flex justify-center items-center gap-2 border border-blue-100">
-          <Loader2 size={16} className="animate-spin" /> Đang đồng bộ từ điển mã kho...
+          <Loader2 size={16} className="animate-spin" /> Đang tải dữ liệu tồn kho (có thể mất vài giây vì kho lớn)...
         </div>
       )}
 
-      {/* 2. CHẾ ĐỘ 1: CHƯA UPLOAD FILE -> HIỂN THỊ KHUNG UPLOAD */}
       {checklist.length === 0 ? (
         <div className="bg-white p-8 md:p-14 border border-slate-200 border-dashed rounded-3xl text-center shadow-sm flex flex-col items-center justify-center">
           <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-4 border-4 border-white shadow-lg">
@@ -273,13 +287,8 @@ export default function KiemTraDonHoan() {
           </div>
         </div>
       ) : (
-        /* 3. CHẾ ĐỘ 2: ĐÃ UPLOAD FILE -> HIỂN THỊ GIAO DIỆN KIỂM KÊ */
         <div className="space-y-6">
-          
-          {/* THANH THÔNG BÁO VÀ Ô BẮN MÃ VẠCH */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
-            {/* Ô Súng Bắn */}
             <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm space-y-4">
               <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Súng quét Barcode / SKU</label>
               <form onSubmit={handleBarcodeSubmit} className="relative">
@@ -295,7 +304,6 @@ export default function KiemTraDonHoan() {
               <div className="text-[10px] text-slate-400 text-center font-bold">Đang xử lý file: <span className="text-blue-500">{fileName}</span></div>
             </div>
 
-            {/* Bảng trạng thái nhanh */}
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-center text-center">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Số sản phẩm đúng</span>
@@ -308,10 +316,8 @@ export default function KiemTraDonHoan() {
                 <span className="text-2xl font-black text-red-600 mt-1">{totalSurplus}</span>
               </div>
             </div>
-
           </div>
 
-          {/* BANNER THÔNG BÁO THEO TỪNG LẦN QUÉT */}
           {alertMessage && (
             <div className={`p-4 font-black text-sm rounded-2xl shadow-md flex items-center gap-3 animate-in slide-in-from-bottom-2 ${
               alertMessage.type === 'danger' ? 'bg-red-600 text-white animate-bounce' : 
@@ -323,10 +329,7 @@ export default function KiemTraDonHoan() {
             </div>
           )}
 
-          {/* BẢNG CHI TIẾT SỐ LƯỢNG CHECKLIST */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Cột 1: Danh sách ĐÚNG YÊU CẦU */}
             <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
               <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
                 <Package size={16} className="text-blue-600" />
@@ -353,7 +356,7 @@ export default function KiemTraDonHoan() {
                         <tr key={idx} className={`transition-colors ${isComplete ? 'bg-emerald-50/40' : isOver ? 'bg-amber-50/40' : 'hover:bg-slate-50/50'}`}>
                           <td className="py-3 px-4">
                             <div className={`font-bold ${isComplete ? 'text-emerald-800' : 'text-slate-800'}`}>{item.name}</div>
-                            <div className="text-[10px] text-slate-400 mt-0.5 tracking-wide font-medium">{item.code || item.id}</div>
+                            <div className={`text-[10px] mt-0.5 tracking-wide font-medium ${item.code === 'N/A' ? 'text-red-500 font-bold' : 'text-slate-400'}`}>{item.code || item.id}</div>
                           </td>
                           <td className="py-3 px-4 text-center font-black text-slate-500">{item.expectedQty}</td>
                           <td className="py-3 px-4 text-center">
@@ -378,7 +381,6 @@ export default function KiemTraDonHoan() {
               </div>
             </div>
 
-            {/* Cột 2: Danh sách NGOÀI LUỒNG / MÃ LẠ */}
             <div className="bg-red-50/50 border border-red-200/60 rounded-2xl shadow-sm flex flex-col overflow-hidden">
               <div className="p-4 border-b border-red-100 bg-red-100/50 flex items-center gap-2">
                 <AlertCircle size={16} className="text-red-600" />
@@ -403,11 +405,9 @@ export default function KiemTraDonHoan() {
                 )}
               </div>
             </div>
-
           </div>
         </div>
       )}
-
     </div>
   );
 }
