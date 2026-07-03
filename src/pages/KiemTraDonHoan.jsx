@@ -40,10 +40,16 @@ export default function KiemTraDonHoan() {
     fetchInventories();
   }, []);
 
-  // Hàm chuẩn hóa chuỗi tiếng Việt và loại bỏ khoảng trắng thừa để so sánh chính xác
+  // 🛠 CẬP NHẬT: Hàm chuẩn hóa mạnh mẽ hơn để trị dứt điểm lỗi font, dấu câu và khoảng trắng
   const normalizeString = (str) => {
     if (!str) return '';
-    return String(str).normalize('NFC').trim().toUpperCase();
+    return String(str)
+      .normalize('NFC')                   // Đồng nhất bộ gõ Unicode
+      .replace(/[\u200B-\u200D\uFEFF]/g, '') // Quét sạch các ký tự tàng hình (zero-width space, BOM)
+      .replace(/[–—]/g, '-')              // Quy đổi mọi loại dấu gạch nối (en-dash, em-dash) về chuẩn 1 dấu gạch ngang (-)
+      .replace(/\s+/g, ' ')               // Gộp tất cả các khoảng trắng kép, tab thành 1 dấu cách duy nhất
+      .trim()                             // Cắt khoảng trắng 2 đầu
+      .toUpperCase();                     // Viết hoa toàn bộ để so sánh
   };
 
   // 1. HÀM TẢI FILE MẪU VỀ
@@ -57,7 +63,7 @@ export default function KiemTraDonHoan() {
     link.click();
   };
 
-  // 2. CẬP NHẬT LUỒNG XỬ LÝ ĐỌC FILE (Đã fix lỗi map Unicode và dấu phẩy trong tên)
+  // 2. CẬP NHẬT LUỒNG XỬ LÝ ĐỌC FILE
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -80,25 +86,27 @@ export default function KiemTraDonHoan() {
         let rawName = rowString.substring(0, lastCommaIndex);
         let rawQty = rowString.substring(lastCommaIndex + 1);
 
-        // Xóa dấu ngoặc kép (nếu có do Excel tự sinh ra) và khoảng trắng
+        // Xóa dấu ngoặc kép và khoảng trắng
         const name = rawName.replace(/^"|"$/g, '').trim();
         const qty = parseInt(rawQty.replace(/^"|"$/g, '').trim(), 10) || 0;
 
         if (!name) continue;
 
-        // Pivot gộp theo Tên sản phẩm
-        if (parsedMap.has(name)) {
-          parsedMap.get(name).expectedQty += qty;
+        // 🛠 CẬP NHẬT: Sử dụng tên đã chuẩn hóa làm Key để gom nhóm chính xác tuyệt đối
+        const normalizedMatchName = normalizeString(name);
+
+        if (parsedMap.has(normalizedMatchName)) {
+          parsedMap.get(normalizedMatchName).expectedQty += qty;
         } else {
-          // Map tên bằng cách sử dụng hàm normalizeString để trị dứt điểm lỗi Unicode tiếng Việt
+          // Tra cứu bằng tên chuẩn hóa
           const dbMatch = inventoryMap.find(item => 
-            normalizeString(item.product_name) === normalizeString(name)
+            normalizeString(item.product_name) === normalizedMatchName
           );
           
-          parsedMap.set(name, {
+          parsedMap.set(normalizedMatchName, {
             id: dbMatch ? dbMatch.product_id : 'N/A',
             code: dbMatch ? dbMatch.product_code : 'N/A',
-            name: name,
+            name: name, // Vẫn giữ lại tên gốc để hiển thị UI cho đẹp
             expectedQty: qty,
             scannedQty: 0
           });
