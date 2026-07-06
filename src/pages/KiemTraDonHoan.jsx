@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   ScanBarcode, FileSpreadsheet, UploadCloud, AlertCircle, CheckCircle2, 
-  Download, RotateCcw, XCircle, Package, Loader2
+  Download, RotateCcw, XCircle, Package, Loader2, Volume2, VolumeX
 } from 'lucide-react';
 
 export default function KiemTraDonHoan() {
@@ -15,6 +15,8 @@ export default function KiemTraDonHoan() {
   const [inputCode, setInputCode] = useState('');
   const [scannedSurplus, setScannedSurplus] = useState([]); 
   const [alertMessage, setAlertMessage] = useState(null);
+  
+  const [soundEnabled, setSoundEnabled] = useState(true);
 
   const inputRef = useRef(null);
 
@@ -24,7 +26,6 @@ export default function KiemTraDonHoan() {
     }
   }, [checklist, scannedSurplus, alertMessage]);
 
-  // 1. FIX LỖI LIMIT 1000 DÒNG CỦA SUPABASE
   useEffect(() => {
     const fetchAllInventories = async () => {
       setLoading(true);
@@ -34,7 +35,6 @@ export default function KiemTraDonHoan() {
         const step = 1000;
         let keepFetching = true;
 
-        // Vòng lặp kéo toàn bộ data cho đến khi hết (vượt mốc 1000 mặc định)
         while (keepFetching) {
           const { data, error } = await supabase
             .from('product_inventories')
@@ -47,7 +47,7 @@ export default function KiemTraDonHoan() {
             allData = [...allData, ...data];
             from += step;
             if (data.length < step) {
-              keepFetching = false; // Đã kéo hết
+              keepFetching = false; 
             }
           } else {
             keepFetching = false;
@@ -63,15 +63,73 @@ export default function KiemTraDonHoan() {
     fetchAllInventories();
   }, []);
 
-  // 2. FIX LỖI MATCHING: Ép chuỗi "MILOU 594 - Xanh" -> "milou594xanh"
   const generateMatchKey = (str) => {
     if (!str) return '';
     return String(str)
-      .normalize('NFC')                   // Đồng nhất bộ gõ
-      .toLowerCase()                      // Chuyển hết về chữ thường
-      .replace(/[\u200B-\u200D\uFEFF]/g, '') // Quét ký tự tàng hình BOM
-      .replace(/[–—\-]/g, '')             // XÓA SẠCH mọi loại dấu gạch ngang/nối
-      .replace(/\s+/g, '');               // XÓA SẠCH toàn bộ khoảng trắng
+      .normalize('NFC')                   
+      .toLowerCase()                      
+      .replace(/[\u200B-\u200D\uFEFF]/g, '') 
+      .replace(/[–—\-]/g, '')             
+      .replace(/\s+/g, '');               
+  };
+
+  // --- HÀM TẠO ÂM THANH MỚI - PHÂN BIỆT RÕ RÀNG 3 TRƯỜNG HỢP ---
+  const playSound = (type) => {
+    if (!soundEnabled) return;
+    
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioContext();
+
+      if (type === 'success') {
+        // 1. Đúng hàng: 1 tiếng "Tít" trong trẻo, ngắn
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, ctx.currentTime); 
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.1);
+        osc.stop(ctx.currentTime + 0.1);
+      } 
+      else if (type === 'warning') {
+        // 2. Dư hàng: 2 tiếng "Tít Tít" liên tiếp
+        for (let i = 0; i < 2; i++) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          
+          osc.type = 'triangle'; 
+          osc.frequency.setValueAtTime(900, ctx.currentTime + i * 0.15);
+          
+          gain.gain.setValueAtTime(0, ctx.currentTime); 
+          gain.gain.setValueAtTime(0.1, ctx.currentTime + i * 0.15);
+          gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + i * 0.15 + 0.1);
+          
+          osc.start(ctx.currentTime + i * 0.15);
+          osc.stop(ctx.currentTime + i * 0.15 + 0.1);
+        }
+      } 
+      else if (type === 'error') {
+        // 3. Sai hàng (Mã lạ): Kêu "Rè rè" trầm cảnh báo
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(250, ctx.currentTime);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        osc.start();
+        osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.3);
+        gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.3);
+        osc.stop(ctx.currentTime + 0.3);
+      }
+    } catch (e) {
+      console.error("Audio playback failed", e);
+    }
   };
 
   const downloadTemplate = () => {
@@ -95,8 +153,6 @@ export default function KiemTraDonHoan() {
       const rows = text.split('\n').filter(row => row.trim().length > 0);
       
       const parsedMap = new Map();
-
-      // Tối ưu: Biến Database thành dạng TỪ ĐIỂN theo KEY để tra cứu cho nhanh
       const dbDictionary = new Map();
       inventoryMap.forEach(item => {
         const key = generateMatchKey(item.product_name);
@@ -117,22 +173,20 @@ export default function KiemTraDonHoan() {
 
         if (!name) continue;
 
-        // Tạo KEY cho từng dòng trong CSV
         const csvKey = generateMatchKey(name);
 
         if (parsedMap.has(csvKey)) {
           parsedMap.get(csvKey).expectedQty += qty;
         } else {
-          // Tra cứu siêu tốc thông qua Dictionary
           const dbMatch = dbDictionary.get(csvKey);
           
           parsedMap.set(csvKey, {
             id: dbMatch ? dbMatch.product_id : 'N/A',
             code: dbMatch ? dbMatch.product_code : 'N/A',
-            name: name, // Giữ lại tên gốc hiển thị cho đẹp
+            name: name, 
             expectedQty: qty,
             scannedQty: 0,
-            matchKey: csvKey // Lưu lại key để chạy map
+            matchKey: csvKey 
           });
         }
       }
@@ -169,13 +223,18 @@ export default function KiemTraDonHoan() {
       targetItem.scannedQty += 1;
 
       if (targetItem.scannedQty > targetItem.expectedQty) {
+        playSound('warning'); // Bíp đúp cảnh báo dư
         setAlertMessage({ type: 'warning', text: `⚠️ CHÚ Ý: Mã [${targetItem.name}] quét DƯ (Lên ${targetItem.scannedQty}/${targetItem.expectedQty}).` });
-      } else if (targetItem.scannedQty === targetItem.expectedQty) {
-        setAlertMessage({ type: 'success', text: `✅ Mã [${targetItem.name}] đã ĐỦ SỐ LƯỢNG!` });
+      } else {
+        playSound('success'); // Bíp đơn báo đúng
+        if (targetItem.scannedQty === targetItem.expectedQty) {
+          setAlertMessage({ type: 'success', text: `✅ Mã [${targetItem.name}] đã ĐỦ SỐ LƯỢNG!` });
+        }
       }
 
       setChecklist(updatedChecklist);
     } else {
+      playSound('error'); // Kêu rè rè báo lỗi mã lạ
       const existingSurplusIndex = scannedSurplus.findIndex(item => item.code === actualCodeToMatch);
       if (existingSurplusIndex !== -1) {
         const updatedSurplus = [...scannedSurplus];
@@ -247,6 +306,16 @@ export default function KiemTraDonHoan() {
         </div>
 
         <div className="flex gap-2">
+          <button 
+            onClick={() => setSoundEnabled(!soundEnabled)} 
+            className={`px-3 py-2 text-xs font-bold rounded-xl shadow-sm transition flex items-center justify-center cursor-pointer ${
+              soundEnabled ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+            }`}
+            title={soundEnabled ? "Tắt âm thanh" : "Bật âm thanh"}
+          >
+            {soundEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
+          </button>
+
           {checklist.length > 0 && (
             <>
               <button onClick={resetAudit} className="px-4 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer">
