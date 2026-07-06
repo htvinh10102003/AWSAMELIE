@@ -73,7 +73,7 @@ export default function KiemTraDonHoan() {
       .replace(/\s+/g, '');               
   };
 
-  // --- HÀM TẠO ÂM THANH MỚI - PHÂN BIỆT RÕ RÀNG 3 TRƯỜNG HỢP ---
+  // --- HÀM TẠO ÂM THANH - ĐÃ TĂNG VOLUME LÊN MỨC TỐI ĐA (1.0) ---
   const playSound = (type) => {
     if (!soundEnabled) return;
     
@@ -82,20 +82,21 @@ export default function KiemTraDonHoan() {
       const ctx = new AudioContext();
 
       if (type === 'success') {
-        // 1. Đúng hàng: 1 tiếng "Tít" trong trẻo, ngắn
+        // 1. Đúng hàng: 1 tiếng "Tít" trong trẻo, to và ngắn
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.type = 'sine';
         osc.frequency.setValueAtTime(1200, ctx.currentTime); 
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        // Tăng volume lên 1.0 (100% thay vì 0.1 như trước)
+        gain.gain.setValueAtTime(1.0, ctx.currentTime);
         osc.start();
-        gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.1);
-        osc.stop(ctx.currentTime + 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+        osc.stop(ctx.currentTime + 0.15);
       } 
       else if (type === 'warning') {
-        // 2. Dư hàng: 2 tiếng "Tít Tít" liên tiếp
+        // 2. Dư hàng: 2 tiếng "Tít Tít" liên tiếp, đanh và cực to
         for (let i = 0; i < 2; i++) {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -106,26 +107,28 @@ export default function KiemTraDonHoan() {
           osc.frequency.setValueAtTime(900, ctx.currentTime + i * 0.15);
           
           gain.gain.setValueAtTime(0, ctx.currentTime); 
-          gain.gain.setValueAtTime(0.1, ctx.currentTime + i * 0.15);
-          gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + i * 0.15 + 0.1);
+          // Tăng volume lên 1.0
+          gain.gain.setValueAtTime(1.0, ctx.currentTime + i * 0.15);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.15 + 0.1);
           
           osc.start(ctx.currentTime + i * 0.15);
           osc.stop(ctx.currentTime + i * 0.15 + 0.1);
         }
       } 
       else if (type === 'error') {
-        // 3. Sai hàng (Mã lạ): Kêu "Rè rè" trầm cảnh báo
+        // 3. Sai hàng (Mã lạ): Kêu "Rè rè" to, trầm và báo động
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(250, ctx.currentTime);
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        // Tăng volume lên 1.0
+        gain.gain.setValueAtTime(1.0, ctx.currentTime);
         osc.start();
-        osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.3);
-        gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.3);
-        osc.stop(ctx.currentTime + 0.3);
+        osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.35);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+        osc.stop(ctx.currentTime + 0.35);
       }
     } catch (e) {
       console.error("Audio playback failed", e);
