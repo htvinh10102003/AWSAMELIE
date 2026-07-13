@@ -111,7 +111,11 @@ export default function OrderReport() {
     const [selectedOrders, setSelectedOrders] = useState([]);
     
     const [showActionMenu, setShowActionMenu] = useState(false);
-    const [showMissedModal, setShowMissedModal] = useState(false); // State cho popup miss webhooks
+    const [showMissedModal, setShowMissedModal] = useState(false);
+
+    // State phục vụ Auto kéo lại Webhooks
+    const [isUpdatingWebhooks, setIsUpdatingWebhooks] = useState(false);
+    const [updateProgress, setUpdateProgress] = useState(0);
 
     const [carrierOptions, setCarrierOptions] = useState([]);
     const [statusOptions, setStatusOptions] = useState([]);
@@ -125,7 +129,6 @@ export default function OrderReport() {
     const [copyMessage, setCopyMessage] = useState('');
     const [sendingOrder, setSendingOrder] = useState(false);
 
-    // Bộ lọc đơn tồn >2 ngày (chỉ áp dụng cho tab "Có thể in")
     const [agingFilter, setAgingFilter] = useState(false);
 
     useEffect(() => {
@@ -141,14 +144,12 @@ export default function OrderReport() {
         init();
     }, []);
 
-    // Reset bộ lọc aging khi chuyển tab (chỉ có ý nghĩa ở tab printable)
     useEffect(() => {
         if (activeTab !== 'printable') {
             setAgingFilter(false);
         }
     }, [activeTab]);
 
-    // Reset trang và action menu khi thay đổi bộ lọc
     useEffect(() => {
         setSelectedOrders([]);
         setShowActionMenu(false);
@@ -210,7 +211,6 @@ export default function OrderReport() {
                 if (!note.toLowerCase().includes(searchNote.toLowerCase())) return false;
             }
             
-            // Bộ lọc ngày tồn thủ công (min/maxAgingDays)
             if (minAgingDays || maxAgingDays) {
                 const days = order.printable_date
                     ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24))
@@ -219,7 +219,6 @@ export default function OrderReport() {
                 if (maxAgingDays && days > Number(maxAgingDays)) return false;
             }
             
-            // Bộ lọc "đơn tồn >2 ngày" – chỉ áp dụng khi bật và đang ở tab printable
             if (agingFilter && activeTab === 'printable') {
                 const days = order.printable_date
                     ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24))
@@ -245,6 +244,33 @@ export default function OrderReport() {
     // Lọc danh sách các đơn không có sản phẩm (miss webhooks)
     const allRawOrders = [...(data.printable || []), ...(data.holding || []), ...(data.outOfStock || [])];
     const missedWebhookOrders = allRawOrders.filter(order => !order.order_products || order.order_products.length === 0);
+
+    // HÀM: Auto kéo lại Webhooks
+    const handleAutoUpdateWebhooks = async () => {
+        setIsUpdatingWebhooks(true);
+        setUpdateProgress(0);
+
+        for (let i = 0; i < missedWebhookOrders.length; i++) {
+            const orderId = missedWebhookOrders[i].id;
+            try {
+                await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, {
+                    method: 'GET',
+                    mode: 'no-cors'
+                });
+            } catch (err) {
+                console.error(`Lỗi kích hoạt webhook đơn ${orderId}:`, err);
+            }
+            setUpdateProgress(i + 1);
+            
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        await fetchAllocation(statusDict);
+        setIsUpdatingWebhooks(false);
+        setShowMissedModal(false);
+    };
 
     const handleSelectAll = (e) => {
         if (e.target.checked) setSelectedOrders(paginatedOrders.map(o => o.id));
@@ -326,14 +352,12 @@ export default function OrderReport() {
         setTimeout(() => setCopyMessage(''), 3000);
     };
 
-    // Hàm render badge tuổi đơn – phiên bản nổi bật hơn cho đơn >2 ngày
     const renderAgingBadge = (dateStr) => {
         if (!dateStr) return <span className="px-2.5 py-1.5 bg-green-100/80 backdrop-blur-sm text-green-700 border border-green-200/30 rounded-full text-xs font-semibold">🟢 Hôm nay</span>;
         const diffTime = new Date() - new Date(dateStr);
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
         if (diffDays === 0) return <span className="px-2.5 py-1.5 bg-green-100/80 backdrop-blur-sm text-green-700 border border-green-200/30 rounded-full text-xs font-semibold inline-flex items-center gap-1">🟢Mới</span>;
         else if (diffDays <= 2) return <span className="px-2.5 py-1.5 bg-amber-100/80 backdrop-blur-sm text-amber-700 border border-amber-200/30 rounded-full text-xs font-semibold inline-flex items-center gap-1">🟡{diffDays} ngày</span>;
-        // Đơn tồn >2 ngày: đỏ rực, có hiệu ứng nổi bật
         return <span className="px-2.5 py-1.5 bg-red-500/90 backdrop-blur-sm text-white border-2 border-red-300 rounded-full text-xs font-extrabold inline-flex items-center gap-1 shadow-[0_0_12px_rgba(239,68,68,0.8)] animate-pulse">🔴{diffDays} ngày</span>;
     };
 
@@ -385,7 +409,6 @@ export default function OrderReport() {
                     </div>
                 </div>
 
-                {/* Tab nhỏ cảnh báo đơn miss webhooks (ẩn đi nếu không có) */}
                 {missedWebhookOrders.length > 0 && (
                     <div className="flex -mt-2">
                         <button
@@ -423,7 +446,6 @@ export default function OrderReport() {
                                 <Copy size={16} /> Copy ({filteredOrders.length})
                             </button>
 
-                            {/* Menu Thao Tác */}
                             <div className="relative" onMouseLeave={() => setShowActionMenu(false)}>
                                 <button onClick={() => setShowActionMenu(!showActionMenu)} disabled={selectedOrders.length === 0 || sendingOrder} className={`px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg ${selectedOrders.length > 0 ? 'bg-blue-600/90 backdrop-blur-md text-white hover:bg-blue-700 shadow-blue-500/20' : 'bg-white/50 text-gray-400 cursor-not-allowed border border-white/20'}`}>
                                     {sendingOrder ? <RefreshCw size={18} className="animate-spin" /> : "Thao tác"} ({selectedOrders.length}) <ChevronDown size={16} />
@@ -464,7 +486,6 @@ export default function OrderReport() {
                                 <option value="desc">Mới nhất trước</option>
                             </select>
                         </div>
-                        {/* Bộ lọc đơn tồn >2 ngày – chỉ hiển thị khi ở tab printable */}
                         {activeTab === 'printable' && (
                             <label className="flex items-center gap-2 px-4 py-3 bg-white/60 backdrop-blur-xl border border-white/30 rounded-2xl cursor-pointer hover:bg-white/80 transition-all shadow-sm select-none">
                                 <input
@@ -511,7 +532,6 @@ export default function OrderReport() {
                                         const channelColorClass = CHANNEL_COLORS[order.sale_channel] || 'bg-gray-100/80 text-gray-600';
                                         const statusColorClass = STATUS_COLORS[order.status] || 'bg-gray-100/80 text-gray-600';
 
-                                        // Xác định đơn tồn lâu (>2 ngày) để tô màu hàng
                                         const agingDays = order.printable_date
                                             ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24))
                                             : 0;
@@ -654,10 +674,10 @@ export default function OrderReport() {
             {showMissedModal && (
                 <div 
                     className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in" 
-                    onClick={() => setShowMissedModal(false)}
+                    onClick={() => !isUpdatingWebhooks && setShowMissedModal(false)}
                 >
                     <div 
-                        className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]" 
+                        className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]" 
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="px-6 py-4 border-b border-red-100 flex justify-between items-center bg-red-50">
@@ -665,21 +685,60 @@ export default function OrderReport() {
                                 <AlertTriangle size={20} /> Danh sách đơn Miss Webhooks
                             </h3>
                             <button 
-                                onClick={() => setShowMissedModal(false)} 
-                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                                onClick={() => !isUpdatingWebhooks && setShowMissedModal(false)} 
+                                className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                                disabled={isUpdatingWebhooks}
                             >
                                 <XCircle size={24} />
                             </button>
                         </div>
-                        <div className="p-6 overflow-y-auto flex-1">
-                            <p className="text-sm text-gray-600 mb-4 font-medium">
-                                Có <span className="font-bold text-red-600">{missedWebhookOrders.length}</span> đơn hàng không chứa thông tin sản phẩm:
-                            </p>
-                            <div className="flex flex-wrap gap-2">
+                        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+                            <div className="flex flex-col bg-gray-50/80 p-5 rounded-2xl border border-gray-100">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-2">
+                                    <p className="text-sm text-gray-700 font-medium leading-relaxed">
+                                        Có <span className="font-bold text-red-600 text-base">{missedWebhookOrders.length}</span> đơn hàng thiếu thông tin.
+                                    </p>
+                                    <button
+                                        onClick={handleAutoUpdateWebhooks}
+                                        disabled={isUpdatingWebhooks}
+                                        className="w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-[0_4px_12px_rgba(37,99,235,0.2)]"
+                                    >
+                                        {isUpdatingWebhooks ? (
+                                            <>
+                                                <RefreshCw size={16} className="animate-spin" />
+                                                Đang xử lý...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <RefreshCw size={16} />
+                                                Auto kéo lại webhook
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                                
+                                {/* Thanh Tiến Trình (Progress Bar) */}
+                                {isUpdatingWebhooks && (
+                                    <div className="w-full mt-3">
+                                        <div className="flex justify-between text-xs mb-1.5 font-bold text-blue-700 tracking-wide">
+                                            <span>Đang kéo lại API...</span>
+                                            <span>{updateProgress} / {missedWebhookOrders.length} ({missedWebhookOrders.length > 0 ? Math.round((updateProgress / missedWebhookOrders.length) * 100) : 0}%)</span>
+                                        </div>
+                                        <div className="w-full bg-blue-100 rounded-full h-2.5 overflow-hidden shadow-inner">
+                                            <div 
+                                                className="bg-blue-600 h-2.5 rounded-full transition-all duration-300 ease-out" 
+                                                style={{ width: `${missedWebhookOrders.length > 0 ? (updateProgress / missedWebhookOrders.length) * 100 : 0}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-2.5 p-1">
                                 {missedWebhookOrders.map(order => (
                                     <span 
                                         key={order.id} 
-                                        className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium font-mono border border-gray-200"
+                                        className="px-3.5 py-2 bg-white text-gray-700 rounded-xl text-sm font-bold font-mono border border-gray-200 shadow-sm hover:border-blue-300 transition-colors"
                                     >
                                         {order.id}
                                     </span>
@@ -688,8 +747,9 @@ export default function OrderReport() {
                         </div>
                         <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
                             <button 
-                                onClick={() => setShowMissedModal(false)}
-                                className="px-5 py-2 bg-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-300 transition-colors"
+                                onClick={() => !isUpdatingWebhooks && setShowMissedModal(false)}
+                                disabled={isUpdatingWebhooks}
+                                className="px-6 py-2.5 bg-white border border-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-100 transition-colors disabled:opacity-50"
                             >
                                 Đóng
                             </button>
