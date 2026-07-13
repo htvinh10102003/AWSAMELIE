@@ -111,6 +111,7 @@ export default function OrderReport() {
     const [selectedOrders, setSelectedOrders] = useState([]);
     
     const [showActionMenu, setShowActionMenu] = useState(false);
+    const [showMissedModal, setShowMissedModal] = useState(false); // State cho popup miss webhooks
 
     const [carrierOptions, setCarrierOptions] = useState([]);
     const [statusOptions, setStatusOptions] = useState([]);
@@ -240,6 +241,10 @@ export default function OrderReport() {
     const totalOrdersCount = filteredOrders.length;
     const totalPages = Math.ceil(totalOrdersCount / pageSize) || 1;
     const paginatedOrders = filteredOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+    // Lọc danh sách các đơn không có sản phẩm (miss webhooks)
+    const allRawOrders = [...(data.printable || []), ...(data.holding || []), ...(data.outOfStock || [])];
+    const missedWebhookOrders = allRawOrders.filter(order => !order.order_products || order.order_products.length === 0);
 
     const handleSelectAll = (e) => {
         if (e.target.checked) setSelectedOrders(paginatedOrders.map(o => o.id));
@@ -379,6 +384,19 @@ export default function OrderReport() {
                         </div>
                     </div>
                 </div>
+
+                {/* Tab nhỏ cảnh báo đơn miss webhooks (ẩn đi nếu không có) */}
+                {missedWebhookOrders.length > 0 && (
+                    <div className="flex -mt-2">
+                        <button
+                            onClick={() => setShowMissedModal(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-red-100/80 hover:bg-red-200 text-red-700 font-semibold text-sm rounded-xl border border-red-200 transition-colors shadow-sm animate-pulse"
+                        >
+                            <AlertTriangle size={18} />
+                            Cảnh báo: Có {missedWebhookOrders.length} đơn miss webhooks (không có sản phẩm)
+                        </button>
+                    </div>
+                )}
 
                 <div className="relative z-10 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] p-6 space-y-5 transition-shadow hover:shadow-[0_8px_40px_rgba(0,0,0,0.08)]">
                     <div className="flex flex-wrap gap-4 items-end justify-between">
@@ -631,6 +649,54 @@ export default function OrderReport() {
                     )}
                 </div>
             </div>
+
+            {/* Popup hiển thị danh sách đơn bị miss webhooks */}
+            {showMissedModal && (
+                <div 
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm animate-fade-in" 
+                    onClick={() => setShowMissedModal(false)}
+                >
+                    <div 
+                        className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh]" 
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="px-6 py-4 border-b border-red-100 flex justify-between items-center bg-red-50">
+                            <h3 className="font-bold text-red-700 flex items-center gap-2">
+                                <AlertTriangle size={20} /> Danh sách đơn Miss Webhooks
+                            </h3>
+                            <button 
+                                onClick={() => setShowMissedModal(false)} 
+                                className="text-gray-400 hover:text-gray-600 transition-colors"
+                            >
+                                <XCircle size={24} />
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto flex-1">
+                            <p className="text-sm text-gray-600 mb-4 font-medium">
+                                Có <span className="font-bold text-red-600">{missedWebhookOrders.length}</span> đơn hàng không chứa thông tin sản phẩm:
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {missedWebhookOrders.map(order => (
+                                    <span 
+                                        key={order.id} 
+                                        className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium font-mono border border-gray-200"
+                                    >
+                                        {order.id}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+                            <button 
+                                onClick={() => setShowMissedModal(false)}
+                                className="px-5 py-2 bg-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-300 transition-colors"
+                            >
+                                Đóng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
