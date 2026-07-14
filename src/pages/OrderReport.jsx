@@ -115,6 +115,7 @@ export default function OrderReport() {
 
     // State phục vụ Auto kéo lại Webhooks
     const [isUpdatingWebhooks, setIsUpdatingWebhooks] = useState(false);
+    const [updatingSelected, setUpdatingSelected] = useState(false);
     const [updateProgress, setUpdateProgress] = useState(0);
 
     const [carrierOptions, setCarrierOptions] = useState([]);
@@ -245,7 +246,7 @@ export default function OrderReport() {
     const allRawOrders = [...(data.printable || []), ...(data.holding || []), ...(data.outOfStock || [])];
     const missedWebhookOrders = allRawOrders.filter(order => !order.order_products || order.order_products.length === 0);
 
-    // HÀM: Auto kéo lại Webhooks
+    // HÀM: Auto kéo lại Webhooks cho đơn bị lỗi thiếu SP
     const handleAutoUpdateWebhooks = async () => {
         setIsUpdatingWebhooks(true);
         setUpdateProgress(0);
@@ -270,6 +271,35 @@ export default function OrderReport() {
         await fetchAllocation(statusDict);
         setIsUpdatingWebhooks(false);
         setShowMissedModal(false);
+    };
+
+    // HÀM: Kéo lại Webhooks cho các đơn được tick chọn
+    const handleUpdateSelectedWebhooks = async () => {
+        if (selectedOrders.length === 0) return;
+        setUpdatingSelected(true);
+        setShowActionMenu(false);
+        setCopyMessage(`Đang tiến hành cập nhật webhook cho ${selectedOrders.length} đơn...`);
+
+        for (let i = 0; i < selectedOrders.length; i++) {
+            const orderId = selectedOrders[i];
+            try {
+                await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, {
+                    method: 'GET',
+                    mode: 'no-cors'
+                });
+            } catch (err) {
+                console.error(`Lỗi kích hoạt webhook đơn ${orderId}:`, err);
+            }
+            await new Promise(resolve => setTimeout(resolve, 300));
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        
+        await fetchAllocation(statusDict);
+        setUpdatingSelected(false);
+        setCopyMessage(`✅ Đã gửi lệnh cập nhật webhook xong cho ${selectedOrders.length} đơn hàng.`);
+        setSelectedOrders([]);
+        setTimeout(() => setCopyMessage(''), 5000);
     };
 
     const handleSelectAll = (e) => {
@@ -447,11 +477,11 @@ export default function OrderReport() {
                             </button>
 
                             <div className="relative" onMouseLeave={() => setShowActionMenu(false)}>
-                                <button onClick={() => setShowActionMenu(!showActionMenu)} disabled={selectedOrders.length === 0 || sendingOrder} className={`px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg ${selectedOrders.length > 0 ? 'bg-blue-600/90 backdrop-blur-md text-white hover:bg-blue-700 shadow-blue-500/20' : 'bg-white/50 text-gray-400 cursor-not-allowed border border-white/20'}`}>
-                                    {sendingOrder ? <RefreshCw size={18} className="animate-spin" /> : "Thao tác"} ({selectedOrders.length}) <ChevronDown size={16} />
+                                <button onClick={() => setShowActionMenu(!showActionMenu)} disabled={selectedOrders.length === 0 || sendingOrder || updatingSelected} className={`px-6 py-3 rounded-2xl font-bold flex items-center gap-2 transition-all shadow-lg ${selectedOrders.length > 0 ? 'bg-blue-600/90 backdrop-blur-md text-white hover:bg-blue-700 shadow-blue-500/20' : 'bg-white/50 text-gray-400 cursor-not-allowed border border-white/20'}`}>
+                                    {sendingOrder || updatingSelected ? <RefreshCw size={18} className="animate-spin" /> : "Thao tác"} ({selectedOrders.length}) <ChevronDown size={16} />
                                 </button>
                                 {showActionMenu && selectedOrders.length > 0 && (
-                                    <div className="absolute right-0 top-[105%] w-56 bg-white/90 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fade-in">
+                                    <div className="absolute right-0 top-[105%] w-60 bg-white/90 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-2xl z-50 overflow-hidden animate-fade-in">
                                         <div className="px-3 py-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100/50 bg-gray-50/50">In Ấn</div>
                                         <button onClick={() => executePrint('A4')} className="w-full text-left px-5 py-3 text-sm font-semibold text-gray-700 hover:bg-blue-50/50 hover:text-blue-700 transition-colors flex items-center gap-2">
                                             <Printer size={16} /> In khổ A4/A5
@@ -459,9 +489,15 @@ export default function OrderReport() {
                                         <button onClick={() => executePrint('K80')} className="w-full text-left px-5 py-3 text-sm font-semibold text-gray-700 hover:bg-blue-50/50 hover:text-blue-700 transition-colors flex items-center gap-2">
                                             <Printer size={16} /> In khổ K80
                                         </button>
+                                        
                                         <div className="px-3 py-2 mt-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-y border-gray-100/50 bg-gray-50/50">Vận Chuyển</div>
-                                        <button onClick={handleSendCarrier} disabled={sendingOrder} className="w-full text-left px-5 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-50 hover:text-amber-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                        <button onClick={handleSendCarrier} disabled={sendingOrder || updatingSelected} className="w-full text-left px-5 py-3 text-sm font-semibold text-amber-700 hover:bg-amber-50 hover:text-amber-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                                             <Send size={16} /> Gửi Hãng Vận Chuyển
+                                        </button>
+
+                                        <div className="px-3 py-2 mt-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider border-y border-gray-100/50 bg-gray-50/50">Hệ Thống</div>
+                                        <button onClick={handleUpdateSelectedWebhooks} disabled={sendingOrder || updatingSelected} className="w-full text-left px-5 py-3 text-sm font-semibold text-blue-700 hover:bg-blue-50 hover:text-blue-800 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                                            <RefreshCw size={16} className={updatingSelected ? "animate-spin" : ""} /> Cập nhật lại Webhook
                                         </button>
                                     </div>
                                 )}
@@ -470,7 +506,7 @@ export default function OrderReport() {
                     </div>
 
                     {copyMessage && (
-                        <div className={`text-xs font-medium bg-white/70 backdrop-blur-sm border rounded-2xl px-4 py-2 animate-fade-in ${copyMessage.includes('✅') ? 'text-green-700 border-green-200/50 bg-green-50/50' : 'text-red-700 border-red-200/50 bg-red-50/50'}`}>
+                        <div className={`text-xs font-medium bg-white/70 backdrop-blur-sm border rounded-2xl px-4 py-2 animate-fade-in ${copyMessage.includes('✅') ? 'text-green-700 border-green-200/50 bg-green-50/50' : copyMessage.includes('Đang tiến hành') ? 'text-blue-700 border-blue-200/50 bg-blue-50/50' : 'text-red-700 border-red-200/50 bg-red-50/50'}`}>
                             {copyMessage}
                         </div>
                     )}
