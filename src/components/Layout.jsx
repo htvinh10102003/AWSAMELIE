@@ -5,7 +5,8 @@ import {
   TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
   BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2, 
-  LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2, Menu
+  LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2, Menu,
+  Filter, FileEdit // <-- Thêm 2 icon mới cho 2 menu vừa tạo
 } from 'lucide-react';
 import TestingNoticeBanner from './TestingNoticeBanner';
 
@@ -35,7 +36,7 @@ export default function Layout() {
   // Tự động mở dropdown nếu đang ở trang con
   useEffect(() => {
     if (location.pathname === '/' || location.pathname.includes('/dashboard-')) setIsDashboardOpen(true);
-    if (location.pathname.includes('/bao-cao-don') || location.pathname.includes('/don-da-in-hom-nay')) setIsPrintOrdersOpen(true);
+    if (location.pathname.includes('/bao-cao-don') || location.pathname.includes('/don-da-in-hom-nay') || location.pathname.includes('/loc-don-theo-day-ke') || location.pathname.includes('/chen-vi-tri-awb')) setIsPrintOrdersOpen(true);
     if (location.pathname.includes('/dong-goi-') || location.pathname.includes('/toc-do-dong-goi-')) setIsPackingOpen(true);
     if (location.pathname.includes('/bao-cao-hoan-') || location.pathname.includes('/kiem-tra-don-hoan') || location.pathname.includes('/xu-ly-don-hoan')) setIsReturnOrdersOpen(true);
     if (location.pathname.includes('/thong-ke-kiem-ke') || location.pathname.includes('/danh-sach-kiem-ke')) setIsInventoryCheckOpen(true);
@@ -167,7 +168,7 @@ export default function Layout() {
 
               // 2. DROPDOWN ĐƠN IN
               if (item.id === 'print_orders') {
-                const isChildActive = location.pathname === '/bao-cao-don' || location.pathname === '/don-da-in-hom-nay';
+                const isChildActive = location.pathname === '/bao-cao-don' || location.pathname === '/don-da-in-hom-nay' || location.pathname === '/loc-don-theo-day-ke' || location.pathname === '/chen-vi-tri-awb';
                 return (
                   <div key={item.id} className="space-y-1.5">
                     <button onClick={() => setIsPrintOrdersOpen(!isPrintOrdersOpen)} className={`w-full flex items-center gap-3 py-3 rounded-2xl transition-all duration-200 group cursor-pointer ${!sidebarExpanded ? 'justify-center px-0' : 'px-4 justify-between'} ${isChildActive && !isPrintOrdersOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
@@ -186,6 +187,15 @@ export default function Layout() {
                         <Link to="/don-da-in-hom-nay" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/don-da-in-hom-nay' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
                           <CheckCircle2 size={16} className={location.pathname === '/don-da-in-hom-nay' ? 'text-blue-600' : 'text-gray-400'} />
                           <span className="text-sm">Đơn đã in hôm nay</span>
+                        </Link>
+                        {/* 2 tab mới được thêm vào đây */}
+                        <Link to="/loc-don-theo-day-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/loc-don-theo-day-ke' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <Filter size={16} className={location.pathname === '/loc-don-theo-day-ke' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Lọc đơn chia theo dãy kệ</span>
+                        </Link>
+                        <Link to="/chen-vi-tri-awb" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/chen-vi-tri-awb' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <FileEdit size={16} className={location.pathname === '/chen-vi-tri-awb' ? 'text-blue-600' : 'text-gray-400'} />
+                          <span className="text-sm">Chèn vị trí SP vào AWB</span>
                         </Link>
                       </div>
                     )}

@@ -20,6 +20,10 @@ import UpdateWarehouseMap from './pages/UpdateWarehouseMap';
 import ProductLocation from './pages/ProductLocation';
 import KPI_Management from './pages/KPI_Management';
 import KPI_Report from './pages/KPI_Report';
+
+// Import màn hình mới thêm
+import FilterByZone from './pages/FilterByZone';
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -36,6 +40,8 @@ export default function App() {
           {/* 🖨️ TAB ĐƠN IN */}
           <Route path="bao-cao-don" element={<OrderReport />} />
           <Route path="don-da-in-hom-nay" element={<PrintedOrdersToday />} />
+          <Route path="loc-don-theo-day-ke" element={<FilterByZone />} />
+          <Route path="chen-vi-tri-awb" element={<UnderDevelopment />} /> {/* Tạm để UnderDevelopment chờ dev */}
 
           {/* 📦 TAB ĐÓNG GÓI */}
           <Route path="dong-goi-don-hang" element={<UnderDevelopment />} />
