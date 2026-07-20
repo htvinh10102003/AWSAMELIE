@@ -3,36 +3,39 @@ import { supabase } from '../lib/supabase';
 import { MapPin, Save, AlertCircle, Plus, LayoutGrid } from 'lucide-react';
 
 export default function SetupZone() {
-  const [rackZones, setRackZones] = useState({});
+  const [locationZones, setLocationZones] = useState({});
   const [availableZones, setAvailableZones] = useState([]);
   const [newZoneName, setNewZoneName] = useState('');
   
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // 1. Tải dữ liệu Kệ và Dãy đang có trong kho
+  // 1. Tải dữ liệu Location Code (Vị trí kệ) và Dãy đang có trong kho
   useEffect(() => {
     const fetchLocations = async () => {
       const { data, error } = await supabase
         .from('location_nodes')
-        .select('rack, zone');
+        .select('location_code, zone');
       
       if (!error && data) {
-        const uniqueRacks = {};
-        const zonesSet = new Set(); // Dùng Set để lọc các dãy trùng lặp
+        const locMap = {};
+        const zonesSet = new Set(); 
 
-        data.forEach(item => {
-          // Gom nhóm lấy các kệ duy nhất
-          if (item.rack && !uniqueRacks[item.rack]) {
-            uniqueRacks[item.rack] = item.zone || '';
+        // Sắp xếp mã vị trí theo thứ tự A-Z để dễ nhìn
+        const sortedData = data.sort((a, b) => 
+          (a.location_code || '').localeCompare(b.location_code || '')
+        );
+
+        sortedData.forEach(item => {
+          if (item.location_code) {
+            locMap[item.location_code] = item.zone || '';
           }
-          // Gom danh sách các dãy đã có sẵn trong DB
           if (item.zone) {
             zonesSet.add(item.zone.toUpperCase());
           }
         });
 
-        setRackZones(uniqueRacks);
+        setLocationZones(locMap);
         setAvailableZones(Array.from(zonesSet).sort());
       }
     };
@@ -41,7 +44,7 @@ export default function SetupZone() {
 
   // 2. Thêm một Dãy mới vào danh sách Dropdown
   const handleAddZone = (e) => {
-    e.preventDefault(); // Ngăn reload trang nếu để trong form
+    e.preventDefault(); 
     const zone = newZoneName.trim().toUpperCase();
     
     if (!zone) return;
@@ -49,29 +52,29 @@ export default function SetupZone() {
     if (!availableZones.includes(zone)) {
       setAvailableZones(prev => [...prev, zone].sort());
     }
-    setNewZoneName(''); // Clear ô input sau khi thêm
+    setNewZoneName('');
   };
 
-  // 3. Xử lý khi chọn Dãy cho Kệ
-  const handleZoneChange = (rack, value) => {
-    setRackZones(prev => ({ ...prev, [rack]: value }));
+  // 3. Xử lý khi chọn Dãy cho Vị trí (Location Code)
+  const handleZoneChange = (locCode, value) => {
+    setLocationZones(prev => ({ ...prev, [locCode]: value }));
   };
 
-  // 4. Lưu toàn bộ cấu hình vào DB
+  // 4. Lưu toàn bộ cấu hình vào DB (Cập nhật theo location_code)
   const handleSave = async () => {
     setLoading(true);
     setMessage('');
     try {
-      const promises = Object.entries(rackZones).map(([rack, zone]) => {
+      const promises = Object.entries(locationZones).map(([locCode, zone]) => {
         return supabase
           .from('location_nodes')
-          .update({ zone: zone || null }) // Gửi null nếu chọn "Chưa phân dãy"
-          .eq('rack', rack);
+          .update({ zone: zone || null })
+          .eq('location_code', locCode); // Match bằng location_code
       });
 
       await Promise.all(promises);
       setMessage('Lưu cấu hình dãy kệ thành công!');
-      setTimeout(() => setMessage(''), 3000); // Ẩn thông báo sau 3s
+      setTimeout(() => setMessage(''), 3000);
     } catch (error) {
       console.error(error);
       setMessage('Có lỗi xảy ra khi lưu.');
@@ -88,7 +91,7 @@ export default function SetupZone() {
         <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl"><MapPin size={24} /></div>
         <div>
           <h2 className="text-2xl font-black text-gray-900 tracking-tight">Quy định Dãy cho Kệ</h2>
-          <p className="text-sm text-gray-500 font-medium">Quản lý danh sách các Dãy và phân bổ Kệ vào Dãy để tối ưu lấy hàng.</p>
+          <p className="text-sm text-gray-500 font-medium">Quản lý danh sách các Dãy và phân bổ Vị trí kệ vào Dãy để tối ưu lấy hàng.</p>
         </div>
       </div>
 
@@ -156,17 +159,17 @@ export default function SetupZone() {
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {Object.keys(rackZones).length === 0 ? (
+              {Object.keys(locationZones).length === 0 ? (
                 <div className="col-span-full py-8 text-center text-gray-400 text-sm">
-                  Không tìm thấy Kệ nào trong kho. Vui lòng kiểm tra dữ liệu vị trí.
+                  Không tìm thấy Vị trí nào trong kho. Vui lòng kiểm tra dữ liệu vị trí.
                 </div>
               ) : (
-                Object.entries(rackZones).map(([rack, currentZone]) => (
-                  <div key={rack} className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col gap-2 hover:border-blue-200 transition-colors">
-                    <label className="text-sm font-bold text-gray-600">Kệ: <span className="text-gray-900">{rack}</span></label>
+                Object.entries(locationZones).map(([locCode, currentZone]) => (
+                  <div key={locCode} className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col gap-2 hover:border-blue-200 transition-colors">
+                    <label className="text-sm font-bold text-gray-600">Vị trí: <span className="text-gray-900">{locCode}</span></label>
                     <select
                       value={currentZone || ''}
-                      onChange={(e) => handleZoneChange(rack, e.target.value)}
+                      onChange={(e) => handleZoneChange(locCode, e.target.value)}
                       className="px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 cursor-pointer bg-white"
                     >
                       <option value="" className="text-gray-400 font-normal">-- Chưa phân dãy --</option>
