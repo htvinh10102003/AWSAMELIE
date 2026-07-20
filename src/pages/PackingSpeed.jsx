@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
     Calendar, Package, Gauge, Clock, Users, User as UserIcon, 
-    Clock3, TrendingUp, Loader2, AlertCircle, Download,
+    Clock3, TrendingUp, Loader2, AlertCircle, Download, Table
 } from 'lucide-react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -22,6 +22,9 @@ export default function PackingSpeed({ mode }) {
     const [totalHoursFromSchedule, setTotalHoursFromSchedule] = useState(0); 
     
     const [generalDate, setGeneralDate] = useState(() => formatDateToInput(new Date()));
+    // Thêm state chuyển đổi góc nhìn cho mode general: 'daily' hoặc 'monthly'
+    const [generalViewType, setGeneralViewType] = useState('daily');
+
     const [monthRawData, setMonthRawData] = useState([]);
     const [monthSchedulesData, setMonthSchedulesData] = useState([]);
 
@@ -45,12 +48,8 @@ export default function PackingSpeed({ mode }) {
         }
     }, [generalDate, startDate, endDate, mode]);
 
-    // Danh sách trạng thái HỢP LỆ (Chỉ tính các đơn đã đóng gói xong hoặc đang đi đường)
     const ALLOWED_STATUSES = [40, 43, 59, 60, 61, 71, 72, 74];
 
-    // ==========================================
-    // ⚡ ISO 1: ĐÓNG GÓI CHUNG (ĐỌC THẲNG TỪ BẢNG ORDERS)
-    // ==========================================
     const fetchGeneralMonthData = async () => {
         if (!generalDate) return;
         setLoading(true);
@@ -68,13 +67,12 @@ export default function PackingSpeed({ mode }) {
             let page = 0;
             const pageSize = 1000;
 
-            // ⚡️ THAY ĐỔI: Đọc trực tiếp từ bảng orders thay vì bảng packing_logs để tránh bẫy Relation lỗi
             while (true) {
                 const { data, error } = await supabase
                     .from('orders')
                     .select('id, packed_at, packed_by_name, status')
                     .not('packed_at', 'is', null)
-                    .in('status', ALLOWED_STATUSES) // Lọc cứng Whitelist trạng thái ngay trên máy chủ
+                    .in('status', ALLOWED_STATUSES)
                     .gte('packed_at', startOfMonthIso)
                     .lte('packed_at', endOfMonthIso)
                     .range(page * pageSize, (page + 1) * pageSize - 1);
@@ -110,7 +108,11 @@ export default function PackingSpeed({ mode }) {
             setMonthRawData(monthLogs);
             setMonthSchedulesData(filteredPackerScheds);
 
-            const dayLogs = monthLogs.filter(o => o.packed_at.startsWith(generalDate));
+            const dayLogs = monthLogs.filter(o => {
+                const dObj = new Date(o.packed_at);
+                const localDateStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
+                return localDateStr === generalDate;
+            });
             setRawData(dayLogs);
 
         } catch (error) {
@@ -120,9 +122,6 @@ export default function PackingSpeed({ mode }) {
         }
     };
 
-    // ==========================================
-    // ⚡ ISO 2: ĐÓNG GÓI THEO NHÂN SỰ
-    // ==========================================
     const fetchPackingAndScheduleData = async () => {
         if (!startDate || !endDate) return;
         setLoading(true);
@@ -206,6 +205,7 @@ export default function PackingSpeed({ mode }) {
         }
     }, [selectedEmployee, rawData, mode]);
 
+    // Xuất Excel đơn RAW ngày hiện tại
     const handleExportRawOrdersExcel = async () => {
         try {
             const startOfDay = `${generalDate}T00:00:00.000Z`;
@@ -228,7 +228,7 @@ export default function PackingSpeed({ mode }) {
             }
             
             let csvContent = "\uFEFF"; 
-            csvContent += "Mã đơn hàng (ID),Thời gian đóng gói,Nhên sự thực hiện\n";
+            csvContent += "Mã đơn hàng (ID),Thời gian đóng gói,Nhân sự thực hiện\n";
             
             data.forEach(row => {
                 const timeStr = new Date(row.packed_at).toLocaleTimeString('vi-VN');
@@ -249,6 +249,63 @@ export default function PackingSpeed({ mode }) {
         }
     };
 
+    // Chuẩn bị dữ liệu tổng hợp tháng
+    const getMonthlySummaryData = () => {
+        const summaryMap = {};
+        
+        monthSchedulesData.forEach(s => {
+            if (!summaryMap[s.work_date]) {
+                summaryMap[s.work_date] = { date: s.work_date, orders: 0, staffSet: new Set() };
+            }
+            const staffName = Array.isArray(s.warehouse_staff) ? s.warehouse_staff[0]?.full_name : s.warehouse_staff?.full_name;
+            if (staffName) summaryMap[s.work_date].staffSet.add(staffName);
+        });
+
+        monthRawData.forEach(o => {
+            const dObj = new Date(o.packed_at);
+            const dateStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
+            
+            if (!summaryMap[dateStr]) {
+                summaryMap[dateStr] = { date: dateStr, orders: 0, staffSet: new Set() };
+            }
+            summaryMap[dateStr].orders += 1;
+        });
+
+        return Object.values(summaryMap).map(item => ({
+            date: item.date,
+            orders: item.orders,
+            staffCount: item.staffSet.size
+        })).sort((a, b) => a.date.localeCompare(b.date));
+    };
+
+    const monthlySummaryData = mode === 'general' ? getMonthlySummaryData() : [];
+
+    // Xuất Excel tổng hợp cả tháng
+    const handleExportMonthlyExcel = () => {
+        if (monthlySummaryData.length === 0) {
+            alert('Không có dữ liệu trong tháng này!');
+            return;
+        }
+
+        let csvContent = "\uFEFF"; 
+        csvContent += "Ngày,Số lượng đơn đóng được,Số lượng nhân sự\n";
+        
+        monthlySummaryData.forEach(row => {
+            const dateVN = row.date.split('-').reverse().join('/');
+            csvContent += `"${dateVN}","${row.orders}","${row.staffCount}"\n`;
+        });
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        const yyyyMm = generalDate.substring(0, 7);
+        link.setAttribute("download", `Amelie_Monthly_Summary_${yyyyMm}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const getGeneralHourlyDistribution = () => {
         const hourMap = {};
         for (let i = 8; i <= 22; i++) hourMap[i] = { hour: `${i}h`, 'Tổng đơn': 0 };
@@ -259,9 +316,6 @@ export default function PackingSpeed({ mode }) {
         return Object.values(hourMap);
     };
 
-    // ==========================================
-    // BÓC TÁCH MA TRẬN ĐỂ HIỂN THỊ
-    // ==========================================
     let dayHours = 0;
     let dayStaffCount = 0;
     let dutyStaffList = [];
@@ -303,7 +357,7 @@ export default function PackingSpeed({ mode }) {
             <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md mt-1 inline-block ${
                 isUp ? 'bg-emerald-50 text-emerald-600 border border-emerald-200' : 'bg-rose-50 text-rose-600 border border-rose-200'
             }`}>
-                {isUp ? `↑ +${percent.toFixed(1)}%` : `↓ ${percent.toFixed(1)}%`} so với TB đóng hàng/tháng
+                {isUp ? `↑ +${percent.toFixed(1)}%` : `↓ ${Math.abs(percent).toFixed(1)}%`} so với TB đóng hàng/tháng
             </span>
         );
     };
@@ -314,7 +368,6 @@ export default function PackingSpeed({ mode }) {
         return `${String(dObj.getDate()).padStart(2, '0')}/${String(dObj.getMonth() + 1).padStart(2, '0')}/${dObj.getFullYear()}` === selectedDate;
     });
 
-    // ⚡️ BƯỚC 2: CHẠY HÀM TÍNH TOÁN THEO GIỜ DỰA TRÊN BIẾN TRÊN
     const getEmployeeHourlyTable = () => {
         const hourMap = {};
         for(let i = 8; i <= 22; i++) hourMap[i] = { hour: `${i}:00 - ${i}:59`, total: 0 };
@@ -330,7 +383,6 @@ export default function PackingSpeed({ mode }) {
         }));
     };
 
-    // ⚡️ BƯỚC 3: ĐỔ RA BIẾN SCOPE CHUẨN ĐỂ RENDER XUỐNG JSX
     const employeeHourlyData = getEmployeeHourlyTable();
 
     return (
@@ -345,7 +397,23 @@ export default function PackingSpeed({ mode }) {
                 </div>
                 
                 {mode === 'general' ? (
-                    <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto justify-end">
+                        {/* Nhóm nút chọn tab chuyển đổi góc nhìn */}
+                        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                            <button 
+                                onClick={() => setGeneralViewType('daily')}
+                                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${generalViewType === 'daily' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Theo ngày
+                            </button>
+                            <button 
+                                onClick={() => setGeneralViewType('monthly')}
+                                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${generalViewType === 'monthly' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Cả tháng
+                            </button>
+                        </div>
+
                         <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-2">
                             <Calendar size={16} className="text-slate-400 mr-2" />
                             <input 
@@ -355,13 +423,24 @@ export default function PackingSpeed({ mode }) {
                                 className="text-xs font-bold text-slate-700 outline-none bg-transparent cursor-pointer"
                             />
                         </div>
-                        <button
-                            onClick={handleExportRawOrdersExcel}
-                            disabled={loading || rawData.length === 0}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                        >
-                            <Download size={14} /> Xuất Excel đơn RAW
-                        </button>
+                        
+                        {generalViewType === 'daily' ? (
+                            <button
+                                onClick={handleExportRawOrdersExcel}
+                                disabled={loading || rawData.length === 0}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                                <Download size={14} /> Xuất Excel (Ngày)
+                            </button>
+                        ) : (
+                            <button
+                                onClick={handleExportMonthlyExcel}
+                                disabled={loading || monthlySummaryData.length === 0}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                            >
+                                <Download size={14} /> Xuất Excel (Tháng)
+                            </button>
+                        )}
                     </div>
                 ) : (
                     <div className="flex flex-wrap items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200/60">
@@ -381,7 +460,7 @@ export default function PackingSpeed({ mode }) {
             {loading ? (
                 <div className="h-64 flex flex-col items-center justify-center gap-3 text-slate-400 text-xs font-bold bg-white rounded-2xl border border-slate-200 shadow-sm">
                     <Loader2 size={28} className="animate-spin text-blue-500" />
-                    Đang tính toán phân phối hiệu suất...
+                    Đang tính toán dữ liệu...
                 </div>
             ) : (
                 <>
@@ -389,88 +468,136 @@ export default function PackingSpeed({ mode }) {
                     {mode === 'general' && (
                         <div className="space-y-6">
                             
-                            {/* BANNER THÔNG BÁO NẾU CHƯA CẬP NHẬT LỊCH LÀM VIỆC */}
-                            {dayStaffCount === 0 && (
-                                <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl flex items-center gap-3 text-xs font-bold shadow-sm animate-pulse">
-                                    <AlertCircle size={18} className="text-amber-600 flex-shrink-0" />
-                                    <span>⚠️ Hệ thống phát hiện chưa cập nhật lịch làm việc cho ngày {new Date(generalDate).toLocaleDateString('vi-VN')}. Vui lòng bổ sung lịch trình của bộ phận Đóng hàng để tính toán KPI chính xác!</span>
-                                </div>
-                            )}
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600"><Package size={22} /></div>
-                                    <div>
-                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Số đơn đóng gói trong ngày</div>
-                                        <div className="text-2xl font-black text-slate-800">{dayTotalOrders.toLocaleString('vi-VN')} <span className="text-xs text-slate-400 font-medium">đơn</span></div>
-                                        {renderComparisonBadge(ordersComparePercent)}
-                                    </div>
-                                </div>
-                                
-                                <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600"><Gauge size={22} /></div>
-                                    <div>
-                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tốc độ đóng gói trung bình</div>
-                                        <div className="text-2xl font-black text-emerald-600">{daySpeed.toFixed(1)} <span className="text-xs font-bold text-slate-400">đơn/giờ</span></div>
-                                        {renderComparisonBadge(speedComparePercent)}
-                                    </div>
-                                </div>
+                            {/* TAB THEO NGÀY */}
+                            {generalViewType === 'daily' && (
+                                <>
+                                    {dayStaffCount === 0 && (
+                                        <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl flex items-center gap-3 text-xs font-bold shadow-sm animate-pulse">
+                                            <AlertCircle size={18} className="text-amber-600 flex-shrink-0" />
+                                            <span>⚠️ Hệ thống phát hiện chưa cập nhật lịch làm việc cho ngày {new Date(generalDate).toLocaleDateString('vi-VN')}. Vui lòng bổ sung lịch trình của bộ phận Đóng hàng để tính toán KPI chính xác!</span>
+                                        </div>
+                                    )}
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center text-blue-600"><Package size={22} /></div>
+                                            <div>
+                                                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Số đơn đóng gói trong ngày</div>
+                                                <div className="text-2xl font-black text-slate-800">{dayTotalOrders.toLocaleString('vi-VN')} <span className="text-xs text-slate-400 font-medium">đơn</span></div>
+                                                {renderComparisonBadge(ordersComparePercent)}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600"><Gauge size={22} /></div>
+                                            <div>
+                                                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tốc độ đóng gói trung bình</div>
+                                                <div className="text-2xl font-black text-emerald-600">{daySpeed.toFixed(1)} <span className="text-xs font-bold text-slate-400">đơn/giờ</span></div>
+                                                {renderComparisonBadge(speedComparePercent)}
+                                            </div>
+                                        </div>
 
-                                <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-orange-600"><Users size={22} /></div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nhân sự đóng gói</div>
-                                        <div className="text-2xl font-black text-slate-800">{dayStaffCount} <span className="text-xs text-slate-400 font-medium">người</span></div>
-                                        <div className="text-[10px] font-bold text-slate-500 truncate mt-1 bg-slate-50 border border-slate-100 rounded px-1.5 py-0.5 block" title={dutyStaffList.join(', ') || 'Chưa xếp lịch'}>
-                                            {dutyStaffList.length > 0 ? dutyStaffList.join(', ') : '❌ Chưa có lịch trực'}
+                                        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-sm flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-full bg-orange-50 flex items-center justify-center text-orange-600"><Users size={22} /></div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nhân sự đóng gói</div>
+                                                <div className="text-2xl font-black text-slate-800">{dayStaffCount} <span className="text-xs text-slate-400 font-medium">người</span></div>
+                                                <div className="text-[10px] font-bold text-slate-500 truncate mt-1 bg-slate-50 border border-slate-100 rounded px-1.5 py-0.5 block" title={dutyStaffList.join(', ') || 'Chưa xếp lịch'}>
+                                                    {dutyStaffList.length > 0 ? dutyStaffList.join(', ') : '❌ Chưa có lịch trực'}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
 
-                            {/* DÒNG HIỂN THỊ TRUNG BÌNH THÁNG TÍCH LŨY */}
-                            <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-700/50 flex flex-col md:flex-row items-center justify-between gap-4">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-white/10 text-amber-400 rounded-xl"><TrendingUp size={20} /></div>
-                                    <div>
-                                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-200">Hiệu suất tháng</h4>
-                                        <p className="text-[11px] text-slate-400 font-medium mt-0.5">Thống kê từ ngày 01 đến hết tháng {new Date(generalDate).toLocaleDateString('vi-VN', {month: '2-digit', year: 'numeric'})}. Cần cập nhật đúng đủ lịch làm việc để có kết quả chính xác!</p>
+                                    <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white p-5 rounded-2xl shadow-md border border-slate-700/50 flex flex-col md:flex-row items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-white/10 text-amber-400 rounded-xl"><TrendingUp size={20} /></div>
+                                            <div>
+                                                <h4 className="text-xs font-black uppercase tracking-wider text-slate-200">Hiệu suất tháng</h4>
+                                                <p className="text-[11px] text-slate-400 font-medium mt-0.5">Thống kê từ ngày 01 đến hết tháng {new Date(generalDate).toLocaleDateString('vi-VN', {month: '2-digit', year: 'numeric'})}. Cần cập nhật đúng đủ lịch làm việc để có kết quả chính xác!</p>
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 w-full md:w-auto text-center md:text-left">
+                                            <div className="border-r border-slate-700/60 pr-4 last:border-0">
+                                                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tổng đơn tháng</span>
+                                                <span className="text-base font-black text-white mt-0.5 block">{monthTotalOrders.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-400">đơn</span></span>
+                                            </div>
+                                            <div className="border-r border-slate-700/60 pr-4 last:border-0">
+                                                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">TB sản lượng/ngày</span>
+                                                <span className="text-base font-black text-amber-400 mt-0.5 block">{monthAvgOrdersPerDay.toFixed(1)} <span className="text-xs font-normal text-slate-400">đ/ngày</span></span>
+                                            </div>
+                                            <div className="border-r border-slate-700/60 pr-4 last:border-0">
+                                                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tổng giờ công đóng gói</span>
+                                                <span className="text-base font-black text-white mt-0.5 block">{monthHours.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-400">giờ</span></span>
+                                            </div>
+                                            <div className="pr-4 last:border-0">
+                                                <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tốc độ TB tháng</span>
+                                                <span className="text-base font-black text-emerald-400 mt-0.5 block">{monthAvgSpeed.toFixed(1)} <span className="text-xs font-normal text-slate-400">đ/giờ</span></span>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 w-full md:w-auto text-center md:text-left">
-                                    <div className="border-r border-slate-700/60 pr-4 last:border-0">
-                                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tổng đơn tháng</span>
-                                        <span className="text-base font-black text-white mt-0.5 block">{monthTotalOrders.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-400">đơn</span></span>
-                                    </div>
-                                    <div className="border-r border-slate-700/60 pr-4 last:border-0">
-                                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">TB sản lượng/ngày</span>
-                                        <span className="text-base font-black text-amber-400 mt-0.5 block">{monthAvgOrdersPerDay.toFixed(1)} <span className="text-xs font-normal text-slate-400">đ/ngày</span></span>
-                                    </div>
-                                    <div className="border-r border-slate-700/60 pr-4 last:border-0">
-                                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tổng giờ công đóng gói</span>
-                                        <span className="text-base font-black text-white mt-0.5 block">{monthHours.toLocaleString('vi-VN')} <span className="text-xs font-normal text-slate-400">giờ</span></span>
-                                    </div>
-                                    <div className="pr-4 last:border-0">
-                                        <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tốc độ TB tháng</span>
-                                        <span className="text-base font-black text-emerald-400 mt-0.5 block">{monthAvgSpeed.toFixed(1)} <span className="text-xs font-normal text-slate-400">đ/giờ</span></span>
-                                    </div>
-                                </div>
-                            </div>
 
-                            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                                <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-1.5"><Clock3 size={14}/> Sơ đồ phân phối sản lượng đóng gói theo khung giờ trong ngày</h4>
-                                <div className="h-[280px] w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={getGeneralHourlyDistribution()}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                            <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11, fontWeight: 700}} dy={10} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11, fontWeight: 700}} />
-                                            <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontWeight: 'bold' }} />
-                                            <Bar dataKey="Tổng đơn" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={32} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
+                                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                                        <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-1.5"><Clock3 size={14}/> Sơ đồ phân phối sản lượng đóng gói theo khung giờ trong ngày</h4>
+                                        <div className="h-[280px] w-full">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={getGeneralHourlyDistribution()}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                                    <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11, fontWeight: 700}} dy={10} />
+                                                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11, fontWeight: 700}} />
+                                                    <RechartsTooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.05)', fontWeight: 'bold' }} />
+                                                    <Bar dataKey="Tổng đơn" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={32} />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+
+                            {/* TAB CẢ THÁNG */}
+                            {generalViewType === 'monthly' && (
+                                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                                    <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                                        <h4 className="text-xs font-black text-slate-600 uppercase tracking-wider flex items-center gap-2">
+                                            <Table size={16} className="text-blue-500" />
+                                            Bảng tổng hợp năng suất tháng {generalDate.substring(0, 7)}
+                                        </h4>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="bg-white text-slate-400 font-bold border-b border-slate-200 text-xs uppercase">
+                                                <tr>
+                                                    <th className="py-3 px-5">Ngày</th>
+                                                    <th className="py-3 px-5 text-center">Số đơn đóng được</th>
+                                                    <th className="py-3 px-5 text-center">Số lượng nhân sự</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                                                {monthlySummaryData.map((row, idx) => (
+                                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="py-3 px-5 font-bold text-slate-600">
+                                                            {row.date.split('-').reverse().join('/')}
+                                                        </td>
+                                                        <td className="py-3 px-5 text-center font-black text-blue-600">
+                                                            {row.orders.toLocaleString('vi-VN')}
+                                                        </td>
+                                                        <td className="py-3 px-5 text-center font-bold text-slate-700">
+                                                            {row.staffCount}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                                {monthlySummaryData.length === 0 && (
+                                                    <tr>
+                                                        <td colSpan="3" className="py-8 text-center text-slate-400 text-xs">
+                                                            Không có dữ liệu trong khoảng thời gian này
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     )}
 
