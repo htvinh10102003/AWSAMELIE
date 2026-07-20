@@ -6,7 +6,7 @@ import {
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
   BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2, 
   LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2, Menu,
-  Filter, FileEdit // <-- Thêm 2 icon mới cho 2 menu vừa tạo
+  Filter, FileEdit, LayoutGrid // <-- Thêm LayoutGrid cho menu Quy ước dãy
 } from 'lucide-react';
 import TestingNoticeBanner from './TestingNoticeBanner';
 
@@ -41,7 +41,7 @@ export default function Layout() {
     if (location.pathname.includes('/bao-cao-hoan-') || location.pathname.includes('/kiem-tra-don-hoan') || location.pathname.includes('/xu-ly-don-hoan')) setIsReturnOrdersOpen(true);
     if (location.pathname.includes('/thong-ke-kiem-ke') || location.pathname.includes('/danh-sach-kiem-ke')) setIsInventoryCheckOpen(true);
     if (location.pathname.includes('/bao-cao-ton-kho') || location.pathname.includes('/vi-tri-san-pham')) setIsInventoryReportOpen(true);
-    if (location.pathname.includes('/cap-nhat-')) setIsAdjustMenuOpen(true);
+    if (location.pathname.includes('/cap-nhat-')) setIsAdjustMenuOpen(true); // Nhờ dòng này, route /cap-nhat-day-ke sẽ tự động mở dropdown này
   }, [location.pathname]);
 
   useEffect(() => {
@@ -377,6 +377,11 @@ export default function Layout() {
                       <Link to="/cap-nhat-so-do-kho" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-so-do-kho' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
                         <MapPin size={16} className={location.pathname === '/cap-nhat-so-do-kho' ? 'text-blue-600' : 'text-gray-400'} />
                         <span className="text-sm">Sơ đồ Kho hàng</span>
+                      </Link>
+                      {/* Thêm link Quy ước dãy vào đây */}
+                      <Link to="/cap-nhat-day-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-day-ke' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                        <LayoutGrid size={16} className={location.pathname === '/cap-nhat-day-ke' ? 'text-blue-600' : 'text-gray-400'} />
+                        <span className="text-sm">Quy ước dãy kệ</span>
                       </Link>
                     </div>
                   )}

@@ -20,8 +20,7 @@ import UpdateWarehouseMap from './pages/UpdateWarehouseMap';
 import ProductLocation from './pages/ProductLocation';
 import KPI_Management from './pages/KPI_Management';
 import KPI_Report from './pages/KPI_Report';
-
-// Import màn hình mới thêm
+import SetupZone from './pages/SetupZone';
 import FilterByZone from './pages/FilterByZone';
 
 export default function App() {
@@ -78,6 +77,8 @@ export default function App() {
           <Route path="cap-nhat-san-pham" element={<ProtectedRoute><UpdateProduct /></ProtectedRoute>} />
           <Route path="cap-nhat-so-do-kho" element={<ProtectedRoute><UpdateWarehouseMap /></ProtectedRoute>} />
           <Route path="quan-ly-kpi" element={<ProtectedRoute><KPI_Management /></ProtectedRoute>} />
+          <Route path="cap-nhat-day-ke" element={<ProtectedRoute><SetupZone /></ProtectedRoute>} />
+
           
         </Route>
       </Routes>
