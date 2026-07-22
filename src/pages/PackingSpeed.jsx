@@ -247,26 +247,20 @@ export default function PackingSpeed({ mode }) {
         }
     };
 
-    // Chuẩn bị dữ liệu tổng hợp tháng CÓ SỐ GIỜ LÀM
+    // Chuẩn bị dữ liệu tổng hợp tháng: HIỂN THỊ RÕ NHÂN SỰ VÀ CA LÀM
     const getMonthlySummaryData = () => {
         const summaryMap = {};
         
         monthSchedulesData.forEach(s => {
             if (!summaryMap[s.work_date]) {
-                summaryMap[s.work_date] = { date: s.work_date, orders: 0, staffSet: new Set(), totalHours: 0 };
+                summaryMap[s.work_date] = { date: s.work_date, orders: 0, staffDetailsSet: new Set() };
             }
             
-            // Tính nhân sự
             const staffName = Array.isArray(s.warehouse_staff) ? s.warehouse_staff[0]?.full_name : s.warehouse_staff?.full_name;
-            if (staffName) {
-                summaryMap[s.work_date].staffSet.add(staffName);
-            }
+            const shift = s.shift;
             
-            // Tính số giờ làm
-            if (s.shift === 'Cả ngày') {
-                summaryMap[s.work_date].totalHours += 7.5;
-            } else if (s.shift === 'Sáng' || s.shift === 'Chiều') {
-                summaryMap[s.work_date].totalHours += 3.75;
+            if (staffName && shift) {
+                summaryMap[s.work_date].staffDetailsSet.add(`${staffName} (${shift})`);
             }
         });
 
@@ -275,7 +269,7 @@ export default function PackingSpeed({ mode }) {
             const dateStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
             
             if (!summaryMap[dateStr]) {
-                summaryMap[dateStr] = { date: dateStr, orders: 0, staffSet: new Set(), totalHours: 0 };
+                summaryMap[dateStr] = { date: dateStr, orders: 0, staffDetailsSet: new Set() };
             }
             summaryMap[dateStr].orders += 1;
         });
@@ -283,8 +277,8 @@ export default function PackingSpeed({ mode }) {
         return Object.values(summaryMap).map(item => ({
             date: item.date,
             orders: item.orders,
-            staffCount: item.staffSet.size,
-            totalHours: item.totalHours
+            // Convert Set sang Array để render dễ dàng
+            staffDetails: Array.from(item.staffDetailsSet)
         })).sort((a, b) => a.date.localeCompare(b.date));
     };
 
@@ -297,11 +291,13 @@ export default function PackingSpeed({ mode }) {
         }
 
         let csvContent = "\uFEFF"; 
-        csvContent += "Ngày,Số lượng đơn đóng được,Số lượng nhân sự,Tổng số giờ làm\n";
+        csvContent += "Ngày,Số lượng đơn đóng được,Chi tiết nhân sự trực\n";
         
         monthlySummaryData.forEach(row => {
             const dateVN = row.date.split('-').reverse().join('/');
-            csvContent += `"${dateVN}","${row.orders}","${row.staffCount}","${row.totalHours}"\n`;
+            // Nối tên nhân sự bằng dấu phẩy cách cho file excel
+            const staffString = row.staffDetails.length > 0 ? row.staffDetails.join(' | ') : 'Chưa xếp lịch';
+            csvContent += `"${dateVN}","${row.orders}","${staffString}"\n`;
         });
         
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -578,30 +574,36 @@ export default function PackingSpeed({ mode }) {
                                                 <tr>
                                                     <th className="py-3 px-5">Ngày</th>
                                                     <th className="py-3 px-5 text-center">Số đơn đóng được</th>
-                                                    <th className="py-3 px-5 text-center">Số lượng nhân sự</th>
-                                                    <th className="py-3 px-5 text-center">Tổng giờ làm</th>
+                                                    <th className="py-3 px-5 text-left">Chi tiết nhân sự trực</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
                                                 {monthlySummaryData.map((row, idx) => (
                                                     <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                                        <td className="py-3 px-5 font-bold text-slate-600">
+                                                        <td className="py-3 px-5 font-bold text-slate-600 whitespace-nowrap">
                                                             {row.date.split('-').reverse().join('/')}
                                                         </td>
-                                                        <td className="py-3 px-5 text-center font-black text-blue-600">
+                                                        <td className="py-3 px-5 text-center font-black text-blue-600 whitespace-nowrap">
                                                             {row.orders.toLocaleString('vi-VN')}
                                                         </td>
-                                                        <td className="py-3 px-5 text-center font-bold text-slate-700">
-                                                            {row.staffCount}
-                                                        </td>
-                                                        <td className="py-3 px-5 text-center font-bold text-emerald-600">
-                                                            {row.totalHours} <span className="text-[10px] text-slate-400 font-normal">h</span>
+                                                        <td className="py-3 px-5 text-left font-medium text-slate-600 text-xs">
+                                                            {row.staffDetails.length > 0 ? (
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {row.staffDetails.map((staff, i) => (
+                                                                        <span key={i} className="inline-block bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md border border-slate-200 shadow-sm">
+                                                                            {staff}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-slate-400 italic font-normal">Chưa xếp lịch</span>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 ))}
                                                 {monthlySummaryData.length === 0 && (
                                                     <tr>
-                                                        <td colSpan="4" className="py-8 text-center text-slate-400 text-xs">
+                                                        <td colSpan="3" className="py-8 text-center text-slate-400 text-xs">
                                                             Không có dữ liệu trong khoảng thời gian này
                                                         </td>
                                                     </tr>
