@@ -22,7 +22,6 @@ export default function PackingSpeed({ mode }) {
     const [totalHoursFromSchedule, setTotalHoursFromSchedule] = useState(0); 
     
     const [generalDate, setGeneralDate] = useState(() => formatDateToInput(new Date()));
-    // Thêm state chuyển đổi góc nhìn cho mode general: 'daily' hoặc 'monthly'
     const [generalViewType, setGeneralViewType] = useState('daily');
 
     const [monthRawData, setMonthRawData] = useState([]);
@@ -205,7 +204,6 @@ export default function PackingSpeed({ mode }) {
         }
     }, [selectedEmployee, rawData, mode]);
 
-    // Xuất Excel đơn RAW ngày hiện tại
     const handleExportRawOrdersExcel = async () => {
         try {
             const startOfDay = `${generalDate}T00:00:00.000Z`;
@@ -249,16 +247,27 @@ export default function PackingSpeed({ mode }) {
         }
     };
 
-    // Chuẩn bị dữ liệu tổng hợp tháng
+    // Chuẩn bị dữ liệu tổng hợp tháng CÓ SỐ GIỜ LÀM
     const getMonthlySummaryData = () => {
         const summaryMap = {};
         
         monthSchedulesData.forEach(s => {
             if (!summaryMap[s.work_date]) {
-                summaryMap[s.work_date] = { date: s.work_date, orders: 0, staffSet: new Set() };
+                summaryMap[s.work_date] = { date: s.work_date, orders: 0, staffSet: new Set(), totalHours: 0 };
             }
+            
+            // Tính nhân sự
             const staffName = Array.isArray(s.warehouse_staff) ? s.warehouse_staff[0]?.full_name : s.warehouse_staff?.full_name;
-            if (staffName) summaryMap[s.work_date].staffSet.add(staffName);
+            if (staffName) {
+                summaryMap[s.work_date].staffSet.add(staffName);
+            }
+            
+            // Tính số giờ làm
+            if (s.shift === 'Cả ngày') {
+                summaryMap[s.work_date].totalHours += 7.5;
+            } else if (s.shift === 'Sáng' || s.shift === 'Chiều') {
+                summaryMap[s.work_date].totalHours += 3.75;
+            }
         });
 
         monthRawData.forEach(o => {
@@ -266,7 +275,7 @@ export default function PackingSpeed({ mode }) {
             const dateStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
             
             if (!summaryMap[dateStr]) {
-                summaryMap[dateStr] = { date: dateStr, orders: 0, staffSet: new Set() };
+                summaryMap[dateStr] = { date: dateStr, orders: 0, staffSet: new Set(), totalHours: 0 };
             }
             summaryMap[dateStr].orders += 1;
         });
@@ -274,13 +283,13 @@ export default function PackingSpeed({ mode }) {
         return Object.values(summaryMap).map(item => ({
             date: item.date,
             orders: item.orders,
-            staffCount: item.staffSet.size
+            staffCount: item.staffSet.size,
+            totalHours: item.totalHours
         })).sort((a, b) => a.date.localeCompare(b.date));
     };
 
     const monthlySummaryData = mode === 'general' ? getMonthlySummaryData() : [];
 
-    // Xuất Excel tổng hợp cả tháng
     const handleExportMonthlyExcel = () => {
         if (monthlySummaryData.length === 0) {
             alert('Không có dữ liệu trong tháng này!');
@@ -288,11 +297,11 @@ export default function PackingSpeed({ mode }) {
         }
 
         let csvContent = "\uFEFF"; 
-        csvContent += "Ngày,Số lượng đơn đóng được,Số lượng nhân sự\n";
+        csvContent += "Ngày,Số lượng đơn đóng được,Số lượng nhân sự,Tổng số giờ làm\n";
         
         monthlySummaryData.forEach(row => {
             const dateVN = row.date.split('-').reverse().join('/');
-            csvContent += `"${dateVN}","${row.orders}","${row.staffCount}"\n`;
+            csvContent += `"${dateVN}","${row.orders}","${row.staffCount}","${row.totalHours}"\n`;
         });
         
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -570,6 +579,7 @@ export default function PackingSpeed({ mode }) {
                                                     <th className="py-3 px-5">Ngày</th>
                                                     <th className="py-3 px-5 text-center">Số đơn đóng được</th>
                                                     <th className="py-3 px-5 text-center">Số lượng nhân sự</th>
+                                                    <th className="py-3 px-5 text-center">Tổng giờ làm</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
@@ -584,11 +594,14 @@ export default function PackingSpeed({ mode }) {
                                                         <td className="py-3 px-5 text-center font-bold text-slate-700">
                                                             {row.staffCount}
                                                         </td>
+                                                        <td className="py-3 px-5 text-center font-bold text-emerald-600">
+                                                            {row.totalHours} <span className="text-[10px] text-slate-400 font-normal">h</span>
+                                                        </td>
                                                     </tr>
                                                 ))}
                                                 {monthlySummaryData.length === 0 && (
                                                     <tr>
-                                                        <td colSpan="3" className="py-8 text-center text-slate-400 text-xs">
+                                                        <td colSpan="4" className="py-8 text-center text-slate-400 text-xs">
                                                             Không có dữ liệu trong khoảng thời gian này
                                                         </td>
                                                     </tr>
