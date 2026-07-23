@@ -419,7 +419,7 @@ export default function InventoryReport() {
                    jsbarcode-displayvalue="true"
                    jsbarcode-fontsize="08"
                    jsbarcode-height="${barcodeHeight}"
-                   jsbarcode-width="1.8"
+                   jsbarcode-width="1.0"
                    jsbarcode-margin="0"
                    jsbarcode-textmargin="2">
               </svg>
