@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { CalendarDays, Users, UserPlus, Loader2, CheckCircle2, AlertCircle, Save, RefreshCw, Clock, Sun, Moon, Sunrise, Sunset, UserCheck, UserX } from 'lucide-react';
+import { 
+  CalendarDays, Users, UserPlus, Loader2, CheckCircle2, AlertCircle, 
+  Save, RefreshCw, Clock, Sun, Moon, Sunrise, Sunset, UserCheck, UserX, Download 
+} from 'lucide-react';
 
 export default function UpdateSchedule() {
   const [activeTab, setActiveTab] = useState('schedule');
@@ -16,9 +19,16 @@ export default function UpdateSchedule() {
   const [scheduleDate, setScheduleDate] = useState(new Date().toISOString().split('T')[0]);
   const [dailyShifts, setDailyShifts] = useState({});
 
-  // States của Bảng Thống kê 7 ngày phía dưới
+  // States của Bảng Thống kê 7 ngày
   const [statsDays, setStatsDays] = useState([]);
   const [statsMatrix, setStatsMatrix] = useState({});
+
+  // THÊM MỚI: States cho chức năng Xuất lịch theo tháng
+  const [exportMonth, setExportMonth] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     loadStaffData();
@@ -118,6 +128,69 @@ export default function UpdateSchedule() {
     } catch (err) {
       setMessage(`❌ Lỗi lưu lịch: ${err.message}`);
     } finally { setLoading(false); }
+  };
+
+  // THÊM MỚI: Hàm xử lý xuất file CSV
+  const handleExportMonthlySchedule = async () => {
+    setIsExporting(true);
+    setMessage('');
+    try {
+      const [year, month] = exportMonth.split('-');
+      const startDate = `${exportMonth}-01`;
+      const lastDay = new Date(year, month, 0).getDate();
+      const endDate = `${exportMonth}-${lastDay}`;
+
+      // Lấy lịch làm việc trong cả tháng
+      const { data: scheduleData, error: scheduleError } = await supabase
+        .from('working_schedules')
+        .select('staff_id, work_date, shift')
+        .gte('work_date', startDate)
+        .lte('work_date', endDate);
+
+      if (scheduleError) throw scheduleError;
+
+      // Nhóm dữ liệu vào ma trận
+      const matrix = {};
+      scheduleData?.forEach(item => {
+        if (!matrix[item.staff_id]) matrix[item.staff_id] = {};
+        matrix[item.staff_id][item.work_date] = item.shift;
+      });
+
+      // Tạo header cho file CSV (Thêm BOM \uFEFF để Excel không bị lỗi font Tiếng Việt)
+      let csvContent = '\uFEFF';
+      let headerRow = ['Họ và tên', 'Chức danh'];
+      for (let i = 1; i <= lastDay; i++) {
+        headerRow.push(`Ngày ${i}`);
+      }
+      csvContent += headerRow.map(h => `"${h}"`).join(',') + '\r\n';
+
+      // Đổ dữ liệu từng nhân viên
+      staff.forEach(member => {
+        let row = [`"${member.full_name}"`, `"${member.role}"`];
+        for (let i = 1; i <= lastDay; i++) {
+          const dateStr = `${exportMonth}-${String(i).padStart(2, '0')}`;
+          const shift = matrix[member.id]?.[dateStr] || 'Nghỉ';
+          row.push(`"${shift}"`);
+        }
+        csvContent += row.join(',') + '\r\n';
+      });
+
+      // Tạo blob và tải xuống
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Lich_Lam_Viec_Thang_${month}_${year}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setMessage(`✅ Xuất lịch tháng ${month}/${year} thành công!`);
+    } catch (err) {
+      setMessage(`❌ Lỗi xuất file: ${err.message}`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Tính thống kê nhanh cho ngày hiện tại
@@ -232,6 +305,31 @@ export default function UpdateSchedule() {
         {/* NỘI DUNG TAB 1: XẾP LỊCH LÀM VIỆC */}
         {activeTab === 'schedule' && (
           <div className="space-y-6">
+            
+            {/* THÊM MỚI: BẢNG CHỨC NĂNG BÁO CÁO & XUẤT DỮ LIỆU */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-wrap items-center justify-between p-4 gap-4">
+              <div className="flex items-center gap-2">
+                <Download size={18} className="text-indigo-500" />
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Xuất báo cáo hàng tháng</h3>
+              </div>
+              <div className="flex items-center gap-3">
+                <input 
+                  type="month" 
+                  value={exportMonth}
+                  onChange={(e) => setExportMonth(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-sm font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                />
+                <button 
+                  onClick={handleExportMonthlySchedule}
+                  disabled={isExporting || staff.length === 0}
+                  className="flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white text-sm font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                  Xuất Excel (CSV)
+                </button>
+              </div>
+            </div>
+
             {/* KHUNG PHÂN CA THEO NGÀY */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
