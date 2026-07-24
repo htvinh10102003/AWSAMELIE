@@ -33,7 +33,7 @@ export default function FilterByZone() {
 
     if (error) {
       console.error(error);
-      alert('Lỗi lấy dữ liệu từ Server');
+      alert('Lỗi từ Server: ' + error.message);
     } else {
       setOrderList(data || []);
       setScannedAwbs(new Set()); // Reset lịch sử quét
