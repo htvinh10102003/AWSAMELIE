@@ -10,35 +10,55 @@ export default function SetupZone() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // 1. Tải dữ liệu Location Code (Vị trí kệ) và Dãy đang có trong kho
+  // 1. Tải dữ liệu Location Code từ bảng Tồn kho và Dãy từ bảng Node
   useEffect(() => {
     const fetchLocations = async () => {
-      const { data, error } = await supabase
-        .from('location_nodes')
-        .select('location_code, zone');
-      
-      if (!error && data) {
+      try {
+        // Lấy tất cả các mã vị trí đang có trong tồn kho
+        const { data: inventoryData, error: invError } = await supabase
+          .from('product_inventories')
+          .select('location_code');
+        
+        // Lấy các Dãy đã được setup trước đó (nếu có)
+        const { data: nodesData, error: nodeError } = await supabase
+          .from('location_nodes')
+          .select('location_code, zone');
+
+        if (invError) throw invError;
+        
         const locMap = {};
         const zonesSet = new Set(); 
 
-        // Sắp xếp mã vị trí theo thứ tự A-Z để dễ nhìn
-        const sortedData = data.sort((a, b) => 
-          (a.location_code || '').localeCompare(b.location_code || '')
-        );
+        // Đổ dữ liệu từ location_nodes vào trước (để lấy zone đã setup)
+        if (nodesData) {
+          nodesData.forEach(item => {
+            if (item.location_code) {
+              locMap[item.location_code.trim()] = item.zone || '';
+            }
+            if (item.zone) {
+              zonesSet.add(item.zone.toUpperCase());
+            }
+          });
+        }
 
-        sortedData.forEach(item => {
-          if (item.location_code) {
-            locMap[item.location_code] = item.zone || '';
-          }
-          if (item.zone) {
-            zonesSet.add(item.zone.toUpperCase());
-          }
-        });
+        // Đổ tiếp dữ liệu từ inventory (chỉ lấy mã vị trí chưa có trong locMap)
+        if (inventoryData) {
+          inventoryData.forEach(item => {
+            const code = item.location_code?.trim();
+            // Nếu có mã vị trí mà chưa có trong locMap thì gán mặc định là rỗng (chưa phân dãy)
+            if (code && locMap[code] === undefined) {
+              locMap[code] = '';
+            }
+          });
+        }
 
         setLocationZones(locMap);
         setAvailableZones(Array.from(zonesSet).sort());
+      } catch (err) {
+        console.error('Lỗi khi lấy vị trí:', err);
       }
     };
+
     fetchLocations();
   }, []);
 
@@ -55,24 +75,29 @@ export default function SetupZone() {
     setNewZoneName('');
   };
 
-  // 3. Xử lý khi chọn Dãy cho Vị trí (Location Code)
+  // 3. Xử lý khi chọn Dãy cho Vị trí
   const handleZoneChange = (locCode, value) => {
     setLocationZones(prev => ({ ...prev, [locCode]: value }));
   };
 
-  // 4. Lưu toàn bộ cấu hình vào DB (Cập nhật theo location_code)
+  // 4. Lưu toàn bộ cấu hình vào DB (Dùng UPSERT)
   const handleSave = async () => {
     setLoading(true);
     setMessage('');
     try {
-      const promises = Object.entries(locationZones).map(([locCode, zone]) => {
-        return supabase
-          .from('location_nodes')
-          .update({ zone: zone || null })
-          .eq('location_code', locCode); // Match bằng location_code
-      });
+      // Chuyển object locationZones thành mảng để Upsert vào database
+      const rowsToUpsert = Object.entries(locationZones).map(([locCode, zone]) => ({
+        location_code: locCode,
+        zone: zone || null // Nếu trống thì đưa về null
+      }));
 
-      await Promise.all(promises);
+      // Dùng lệnh upsert: Nếu location_code đã có thì update 'zone', nếu chưa có thì insert dòng mới
+      const { error } = await supabase
+        .from('location_nodes')
+        .upsert(rowsToUpsert, { onConflict: 'location_code' });
+
+      if (error) throw error;
+
       setMessage('Lưu cấu hình dãy kệ thành công!');
       setTimeout(() => setMessage(''), 3000);
     } catch (error) {
@@ -82,6 +107,9 @@ export default function SetupZone() {
       setLoading(false);
     }
   };
+
+  // Sắp xếp mã vị trí ra Array để render cho đẹp (thứ tự A-Z)
+  const sortedLocations = Object.entries(locationZones).sort(([a], [b]) => a.localeCompare(b));
 
   return (
     <div className="max-w-5xl mx-auto p-6 bg-white rounded-3xl shadow-sm border border-gray-100">
@@ -103,20 +131,19 @@ export default function SetupZone() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Cột trái: Quản lý danh sách Dãy (Tạo mới) */}
+        {/* Cột trái: Quản lý danh sách Dãy */}
         <div className="lg:col-span-1 flex flex-col gap-4">
-          <div className="p-5 bg-slate-50 border border-slate-200 rounded-3xl">
+          <div className="p-5 bg-slate-50 border border-slate-200 rounded-3xl sticky top-6">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
               <LayoutGrid size={18} className="text-blue-600"/> Quản lý Dãy (Zone)
             </h3>
             
-            {/* Form thêm dãy mới */}
             <form onSubmit={handleAddZone} className="flex gap-2 mb-4">
               <input
                 type="text"
                 value={newZoneName}
                 onChange={(e) => setNewZoneName(e.target.value)}
-                placeholder="Nhập tên dãy (VD: A)"
+                placeholder="Tên dãy (VD: A)"
                 maxLength={5}
                 className="flex-1 px-4 py-2.5 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-bold text-sm"
               />
@@ -129,7 +156,6 @@ export default function SetupZone() {
               </button>
             </form>
 
-            {/* Danh sách các dãy đang có */}
             <div className="flex flex-wrap gap-2">
               {availableZones.length === 0 ? (
                 <span className="text-sm text-gray-400 italic">Chưa có dãy nào</span>
@@ -144,11 +170,11 @@ export default function SetupZone() {
           </div>
         </div>
 
-        {/* Cột phải: Danh sách Kệ để gán Dropdown */}
+        {/* Cột phải: Danh sách Kệ (Vị trí) */}
         <div className="lg:col-span-2">
           <div className="p-6 bg-white border border-gray-200 shadow-sm rounded-3xl">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-gray-800 text-lg">Gán Dãy cho Kệ hiện tại</h3>
+              <h3 className="font-bold text-gray-800 text-lg">Gán Dãy cho Vị trí hiện tại</h3>
               <button
                 onClick={handleSave}
                 disabled={loading}
@@ -158,21 +184,23 @@ export default function SetupZone() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {Object.keys(locationZones).length === 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 h-[60vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-200">
+              {sortedLocations.length === 0 ? (
                 <div className="col-span-full py-8 text-center text-gray-400 text-sm">
-                  Không tìm thấy Vị trí nào trong kho. Vui lòng kiểm tra dữ liệu vị trí.
+                  Không tìm thấy Vị trí nào trong tồn kho.
                 </div>
               ) : (
-                Object.entries(locationZones).map(([locCode, currentZone]) => (
+                sortedLocations.map(([locCode, currentZone]) => (
                   <div key={locCode} className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 flex flex-col gap-2 hover:border-blue-200 transition-colors">
-                    <label className="text-sm font-bold text-gray-600">Vị trí: <span className="text-gray-900">{locCode}</span></label>
+                    <label className="text-sm font-bold text-gray-600">
+                      Vị trí: <span className="text-gray-900">{locCode}</span>
+                    </label>
                     <select
                       value={currentZone || ''}
                       onChange={(e) => handleZoneChange(locCode, e.target.value)}
-                      className="px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 cursor-pointer bg-white"
+                      className="px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 cursor-pointer bg-white text-sm"
                     >
-                      <option value="" className="text-gray-400 font-normal">-- Chưa phân dãy --</option>
+                      <option value="" className="text-gray-400 font-normal">-- Chưa phân --</option>
                       {availableZones.map((zone) => (
                         <option key={zone} value={zone}>
                           Dãy {zone}
@@ -182,6 +210,9 @@ export default function SetupZone() {
                   </div>
                 ))
               )}
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-100 text-xs text-gray-500 font-medium text-right">
+              Tổng số vị trí: {sortedLocations.length}
             </div>
           </div>
         </div>
