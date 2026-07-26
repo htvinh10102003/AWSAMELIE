@@ -367,7 +367,7 @@ export default function KiemTraDonHoan() {
                 <input 
                   ref={inputRef}
                   type="text"
-                  placeholder="Tạch tạch mã vạch vào đây..."
+                  placeholder="Bắn mã vạch vào đây..."
                   value={inputCode}
                   onChange={e => setInputCode(e.target.value)}
                   className="w-full text-center text-sm font-bold tracking-widest py-3 px-4 bg-slate-50 border-2 border-slate-300 rounded-xl outline-none focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition"

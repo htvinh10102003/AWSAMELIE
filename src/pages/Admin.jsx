@@ -546,7 +546,7 @@ export default function Admin() {
                   <div><label className="text-sm font-semibold mb-1 block">Business ID</label><input type="text" disabled={!isOwner} name="nhanh_business_id" value={apiConfigs.nhanh_business_id} onChange={handleApiChange} className="w-full px-4 py-2 border rounded-lg text-sm outline-none focus:border-blue-500 disabled:bg-slate-50" /></div>
               </div>
               <div><label className="text-sm font-semibold mb-1 block">Secret Key</label><input type="password" disabled={!isOwner} name="nhanh_secret_key" value={apiConfigs.nhanh_secret_key} onChange={handleApiChange} className="w-full px-4 py-2 border rounded-lg text-sm outline-none focus:border-blue-500 disabled:bg-slate-50" /></div>
-              <div className="bg-yellow-50/50 p-4 border border-yellow-100 rounded-lg"><label className="text-xs font-bold text-yellow-800 uppercase mb-1.5 block">Mã Access Code mới bốc (Sống 15 phút)</label><input type="text" disabled={!isOwner} name="nhanh_access_code" value={apiConfigs.nhanh_access_code} onChange={handleApiChange} className="w-full px-4 py-2 border rounded-lg text-sm bg-white outline-none focus:border-blue-500 disabled:bg-slate-50" /></div>
+              <div className="bg-yellow-50/50 p-4 border border-yellow-100 rounded-lg"><label className="text-xs font-bold text-yellow-800 uppercase mb-1.5 block">Mã Access Code mới (Hạn 15p)</label><input type="text" disabled={!isOwner} name="nhanh_access_code" value={apiConfigs.nhanh_access_code} onChange={handleApiChange} className="w-full px-4 py-2 border rounded-lg text-sm bg-white outline-none focus:border-blue-500 disabled:bg-slate-50" /></div>
               <button type="submit" disabled={apiLoading || !isOwner} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition cursor-pointer text-sm disabled:opacity-50 disabled:cursor-not-allowed">{apiLoading ? 'Đang lưu...' : 'Lưu & Đổi Token'}</button>
             </form>
           </div>
@@ -815,7 +815,7 @@ export default function Admin() {
                   <option value="user">Nhân viên kho (User)</option>
                   <option value="admin">Quản trị viên (Admin)</option>
                 </select>
-                {!isOwner && <p className="text-[10px] text-amber-600 font-medium mt-1">⚠️ Chỉ tài khoản Chủ mới được phép thay đổi cấp bậc quyền lực.</p>}
+                {!isOwner && <p className="text-[10px] text-amber-600 font-medium mt-1">⚠️ Chỉ tài khoản Owner mới được phép thay đổi cấp bậc tài khoản.</p>}
               </div>
 
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 mt-2">
