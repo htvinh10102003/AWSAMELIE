@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
-  Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, MapPin, UploadCloud
+  Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, MapPin, UploadCloud, Lock
 } from 'lucide-react';
 import * as Papa from 'papaparse'; // Thư viện đọc CSV
 
@@ -364,7 +364,6 @@ export default function Admin() {
     setIsUploadingCsv(true);
     setLocationMessage({ text: 'Đang xử lý file...', type: 'processing' });
 
-    // Dùng PapaParse để đọc file Excel/CSV
     Papa.parse(csvFile, {
         header: true,
         skipEmptyLines: true,
@@ -373,18 +372,15 @@ export default function Admin() {
             let successCount = 0;
             let errorCount = 0;
 
-            // Chạy vòng lặp cập nhật từng sản phẩm vào Database
             for (const row of data) {
-                // Tìm Key dựa trên cả tiếng Việt hoặc tiếng Anh (Mã SP/Product Code, Vị trí/Location)
                 const productCode = row['Mã SP'] || row['Mã sản phẩm'] || row['product_code'];
                 const location = row['Vị trí'] || row['Vi tri'] || row['location_code'];
 
                 if (productCode && location) {
-                    // Update thẳng vào cột location_code của bảng product_inventories
                     const { error } = await supabase
                         .from('product_inventories')
                         .update({ location_code: location })
-                        .eq('product_code', productCode); // So khớp với Mã sản phẩm
+                        .eq('product_code', productCode);
 
                     if (!error) successCount++;
                     else errorCount++;
@@ -454,7 +450,7 @@ export default function Admin() {
               <DownloadCloud size={20}/> Đồng bộ Dữ liệu Cục bộ (Tránh Miss Webhook)
             </h2>
 
-            {/* 1. Tầng cào Đơn hàng (Đã khôi phục) */}
+            {/* 1. Tầng cào Đơn hàng */}
             <div className="bg-blue-50/50 p-5 rounded-2xl border border-blue-100">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex-1">
@@ -529,17 +525,29 @@ export default function Admin() {
           </div>
 
           {/* CÀI ĐẶT API NHANH.VN */}
-          <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+          <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 relative overflow-hidden">
+            {!isOwner && (
+              <div className="absolute inset-0 z-10 bg-white/70 backdrop-blur-[2px] flex flex-col items-center justify-center border border-slate-200 rounded-xl">
+                <div className="bg-white p-5 rounded-2xl shadow-xl flex flex-col items-center text-center max-w-sm border border-slate-100 mx-4">
+                   <div className="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-3">
+                     <Lock size={24} />
+                   </div>
+                   <p className="text-base font-black text-slate-800">Giới hạn quyền truy cập</p>
+                   <p className="text-xs text-slate-500 mt-1.5 font-medium leading-relaxed">Tính năng này đã bị khóa.<br/>Chỉ <span className="font-bold text-red-600">Chủ sở hữu (Owner)</span> mới có quyền thay đổi API Nhanh.vn.</p>
+                </div>
+              </div>
+            )}
+            
             <h2 className="text-xl font-bold mb-6 text-gray-800 flex items-center gap-2"><Settings size={20}/> Cài đặt kết nối Nhanh.vn</h2>
             {apiMessage && <div className={`p-4 mb-6 rounded-lg font-medium text-sm ${apiMessage.includes('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{apiMessage}</div>}
             <form onSubmit={handleSaveApi} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
-                  <div><label className="text-sm font-semibold mb-1 block">App ID</label><input type="text" name="nhanh_app_id" value={apiConfigs.nhanh_app_id} onChange={handleApiChange} className="w-full px-4 py-2 border rounded-lg text-sm outline-none focus:border-blue-500" /></div>
-                  <div><label className="text-sm font-semibold mb-1 block">Business ID</label><input type="text" name="nhanh_business_id" value={apiConfigs.nhanh_business_id} onChange={handleApiChange} className="w-full px-4 py-2 border rounded-lg text-sm outline-none focus:border-blue-500" /></div>
+                  <div><label className="text-sm font-semibold mb-1 block">App ID</label><input type="text" disabled={!isOwner} name="nhanh_app_id" value={apiConfigs.nhanh_app_id} onChange={handleApiChange} className="w-full px-4 py-2 border rounded-lg text-sm outline-none focus:border-blue-500 disabled:bg-slate-50" /></div>
+                  <div><label className="text-sm font-semibold mb-1 block">Business ID</label><input type="text" disabled={!isOwner} name="nhanh_business_id" value={apiConfigs.nhanh_business_id} onChange={handleApiChange} className="w-full px-4 py-2 border rounded-lg text-sm outline-none focus:border-blue-500 disabled:bg-slate-50" /></div>
               </div>
-              <div><label className="text-sm font-semibold mb-1 block">Secret Key</label><input type="password" name="nhanh_secret_key" value={apiConfigs.nhanh_secret_key} onChange={handleApiChange} className="w-full px-4 py-2 border rounded-lg text-sm outline-none focus:border-blue-500" /></div>
-              <div className="bg-yellow-50/50 p-4 border border-yellow-100 rounded-lg"><label className="text-xs font-bold text-yellow-800 uppercase mb-1.5 block">Mã Access Code mới bốc (Sống 15 phút)</label><input type="text" name="nhanh_access_code" value={apiConfigs.nhanh_access_code} onChange={handleApiChange} className="w-full px-4 py-2 border rounded-lg text-sm bg-white outline-none focus:border-blue-500" /></div>
-              <button type="submit" disabled={apiLoading} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition cursor-pointer text-sm">{apiLoading ? 'Đang lưu...' : 'Lưu & Đổi Token'}</button>
+              <div><label className="text-sm font-semibold mb-1 block">Secret Key</label><input type="password" disabled={!isOwner} name="nhanh_secret_key" value={apiConfigs.nhanh_secret_key} onChange={handleApiChange} className="w-full px-4 py-2 border rounded-lg text-sm outline-none focus:border-blue-500 disabled:bg-slate-50" /></div>
+              <div className="bg-yellow-50/50 p-4 border border-yellow-100 rounded-lg"><label className="text-xs font-bold text-yellow-800 uppercase mb-1.5 block">Mã Access Code mới bốc (Sống 15 phút)</label><input type="text" disabled={!isOwner} name="nhanh_access_code" value={apiConfigs.nhanh_access_code} onChange={handleApiChange} className="w-full px-4 py-2 border rounded-lg text-sm bg-white outline-none focus:border-blue-500 disabled:bg-slate-50" /></div>
+              <button type="submit" disabled={apiLoading || !isOwner} className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition cursor-pointer text-sm disabled:opacity-50 disabled:cursor-not-allowed">{apiLoading ? 'Đang lưu...' : 'Lưu & Đổi Token'}</button>
             </form>
           </div>
 
@@ -588,7 +596,19 @@ export default function Admin() {
           </div>
 
           {/* LIÊN KẾT GOOGLE SHEETS */}
-          <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+          <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 relative overflow-hidden">
+            {!isOwner && (
+              <div className="absolute inset-0 z-10 bg-white/70 backdrop-blur-[2px] flex flex-col items-center justify-center border border-slate-200 rounded-xl">
+                <div className="bg-white p-5 rounded-2xl shadow-xl flex flex-col items-center text-center max-w-sm border border-slate-100 mx-4">
+                   <div className="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-3">
+                     <Lock size={24} />
+                   </div>
+                   <p className="text-base font-black text-slate-800">Giới hạn quyền truy cập</p>
+                   <p className="text-xs text-slate-500 mt-1.5 font-medium leading-relaxed">Chỉ <span className="font-bold text-red-600">Chủ sở hữu (Owner)</span> mới có quyền thay đổi liên kết Google Sheets.</p>
+                </div>
+              </div>
+            )}
+            
             <h2 className="text-xl font-bold mb-6 text-gray-800 flex items-center gap-2"><Settings size={20}/> Liên kết Google Sheets Vận Hành</h2>
             {sheetMessage && <div className={`p-4 mb-6 rounded-lg font-medium text-sm ${sheetMessage.includes('✅') || sheetMessage.includes('🎉') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{sheetMessage}</div>}
             
@@ -596,30 +616,30 @@ export default function Admin() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="md:col-span-3">
                       <label className="block text-xs font-bold text-gray-600 uppercase mb-1 tracking-wider">Link Sheet Đơn Đi Hàng Ngày</label>
-                      <input type="text" value={sheetDailyUrl} onChange={e => setSheetDailyUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500"/>
+                      <input type="text" disabled={!isOwner} value={sheetDailyUrl} onChange={e => setSheetDailyUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500 disabled:bg-slate-50"/>
                   </div>
                   <div>
                       <label className="block text-xs font-bold text-gray-600 uppercase mb-1 tracking-wider">Mã GID Đơn Đi</label>
-                      <input type="text" value={sheetDailyGid} onChange={e => setSheetDailyGid(e.target.value)} placeholder="0" className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500"/>
+                      <input type="text" disabled={!isOwner} value={sheetDailyGid} onChange={e => setSheetDailyGid(e.target.value)} placeholder="0" className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500 disabled:bg-slate-50"/>
                   </div>
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
                   <div className="md:col-span-3">
                       <label className="block text-xs font-bold text-gray-600 uppercase mb-1 tracking-wider">Link Sheet Đơn In Hàng Ngày</label>
-                      <input type="text" value={sheetPrintUrl} onChange={e => setSheetPrintUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500"/>
+                      <input type="text" disabled={!isOwner} value={sheetPrintUrl} onChange={e => setSheetPrintUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500 disabled:bg-slate-50"/>
                   </div>
                   <div>
                       <label className="block text-xs font-bold text-gray-600 uppercase mb-1 tracking-wider">Mã GID Đơn In</label>
-                      <input type="text" value={sheetPrintGid} onChange={e => setSheetPrintGid(e.target.value)} placeholder="1245667" className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500"/>
+                      <input type="text" disabled={!isOwner} value={sheetPrintGid} onChange={e => setSheetPrintGid(e.target.value)} placeholder="1245667" className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500 disabled:bg-slate-50"/>
                   </div>
               </div>
 
               <div className="flex gap-3 border-t border-slate-100 pt-6 mt-4">
-                  <button onClick={handleSaveConfig} disabled={syncLoading} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-blue-700 transition cursor-pointer disabled:opacity-50">
+                  <button onClick={handleSaveConfig} disabled={syncLoading || !isOwner} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-blue-700 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
                       Lưu cấu hình liên kết
                   </button>
-                  <button onClick={handleTriggerSyncSheets} disabled={syncLoading} className="px-5 py-2.5 bg-slate-800 text-white text-sm font-bold rounded-lg hover:bg-slate-900 transition disabled:opacity-50 cursor-pointer">
+                  <button onClick={handleTriggerSyncSheets} disabled={syncLoading || !isOwner} className="px-5 py-2.5 bg-slate-800 text-white text-sm font-bold rounded-lg hover:bg-slate-900 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
                       {syncLoading ? "⏳ Đang xử lý..." : "🔄 Bấm Quét Sheets Ngay"}
                   </button>
               </div>
@@ -628,41 +648,53 @@ export default function Admin() {
         </div>
       )}
 
-      {/* RENDER TAB 2: QUẢN LÝ TÀI KHOẢN KÈM NÚT SỬA THÔNG TIN */}
+      {/* RENDER TAB 2: QUẢN LÝ TÀI KHOẢN */}
       {activeTab === 'users_management' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
           
           {/* FORM KHỞI TẠO USER */}
-          <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm h-fit space-y-4">
+          <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm h-fit space-y-4 relative overflow-hidden">
+            {!isOwner && (
+              <div className="absolute inset-0 z-10 bg-white/70 backdrop-blur-[2px] flex flex-col items-center justify-center border border-slate-200 rounded-2xl">
+                <div className="bg-white p-4 rounded-xl shadow-lg flex flex-col items-center text-center max-w-[200px] border border-slate-100 mx-4">
+                   <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-2">
+                     <Lock size={20} />
+                   </div>
+                   <p className="text-sm font-black text-slate-800">Khóa tính năng</p>
+                   <p className="text-[10px] text-slate-500 mt-1 font-medium">Chỉ Owner mới được cấp tài khoản hệ thống mới.</p>
+                </div>
+              </div>
+            )}
+            
             <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider flex items-center gap-2 border-b pb-2">
               <UserPlus size={16} className="text-blue-600" /> Thêm tài khoản mới
             </h3>
             <form onSubmit={handleCreateUser} className="space-y-3 text-xs font-bold text-slate-600">
               <div>
                 <label className="block mb-1">Họ và tên</label>
-                <input type="text" placeholder="Ví dụ: Nguyễn Văn A" value={userForm.fullName} onChange={e => setUserForm({...userForm, fullName: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white focus:border-blue-500" />
+                <input type="text" disabled={!isOwner} placeholder="Ví dụ: Nguyễn Văn A" value={userForm.fullName} onChange={e => setUserForm({...userForm, fullName: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white focus:border-blue-500 disabled:opacity-70" />
               </div>
               <div>
                 <label className="block mb-1">Địa chỉ Email đăng nhập</label>
-                <input type="email" placeholder="username@gmail.com" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white focus:border-blue-500" />
+                <input type="email" disabled={!isOwner} placeholder="username@gmail.com" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white focus:border-blue-500 disabled:opacity-70" />
               </div>
               <div>
                 <label className="block mb-1">Mật khẩu khởi tạo</label>
                 <div className="relative">
-                  <input type={showPassword ? "text" : "password"} placeholder="Nhập mật khẩu..." value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="w-full pl-4 pr-10 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white focus:border-blue-500" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer">
+                  <input type={showPassword ? "text" : "password"} disabled={!isOwner} placeholder="Nhập mật khẩu..." value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="w-full pl-4 pr-10 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white focus:border-blue-500 disabled:opacity-70" />
+                  <button type="button" disabled={!isOwner} onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer disabled:cursor-not-allowed">
                     {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
                 </div>
               </div>
               <div>
                 <label className="block mb-1">Cấp bậc hệ thống ban đầu</label>
-                <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none cursor-pointer focus:bg-white">
+                <select value={userForm.role} disabled={!isOwner} onChange={e => setUserForm({...userForm, role: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none cursor-pointer focus:bg-white disabled:opacity-70 disabled:cursor-not-allowed">
                   <option value="user">User</option>
                   <option value="admin">Admin</option>
                 </select>
               </div>
-              <button type="submit" disabled={loading} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer mt-2 flex items-center justify-center gap-1.5">
+              <button type="submit" disabled={loading || !isOwner} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer mt-2 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
                 {loading ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />} Kích hoạt tài khoản
               </button>
             </form>
@@ -710,7 +742,6 @@ export default function Admin() {
                           </td>
                           <td className="py-3 px-6">
                             <div className="flex items-center justify-center gap-2">
-                              {/* ⚡️ THÊM NÚT CHỈNH SỬA THÔNG TIN */}
                               <button
                                 onClick={() => handleOpenEditModal(u)}
                                 disabled={actionLoadingId === u.id || (isTargetOwner && !isOwner)}
@@ -744,9 +775,7 @@ export default function Admin() {
         </div>
       )}
 
-      {/* ========================================================== */}
-      {/* ⚡️ KHỐI POP-UP MODAL CHỈNH SỬA THÔNG TIN THÀNH VIÊN */}
-      {/* ========================================================== */}
+      {/* POP-UP MODAL CHỈNH SỬA THÔNG TIN */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
           <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-md p-6 transform transition-all animate-in zoom-in-95 duration-200">
