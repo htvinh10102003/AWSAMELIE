@@ -47,6 +47,31 @@ export default function Admin() {
   const [isSyncingMaster, setIsSyncingMaster] = useState(false);
   const [syncMasterStatus, setSyncMasterStatus] = useState('idle');
   const [syncProductMessage, setSyncProductMessage] = useState(''); 
+  // ==========================================
+  // ⚡️ DỌN DẸP DỮ LIỆU CŨ (CLEANUP)
+  // ==========================================
+  const [cleanDays, setCleanDays] = useState('180');
+  const [isCleaning, setIsCleaning] = useState(false);
+  const [cleanMessage, setCleanMessage] = useState({ text: '', type: '' });
+
+  const handleCleanData = async () => {
+    if (!confirm(`🚨 CẢNH BÁO ĐỎ: Bạn có chắc chắn muốn XÓA VĨNH VIỄN toàn bộ đơn hàng và lịch sử cũ hơn ${cleanDays} ngày không? \n\nHành động này KHÔNG THỂ KHÔI PHỤC!`)) return;
+    
+    setIsCleaning(true);
+    setCleanMessage({ text: 'Đang quét và xóa dữ liệu... Vui lòng không đóng trang.', type: 'processing' });
+    
+    try {
+      // Gọi hàm RPC trực tiếp xuống Database Supabase
+      const { error } = await supabase.rpc('cleanup_old_data', { days_old: parseInt(cleanDays) });
+      
+      if (error) throw error;
+      setCleanMessage({ text: `🎉 Đã dọn dẹp sạch sẽ toàn bộ dữ liệu cũ hơn ${cleanDays} ngày!`, type: 'success' });
+    } catch (err) {
+      setCleanMessage({ text: `❌ Lỗi xóa dữ liệu: ${err.message}`, type: 'error' });
+    } finally {
+      setIsCleaning(false);
+    }
+  };
 
   // ==========================================
   // ⚡️ MỚI: QUẢN LÝ VỊ TRÍ KHO HÀNG (LOCATION)
@@ -643,6 +668,62 @@ export default function Admin() {
                       {syncLoading ? "⏳ Đang xử lý..." : "🔄 Bấm Quét Sheets Ngay"}
                   </button>
               </div>
+            </div>
+          </div>
+          {/* ================= KHỐI DỌN DẸP DỮ LIỆU (CLEANUP) ================= */}
+          <div className="bg-white p-8 rounded-xl shadow-sm border border-red-200 relative overflow-hidden mt-8">
+            {!isOwner && (
+              <div className="absolute inset-0 z-10 bg-white/70 backdrop-blur-[2px] flex flex-col items-center justify-center border border-slate-200 rounded-xl">
+                <div className="bg-white p-5 rounded-2xl shadow-xl flex flex-col items-center text-center max-w-sm border border-slate-100 mx-4">
+                   <div className="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-3">
+                     <Lock size={24} />
+                   </div>
+                   <p className="text-base font-black text-slate-800">Giới hạn quyền truy cập</p>
+                   <p className="text-xs text-slate-500 mt-1.5 font-medium leading-relaxed">Tính năng xóa dữ liệu bị khóa.<br/>Chỉ <span className="font-bold text-red-600">Chủ sở hữu (Owner)</span> mới có quyền dọn dẹp database.</p>
+                </div>
+              </div>
+            )}
+            
+            <h2 className="text-xl font-bold mb-2 text-red-600 flex items-center gap-2">
+              🗑️ Dọn dẹp Database (Clear Data)
+            </h2>
+            <p className="text-sm text-slate-500 mb-6">Xóa vĩnh viễn các dữ liệu đơn hàng (orders, order_products, order_histories...) không có cập nhật mới để tránh tràn dung lượng hệ thống.</p>
+            
+            {cleanMessage.text && (
+              <div className={`p-4 mb-6 rounded-lg font-bold text-sm flex items-center gap-2 ${
+                cleanMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 
+                cleanMessage.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' : 
+                'bg-blue-50 text-blue-700 border border-blue-200 animate-pulse'
+              }`}>
+                {cleanMessage.type === 'success' && <CheckCircle2 size={18} />}
+                {cleanMessage.type === 'error' && <AlertCircle size={18} />}
+                {cleanMessage.type === 'processing' && <Loader2 size={18} className="animate-spin" />}
+                {cleanMessage.text}
+              </div>
+            )}
+
+            <div className="flex flex-col md:flex-row gap-4 items-end bg-red-50/30 p-5 rounded-xl border border-red-100">
+              <div className="flex-1 w-full">
+                <label className="block text-sm font-bold text-slate-800 mb-2">Chọn mốc thời gian xóa</label>
+                <select 
+                  value={cleanDays} 
+                  onChange={e => setCleanDays(e.target.value)}
+                  disabled={!isOwner || isCleaning}
+                  className="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm font-medium outline-none focus:border-red-500 bg-white disabled:bg-slate-50 cursor-pointer"
+                >
+                  <option value="90">Dữ liệu cũ hơn 90 ngày (3 tháng)</option>
+                  <option value="180">Dữ liệu cũ hơn 180 ngày (6 tháng)</option>
+                  <option value="365">Dữ liệu cũ hơn 365 ngày (1 năm)</option>
+                </select>
+              </div>
+              
+              <button 
+                onClick={handleCleanData}
+                disabled={!isOwner || isCleaning}
+                className="w-full md:w-auto px-6 py-2.5 bg-red-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-red-700 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCleaning ? <Loader2 size={18} className="animate-spin" /> : 'Xác nhận Dọn dẹp'}
+              </button>
             </div>
           </div>
         </div>
