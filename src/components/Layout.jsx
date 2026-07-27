@@ -6,7 +6,7 @@ import {
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
   BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2, 
   LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2, Menu,
-  Filter, FileEdit, LayoutGrid // <-- Thêm LayoutGrid cho menu Quy ước dãy
+  Filter, FileEdit, LayoutGrid, Webhook
 } from 'lucide-react';
 import TestingNoticeBanner from './TestingNoticeBanner';
 
@@ -378,10 +378,13 @@ export default function Layout() {
                         <MapPin size={16} className={location.pathname === '/cap-nhat-so-do-kho' ? 'text-blue-600' : 'text-gray-400'} />
                         <span className="text-sm">Sơ đồ Kho hàng</span>
                       </Link>
-                      {/* Thêm link Quy ước dãy vào đây */}
                       <Link to="/cap-nhat-day-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-day-ke' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
                         <LayoutGrid size={16} className={location.pathname === '/cap-nhat-day-ke' ? 'text-blue-600' : 'text-gray-400'} />
                         <span className="text-sm">Quy ước dãy kệ</span>
+                      </Link>
+                      <Link to="/cap-nhat-webhook" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-webhook' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                        <Webhook size={16} className={location.pathname === '/cap-nhat-webhook' ? 'text-blue-600' : 'text-gray-400'} />
+                        <span className="text-sm">Chạy lại Webhook</span>
                       </Link>
                     </div>
                   )}

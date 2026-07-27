@@ -22,6 +22,7 @@ import KPI_Management from './pages/KPI_Management';
 import KPI_Report from './pages/KPI_Report';
 import SetupZone from './pages/SetupZone';
 import FilterByZone from './pages/FilterByZone';
+import WebhookRetrier from './pages/WebhookRetrier'; // <-- Thêm import component Webhook
 
 export default function App() {
   return (
@@ -78,8 +79,10 @@ export default function App() {
           <Route path="cap-nhat-so-do-kho" element={<ProtectedRoute><UpdateWarehouseMap /></ProtectedRoute>} />
           <Route path="quan-ly-kpi" element={<ProtectedRoute><KPI_Management /></ProtectedRoute>} />
           <Route path="cap-nhat-day-ke" element={<ProtectedRoute><SetupZone /></ProtectedRoute>} />
-
           
+          {/* --- ROUTE MỚI THÊM VÀO --- */}
+          <Route path="cap-nhat-webhook" element={<ProtectedRoute><WebhookRetrier /></ProtectedRoute>} />
+
         </Route>
       </Routes>
     </BrowserRouter>
