@@ -31,7 +31,7 @@ export default function WebhookRetrier() {
         // Fetch dữ liệu (Lưu ý vấn đề CORS bên dưới)
         const response = await fetch(targetUrl, {
           method: 'GET',
-          // mode: 'no-cors', // Mở comment dòng này nếu chạy trực tiếp trên trình duyệt bị chặn CORS
+          mode: 'no-cors',
         });
 
         // Cập nhật state list thành công
