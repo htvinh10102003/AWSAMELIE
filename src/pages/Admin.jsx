@@ -683,7 +683,7 @@ export default function Admin() {
                   
                   <div>
                     <p className="text-sm font-bold text-slate-800">Cập nhật dữ liệu sang Sheets</p>
-                    <p className="text-[11px] text-slate-500 mt-1">Đẩy đồng loạt dữ liệu vận hành từ hệ thống sang file Google Sheets.</p>
+                    <p className="text-[11px] text-slate-500 mt-1">Cập nhật toàn bộ dữ liệu trong file google sheet lên hệ thống</p>
                   </div>
                   <button onClick={handleTriggerSyncSheets} disabled={syncLoading || !isAdminOrOwner} className="px-6 py-2.5 bg-slate-800 text-white text-sm font-bold rounded-lg hover:bg-slate-900 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap">
                       {syncLoading ? "⏳ Đang xử lý..." : "🔄 Bấm Quét Sheets Ngay"}
