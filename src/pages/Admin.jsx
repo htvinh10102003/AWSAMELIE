@@ -620,54 +620,75 @@ export default function Admin() {
             </form>
           </div>
 
-          {/* LIÊN KẾT GOOGLE SHEETS */}
-          <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200 relative overflow-hidden">
-            {!isOwner && (
-              <div className="absolute inset-0 z-10 bg-white/70 backdrop-blur-[2px] flex flex-col items-center justify-center border border-slate-200 rounded-xl">
-                <div className="bg-white p-5 rounded-2xl shadow-xl flex flex-col items-center text-center max-w-sm border border-slate-100 mx-4">
-                   <div className="w-12 h-12 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-3">
-                     <Lock size={24} />
-                   </div>
-                   <p className="text-base font-black text-slate-800">Giới hạn quyền truy cập</p>
-                   <p className="text-xs text-slate-500 mt-1.5 font-medium leading-relaxed">Chỉ <span className="font-bold text-red-600">Chủ sở hữu (Owner)</span> mới có quyền thay đổi liên kết Google Sheets.</p>
-                </div>
-              </div>
-            )}
-            
+         {/* LIÊN KẾT GOOGLE SHEETS */}
+          <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
             <h2 className="text-xl font-bold mb-6 text-gray-800 flex items-center gap-2"><Settings size={20}/> Liên kết Google Sheets Vận Hành</h2>
             {sheetMessage && <div className={`p-4 mb-6 rounded-lg font-medium text-sm ${sheetMessage.includes('✅') || sheetMessage.includes('🎉') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{sheetMessage}</div>}
             
             <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="md:col-span-3">
-                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1 tracking-wider">Link Sheet Đơn Đi Hàng Ngày</label>
-                      <input type="text" disabled={!isOwner} value={sheetDailyUrl} onChange={e => setSheetDailyUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500 disabled:bg-slate-50"/>
-                  </div>
-                  <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1 tracking-wider">Mã GID Đơn Đi</label>
-                      <input type="text" disabled={!isOwner} value={sheetDailyGid} onChange={e => setSheetDailyGid(e.target.value)} placeholder="0" className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500 disabled:bg-slate-50"/>
-                  </div>
-              </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
-                  <div className="md:col-span-3">
-                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1 tracking-wider">Link Sheet Đơn In Hàng Ngày</label>
-                      <input type="text" disabled={!isOwner} value={sheetPrintUrl} onChange={e => setSheetPrintUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500 disabled:bg-slate-50"/>
+              {/* KHU VỰC 1: Cấu hình Link (CHỈ MỞ CHO OWNER) */}
+              <div className="relative overflow-hidden p-1 -m-1">
+                {!isOwner && (
+                  <div className="absolute inset-0 z-10 bg-white/70 backdrop-blur-[2px] flex flex-col items-center justify-center border border-slate-200 rounded-xl">
+                    <div className="bg-white p-4 rounded-2xl shadow-xl flex flex-col items-center text-center max-w-[240px] border border-slate-100 mx-4">
+                       <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-2">
+                         <Lock size={18} />
+                       </div>
+                       <p className="text-sm font-black text-slate-800">Giới hạn quyền</p>
+                       <p className="text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">Chỉ <span className="font-bold text-red-600">Owner</span> mới được thay đổi liên kết hệ thống.</p>
+                    </div>
                   </div>
-                  <div>
-                      <label className="block text-xs font-bold text-gray-600 uppercase mb-1 tracking-wider">Mã GID Đơn In</label>
-                      <input type="text" disabled={!isOwner} value={sheetPrintGid} onChange={e => setSheetPrintGid(e.target.value)} placeholder="1245667" className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500 disabled:bg-slate-50"/>
-                  </div>
+                )}
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="md:col-span-3">
+                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1 tracking-wider">Link Sheet Đơn Đi Hàng Ngày</label>
+                        <input type="text" disabled={!isOwner} value={sheetDailyUrl} onChange={e => setSheetDailyUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500 disabled:bg-slate-50"/>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1 tracking-wider">Mã GID Đơn Đi</label>
+                        <input type="text" disabled={!isOwner} value={sheetDailyGid} onChange={e => setSheetDailyGid(e.target.value)} placeholder="0" className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500 disabled:bg-slate-50"/>
+                    </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2 mt-4">
+                    <div className="md:col-span-3">
+                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1 tracking-wider">Link Sheet Đơn In Hàng Ngày</label>
+                        <input type="text" disabled={!isOwner} value={sheetPrintUrl} onChange={e => setSheetPrintUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500 disabled:bg-slate-50"/>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-gray-600 uppercase mb-1 tracking-wider">Mã GID Đơn In</label>
+                        <input type="text" disabled={!isOwner} value={sheetPrintGid} onChange={e => setSheetPrintGid(e.target.value)} placeholder="1245667" className="w-full text-sm border border-slate-300 rounded-lg px-4 py-2 outline-none focus:border-blue-500 disabled:bg-slate-50"/>
+                    </div>
+                </div>
+
+                <div className="mt-4 pb-2">
+                    <button onClick={handleSaveConfig} disabled={syncLoading || !isOwner} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-blue-700 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                        Lưu cấu hình liên kết
+                    </button>
+                </div>
               </div>
 
-              <div className="flex gap-3 border-t border-slate-100 pt-6 mt-4">
-                  <button onClick={handleSaveConfig} disabled={syncLoading || !isOwner} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-blue-700 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                      Lưu cấu hình liên kết
-                  </button>
-                  <button onClick={handleTriggerSyncSheets} disabled={syncLoading || !isOwner} className="px-5 py-2.5 bg-slate-800 text-white text-sm font-bold rounded-lg hover:bg-slate-900 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer">
+              {/* KHU VỰC 2: Action Quét Sheet (MỞ CHO OWNER VÀ ADMIN) */}
+              <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between border-t border-slate-100 pt-6 mt-4 relative">
+                  {!isAdminOrOwner && (
+                    <div className="absolute inset-0 z-10 bg-white/70 backdrop-blur-[1px] flex items-center justify-center rounded-lg">
+                      <p className="text-xs font-bold text-red-600 flex items-center gap-1.5 bg-white px-4 py-2 rounded-lg shadow-sm border border-red-100">
+                        <Lock size={14} /> Chức năng yêu cầu quyền Admin
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div>
+                    <p className="text-sm font-bold text-slate-800">Cập nhật dữ liệu sang Sheets</p>
+                    <p className="text-[11px] text-slate-500 mt-1">Đẩy đồng loạt dữ liệu vận hành từ hệ thống sang file Google Sheets.</p>
+                  </div>
+                  <button onClick={handleTriggerSyncSheets} disabled={syncLoading || !isAdminOrOwner} className="px-6 py-2.5 bg-slate-800 text-white text-sm font-bold rounded-lg hover:bg-slate-900 transition disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap">
                       {syncLoading ? "⏳ Đang xử lý..." : "🔄 Bấm Quét Sheets Ngay"}
                   </button>
               </div>
+
             </div>
           </div>
           {/* ================= KHỐI DỌN DẸP DỮ LIỆU (CLEANUP) ================= */}
