@@ -432,6 +432,7 @@ export default function Admin() {
 
   const dynamicOptions = getDynamicPriorityOptions();
   const isOwner = currentUserMeta.is_owner === true;
+  const isAdminOrOwner = isOwner || currentUserMeta.role === 'admin';
 
   return (
     <div className="max-w-5xl mx-auto space-y-8 pb-12 mt-8">
