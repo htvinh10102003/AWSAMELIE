@@ -636,8 +636,8 @@ export default function Admin() {
                        <div className="w-10 h-10 bg-red-50 text-red-500 rounded-full flex items-center justify-center mb-2">
                          <Lock size={18} />
                        </div>
-                       <p className="text-sm font-black text-slate-800">Giới hạn quyền</p>
-                       <p className="text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">Chỉ <span className="font-bold text-red-600">Owner</span> mới được thay đổi liên kết hệ thống.</p>
+                       <p className="text-sm font-black text-slate-800">Giới hạn quyền truy cập</p>
+                       <p className="text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">Chỉ <span className="font-bold text-red-600">Chủ sở hữu (Owner)</span> mới được thay đổi liên kết hệ thống.</p>
                     </div>
                   </div>
                 )}
