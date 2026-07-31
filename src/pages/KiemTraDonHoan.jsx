@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   ScanBarcode, FileSpreadsheet, UploadCloud, AlertCircle, CheckCircle2, 
-  Download, RotateCcw, XCircle, Package, Loader2, Volume2, VolumeX
+  Download, RotateCcw, XCircle, Package, Loader2, Volume2, VolumeX, Camera, CameraOff
 } from 'lucide-react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 export default function KiemTraDonHoan() {
   const [loading, setLoading] = useState(false);
@@ -17,14 +18,26 @@ export default function KiemTraDonHoan() {
   const [alertMessage, setAlertMessage] = useState(null);
   
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [isScanningCam, setIsScanningCam] = useState(false);
 
   const inputRef = useRef(null);
 
+  // --- REFS DÀNH CHO CAMERA XỬ LÝ STATE TRỰC TIẾP TRÁNH RE-RENDER ---
+  const checklistRef = useRef(checklist);
+  const scannedSurplusRef = useRef(scannedSurplus);
+  const inventoryMapRef = useRef(inventoryMap);
+  const soundEnabledRef = useRef(soundEnabled);
+
+  useEffect(() => { checklistRef.current = checklist; }, [checklist]);
+  useEffect(() => { scannedSurplusRef.current = scannedSurplus; }, [scannedSurplus]);
+  useEffect(() => { inventoryMapRef.current = inventoryMap; }, [inventoryMap]);
+  useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
+
   useEffect(() => {
-    if (checklist.length > 0 && inputRef.current) {
+    if (checklist.length > 0 && inputRef.current && !isScanningCam) {
       inputRef.current.focus();
     }
-  }, [checklist, scannedSurplus, alertMessage]);
+  }, [checklist, scannedSurplus, alertMessage, isScanningCam]);
 
   useEffect(() => {
     const fetchAllInventories = async () => {
@@ -73,30 +86,26 @@ export default function KiemTraDonHoan() {
       .replace(/\s+/g, '');               
   };
 
-  // --- HÀM TẠO ÂM THANH - ĐÃ TĂNG VOLUME LÊN MỨC TỐI ĐA (1.0) ---
-  const playSound = (type) => {
-    if (!soundEnabled) return;
+  const playSound = (type, isEnabled = true) => {
+    if (!isEnabled) return;
     
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       const ctx = new AudioContext();
 
       if (type === 'success') {
-        // 1. Đúng hàng: 1 tiếng "Tít" trong trẻo, to và ngắn
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.type = 'sine';
         osc.frequency.setValueAtTime(1200, ctx.currentTime); 
-        // Tăng volume lên 1.0 (100% thay vì 0.1 như trước)
         gain.gain.setValueAtTime(1.0, ctx.currentTime);
         osc.start();
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
         osc.stop(ctx.currentTime + 0.15);
       } 
       else if (type === 'warning') {
-        // 2. Dư hàng: 2 tiếng "Tít Tít" liên tiếp, đanh và cực to
         for (let i = 0; i < 2; i++) {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
@@ -105,25 +114,20 @@ export default function KiemTraDonHoan() {
           
           osc.type = 'triangle'; 
           osc.frequency.setValueAtTime(900, ctx.currentTime + i * 0.15);
-          
           gain.gain.setValueAtTime(0, ctx.currentTime); 
-          // Tăng volume lên 1.0
           gain.gain.setValueAtTime(1.0, ctx.currentTime + i * 0.15);
           gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.15 + 0.1);
-          
           osc.start(ctx.currentTime + i * 0.15);
           osc.stop(ctx.currentTime + i * 0.15 + 0.1);
         }
       } 
       else if (type === 'error') {
-        // 3. Sai hàng (Mã lạ): Kêu "Rè rè" to, trầm và báo động
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
         gain.connect(ctx.destination);
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(250, ctx.currentTime);
-        // Tăng volume lên 1.0
         gain.gain.setValueAtTime(1.0, ctx.currentTime);
         osc.start();
         osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.35);
@@ -133,6 +137,110 @@ export default function KiemTraDonHoan() {
     } catch (e) {
       console.error("Audio playback failed", e);
     }
+  };
+
+  // --- CAMERA HOOK ---
+  useEffect(() => {
+    let html5QrCode;
+    
+    if (isScanningCam) {
+      html5QrCode = new Html5Qrcode("reader-kiemtra");
+      
+      const config = { 
+        fps: 10, 
+        qrbox: { width: 300, height: 100 }, 
+        formatsToSupport: [Html5QrcodeSupportedFormats.CODE_128], 
+        aspectRatio: 1.0,
+      };
+
+      const qrCodeSuccessCallback = (decodedText) => {
+        processBarcode(decodedText);
+      };
+
+      html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback, () => {})
+        .catch((err) => {
+          console.error("Camera Error:", err);
+          alert("Lỗi Camera: Không thể mở máy ảnh. Hãy đảm bảo bạn dùng HTTPS và đã cấp quyền.");
+          setIsScanningCam(false);
+        });
+    }
+
+    return () => {
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().catch(console.error);
+      }
+    };
+  }, [isScanningCam]);
+
+  // --- XỬ LÝ MÃ CHUNG (DÙNG CHO CẢ NHẬP TAY VÀ CAMERA) ---
+  const processBarcode = (rawCode) => {
+    const code = rawCode.trim().toUpperCase(); 
+    if (!code) return;
+    
+    setAlertMessage(null);
+
+    const currentInventory = inventoryMapRef.current;
+    const currentChecklist = checklistRef.current;
+    const currentSurplus = scannedSurplusRef.current;
+
+    const dbMatch = currentInventory.find(item => 
+      String(item.product_code).toUpperCase() === code || 
+      String(item.product_id).toUpperCase() === code
+    );
+
+    const actualCodeToMatch = dbMatch ? String(dbMatch.product_code).toUpperCase() : code;
+    const actualIdToMatch = dbMatch ? String(dbMatch.product_id).toUpperCase() : code;
+
+    const targetIndex = currentChecklist.findIndex(item => 
+      item.code === code || item.id === code || 
+      item.code === actualCodeToMatch || item.id === actualIdToMatch || 
+      item.id === actualCodeToMatch || item.code === actualIdToMatch 
+    );
+
+    if (targetIndex !== -1) {
+      const updatedChecklist = [...currentChecklist];
+      const targetItem = { ...updatedChecklist[targetIndex] };
+      
+      targetItem.scannedQty += 1;
+      updatedChecklist[targetIndex] = targetItem;
+
+      if (targetItem.scannedQty > targetItem.expectedQty) {
+        playSound('warning', soundEnabledRef.current); 
+        setAlertMessage({ type: 'warning', text: `⚠️ CHÚ Ý: Mã [${targetItem.name}] quét DƯ (Lên ${targetItem.scannedQty}/${targetItem.expectedQty}).` });
+      } else {
+        playSound('success', soundEnabledRef.current); 
+        if (targetItem.scannedQty === targetItem.expectedQty) {
+          setAlertMessage({ type: 'success', text: `✅ Mã [${targetItem.name}] đã ĐỦ SỐ LƯỢNG!` });
+        }
+      }
+
+      setChecklist(updatedChecklist);
+    } else {
+      playSound('error', soundEnabledRef.current); 
+      const existingSurplusIndex = currentSurplus.findIndex(item => item.code === actualCodeToMatch);
+      if (existingSurplusIndex !== -1) {
+        const updatedSurplus = [...currentSurplus];
+        const targetSurplus = { ...updatedSurplus[existingSurplusIndex] };
+        targetSurplus.scannedQty += 1;
+        updatedSurplus[existingSurplusIndex] = targetSurplus;
+        setScannedSurplus(updatedSurplus);
+      } else {
+        setScannedSurplus([...currentSurplus, {
+          code: actualCodeToMatch !== code ? actualCodeToMatch : code,
+          name: dbMatch ? dbMatch.product_name : 'Mã vạch lạ không rõ trên hệ thống',
+          scannedQty: 1
+        }]);
+      }
+      setAlertMessage({ type: 'danger', text: `🚨 BÁO ĐỘNG ĐỎ: Quét trúng mã lạ hoặc dư thừa ngoài danh sách!` });
+    }
+
+    // Xóa input nếu quét bằng máy quét tay
+    setInputCode(''); 
+  };
+
+  const handleBarcodeSubmit = (e) => {
+    e.preventDefault();
+    processBarcode(inputCode);
   };
 
   const downloadTemplate = () => {
@@ -196,64 +304,8 @@ export default function KiemTraDonHoan() {
       setChecklist(Array.from(parsedMap.values()));
     };
     reader.readAsText(file);
-  };
-
-  const handleBarcodeSubmit = (e) => {
-    e.preventDefault();
-    const code = inputCode.trim().toUpperCase(); 
-    if (!code) return;
-    
-    setAlertMessage(null);
-
-    const dbMatch = inventoryMap.find(item => 
-      String(item.product_code).toUpperCase() === code || 
-      String(item.product_id).toUpperCase() === code
-    );
-
-    const actualCodeToMatch = dbMatch ? String(dbMatch.product_code).toUpperCase() : code;
-    const actualIdToMatch = dbMatch ? String(dbMatch.product_id).toUpperCase() : code;
-
-    const targetIndex = checklist.findIndex(item => 
-      item.code === code || item.id === code || 
-      item.code === actualCodeToMatch || item.id === actualIdToMatch || 
-      item.id === actualCodeToMatch || item.code === actualIdToMatch 
-    );
-
-    if (targetIndex !== -1) {
-      const updatedChecklist = [...checklist];
-      const targetItem = updatedChecklist[targetIndex];
-      
-      targetItem.scannedQty += 1;
-
-      if (targetItem.scannedQty > targetItem.expectedQty) {
-        playSound('warning'); // Bíp đúp cảnh báo dư
-        setAlertMessage({ type: 'warning', text: `⚠️ CHÚ Ý: Mã [${targetItem.name}] quét DƯ (Lên ${targetItem.scannedQty}/${targetItem.expectedQty}).` });
-      } else {
-        playSound('success'); // Bíp đơn báo đúng
-        if (targetItem.scannedQty === targetItem.expectedQty) {
-          setAlertMessage({ type: 'success', text: `✅ Mã [${targetItem.name}] đã ĐỦ SỐ LƯỢNG!` });
-        }
-      }
-
-      setChecklist(updatedChecklist);
-    } else {
-      playSound('error'); // Kêu rè rè báo lỗi mã lạ
-      const existingSurplusIndex = scannedSurplus.findIndex(item => item.code === actualCodeToMatch);
-      if (existingSurplusIndex !== -1) {
-        const updatedSurplus = [...scannedSurplus];
-        updatedSurplus[existingSurplusIndex].scannedQty += 1;
-        setScannedSurplus(updatedSurplus);
-      } else {
-        setScannedSurplus(prev => [...prev, {
-          code: actualCodeToMatch !== code ? actualCodeToMatch : code,
-          name: dbMatch ? dbMatch.product_name : 'Mã vạch lạ không rõ trên hệ thống',
-          scannedQty: 1
-        }]);
-      }
-      setAlertMessage({ type: 'danger', text: `🚨 BÁO ĐỘNG ĐỎ: Quét trúng mã lạ hoặc dư thừa ngoài danh sách!` });
-    }
-
-    setInputCode(''); 
+    // Xóa file khỏi input để có thể chọn lại file cũ nếu muốn
+    e.target.value = null; 
   };
 
   const totalExpected = checklist.reduce((sum, item) => sum + item.expectedQty, 0);
@@ -266,6 +318,7 @@ export default function KiemTraDonHoan() {
       setScannedSurplus([]);
       setFileName('');
       setAlertMessage(null);
+      setIsScanningCam(false);
     }
   };
 
@@ -354,15 +407,39 @@ export default function KiemTraDonHoan() {
             </button>
             <label className="px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md transition cursor-pointer flex items-center gap-2">
               <UploadCloud size={16} /> Chọn file dữ liệu
-              <input type="file" accept=".csv, .txt" className="hidden" onChange={handleFileUpload} />
+              {/* NÂNG CẤP THUỘC TÍNH ACCEPT ĐỂ ĐIỆN THOẠI KHÔNG BỊ CHẶN */}
+              <input type="file" accept=".csv, .txt, text/csv, text/plain" className="hidden" onChange={handleFileUpload} />
             </label>
           </div>
         </div>
       ) : (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
             <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm space-y-4">
-              <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Súng quét Barcode / SKU</label>
+              <div className="flex justify-between items-center">
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Súng quét Barcode / SKU</label>
+                <button 
+                    onClick={() => setIsScanningCam(!isScanningCam)}
+                    type="button"
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      isScanningCam ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                >
+                    {isScanningCam ? <><CameraOff size={14}/> Tắt Cam</> : <><Camera size={14}/> Bật Cam</>}
+                </button>
+              </div>
+
+              {/* KHUNG HIỂN THỊ CAMERA QUÉT KIỂM HÀNG */}
+              {isScanningCam && (
+                <div className="mb-2 overflow-hidden rounded-xl border-2 border-blue-300 shadow-inner bg-black">
+                  <div id="reader-kiemtra" className="w-full"></div>
+                  <div className="bg-blue-50 p-2 text-center text-[10px] text-blue-600 font-medium border-t border-blue-200">
+                    Đưa mã vạch (Code 128) vào khung hình chữ nhật
+                  </div>
+                </div>
+              )}
+
               <form onSubmit={handleBarcodeSubmit} className="relative">
                 <input 
                   ref={inputRef}
