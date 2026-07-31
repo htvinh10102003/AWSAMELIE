@@ -2,25 +2,50 @@ import { useState, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   PackageMinus, Search, CheckCircle2, AlertCircle, ScanBarcode, 
-  Download, Loader2, ArrowLeftRight, Trash2, XCircle
+  Download, Loader2, ArrowLeftRight, Trash2, XCircle, Camera, CameraOff
 } from 'lucide-react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+
+// Hàm tạo tiếng "Tít" ngắn khi quét thành công
+const playBeep = () => {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+    
+    osc.connect(gainNode);
+    gainNode.connect(ctx.destination);
+    
+    osc.type = 'sine'; // Kiểu âm thanh
+    osc.frequency.value = 1000; // Tần số 1000Hz (tiếng tít tiêu chuẩn)
+    gainNode.gain.setValueAtTime(0.1, ctx.currentTime); // Âm lượng nhỏ vừa phải
+    
+    osc.start();
+    osc.stop(ctx.currentTime + 0.1); // Kêu trong 0.1 giây
+  } catch (err) {
+    console.error("Audio API không được hỗ trợ", err);
+  }
+};
 
 export default function ReturnProcessing() {
   const [loading, setLoading] = useState(false);
   
   // States quét Vận đơn
   const [trackingCode, setTrackingCode] = useState('');
-  const [currentOrder, setCurrentOrder] = useState(null); // Đơn gốc lấy từ Nhanh
+  const [currentOrder, setCurrentOrder] = useState(null); 
   
   // States quét Sản phẩm
   const [barcodeInput, setBarcodeInput] = useState('');
-  const [scannedItems, setScannedItems] = useState([]); // Các sản phẩm thực tế quét được
+  const [scannedItems, setScannedItems] = useState([]); 
   
-  // Nhớ kéo sẵn từ điển kho để cross-match Barcode -> ID Nhanh
+  // Tồn kho & Nhật ký
   const [inventoryMap, setInventoryMap] = useState([]);
-  
-  // ⚡️ NHẬT KÝ PHIÊN LÀM VIỆC (ĐỂ XUẤT EXCEL CUỐI NGÀY)
   const [sessionLogs, setSessionLogs] = useState([]);
+
+  // State Camera
+  const [isScanningCam, setIsScanningCam] = useState(false);
 
   const trackingInputRef = useRef(null);
   const barcodeInputRef = useRef(null);
@@ -35,6 +60,69 @@ export default function ReturnProcessing() {
     trackingInputRef.current?.focus();
   }, []);
 
+  // XỬ LÝ CAMERA QUÉT MÃ CODE 128
+  useEffect(() => {
+    let html5QrCode;
+    
+    if (isScanningCam) {
+      html5QrCode = new Html5Qrcode("reader");
+      
+      const config = { 
+        fps: 10, 
+        qrbox: { width: 300, height: 100 }, // Khung chữ nhật dẹt cho Barcode 128
+        formatsToSupport: [Html5QrcodeSupportedFormats.CODE_128], // Tối ưu: Chỉ quét Code 128
+        aspectRatio: 1.0,
+      };
+
+      const qrCodeSuccessCallback = (decodedText) => {
+        handleProcessBarcode(decodedText);
+      };
+
+      const qrCodeErrorCallback = (errorMessage) => {
+        // Bỏ qua log lỗi liên tục khi camera đang tìm mã
+      };
+
+      html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback, qrCodeErrorCallback)
+        .catch((err) => {
+          console.error("Camera Error:", err);
+          alert("Lỗi Camera: Hãy đảm bảo bạn dùng kết nối HTTPS và đã cấp quyền Camera cho trình duyệt.");
+          setIsScanningCam(false);
+        });
+    }
+
+    return () => {
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().catch(console.error);
+      }
+    };
+  }, [isScanningCam]);
+
+  // HÀM XỬ LÝ CHUNG MÃ VẠCH: Dùng cho cả Enter tay và Camera
+  const handleProcessBarcode = (code) => {
+    const cleanCode = code.trim().toUpperCase();
+    if (!cleanCode) return;
+
+    const dbMatch = inventoryMap.find(item => String(item.product_code).toUpperCase() === cleanCode);
+    
+    if (!dbMatch) {
+      alert(`Mã vạch [${cleanCode}] chưa có trong danh bạ hệ thống!`);
+      setBarcodeInput('');
+      return;
+    }
+
+    // Phát tiếng tít
+    playBeep();
+
+    setScannedItems(prev => {
+      const existing = prev.find(i => i.id === dbMatch.product_id);
+      if (existing) {
+        return prev.map(i => i.id === dbMatch.product_id ? { ...i, qty: i.qty + 1 } : i);
+      }
+      return [...prev, { id: dbMatch.product_id, code: dbMatch.product_code, name: dbMatch.product_name, qty: 1 }];
+    });
+    setBarcodeInput('');
+  };
+
   // 1. TÌM KIẾM ĐƠN GỐC
   const searchOrder = async (e) => {
     e.preventDefault();
@@ -47,78 +135,54 @@ export default function ReturnProcessing() {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-return`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({ action: 'search', payload: { code: trackingCode.trim() } })
       });
       const data = await res.json();
 
       if (data.success && data.order) {
         setCurrentOrder(data.order);
-        // Tự động focus vào ô quét SP
         setTimeout(() => barcodeInputRef.current?.focus(), 100);
       } else {
-        // NẾU KHÔNG THẤY -> CHUYỂN SANG CHẾ ĐỘ ĐƠN HOÀN NGOÀI
         setCurrentOrder({
           isExternal: true,
           id: 'N/A',
           customerName: 'Khách Vô Danh',
           customerMobile: '',
-          products: [] // Không có SP dự kiến
+          products: [] 
         });
         alert("Không tìm thấy đơn gốc! Hệ thống đã chuyển sang chế độ: HOÀN NGOÀI.");
         setTimeout(() => barcodeInputRef.current?.focus(), 100);
       }
     } catch (err) {
-      alert("Lỗi kết nối máy chủ Nhanh.vn");
+      alert("Lỗi kết nối máy chủ");
     } finally {
       setLoading(false);
     }
   };
 
-  // 2. BẮN MÃ VẠCH SẢN PHẨM HOÀN
-  const handleScanProduct = (e) => {
+  // 2. BẮN MÃ VẠCH BẰNG INPUT (MÁY QUÉT CẦM TAY HOẶC GÕ TAY)
+  const onSubmitScan = (e) => {
     e.preventDefault();
-    const code = barcodeInput.trim().toUpperCase();
-    if (!code) return;
-
-    // Tìm trong Database kho xem là SP gì
-    const dbMatch = inventoryMap.find(item => String(item.product_code).toUpperCase() === code);
-    
-    if (!dbMatch) {
-      alert(`Mã vạch [${code}] chưa có trong danh bạ hệ thống!`);
-      setBarcodeInput('');
-      return;
-    }
-
-    setScannedItems(prev => {
-      const existing = prev.find(i => i.id === dbMatch.product_id);
-      if (existing) {
-        return prev.map(i => i.id === dbMatch.product_id ? { ...i, qty: i.qty + 1 } : i);
-      }
-      return [...prev, { id: dbMatch.product_id, code: dbMatch.product_code, name: dbMatch.product_name, qty: 1 }];
-    });
-    setBarcodeInput('');
+    handleProcessBarcode(barcodeInput);
   };
 
   const removeScannedItem = (id) => {
     setScannedItems(prev => prev.filter(i => i.id !== id));
   };
 
-  // 3. THUẬT TOÁN XÁC ĐỊNH LOẠI HOÀN VÀ GỬI LÊN NHANH
+  // 3. THUẬT TOÁN XÁC ĐỊNH LÊN ĐƠN HOÀN
   const submitReturn = async () => {
     if (scannedItems.length === 0) return alert("Bạn chưa quét sản phẩm thực nhận nào!");
     
     setLoading(true);
     let returnType = 'EXTERNAL';
 
-    // Xác định logic
     if (currentOrder && !currentOrder.isExternal) {
       const expectedProducts = currentOrder.products || [];
-      // Đếm tổng dự kiến và tổng thực nhận
       const totalExpected = expectedProducts.reduce((sum, p) => sum + Number(p.quantity), 0);
       const totalScanned = scannedItems.reduce((sum, p) => sum + p.qty, 0);
 
-      // (Đơn giản hóa logic: Nếu tổng quét == tổng gốc -> Hoàn toàn bộ. Nếu ít hơn -> 1 phần)
       if (totalScanned === totalExpected) returnType = 'FULL';
       else returnType = 'PARTIAL';
     }
@@ -131,18 +195,17 @@ export default function ReturnProcessing() {
         trackingCode: trackingCode.trim(),
         customerName: currentOrder.customerName,
         customerMobile: currentOrder.customerMobile,
-        returnedProducts: scannedItems // Gửi mảng SP lên
+        returnedProducts: scannedItems 
       };
 
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/process-return`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({ action: 'submit', payload })
       });
       const data = await res.json();
 
       if (data.success) {
-        // Ghi vào Nhật ký Phiên
         setSessionLogs(prev => [{
           time: new Date().toLocaleTimeString('vi-VN'),
           tracking: trackingCode.trim(),
@@ -151,10 +214,10 @@ export default function ReturnProcessing() {
           items: scannedItems.map(i => `${i.name} (x${i.qty})`).join(' | ')
         }, ...prev]);
 
-        // Reset để quét đơn mới
         setCurrentOrder(null);
         setScannedItems([]);
         setTrackingCode('');
+        setIsScanningCam(false); 
         trackingInputRef.current?.focus();
       } else {
         alert("Lỗi: " + data.message);
@@ -166,7 +229,7 @@ export default function ReturnProcessing() {
     }
   };
 
-  // 4. XUẤT EXCEL (CSV) NHẬT KÝ CUỐI NGÀY
+  // 4. XUẤT EXCEL (CSV)
   const exportSessionLogs = () => {
     if (sessionLogs.length === 0) return alert("Phiên làm việc chưa có dữ liệu nào.");
     let csvContent = "\uFEFFThời gian,Mã Vận Đơn/Đơn hàng,Loại Hoàn,Sản phẩm thực nhận,Trạng thái\n";
@@ -231,6 +294,7 @@ export default function ReturnProcessing() {
               </div>
 
               <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                
                 {/* Cột SP Dự kiến */}
                 {!currentOrder.isExternal && (
                   <div>
@@ -248,14 +312,37 @@ export default function ReturnProcessing() {
 
                 {/* Cột SP Thực nhận */}
                 <div className={currentOrder.isExternal ? 'md:col-span-2' : ''}>
-                  <h4 className="text-[10px] font-black text-rose-500 uppercase tracking-wider mb-3 flex items-center justify-between">
-                    <span>Sản phẩm Thực nhận (Quét mã)</span>
-                    <span className="bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">Tổng: {scannedItems.reduce((s,p)=>s+p.qty,0)}</span>
-                  </h4>
+                  <div className="flex justify-between items-center mb-3">
+                     <h4 className="text-[10px] font-black text-rose-500 uppercase tracking-wider">
+                        Sản phẩm Thực nhận
+                        <span className="ml-2 bg-rose-100 text-rose-700 px-2 py-0.5 rounded-full">Tổng: {scannedItems.reduce((s,p)=>s+p.qty,0)}</span>
+                     </h4>
+                     
+                     {/* NÚT BẬT/TẮT CAMERA */}
+                     <button 
+                        onClick={() => setIsScanningCam(!isScanningCam)}
+                        type="button"
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                          isScanningCam ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        }`}
+                     >
+                        {isScanningCam ? <><CameraOff size={14}/> Tắt Cam</> : <><Camera size={14}/> Bật Cam</>}
+                     </button>
+                  </div>
                   
-                  <form onSubmit={handleScanProduct} className="mb-4">
+                  {/* KHUNG HIỂN THỊ CAMERA */}
+                  {isScanningCam && (
+                    <div className="mb-4 overflow-hidden rounded-xl border-2 border-rose-300 shadow-inner bg-black">
+                      <div id="reader" className="w-full"></div>
+                      <div className="bg-rose-50 p-2 text-center text-[10px] text-rose-600 font-medium border-t border-rose-200">
+                        Đưa mã vạch (Code 128) vào khung hình chữ nhật
+                      </div>
+                    </div>
+                  )}
+
+                  <form onSubmit={onSubmitScan} className="mb-4">
                     <input 
-                      ref={barcodeInputRef} type="text" placeholder="Quét mã vạch sản phẩm hoàn..." value={barcodeInput} onChange={e => setBarcodeInput(e.target.value)}
+                      ref={barcodeInputRef} type="text" placeholder="Hoặc quét/nhập tay mã vạch..." value={barcodeInput} onChange={e => setBarcodeInput(e.target.value)}
                       className="w-full text-xs font-bold tracking-widest py-2.5 px-3 bg-white border border-rose-200 rounded-lg outline-none focus:border-rose-500 focus:ring-2 focus:ring-rose-100 transition shadow-sm"
                     />
                   </form>
