@@ -35,7 +35,7 @@ export default function App() {
 
           {/* 📊 TAB DASHBOARD (TỔNG QUAN) */}
           <Route index element={<Dashboard />} /> {/* Đơn đi hàng ngày */}
-          <Route path="dashboard-don-hoan" element={<dashboard-don-hoan />} />
+          <Route path="dashboard-don-hoan" element={<DashboardDonHoan />} />
           <Route path="dashboard-kpi" element={<KPI_Report />} />
           
           {/* 🖨️ TAB ĐƠN IN */}
