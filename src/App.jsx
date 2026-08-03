@@ -22,7 +22,8 @@ import KPI_Management from './pages/KPI_Management';
 import KPI_Report from './pages/KPI_Report';
 import SetupZone from './pages/SetupZone';
 import FilterByZone from './pages/FilterByZone';
-import WebhookRetrier from './pages/WebhookRetrier'; // <-- Thêm import component Webhook
+import WebhookRetrier from './pages/WebhookRetrier';
+import DashboardDonHoan from './pages/DashboardDonHoan';
 
 export default function App() {
   return (
@@ -34,7 +35,7 @@ export default function App() {
 
           {/* 📊 TAB DASHBOARD (TỔNG QUAN) */}
           <Route index element={<Dashboard />} /> {/* Đơn đi hàng ngày */}
-          <Route path="dashboard-don-hoan" element={<UnderDevelopment />} />
+          <Route path="dashboard-don-hoan" element={<dashboard-don-hoan />} />
           <Route path="dashboard-kpi" element={<KPI_Report />} />
           
           {/* 🖨️ TAB ĐƠN IN */}
