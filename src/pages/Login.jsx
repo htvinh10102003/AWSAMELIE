@@ -1,182 +1,61 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import {
-  Lock,
-  Mail,
-  Eye,
-  EyeOff,
-  ArrowLeft,
-  ShieldCheck,
-  Fingerprint,
+  LockKeyhole,
+  Terminal,
+  Activity,
   Cpu,
-  CheckCircle2,
-  PackageCheck
+  Fingerprint,
+  ChevronRight,
+  ShieldAlert,
+  Database,
+  Network
 } from 'lucide-react';
 
-// ✨ LINH VẬT MÈO TRẮNG (CUTE & REALISTIC)
-function Mascot({ focusedField, showPassword, error, emailLength }) {
-  const isEmail = focusedField === 'email';
-  const isPassword = focusedField === 'password';
-  const isCovering = isPassword && !showPassword;
-  const isPeeking = isPassword && showPassword;
-  
-  const hasError = !!error && !focusedField;
-
-  const lookX = isEmail ? Math.min(emailLength, 24) * 0.5 - 6 : 0;
-  const lookY = isEmail ? 2 : (hasError ? 4 : 0);
-
-  const pupilStyle = {
-    transform: `translate(calc(-50% + ${lookX}px), calc(-50% + ${lookY}px))`,
-    transition: 'transform 0.1s ease-out'
-  };
-
-  return (
-    <div className="relative w-32 h-32 transition-transform duration-300 drop-shadow-md">
-      
-      {/* Bong bóng chat báo lỗi vui nhộn */}
-      <div className={`absolute -top-12 left-1/2 -translate-x-1/2 w-max max-w-[200px] text-center bg-red-500 text-white text-xs font-bold py-1.5 px-3 rounded-2xl shadow-lg shadow-red-500/30 transition-all duration-300 z-50 ${hasError ? 'opacity-100 scale-100 animate-bounce' : 'opacity-0 scale-50 pointer-events-none'}`}>
-        Meo! Nhập sai rồi... 😿
-        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-3 h-3 bg-red-500 rotate-45" />
-      </div>
-
-      {/* Tai trái */}
-      <div className={`absolute top-0 left-2 w-10 h-10 bg-white border-2 border-slate-200 rounded-xl overflow-hidden origin-bottom-right transition-transform duration-300 z-0
-        ${hasError ? '-rotate-[60deg] translate-y-3' : '-rotate-12'}
-      `}>
-        <div className="absolute bottom-0 right-0 w-6 h-6 bg-pink-200 rounded-tl-full" />
-      </div>
-
-      {/* Tai phải */}
-      <div className={`absolute top-0 right-2 w-10 h-10 bg-white border-2 border-slate-200 rounded-xl overflow-hidden origin-bottom-left transition-transform duration-300 z-0
-        ${hasError ? 'rotate-[60deg] translate-y-3' : 'rotate-12'}
-      `}>
-        <div className="absolute bottom-0 left-0 w-6 h-6 bg-pink-200 rounded-tr-full" />
-      </div>
-
-      {/* Đầu mèo */}
-      <div className="absolute inset-0 bg-white rounded-[40%] border-2 border-slate-200 shadow-sm z-10 flex flex-col items-center justify-center pt-2 overflow-hidden">
-        
-        {/* Mắt */}
-        <div className="flex gap-4 mb-2">
-          {/* Mắt trái */}
-          <div className="w-7 h-7 bg-white rounded-full relative border-2 border-slate-300 overflow-hidden shadow-inner">
-            <div 
-              className="absolute w-3.5 h-3.5 bg-slate-800 rounded-full top-1/2 left-1/2"
-              style={pupilStyle}
-            >
-              <div className="absolute top-0.5 right-0.5 w-1 h-1 bg-white rounded-full opacity-80" />
-            </div>
-            <div className={`absolute top-0 left-0 w-full bg-slate-100 transition-all duration-300 ${hasError ? 'h-3 opacity-100' : 'h-0 opacity-0'}`} />
-          </div>
-          
-          {/* Mắt phải */}
-          <div className="w-7 h-7 bg-white rounded-full relative border-2 border-slate-300 overflow-hidden shadow-inner">
-            <div 
-              className="absolute w-3.5 h-3.5 bg-slate-800 rounded-full top-1/2 left-1/2"
-              style={pupilStyle}
-            >
-              <div className="absolute top-0.5 right-0.5 w-1 h-1 bg-white rounded-full opacity-80" />
-            </div>
-            <div className={`absolute top-0 left-0 w-full bg-slate-100 transition-all duration-300 ${hasError ? 'h-3 opacity-100' : 'h-0 opacity-0'}`} />
-          </div>
-        </div>
-
-        {/* Má hồng */}
-        <div className="absolute top-14 left-3 w-4 h-2 bg-pink-400/30 rounded-full blur-[2px]" />
-        <div className="absolute top-14 right-3 w-4 h-2 bg-pink-400/30 rounded-full blur-[2px]" />
-
-        {/* Mũi và Miệng */}
-        <div className="flex flex-col items-center">
-          <div className="w-2.5 h-1.5 bg-pink-400 rounded-full" />
-          {hasError ? (
-            <div className="w-3 h-2 border-t-2 border-slate-400 rounded-t-full mt-1.5 transition-all" />
-          ) : (
-            <div className="flex justify-center mt-1 transition-all">
-              <div className="w-2.5 h-2.5 border-b-2 border-r-2 border-slate-400 rounded-br-full rotate-45" />
-              <div className="w-2.5 h-2.5 border-b-2 border-l-2 border-slate-400 rounded-bl-full -rotate-45" />
-            </div>
-          )}
-        </div>
-
-        {/* Ria mép (Trái) */}
-        <div className="absolute top-14 -left-1 flex flex-col gap-1.5 opacity-40">
-          <div className="w-5 h-[1.5px] bg-slate-600 rotate-[15deg]" />
-          <div className="w-6 h-[1.5px] bg-slate-600 ml-1" />
-          <div className="w-5 h-[1.5px] bg-slate-600 -rotate-[15deg]" />
-        </div>
-
-        {/* Ria mép (Phải) */}
-        <div className="absolute top-14 -right-1 flex flex-col gap-1.5 items-end opacity-40">
-          <div className="w-5 h-[1.5px] bg-slate-600 -rotate-[15deg]" />
-          <div className="w-6 h-[1.5px] bg-slate-600 mr-1" />
-          <div className="w-5 h-[1.5px] bg-slate-600 rotate-[15deg]" />
-        </div>
-      </div>
-
-      {/* Tay trái */}
-      <div
-        className={`absolute z-30 w-7 h-10 bg-white rounded-full border-2 border-slate-200 transition-all duration-300 shadow-sm origin-bottom
-        ${isCovering || isPeeking ? 'top-6 left-5 rotate-[50deg]' : 'top-20 -left-1 -rotate-[20deg]'}`}
-      >
-        <div className="absolute top-1 left-1/2 -translate-x-1/2 flex gap-1 opacity-30">
-          <div className="w-[1px] h-2.5 bg-slate-500" />
-          <div className="w-[1px] h-2.5 bg-slate-500" />
-        </div>
-      </div>
-
-      {/* Tay phải */}
-      <div
-        className={`absolute z-30 w-7 h-10 bg-white rounded-full border-2 border-slate-200 transition-all duration-300 shadow-sm origin-bottom
-        ${isCovering ? 'top-6 right-5 -rotate-[50deg]' : ''}
-        ${isPeeking ? 'top-10 right-2 -rotate-[20deg]' : ''}
-        ${!isCovering && !isPeeking ? 'top-20 -right-1 rotate-[20deg]' : ''}`}
-      >
-        <div className="absolute top-1 left-1/2 -translate-x-1/2 flex gap-1 opacity-30">
-          <div className="w-[1px] h-2.5 bg-slate-500" />
-          <div className="w-[1px] h-2.5 bg-slate-500" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ✨ COMPONENT ITEM TÍNH NĂNG
-function FeatureItem({ text }) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="mt-1 flex-shrink-0 bg-cyan-500/20 p-1 rounded-full">
-        <CheckCircle2 size={16} className="text-cyan-400" />
-      </div>
-      <p className="text-slate-300 font-medium leading-relaxed">{text}</p>
-    </div>
-  );
-}
-
 export default function Login() {
-  // === STATES QUẢN LÝ ĐĂNG NHẬP ===
-  const [mode, setMode] = useState('login'); 
+  const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
 
-  // === STATES PHẢN HỒI HỆ THỐNG ===
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-
-  // === STATE ĐIỀU KHIỂN LINH VẬT ===
-  const [focusedField, setFocusedField] = useState(null); 
+  
+  // Fake terminal logs for the aesthetic background
+  const [logs, setLogs] = useState([]);
 
   const navigate = useNavigate();
 
-  // ⚡️ XỬ LÝ ĐĂNG NHẬP
+  // Sinh log giả để tạo cảm giác Data Center
+  useEffect(() => {
+    const messages = [
+      "Establishing secure connection...",
+      "Bypassing proxy server...",
+      "Connecting to WMS_CORE_DB_01...",
+      "Encrypting payload [RSA-4096]...",
+      "Awaiting user authentication..."
+    ];
+    let i = 0;
+    const interval = setInterval(() => {
+      if (i < messages.length) {
+        setLogs(prev => [...prev, messages[i]]);
+        i++;
+      } else {
+        clearInterval(interval);
+      }
+    }, 800);
+    return () => clearInterval(interval);
+  }, []);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setMessage('');
+    
+    setLogs(prev => [...prev, "> VERIFYING CREDENTIALS..."]);
 
     const { error } = await supabase.auth.signInWithPassword({
       email,
@@ -184,132 +63,111 @@ export default function Login() {
     });
 
     if (error) {
+      setLogs(prev => [...prev, "> AUTH_FAILED: ACCESS DENIED."]);
       setError(
         error.message === 'Invalid login credentials'
-          ? 'Sai tài khoản hoặc mật khẩu!'
+          ? 'Truy cập bị từ chối. Sai thông tin xác thực.'
           : error.message
       );
     } else {
-      navigate('/admin');
+      setLogs(prev => [...prev, "> AUTH_SUCCESS: REDIRECTING..."]);
+      setTimeout(() => navigate('/admin'), 1000);
     }
     setLoading(false);
   };
 
-  // ⚡️ XỬ LÝ QUÊN MẬT KHẨU
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setMessage('');
 
+    setLogs(prev => [...prev, "> INITIATING PASSWORD OVERRIDE PROTOCOL..."]);
+
     const { error } = await supabase.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/admin`,
     });
 
     if (error) {
-      setError(`Lỗi gửi mail: ${error.message}`);
+      setLogs(prev => [...prev, `> ERROR: ${error.message}`]);
+      setError(`Lỗi hệ thống: ${error.message}`);
     } else {
-      setMessage('✅ Đã gửi link đặt lại mật khẩu!');
+      setLogs(prev => [...prev, "> PROTOCOL SUCCESS: CHECK INBOX."]);
+      setMessage('Lệnh khôi phục đã được mã hóa và gửi tới email.');
     }
     setLoading(false);
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-slate-50 font-sans antialiased overflow-hidden">
+    <div className="relative min-h-screen w-full bg-[#030712] text-cyan-500 font-sans antialiased flex items-center justify-center overflow-hidden selection:bg-cyan-500/30">
       
-      {/* ================= PHẦN TRÁI: GIỚI THIỆU (BRANDING) ================= */}
-      <div className="hidden lg:flex relative w-1/2 flex-col justify-between bg-[#0a0a1a] p-12 xl:p-16 overflow-hidden">
-        {/* Nền công nghệ */}
-        <div className="absolute inset-0 z-0">
-          <div
-            className="absolute inset-0 opacity-20"
-            style={{
-              backgroundImage:
-                'linear-gradient(rgba(56,189,248,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(56,189,248,0.15) 1px, transparent 1px)',
-              backgroundSize: '60px 60px',
-            }}
-          />
-          <div className="absolute -top-40 -left-40 h-[600px] w-[600px] rounded-full bg-blue-600/20 blur-[120px]" />
-          <div className="absolute -bottom-40 -right-40 h-[600px] w-[600px] rounded-full bg-cyan-400/10 blur-[120px]" />
-        </div>
-
-        <div className="relative z-10 flex flex-col pt-8">
-          {/* Logo */}
-          <div className="flex items-center gap-3 mb-16">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-400 to-blue-600 shadow-lg shadow-cyan-500/30">
-              <PackageCheck size={24} className="text-white" />
-            </div>
-            <span className="text-2xl font-black text-white tracking-wider">AMELIE WMS</span>
-          </div>
-
-          <h1 className="text-4xl xl:text-5xl font-black text-white leading-tight tracking-tight mb-6">
-            Khởi tạo sức mạnh <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
-              Quản trị kho vận
-            </span>
-          </h1>
-          
-          <p className="text-lg text-slate-300 max-w-lg leading-relaxed mb-12">
-            AMELIE WMS là hệ thống quản lý kho vận chuyên nghiệp, kết nối trực tiếp với Nhanh.vn nhằm hỗ trợ tối ưu hóa quy trình, kiểm soát tồn kho và xuất báo cáo tự động mỗi ngày.
-          </p>
-          
-          <div className="space-y-6 max-w-md">
-            <FeatureItem text="Đồng bộ dữ liệu thời gian thực trực tiếp qua API Nhanh.vn." />
-            <FeatureItem text="Hỗ trợ các nghiệp vụ xuất nhập tồn, luân chuyển hàng hóa chính xác." />
-            <FeatureItem text="Hệ thống báo cáo, thống kê đa chiều trực quan cho ban quản trị." />
-          </div>
-        </div>
-
-        <div className="relative z-10 text-sm text-slate-500 font-medium pb-4">
-          © {new Date().getFullYear()} Amelie Team. All rights reserved.
-        </div>
+      {/* Background: Radar Grid & Scanning Line */}
+      <div className="absolute inset-0 z-0 pointer-events-none opacity-20">
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(6,182,212,0.2)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.2)_1px,transparent_1px)] bg-[size:40px_40px]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-500/10 to-transparent w-full h-[200%] animate-scan" />
       </div>
 
-      {/* ================= PHẦN PHẢI: FORM ĐĂNG NHẬP ================= */}
-      <div className="flex w-full lg:w-1/2 items-center justify-center p-6 sm:p-12 relative">
-        {/* Background blobs cho mobile (bị ẩn trên Desktop) */}
-        <div className="absolute inset-0 z-0 lg:hidden overflow-hidden bg-[#0a0a1a]">
-          <div className="absolute -top-40 -left-40 h-[400px] w-[400px] rounded-full bg-blue-500/20 blur-[100px]" />
-          <div className="absolute -bottom-40 -right-40 h-[400px] w-[400px] rounded-full bg-purple-500/20 blur-[100px]" />
-        </div>
+      {/* HUD Elements (Heads-Up Display) - Ẩn trên mobile */}
+      <div className="hidden lg:block absolute top-6 left-6 font-mono text-xs text-cyan-700 pointer-events-none z-0 space-y-1">
+        <div className="flex items-center gap-2"><Activity size={14} className="animate-pulse text-cyan-400" /> SYS.STAT: ONLINE</div>
+        <div>NODE: WMS-CORE-01</div>
+        <div>LATENCY: 12ms</div>
+      </div>
+      
+      <div className="hidden lg:block absolute bottom-6 right-6 font-mono text-xs text-cyan-700 pointer-events-none z-0 text-right space-y-1">
+        <div className="flex items-center justify-end gap-2"><LockKeyhole size={14} /> SEC: RSA-4096 ENCRYPTED</div>
+        <div>IP: {Math.floor(Math.random() * 255)}.{Math.floor(Math.random() * 255)}.x.x</div>
+        <div>V: 2.4.1-STABLE</div>
+      </div>
 
-        {/* Card Đăng nhập */}
-        <div className="relative z-10 w-full max-w-md mt-12">
+      {/* Fake Terminal Background */}
+      <div className="absolute top-1/4 left-8 font-mono text-xs text-cyan-800/40 pointer-events-none hidden xl:block max-w-[250px]">
+        {logs.map((log, idx) => (
+          <div key={idx} className="mb-1">{log}</div>
+        ))}
+        <div className="animate-pulse">_</div>
+      </div>
+
+      {/* Main Authentication Card */}
+      <div className="relative z-10 w-full max-w-[420px] p-6">
+        
+        <div className="bg-[#0b1120]/80 backdrop-blur-md border border-cyan-900/50 p-1 rounded-sm shadow-[0_0_40px_rgba(6,182,212,0.1)] relative">
           
-          {/* Mascot Container */}
-          <div className="absolute -top-24 left-1/2 -translate-x-1/2 z-20">
-            <Mascot 
-              focusedField={focusedField} 
-              showPassword={showPassword} 
-              error={error} 
-              emailLength={email.length} 
-            />
-          </div>
+          {/* Cắt góc kiểu Sci-fi (Corner Accents) */}
+          <div className="absolute top-0 left-0 w-2 h-2 border-t-2 border-l-2 border-cyan-400" />
+          <div className="absolute top-0 right-0 w-2 h-2 border-t-2 border-r-2 border-cyan-400" />
+          <div className="absolute bottom-0 left-0 w-2 h-2 border-b-2 border-l-2 border-cyan-400" />
+          <div className="absolute bottom-0 right-0 w-2 h-2 border-b-2 border-r-2 border-cyan-400" />
 
-          <div className="bg-white rounded-[2rem] p-8 sm:p-10 pt-12 shadow-2xl shadow-slate-200/50 border border-slate-100 transition-all lg:shadow-xl lg:shadow-slate-300/30">
-            
+          <div className="p-8 border border-cyan-900/30">
+            {/* Header */}
+            <div className="flex flex-col items-center mb-8 border-b border-cyan-900/50 pb-6">
+              <div className="relative h-14 w-14 rounded-full bg-cyan-950 flex items-center justify-center mb-4 border border-cyan-500/30 shadow-[0_0_15px_rgba(6,182,212,0.2)]">
+                <Database size={28} className="text-cyan-400" />
+                {/* Vòng xoay ngoài */}
+                <div className="absolute inset-0 rounded-full border border-t-cyan-400 border-r-transparent border-b-transparent border-l-transparent animate-spin" style={{ animationDuration: '3s' }} />
+              </div>
+              <h1 className="text-xl font-bold text-cyan-50 tracking-[0.2em] uppercase">
+                AMELIE <span className="text-cyan-500">WMS</span>
+              </h1>
+              <p className="text-[10px] font-mono text-cyan-600 mt-2 tracking-widest uppercase">
+                // Restricted Access Area //
+              </p>
+            </div>
+
             {mode === 'login' ? (
-              <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="mb-8 text-center">
-                  <h2 className="text-2xl font-black tracking-tight text-slate-900">
-                    Chào mừng trở lại! 👋
-                  </h2>
-                  <p className="mt-2 text-sm font-medium text-slate-500">
-                    Đăng nhập vào bảng điều khiển hệ thống
-                  </p>
-                </div>
-
+              <div className="animate-in fade-in duration-300">
                 {error && (
-                  <div className="mb-6 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm font-semibold text-red-600 animate-shake">
-                    ⚠️ {error}
+                  <div className="mb-6 p-3 bg-red-950/30 border border-red-900 text-xs font-mono text-red-500 flex items-start gap-2">
+                    <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+                    <p>[ERR] {error}</p>
                   </div>
                 )}
 
                 <form onSubmit={handleLogin} className="space-y-5">
-                  {/* Email */}
-                  <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600">
-                      Email quản trị
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-mono text-cyan-600 uppercase tracking-wider flex items-center gap-2">
+                      <ChevronRight size={12} /> ID Xác thực (Email)
                     </label>
                     <div className="relative">
                       <input
@@ -320,23 +178,16 @@ export default function Login() {
                           setEmail(e.target.value);
                           if (error) setError('');
                         }}
-                        onFocus={() => setFocusedField('email')}
-                        onBlur={() => setFocusedField(null)}
-                        placeholder="vinh12345@gmail.com"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-cyan-500 focus:bg-white focus:ring-4 focus:ring-cyan-500/10"
-                      />
-                      <Mail
-                        size={18}
-                        className="absolute left-4 top-3 text-slate-400"
+                        className="w-full bg-[#030712] border border-cyan-900/50 px-4 py-2.5 text-sm text-cyan-100 placeholder:text-cyan-900 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_rgba(6,182,212,0.2)] font-mono transition-all rounded-none"
+                        placeholder="admin@amelie.com"
                       />
                     </div>
                   </div>
 
-                  {/* Mật khẩu */}
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
-                        Mật khẩu
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-mono text-cyan-600 uppercase tracking-wider flex items-center gap-2">
+                        <ChevronRight size={12} /> Khóa bảo mật
                       </label>
                       <button
                         type="button"
@@ -345,173 +196,149 @@ export default function Login() {
                           setError('');
                           setMessage('');
                         }}
-                        className="text-xs font-bold text-cyan-600 transition hover:text-cyan-500 hover:underline"
+                        className="text-[10px] font-mono text-cyan-700 hover:text-cyan-400 transition-colors uppercase tracking-widest"
                       >
-                        Quên mật khẩu?
+                        [Override_Pass]
                       </button>
                     </div>
                     <div className="relative">
                       <input
-                        type={showPassword ? 'text' : 'password'}
+                        type="password"
                         required
                         value={password}
                         onChange={(e) => {
                           setPassword(e.target.value);
                           if (error) setError('');
                         }}
-                        onFocus={() => setFocusedField('password')}
-                        onBlur={() => setFocusedField(null)}
-                        placeholder="••••••••"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-11 pr-11 text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-cyan-500 focus:bg-white focus:ring-4 focus:ring-cyan-500/10"
+                        className="w-full bg-[#030712] border border-cyan-900/50 px-4 py-2.5 text-sm text-cyan-100 placeholder:text-cyan-900 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_rgba(6,182,212,0.2)] font-mono transition-all rounded-none"
+                        placeholder="••••••••••••"
                       />
-                      <Lock
-                        size={18}
-                        className="absolute left-4 top-3 text-slate-400"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3.5 top-3 text-slate-400 transition hover:text-slate-600"
-                      >
-                        {showPassword ? (
-                          <EyeOff size={18} />
-                        ) : (
-                          <Eye size={18} />
-                        )}
-                      </button>
                     </div>
                   </div>
 
-                  {/* Ghi nhớ đăng nhập */}
-                  <div className="flex items-center justify-between pt-1">
-                    <label className="flex cursor-pointer select-none items-center gap-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
+                  <div className="flex items-center pt-2">
+                    <label className="flex items-center gap-2 cursor-pointer group">
                       <input
                         type="checkbox"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-300 text-cyan-500 focus:ring-cyan-500"
+                        className="appearance-none w-3.5 h-3.5 border border-cyan-800 bg-[#030712] checked:bg-cyan-500 checked:border-cyan-400 transition-all cursor-pointer rounded-sm"
                       />
-                      Duy trì đăng nhập
+                      <span className="text-[10px] font-mono text-cyan-700 group-hover:text-cyan-500 uppercase tracking-wider transition-colors select-none">
+                        Duy trì kết nối
+                      </span>
                     </label>
                   </div>
 
                   <button
                     type="submit"
                     disabled={loading}
-                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-cyan-500/25 transition-all hover:shadow-cyan-500/40 hover:-translate-y-0.5 disabled:opacity-50 disabled:pointer-events-none"
+                    className="w-full mt-6 bg-cyan-950/50 hover:bg-cyan-900/50 text-cyan-400 border border-cyan-500/50 hover:border-cyan-400 py-3 text-xs font-mono font-bold tracking-widest uppercase transition-all shadow-[inset_0_0_15px_rgba(6,182,212,0.1)] hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] disabled:opacity-50 flex items-center justify-center gap-2 rounded-sm group relative overflow-hidden"
                   >
+                    <div className="absolute inset-0 w-0 bg-cyan-500/10 transition-all duration-300 ease-out group-hover:w-full" />
                     {loading ? (
-                      'Đang xác thực...'
+                      <>
+                        <Cpu size={16} className="animate-pulse" />
+                        PROCESSING...
+                      </>
                     ) : (
                       <>
-                        <Fingerprint size={18} />
-                        Đăng nhập hệ thống
+                        <Fingerprint size={16} />
+                        Xác thực truy cập
                       </>
                     )}
                   </button>
                 </form>
               </div>
             ) : (
-              /* Giao diện quên mật khẩu */
-              <div className="animate-in fade-in slide-in-from-right-4 duration-500">
-                <div className="mb-8">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode('login');
-                      setError('');
-                      setMessage('');
-                    }}
-                    className="inline-flex items-center gap-2 text-xs font-bold text-slate-500 transition hover:text-slate-900"
-                  >
-                    <ArrowLeft size={14} /> Quay lại đăng nhập
-                  </button>
-                </div>
+              /* Forgot Password Flow */
+              <div className="animate-in fade-in duration-300">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    setError('');
+                    setMessage('');
+                  }}
+                  className="mb-6 flex items-center gap-2 text-[10px] font-mono text-cyan-700 hover:text-cyan-400 transition-colors uppercase tracking-widest"
+                >
+                  &lt; [Return_to_Auth]
+                </button>
 
-                <div className="mb-8 text-center">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/30">
-                    <ShieldCheck size={28} className="text-white" />
-                  </div>
-                  <h2 className="text-2xl font-black tracking-tight text-slate-900">
-                    Khôi phục mật khẩu
-                  </h2>
-                  <p className="mt-2 text-sm font-medium text-slate-500 px-4">
-                    Nhập email tài khoản, chúng tôi sẽ gửi liên kết đặt lại mật khẩu cho bạn.
-                  </p>
+                <div className="mb-6 border-l-2 border-cyan-500 pl-3">
+                  <h2 className="text-sm font-mono font-bold text-cyan-100 uppercase tracking-wider">Khôi phục Protocol</h2>
+                  <p className="text-[10px] font-mono text-cyan-600 mt-1 uppercase tracking-wider">Gửi chuỗi mã hóa đặt lại mật khẩu.</p>
                 </div>
 
                 {error && (
-                  <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm font-semibold text-red-600">
-                    ⚠️ {error}
+                  <div className="mb-6 p-3 bg-red-950/30 border border-red-900 text-xs font-mono text-red-500">
+                    [ERR] {error}
                   </div>
                 )}
                 {message && (
-                  <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-3.5 text-sm font-semibold text-green-600">
-                    {message}
+                  <div className="mb-6 p-3 bg-cyan-950/50 border border-cyan-500/50 text-xs font-mono text-cyan-400 flex items-start gap-2">
+                    <Network size={14} className="mt-0.5 shrink-0" />
+                    <p>[SYS] {message}</p>
                   </div>
                 )}
 
                 <form onSubmit={handleForgotPassword} className="space-y-5">
-                  <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600">
-                      Email tài khoản
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-mono text-cyan-600 uppercase tracking-wider flex items-center gap-2">
+                      <ChevronRight size={12} /> ID Xác thực (Email)
                     </label>
-                    <div className="relative">
-                      <input
-                        type="email"
-                        required
-                        value={email}
-                        onChange={(e) => {
-                          setEmail(e.target.value);
-                          if (error) setError('');
-                        }}
-                        onFocus={() => setFocusedField('email')}
-                        onBlur={() => setFocusedField(null)}
-                        placeholder="vinh12345@gmail.com"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-amber-500 focus:bg-white focus:ring-4 focus:ring-amber-500/10"
-                      />
-                      <Mail
-                        size={18}
-                        className="absolute left-4 top-3 text-slate-400"
-                      />
-                    </div>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (error) setError('');
+                      }}
+                      className="w-full bg-[#030712] border border-cyan-900/50 px-4 py-2.5 text-sm text-cyan-100 placeholder:text-cyan-900 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_10px_rgba(6,182,212,0.2)] font-mono transition-all rounded-none"
+                      placeholder="admin@amelie.com"
+                    />
                   </div>
 
                   <button
                     type="submit"
                     disabled={loading}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 py-3.5 text-sm font-bold text-white shadow-lg shadow-amber-500/25 transition-all hover:shadow-amber-500/40 hover:-translate-y-0.5 disabled:opacity-50 disabled:pointer-events-none"
+                    className="w-full bg-cyan-950/50 hover:bg-cyan-900/50 text-cyan-400 border border-cyan-500/50 hover:border-cyan-400 py-3 text-xs font-mono font-bold tracking-widest uppercase transition-all shadow-[inset_0_0_15px_rgba(6,182,212,0.1)] hover:shadow-[0_0_15px_rgba(6,182,212,0.4)] disabled:opacity-50 flex items-center justify-center gap-2 rounded-sm group relative overflow-hidden"
                   >
-                    {loading ? 'Đang gửi yêu cầu...' : 'Gửi liên kết khôi phục'}
+                    <div className="absolute inset-0 w-0 bg-cyan-500/10 transition-all duration-300 ease-out group-hover:w-full" />
+                    {loading ? (
+                      <>
+                        <Terminal size={16} className="animate-bounce" />
+                        TRANSMITTING...
+                      </>
+                    ) : (
+                      'Thực thi lệnh'
+                    )}
                   </button>
                 </form>
               </div>
             )}
-
-            {/* Link phiên bản cũ */}
-            <div className="mt-8 border-t border-slate-100 pt-6 text-center">
-              <a
-                href="https://htvinh10102003.github.io/ameliebaocaokho/"
-                className="text-xs font-bold text-slate-400 transition-colors hover:text-slate-600"
-              >
-                Trở về phiên bản cũ
-              </a>
-            </div>
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-6 text-center">
+          <a
+            href="https://htvinh10102003.github.io/ameliebaocaokho/"
+            className="text-[10px] font-mono text-cyan-800 hover:text-cyan-500 transition-colors tracking-widest uppercase"
+          >
+            // Init Legacy_System (v1.0)
+          </a>
         </div>
       </div>
 
-      {/* Animation CSS */}
       <style>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          20% { transform: translateX(-6px); }
-          40% { transform: translateX(6px); }
-          60% { transform: translateX(-4px); }
-          80% { transform: translateX(4px); }
+        @keyframes scan {
+          0% { transform: translateY(-100%); }
+          100% { transform: translateY(50%); }
         }
-        .animate-shake {
-          animation: shake 0.4s ease-in-out;
+        .animate-scan {
+          animation: scan 6s linear infinite;
         }
       `}</style>
     </div>
