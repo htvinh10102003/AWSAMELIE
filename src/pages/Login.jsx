@@ -121,8 +121,8 @@ export default function Login() {
           
           <div className="space-y-6 max-w-md">
             <FeatureItem text="Tích hợp API Nhanh.vn, tự động đồng bộ đơn hàng và tồn kho." />
-            <FeatureItem text="Quản lý nhập - xuất - tồn, kiểm kê hàng hóa đa điểm." />
-            <FeatureItem text="Báo cáo thống kê hiệu suất luân chuyển kho theo thời gian thực." />
+            <FeatureItem text="Quản lý nhập - xuất - tồn, quản lý đơn in, đơn đi, đơn trả" />
+            <FeatureItem text="Báo cáo thống kê, kiểm kê hàng hóa, tốc độ đóng gói." />
           </div>
         </div>
 
@@ -130,7 +130,7 @@ export default function Login() {
           <span>© {new Date().getFullYear()} Amelie WMS Team.</span>
           <div className="flex gap-4">
             <a href="#" className="hover:text-white transition-colors">Bảo mật</a>
-            <a href="#" className="hover:text-white transition-colors">Hỗ trợ</a>
+            <a href="mailto:contact.hotavinh@gmail.com" className="hover:text-white transition-colors">Hỗ trợ</a>
           </div>
         </div>
       </div>
@@ -184,7 +184,7 @@ export default function Login() {
                           setEmail(e.target.value);
                           if (error) setError('');
                         }}
-                        placeholder="admin@amelie.com"
+                        placeholder="hotavinh@gmail.com"
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10"
                       />
                       <Mail
@@ -265,7 +265,7 @@ export default function Login() {
                     ) : (
                       <>
                         <Fingerprint size={18} />
-                        Đăng nhập hệ thống
+                        Đăng nhập
                       </>
                     )}
                   </button>
