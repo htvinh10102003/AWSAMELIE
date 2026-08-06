@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
     Calendar, Package, Gauge, Clock, Users, User as UserIcon, 
-    Clock3, TrendingUp, Loader2, AlertCircle, Download, Table
+    Clock3, TrendingUp, Loader2, AlertCircle, Download, Table, Wrench
 } from 'lucide-react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -247,7 +247,6 @@ export default function PackingSpeed({ mode }) {
         }
     };
 
-    // Chuẩn bị dữ liệu tổng hợp tháng: HIỂN THỊ RÕ NHÂN SỰ VÀ CA LÀM
     const getMonthlySummaryData = () => {
         const summaryMap = {};
         
@@ -277,7 +276,6 @@ export default function PackingSpeed({ mode }) {
         return Object.values(summaryMap).map(item => ({
             date: item.date,
             orders: item.orders,
-            // Convert Set sang Array để render dễ dàng
             staffDetails: Array.from(item.staffDetailsSet)
         })).sort((a, b) => a.date.localeCompare(b.date));
     };
@@ -295,7 +293,6 @@ export default function PackingSpeed({ mode }) {
         
         monthlySummaryData.forEach(row => {
             const dateVN = row.date.split('-').reverse().join('/');
-            // Nối tên nhân sự bằng dấu phẩy cách cho file excel
             const staffString = row.staffDetails.length > 0 ? row.staffDetails.join(' | ') : 'Chưa xếp lịch';
             csvContent += `"${dateVN}","${row.orders}","${staffString}"\n`;
         });
@@ -403,7 +400,6 @@ export default function PackingSpeed({ mode }) {
                 
                 {mode === 'general' ? (
                     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full sm:w-auto justify-end">
-                        {/* Nhóm nút chọn tab chuyển đổi góc nhìn */}
                         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
                             <button 
                                 onClick={() => setGeneralViewType('daily')}
@@ -472,7 +468,6 @@ export default function PackingSpeed({ mode }) {
                     {/* KHỐI 1: HIỂN THỊ ĐÓNG GÓI CHUNG */}
                     {mode === 'general' && (
                         <div className="space-y-6">
-                            
                             {/* TAB THEO NGÀY */}
                             {generalViewType === 'daily' && (
                                 <>
@@ -541,10 +536,25 @@ export default function PackingSpeed({ mode }) {
                                             </div>
                                         </div>
                                     </div>
+                                    
+                                    {/* BÁO CÁO CỘT - ĐÃ THÊM LỚP OVERLAY BẢO TRÌ */}
+                                    <div className="relative bg-white p-5 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                                        {/* Overlay Layer */}
+                                        <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[3px] flex items-center justify-center p-4">
+                                            <div className="bg-white p-5 rounded-2xl border border-amber-200 shadow-lg text-center max-w-sm flex flex-col items-center gap-3">
+                                                <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-amber-500">
+                                                    <Wrench size={24} />
+                                                </div>
+                                                <p className="text-xs font-bold text-slate-700 leading-relaxed">
+                                                    Báo cáo đang được cập nhật và tinh chỉnh để hiển thị chi tiết Số lượng sản phẩm, chi tiết đơn hàng. Vui lòng truy cập lại sau.
+                                                </p>
+                                            </div>
+                                        </div>
 
-                                    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-                                        <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-1.5"><Clock3 size={14}/> Sơ đồ phân phối sản lượng đóng gói theo khung giờ trong ngày</h4>
-                                        <div className="h-[280px] w-full">
+                                        <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-1.5">
+                                            <Clock3 size={14}/> Sơ đồ phân phối sản lượng đóng gói theo khung giờ trong ngày
+                                        </h4>
+                                        <div className="h-[280px] w-full opacity-30 select-none pointer-events-none blur-[1px]">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <BarChart data={getGeneralHourlyDistribution()}>
                                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -679,26 +689,42 @@ export default function PackingSpeed({ mode }) {
                                         </div>
                                     </div>
 
-                                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                                        <div className="p-3.5 border-b border-slate-100 bg-slate-50/50"><h4 className="text-xs font-black text-slate-500 uppercase tracking-wider">Chi tiết cơ cấu sản phẩm đóng gói từng giờ</h4></div>
-                                        <table className="w-full text-xs text-left">
-                                            <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[10px] uppercase">
-                                                <tr>
-                                                    <th className="py-3 px-4">Khung giờ thao tác</th>
-                                                    <th className="py-3 px-4 text-center">Tổng đơn</th>
-                                                    <th className="py-3 px-4 text-center text-emerald-600">Tốc độ thực tế (đơn/phút)</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                                                {employeeHourlyData.map((row, idx) => (
-                                                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                                                        <td className="py-3 px-4 font-bold text-slate-600 flex items-center gap-2"><Clock3 size={14} className="text-slate-400"/> {row.hour}</td>
-                                                        <td className="py-3 px-4 text-center font-black text-slate-800">{row.total}</td>
-                                                        <td className="py-3 px-4 text-center font-bold text-emerald-600">~ {row.speedMin} đ/phút</td>
+                                    {/* BẢNG CHI TIẾT THEO NHÂN SỰ - CŨNG ĐƯỢC THÊM OVERLAY CHO ĐỒNG BỘ NẾU BẠN MUỐN ẨN CHI TIẾT */}
+                                    <div className="relative bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                                        <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[3px] flex items-center justify-center p-4">
+                                            <div className="bg-white p-4 rounded-xl border border-amber-200 shadow-lg text-center max-w-sm flex flex-col items-center gap-3">
+                                                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-500">
+                                                    <Wrench size={20} />
+                                                </div>
+                                                <p className="text-xs font-bold text-slate-700 leading-relaxed">
+                                                    Báo cáo đang được cập nhật và tinh chỉnh để hiển thị chi tiết Số lượng sản phẩm, chi tiết đơn hàng. Vui lòng truy cập lại sau.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-3.5 border-b border-slate-100 bg-slate-50/50 opacity-40">
+                                            <h4 className="text-xs font-black text-slate-500 uppercase tracking-wider">Chi tiết cơ cấu sản phẩm đóng gói từng giờ</h4>
+                                        </div>
+                                        <div className="opacity-40 select-none pointer-events-none blur-[1px]">
+                                            <table className="w-full text-xs text-left">
+                                                <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[10px] uppercase">
+                                                    <tr>
+                                                        <th className="py-3 px-4">Khung giờ thao tác</th>
+                                                        <th className="py-3 px-4 text-center">Tổng đơn</th>
+                                                        <th className="py-3 px-4 text-center text-emerald-600">Tốc độ thực tế (đơn/phút)</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                                                    {employeeHourlyData.map((row, idx) => (
+                                                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                                            <td className="py-3 px-4 font-bold text-slate-600 flex items-center gap-2"><Clock3 size={14} className="text-slate-400"/> {row.hour}</td>
+                                                            <td className="py-3 px-4 text-center font-black text-slate-800">{row.total}</td>
+                                                            <td className="py-3 px-4 text-center font-bold text-emerald-600">~ {row.speedMin} đ/phút</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </>
                             ) : (
