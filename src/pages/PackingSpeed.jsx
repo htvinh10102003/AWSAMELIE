@@ -67,7 +67,7 @@ export default function PackingSpeed({ mode }) {
             const pageSize = 1000;
 
             while (true) {
-                // Đã thêm sale_channel và order_products(quantity) để đếm số lượng SP
+                // Đã lấy thêm sale_channel và số lượng sản phẩm (order_products)
                 const { data, error } = await supabase
                     .from('orders')
                     .select('id, packed_at, packed_by_name, status, sale_channel, order_products(quantity)')
@@ -108,6 +108,7 @@ export default function PackingSpeed({ mode }) {
             setMonthRawData(monthLogs);
             setMonthSchedulesData(filteredPackerScheds);
 
+            // Lọc ra dữ liệu của ngày cụ thể
             const dayLogs = monthLogs.filter(o => {
                 const dObj = new Date(o.packed_at);
                 const localDateStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
@@ -134,7 +135,6 @@ export default function PackingSpeed({ mode }) {
             const pageSize = 1000;
 
             while (true) {
-                // Đã thêm sale_channel và order_products(quantity)
                 const { data, error } = await supabase
                     .from('orders')
                     .select('id, packed_at, packed_by_name, status, sale_channel, order_products(quantity)')
@@ -320,6 +320,49 @@ export default function PackingSpeed({ mode }) {
         return Object.values(hourMap);
     };
 
+    // ===== HÀM TÍNH TOÁN BÁO CÁO ĐƠN SÀN CHO TOÀN KHO (Tab Chung) =====
+    const getGeneralEcomHourlyTable = () => {
+        const hourMap = {};
+        for(let i = 8; i <= 22; i++) {
+            hourMap[i] = {
+                hour: `${i}:00 - ${i}:59`,
+                totalEcom: 0, shopee: 0, tiktok: 0,
+                item1: 0, item2: 0, item3Plus: 0
+            };
+        }
+        
+        // rawData lúc này chứa dữ liệu của toàn bộ kho trong ngày (ở mode general)
+        rawData.forEach(o => {
+            // Chỉ lấy Shopee (42) và TikTok (48)
+            if (o.sale_channel === 42 || o.sale_channel === 48) {
+                const h = new Date(o.packed_at).getHours();
+                if (hourMap[h]) {
+                    hourMap[h].totalEcom += 1;
+                    if (o.sale_channel === 42) hourMap[h].shopee += 1;
+                    if (o.sale_channel === 48) hourMap[h].tiktok += 1;
+
+                    // Tính tổng số lượng SP trong đơn
+                    let totalQty = 0;
+                    if (o.order_products && Array.isArray(o.order_products)) {
+                        totalQty = o.order_products.reduce((sum, p) => sum + (Number(p.quantity) || 1), 0);
+                    }
+                    
+                    // Dự phòng nếu không có SP, tạm tính là 1
+                    totalQty = totalQty > 0 ? totalQty : 1; 
+
+                    if (totalQty === 1) hourMap[h].item1 += 1;
+                    else if (totalQty === 2) hourMap[h].item2 += 1;
+                    else if (totalQty >= 3) hourMap[h].item3Plus += 1;
+                }
+            }
+        });
+        
+        // Chỉ trả về các khung giờ có đơn Sàn
+        return Object.values(hourMap).filter(h => h.totalEcom > 0);
+    };
+
+    const generalEcomHourlyData = mode === 'general' ? getGeneralEcomHourlyTable() : [];
+
     let dayHours = 0;
     let dayStaffCount = 0;
     let dutyStaffList = [];
@@ -387,48 +430,7 @@ export default function PackingSpeed({ mode }) {
         }));
     };
 
-    // ===== HÀM MỚI BỔ SUNG ĐỂ TÍNH TOÁN BÁO CÁO SÀN =====
-    const getEmployeeEcomHourlyTable = () => {
-        const hourMap = {};
-        for(let i = 8; i <= 22; i++) {
-            hourMap[i] = {
-                hour: `${i}:00 - ${i}:59`,
-                totalEcom: 0, shopee: 0, tiktok: 0,
-                item1: 0, item2: 0, item3Plus: 0
-            };
-        }
-        
-        empSpecificData.forEach(o => {
-            // Lọc theo Shopee (42) và TikTok (48)
-            if (o.sale_channel === 42 || o.sale_channel === 48) {
-                const h = new Date(o.packed_at).getHours();
-                if (hourMap[h]) {
-                    hourMap[h].totalEcom += 1;
-                    if (o.sale_channel === 42) hourMap[h].shopee += 1;
-                    if (o.sale_channel === 48) hourMap[h].tiktok += 1;
-
-                    // Tính tổng số lượng SP trong đơn
-                    let totalQty = 0;
-                    if (o.order_products && Array.isArray(o.order_products)) {
-                        totalQty = o.order_products.reduce((sum, p) => sum + (Number(p.quantity) || 1), 0);
-                    }
-                    
-                    // Dự phòng nếu không có SP (lỗi data), tạm tính là 1
-                    totalQty = totalQty > 0 ? totalQty : 1; 
-
-                    if (totalQty === 1) hourMap[h].item1 += 1;
-                    else if (totalQty === 2) hourMap[h].item2 += 1;
-                    else if (totalQty >= 3) hourMap[h].item3Plus += 1;
-                }
-            }
-        });
-        
-        // Trả về những khung giờ có phát sinh đơn Sàn
-        return Object.values(hourMap).filter(h => h.totalEcom > 0);
-    };
-
     const employeeHourlyData = getEmployeeHourlyTable();
-    const ecomHourlyData = getEmployeeEcomHourlyTable();
 
     return (
         <div className="space-y-6 animate-fade-in pb-12 font-sans text-slate-800">
@@ -581,14 +583,13 @@ export default function PackingSpeed({ mode }) {
                                     </div>
                                     
                                     <div className="relative bg-white p-5 rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                                        {/* Overlay Layer */}
                                         <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[3px] flex items-center justify-center p-4">
                                             <div className="bg-white p-5 rounded-2xl border border-amber-200 shadow-lg text-center max-w-sm flex flex-col items-center gap-3">
                                                 <div className="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center text-amber-500">
                                                     <Wrench size={24} />
                                                 </div>
                                                 <p className="text-xs font-bold text-slate-700 leading-relaxed">
-                                                    Báo cáo đang được cập nhật để hiển thị chi tiết Số lượng sản phẩm, chi tiết đơn hàng. Vui lòng truy cập lại sau.
+                                                    Báo cáo đang được cập nhật và tinh chỉnh để hiển thị chi tiết Số lượng sản phẩm, chi tiết đơn hàng. Vui lòng truy cập lại sau.
                                                 </p>
                                             </div>
                                         </div>
@@ -608,6 +609,55 @@ export default function PackingSpeed({ mode }) {
                                             </ResponsiveContainer>
                                         </div>
                                     </div>
+
+                                    {/* ===== BẢNG MỚI ĐƯỢC THÊM VÀO ĐÂY (TRONG THỐNG KÊ CHUNG THEO NGÀY) ===== */}
+                                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mt-6">
+                                        <div className="p-3.5 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
+                                            <Package size={16} className="text-orange-500" />
+                                            <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                                                Báo cáo tốc độ đóng gói và SL sản phẩm đơn Sàn theo khung giờ
+                                            </h4>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-xs text-left">
+                                                <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[10px] uppercase">
+                                                    <tr>
+                                                        <th className="py-3 px-4 whitespace-nowrap">Khung giờ thao tác</th>
+                                                        <th className="py-3 px-4 text-center whitespace-nowrap">Tổng đơn Sàn</th>
+                                                        <th className="py-3 px-4 text-center text-orange-600 whitespace-nowrap">Shopee</th>
+                                                        <th className="py-3 px-4 text-center text-slate-900 whitespace-nowrap">TikTok</th>
+                                                        <th className="py-3 px-4 text-center text-blue-600 whitespace-nowrap">Đơn 1 SP</th>
+                                                        <th className="py-3 px-4 text-center text-indigo-600 whitespace-nowrap">Đơn 2 SP</th>
+                                                        <th className="py-3 px-4 text-center text-purple-600 whitespace-nowrap">Đơn 3+ SP</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                                                    {generalEcomHourlyData.length > 0 ? (
+                                                        generalEcomHourlyData.map((row, idx) => (
+                                                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                                                                <td className="py-3 px-4 font-bold text-slate-600 flex items-center gap-2">
+                                                                    <Clock3 size={14} className="text-slate-400"/> {row.hour}
+                                                                </td>
+                                                                <td className="py-3 px-4 text-center font-black text-slate-800">{row.totalEcom}</td>
+                                                                <td className="py-3 px-4 text-center font-bold text-orange-600">{row.shopee}</td>
+                                                                <td className="py-3 px-4 text-center font-bold text-slate-900">{row.tiktok}</td>
+                                                                <td className="py-3 px-4 text-center font-bold text-blue-600">{row.item1}</td>
+                                                                <td className="py-3 px-4 text-center font-bold text-indigo-600">{row.item2}</td>
+                                                                <td className="py-3 px-4 text-center font-bold text-purple-600">{row.item3Plus}</td>
+                                                            </tr>
+                                                        ))
+                                                    ) : (
+                                                        <tr>
+                                                            <td colSpan="7" className="py-8 text-center text-slate-400 text-xs italic">
+                                                                Chưa có dữ liệu đóng gói đơn Sàn (Shopee/TikTok) trong ngày này
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    {/* ========================================================================= */}
                                 </>
                             )}
 
@@ -731,7 +781,6 @@ export default function PackingSpeed({ mode }) {
                                         </div>
                                     </div>
 
-                                    {/* BẢNG CŨ CỦA BẠN - VẪN GIỮ NGUYÊN HOÀN TOÀN CÙNG OVERLAY BẢO TRÌ */}
                                     <div className="relative bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
                                         <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[3px] flex items-center justify-center p-4">
                                             <div className="bg-white p-4 rounded-xl border border-amber-200 shadow-lg text-center max-w-sm flex flex-col items-center gap-3">
@@ -739,7 +788,7 @@ export default function PackingSpeed({ mode }) {
                                                     <Wrench size={20} />
                                                 </div>
                                                 <p className="text-xs font-bold text-slate-700 leading-relaxed">
-                                                    Báo cáo đang được cập nhật và tinh chỉnh để hiển thị chi tiết Số lượng sản phẩm, chi tiết đơn hàng. Vui lòng truy cập lại sau.
+                                                    Báo cáo đang được cập nhật để hiển thị chi tiết Số lượng sản phẩm, chi tiết đơn hàng. Vui lòng truy cập lại sau.
                                                 </p>
                                             </div>
                                         </div>
@@ -764,54 +813,6 @@ export default function PackingSpeed({ mode }) {
                                                             <td className="py-3 px-4 text-center font-bold text-emerald-600">~ {row.speedMin} đ/phút</td>
                                                         </tr>
                                                     ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-
-                                    {/* ===== ĐÂY LÀ BẢNG MỚI THEO YÊU CẦU ĐƯỢC THÊM VÀO DƯỚI BẢNG CŨ ===== */}
-                                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mt-6">
-                                        <div className="p-3.5 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
-                                            <Package size={16} className="text-orange-500" />
-                                            <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                                                Báo cáo tốc độ đóng gói và SL sản phẩm đơn Sàn theo khung giờ
-                                            </h4>
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-xs text-left">
-                                                <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[10px] uppercase">
-                                                    <tr>
-                                                        <th className="py-3 px-4 whitespace-nowrap">Khung giờ thao tác</th>
-                                                        <th className="py-3 px-4 text-center whitespace-nowrap">Tổng đơn Sàn</th>
-                                                        <th className="py-3 px-4 text-center text-orange-600 whitespace-nowrap">Shopee</th>
-                                                        <th className="py-3 px-4 text-center text-slate-900 whitespace-nowrap">TikTok</th>
-                                                        <th className="py-3 px-4 text-center text-blue-600 whitespace-nowrap">Đơn 1 SP</th>
-                                                        <th className="py-3 px-4 text-center text-indigo-600 whitespace-nowrap">Đơn 2 SP</th>
-                                                        <th className="py-3 px-4 text-center text-purple-600 whitespace-nowrap">Đơn 3+ SP</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
-                                                    {ecomHourlyData.length > 0 ? (
-                                                        ecomHourlyData.map((row, idx) => (
-                                                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                                                <td className="py-3 px-4 font-bold text-slate-600 flex items-center gap-2">
-                                                                    <Clock3 size={14} className="text-slate-400"/> {row.hour}
-                                                                </td>
-                                                                <td className="py-3 px-4 text-center font-black text-slate-800">{row.totalEcom}</td>
-                                                                <td className="py-3 px-4 text-center font-bold text-orange-600">{row.shopee}</td>
-                                                                <td className="py-3 px-4 text-center font-bold text-slate-900">{row.tiktok}</td>
-                                                                <td className="py-3 px-4 text-center font-bold text-blue-600">{row.item1}</td>
-                                                                <td className="py-3 px-4 text-center font-bold text-indigo-600">{row.item2}</td>
-                                                                <td className="py-3 px-4 text-center font-bold text-purple-600">{row.item3Plus}</td>
-                                                            </tr>
-                                                        ))
-                                                    ) : (
-                                                        <tr>
-                                                            <td colSpan="7" className="py-8 text-center text-slate-400 text-xs italic">
-                                                                Chưa có dữ liệu đóng gói đơn Sàn (Shopee/TikTok) trong khoảng thời gian này
-                                                            </td>
-                                                        </tr>
-                                                    )}
                                                 </tbody>
                                             </table>
                                         </div>
