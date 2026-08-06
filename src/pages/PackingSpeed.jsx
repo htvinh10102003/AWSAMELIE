@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
     Calendar, Package, Gauge, Clock, Users, User as UserIcon, 
-    Clock3, TrendingUp, Loader2, AlertCircle, Download, Table, Wrench
+    Clock3, TrendingUp, Loader2, AlertCircle, Download, Table, Wrench,
+    Eye, X, ShoppingCart
 } from 'lucide-react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -39,6 +40,9 @@ export default function PackingSpeed({ mode }) {
     const [employeeList, setEmployeeList] = useState([]);
     const [availableDates, setAvailableDates] = useState([]);
 
+    // STATE MỚI: Dùng để lưu khung giờ đang được chọn xem chi tiết (null nếu không xem)
+    const [selectedHourForDetails, setSelectedHourForDetails] = useState(null);
+
     useEffect(() => {
         if (mode === 'general') {
             fetchGeneralMonthData();
@@ -67,10 +71,10 @@ export default function PackingSpeed({ mode }) {
             const pageSize = 1000;
 
             while (true) {
-                // Đã lấy thêm sale_channel và số lượng sản phẩm (order_products)
+                // Đã CẬP NHẬT: Lấy thêm product_name, product_code để hiển thị chi tiết
                 const { data, error } = await supabase
                     .from('orders')
-                    .select('id, packed_at, packed_by_name, status, sale_channel, order_products(quantity)')
+                    .select('id, packed_at, packed_by_name, status, sale_channel, order_products(product_name, product_code, quantity)')
                     .not('packed_at', 'is', null)
                     .in('status', ALLOWED_STATUSES)
                     .gte('packed_at', startOfMonthIso)
@@ -108,7 +112,6 @@ export default function PackingSpeed({ mode }) {
             setMonthRawData(monthLogs);
             setMonthSchedulesData(filteredPackerScheds);
 
-            // Lọc ra dữ liệu của ngày cụ thể
             const dayLogs = monthLogs.filter(o => {
                 const dObj = new Date(o.packed_at);
                 const localDateStr = `${dObj.getFullYear()}-${String(dObj.getMonth() + 1).padStart(2, '0')}-${String(dObj.getDate()).padStart(2, '0')}`;
@@ -135,9 +138,10 @@ export default function PackingSpeed({ mode }) {
             const pageSize = 1000;
 
             while (true) {
+                // Đã CẬP NHẬT: Lấy thêm product_name, product_code
                 const { data, error } = await supabase
                     .from('orders')
-                    .select('id, packed_at, packed_by_name, status, sale_channel, order_products(quantity)')
+                    .select('id, packed_at, packed_by_name, status, sale_channel, order_products(product_name, product_code, quantity)')
                     .not('packed_at', 'is', null)
                     .in('status', ALLOWED_STATUSES)
                     .gte('packed_at', startIso.toISOString())
@@ -320,20 +324,18 @@ export default function PackingSpeed({ mode }) {
         return Object.values(hourMap);
     };
 
-    // ===== HÀM TÍNH TOÁN BÁO CÁO ĐƠN SÀN CHO TOÀN KHO (Tab Chung) =====
     const getGeneralEcomHourlyTable = () => {
         const hourMap = {};
         for(let i = 8; i <= 22; i++) {
             hourMap[i] = {
+                hourNumber: i, // Thêm trường này để dễ dàng filter chi tiết
                 hour: `${i}:00 - ${i}:59`,
                 totalEcom: 0, shopee: 0, tiktok: 0,
                 item1: 0, item2: 0, item3Plus: 0
             };
         }
         
-        // rawData lúc này chứa dữ liệu của toàn bộ kho trong ngày (ở mode general)
         rawData.forEach(o => {
-            // Chỉ lấy Shopee (42) và TikTok (48)
             if (o.sale_channel === 42 || o.sale_channel === 48) {
                 const h = new Date(o.packed_at).getHours();
                 if (hourMap[h]) {
@@ -341,13 +343,10 @@ export default function PackingSpeed({ mode }) {
                     if (o.sale_channel === 42) hourMap[h].shopee += 1;
                     if (o.sale_channel === 48) hourMap[h].tiktok += 1;
 
-                    // Tính tổng số lượng SP trong đơn
                     let totalQty = 0;
                     if (o.order_products && Array.isArray(o.order_products)) {
                         totalQty = o.order_products.reduce((sum, p) => sum + (Number(p.quantity) || 1), 0);
                     }
-                    
-                    // Dự phòng nếu không có SP, tạm tính là 1
                     totalQty = totalQty > 0 ? totalQty : 1; 
 
                     if (totalQty === 1) hourMap[h].item1 += 1;
@@ -357,11 +356,19 @@ export default function PackingSpeed({ mode }) {
             }
         });
         
-        // Chỉ trả về các khung giờ có đơn Sàn
         return Object.values(hourMap).filter(h => h.totalEcom > 0);
     };
 
     const generalEcomHourlyData = mode === 'general' ? getGeneralEcomHourlyTable() : [];
+
+    // HÀM MỚI: Lấy danh sách chi tiết đơn Sàn của 1 khung giờ cụ thể
+    const getOrdersDetailForHour = (hourNumber) => {
+        return rawData.filter(o => {
+            if (o.sale_channel !== 42 && o.sale_channel !== 48) return false;
+            const h = new Date(o.packed_at).getHours();
+            return h === hourNumber;
+        }).sort((a, b) => new Date(a.packed_at) - new Date(b.packed_at));
+    };
 
     let dayHours = 0;
     let dayStaffCount = 0;
@@ -610,13 +617,16 @@ export default function PackingSpeed({ mode }) {
                                         </div>
                                     </div>
 
-                                    {/* ===== BẢNG MỚI ĐƯỢC THÊM VÀO ĐÂY (TRONG THỐNG KÊ CHUNG THEO NGÀY) ===== */}
+                                    {/* BẢNG MỚI ĐÃ ĐƯỢC THÊM TÍNH NĂNG CLICK MỞ MODAL */}
                                     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mt-6">
-                                        <div className="p-3.5 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
-                                            <Package size={16} className="text-orange-500" />
-                                            <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">
-                                                Báo cáo tốc độ đóng gói và SL sản phẩm đơn Sàn theo khung giờ
-                                            </h4>
+                                        <div className="p-3.5 border-b border-slate-100 bg-slate-50 flex items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <Package size={16} className="text-orange-500" />
+                                                <h4 className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                                                    Báo cáo tốc độ đóng gói và SL sản phẩm đơn Sàn theo khung giờ
+                                                </h4>
+                                            </div>
+                                            <span className="text-[10px] text-slate-400 italic">Bấm vào từng hàng để xem chi tiết đơn</span>
                                         </div>
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-xs text-left">
@@ -629,14 +639,21 @@ export default function PackingSpeed({ mode }) {
                                                         <th className="py-3 px-4 text-center text-blue-600 whitespace-nowrap">Đơn 1 SP</th>
                                                         <th className="py-3 px-4 text-center text-indigo-600 whitespace-nowrap">Đơn 2 SP</th>
                                                         <th className="py-3 px-4 text-center text-purple-600 whitespace-nowrap">Đơn 3+ SP</th>
+                                                        <th className="py-3 px-4 text-center whitespace-nowrap">Hành động</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
                                                     {generalEcomHourlyData.length > 0 ? (
                                                         generalEcomHourlyData.map((row, idx) => (
-                                                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                                                <td className="py-3 px-4 font-bold text-slate-600 flex items-center gap-2">
-                                                                    <Clock3 size={14} className="text-slate-400"/> {row.hour}
+                                                            // THÊM ONCLICK ĐỂ MỞ MODAL
+                                                            <tr 
+                                                                key={idx} 
+                                                                onClick={() => setSelectedHourForDetails(row.hourNumber)}
+                                                                className="hover:bg-blue-50 transition-colors cursor-pointer group"
+                                                                title="Bấm để xem danh sách đơn hàng"
+                                                            >
+                                                                <td className="py-3 px-4 font-bold text-slate-600 flex items-center gap-2 group-hover:text-blue-600">
+                                                                    <Clock3 size={14} className="text-slate-400 group-hover:text-blue-500"/> {row.hour}
                                                                 </td>
                                                                 <td className="py-3 px-4 text-center font-black text-slate-800">{row.totalEcom}</td>
                                                                 <td className="py-3 px-4 text-center font-bold text-orange-600">{row.shopee}</td>
@@ -644,11 +661,16 @@ export default function PackingSpeed({ mode }) {
                                                                 <td className="py-3 px-4 text-center font-bold text-blue-600">{row.item1}</td>
                                                                 <td className="py-3 px-4 text-center font-bold text-indigo-600">{row.item2}</td>
                                                                 <td className="py-3 px-4 text-center font-bold text-purple-600">{row.item3Plus}</td>
+                                                                <td className="py-3 px-4 text-center text-blue-500 opacity-50 group-hover:opacity-100">
+                                                                    <div className="flex items-center justify-center gap-1">
+                                                                        <Eye size={16} /> <span className="text-[10px] hidden sm:inline">Xem</span>
+                                                                    </div>
+                                                                </td>
                                                             </tr>
                                                         ))
                                                     ) : (
                                                         <tr>
-                                                            <td colSpan="7" className="py-8 text-center text-slate-400 text-xs italic">
+                                                            <td colSpan="8" className="py-8 text-center text-slate-400 text-xs italic">
                                                                 Chưa có dữ liệu đóng gói đơn Sàn (Shopee/TikTok) trong ngày này
                                                             </td>
                                                         </tr>
@@ -657,7 +679,6 @@ export default function PackingSpeed({ mode }) {
                                             </table>
                                         </div>
                                     </div>
-                                    {/* ========================================================================= */}
                                 </>
                             )}
 
@@ -718,9 +739,7 @@ export default function PackingSpeed({ mode }) {
                         </div>
                     )}
 
-                    {/* ======================================================= */}
                     {/* KHỐI 2: HIỂN THỊ ĐÓNG GÓI THEO NHÂN SỰ */}
-                    {/* ======================================================= */}
                     {mode === 'employee' && (
                         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
                             <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 flex flex-wrap items-center gap-4">
@@ -788,7 +807,7 @@ export default function PackingSpeed({ mode }) {
                                                     <Wrench size={20} />
                                                 </div>
                                                 <p className="text-xs font-bold text-slate-700 leading-relaxed">
-                                                    Báo cáo đang được cập nhật để hiển thị chi tiết Số lượng sản phẩm, chi tiết đơn hàng. Vui lòng truy cập lại sau.
+                                                    Báo cáo đang được cập nhật và tinh chỉnh để hiển thị chi tiết Số lượng sản phẩm, chi tiết đơn hàng. Vui lòng truy cập lại sau.
                                                 </p>
                                             </div>
                                         </div>
@@ -826,6 +845,105 @@ export default function PackingSpeed({ mode }) {
                         </div>
                     )}
                 </>
+            )}
+
+            {/* MODAL HIỂN THỊ CHI TIẾT ĐƠN HÀNG TRONG KHUNG GIỜ */}
+            {selectedHourForDetails !== null && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[85vh] flex flex-col overflow-hidden animate-slide-up">
+                        
+                        {/* Modal Header */}
+                        <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                                    <Clock size={20} />
+                                </div>
+                                <div>
+                                    <h3 className="font-black text-slate-800 text-sm uppercase">
+                                        Chi tiết đơn Sàn đóng gói
+                                    </h3>
+                                    <p className="text-[11px] text-slate-500 font-semibold mt-0.5">
+                                        Khung giờ: {selectedHourForDetails}:00 - {selectedHourForDetails}:59
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => setSelectedHourForDetails(null)} 
+                                className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+                        
+                        {/* Modal Body / Table */}
+                        <div className="overflow-y-auto flex-1 bg-white p-2">
+                            <table className="w-full text-xs text-left">
+                                <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-[10px] uppercase sticky top-0 z-10 shadow-sm">
+                                    <tr>
+                                        <th className="py-3 px-4">STT</th>
+                                        <th className="py-3 px-4">Mã đơn (ID)</th>
+                                        <th className="py-3 px-4 text-center">Kênh</th>
+                                        <th className="py-3 px-4">Thời gian đóng</th>
+                                        <th className="py-3 px-4">Nhân sự</th>
+                                        <th className="py-3 px-4">Chi tiết Sản phẩm (SL)</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {getOrdersDetailForHour(selectedHourForDetails).map((order, idx) => (
+                                        <tr key={order.id} className="hover:bg-slate-50 transition-colors">
+                                            <td className="py-3 px-4 font-bold text-slate-400">{idx + 1}</td>
+                                            <td className="py-3 px-4 font-bold text-slate-700">{order.id}</td>
+                                            <td className="py-3 px-4 text-center">
+                                                {order.sale_channel === 42 ? (
+                                                    <span className="inline-block bg-orange-100 text-orange-600 px-2 py-0.5 rounded text-[10px] font-black border border-orange-200">SHOPEE</span>
+                                                ) : (
+                                                    <span className="inline-block bg-slate-200 text-slate-800 px-2 py-0.5 rounded text-[10px] font-black border border-slate-300">TIKTOK</span>
+                                                )}
+                                            </td>
+                                            <td className="py-3 px-4 font-medium text-slate-600">
+                                                {new Date(order.packed_at).toLocaleTimeString('vi-VN')}
+                                            </td>
+                                            <td className="py-3 px-4 font-bold text-blue-600">
+                                                {order.packed_by_name || 'N/A'}
+                                            </td>
+                                            <td className="py-3 px-4">
+                                                {order.order_products && order.order_products.length > 0 ? (
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {order.order_products.map((p, i) => (
+                                                            <div key={i} className="flex items-start gap-2 bg-slate-50 p-1.5 rounded border border-slate-100">
+                                                                <ShoppingCart size={12} className="text-slate-400 mt-0.5 flex-shrink-0" />
+                                                                <div className="flex-1">
+                                                                    <div className="font-semibold text-slate-700 text-[11px] leading-tight">
+                                                                        {p.product_name || 'Không tên'}
+                                                                    </div>
+                                                                    <div className="text-[10px] text-slate-400 font-medium">
+                                                                        Mã: {p.product_code || 'N/A'}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                                                                    x{p.quantity || 1}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-slate-400 italic text-[10px]">Không có data SP</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {getOrdersDetailForHour(selectedHourForDetails).length === 0 && (
+                                        <tr>
+                                            <td colSpan="6" className="py-8 text-center text-slate-400 italic">
+                                                Lỗi hiển thị dữ liệu
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
