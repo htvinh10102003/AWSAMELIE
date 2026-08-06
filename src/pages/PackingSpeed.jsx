@@ -588,7 +588,7 @@ export default function PackingSpeed({ mode }) {
                                                     <Wrench size={24} />
                                                 </div>
                                                 <p className="text-xs font-bold text-slate-700 leading-relaxed">
-                                                    Báo cáo đang được cập nhật và tinh chỉnh để hiển thị chi tiết Số lượng sản phẩm, chi tiết đơn hàng. Vui lòng truy cập lại sau.
+                                                    Báo cáo đang được cập nhật để hiển thị chi tiết Số lượng sản phẩm, chi tiết đơn hàng. Vui lòng truy cập lại sau.
                                                 </p>
                                             </div>
                                         </div>
