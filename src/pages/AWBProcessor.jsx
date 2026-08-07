@@ -143,47 +143,89 @@ const pdfLibDoc = await PDFDocument.load(bufferForPdfLib);
       setProgress({ current: 0, total: totalPages });
 
       for (let i = 1; i <= totalPages; i++) {
-        // Quét mã vạch (Render ảnh nhỏ -> ZXing)
         const pageJS = await pdfjsDoc.getPage(i);
-        const viewport = pageJS.getViewport({ scale: 2.0 });
-        const canvas = document.createElement('canvas');
-        canvas.width = viewport.width; canvas.height = viewport.height;
-        await pageJS.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-        
         let barcodeText = null;
+
+        // ==================================================
+        // CHIẾN THUẬT 1: ĐỌC TEXT TRỰC TIẾP (Dành cho PDF chuẩn)
+        // Nhanh như chớp, chính xác 100%
+        // ==================================================
         try {
-          const result = await codeReader.decodeFromCanvas(canvas);
-          barcodeText = result.getText();
-        } catch (e) { /* Bỏ qua nếu ko thấy mã */ }
-        
+          const textContent = await pageJS.getTextContent();
+          const fullText = textContent.items.map(item => item.str).join(' ');
+
+          // Regex bắt các mã vận đơn VN: SPX(Shopee), S...(GHTK), 8...(J&T), SPEVN(Ninja), VN(Tiktok)...
+          const trackingRegex = /(SPX[A-Z0-9]+|SPEVN[A-Z0-9]+|JT[0-9]+|VN[A-Z0-9]+|S[0-9A-Z]+\.[0-9A-Z\.]+|8[0-9]{9,20}|[A-Z0-9]{10,25})/g;
+          let matches = fullText.match(trackingRegex);
+
+          if (matches && matches.length > 0) {
+            // Sắp xếp ưu tiên: Các mã bắt đầu bằng tiền tố hãng vận chuyển sẽ được đưa lên lấy trước
+            const priorityPrefixes = ['SPX', 'SPEVN', 'JT', 'VN', 'S', '8'];
+            matches.sort((a, b) => {
+              const aHasPrefix = priorityPrefixes.some(p => a.startsWith(p));
+              const bHasPrefix = priorityPrefixes.some(p => b.startsWith(p));
+              if (aHasPrefix && !bHasPrefix) return -1;
+              if (!aHasPrefix && bHasPrefix) return 1;
+              return b.length - a.length; // Nếu cùng là mã, lấy mã dài hơn
+            });
+            
+            barcodeText = matches[0].toUpperCase();
+          }
+        } catch (e) {
+          console.warn(`Lỗi đọc text trang ${i}:`, e);
+        }
+
+        // ==================================================
+        // CHIẾN THUẬT 2: QUÉT ẢNH BẰNG AI (Dành cho PDF là file scan/ảnh)
+        // Chạy đa độ phân giải để ép thư viện tìm ra mã
+        // ==================================================
+        if (!barcodeText) {
+          const scales = [2.0, 3.0, 1.5, 4.0]; // Thử quét từ nét vừa đến cực nét
+          for (const scale of scales) {
+            try {
+              const viewport = pageJS.getViewport({ scale });
+              const canvas = document.createElement('canvas');
+              canvas.width = viewport.width; 
+              canvas.height = viewport.height;
+              await pageJS.render({ canvasContext: canvas.getContext('2d', { willReadFrequently: true }), viewport }).promise;
+              
+              const result = await codeReader.decodeFromCanvas(canvas);
+              barcodeText = result.getText();
+              
+              if (barcodeText) break; // Quét trúng thì thoát vòng lặp Scale ngay
+            } catch (e) { 
+              // Bỏ qua lỗi để thử scale tiếp theo
+            }
+          }
+        }
+
+        // ==================================================
+        // PHẦN VẼ LÊN PDF KHI ĐÃ CÓ MÃ
+        // ==================================================
         if (barcodeText) {
           const productsInfo = await fetchOrderDetails(barcodeText);
           
           if (productsInfo.length > 0) {
             const pageLib = pdfLibDoc.getPage(i - 1);
-            
-            // 1. TÍNH TOÁN KHUNG NỀN TRẮNG
-            const padding = 6; // Đệm px
+            const padding = 6;
             const textsToDraw = productsInfo.map(p => `${p.product_name} -- ${p.location_code}`);
             
-            // Tìm chuỗi dài nhất
             const maxTextWidth = Math.max(...textsToDraw.map(t => font.widthOfTextAtSize(t, Number(config.fontSize))));
             const boxWidth = maxTextWidth + (padding * 2);
             const boxHeight = (textsToDraw.length * Number(config.lineHeight)) + padding;
             
-            // pdf-lib có trục Y từ Dưới-lên. Cần đảo ngược lại trục Y của người dùng (Trên-xuống)
             const pdfY_BottomLeft = pageLib.getHeight() - config.y - boxHeight;
 
-            // 2. VẼ NỀN TRẮNG
+            // Vẽ bảng nền trắng
             pageLib.drawRectangle({
               x: Number(config.x),
               y: pdfY_BottomLeft,
               width: boxWidth,
               height: boxHeight,
-              color: rgb(1, 1, 1), // Màu trắng
+              color: rgb(1, 1, 1),
             });
 
-            // 3. VẼ CHỮ LÊN NỀN
+            // Ghi chữ
             let textY = pdfY_BottomLeft + boxHeight - padding - Number(config.fontSize);
             textsToDraw.forEach((text) => {
               pageLib.drawText(text, {
@@ -201,8 +243,9 @@ const pdfLibDoc = await PDFDocument.load(bufferForPdfLib);
             addLog(`Trang ${i}: [${barcodeText}] - Không có dữ liệu SP`, 'warning');
           }
         } else {
-          addLog(`Trang ${i}: Không quét được mã vạch!`, 'error');
+          addLog(`Trang ${i}: Không quét được mã vận đơn!`, 'error');
         }
+        
         setProgress({ current: i, total: totalPages });
       }
 
