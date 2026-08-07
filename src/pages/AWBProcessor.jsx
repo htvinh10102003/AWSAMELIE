@@ -137,7 +137,15 @@ const bufferForPdfLib = baseBuffer.slice(0);
 
 const pdfjsDoc = await pdfjsLib.getDocument({ data: bufferForPdfJs }).promise;
 const pdfLibDoc = await PDFDocument.load(bufferForPdfLib);
-      const font = await pdfLibDoc.embedFont(StandardFonts.HelveticaBold);
+      // Tải font Roboto Bold (Hỗ trợ Tiếng Việt) trực tiếp từ Google Fonts
+      addLog('Đang nhúng font Tiếng Việt...', 'info');
+      const fontUrl = 'https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto-Bold.ttf';
+      const fontResponse = await fetch(fontUrl);
+      const fontBytes = await fontResponse.arrayBuffer();
+      
+      // Nhúng custom font vào PDF
+      // pdf-lib sẽ tự động map các ký tự Unicode Tiếng Việt vào font này
+      const font = await pdfLibDoc.embedFont(fontBytes);
       
       const totalPages = pdfjsDoc.numPages;
       setProgress({ current: 0, total: totalPages });
