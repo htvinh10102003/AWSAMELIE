@@ -22,6 +22,9 @@ export default function UpdateWarehouseMap() {
   const [isSearchingProduct, setIsSearchingProduct] = useState(false);
   const [isUpdatingManual, setIsUpdatingManual] = useState(false);
   const [manualMessage, setManualMessage] = useState({ text: '', type: '' });
+  
+  // ⚡️ STATE MỚI: Tính năng cập nhật toàn bộ size
+  const [updateAllSizes, setUpdateAllSizes] = useState(false);
 
   // ==========================================
   const [racks, setRacks] = useState([]);
@@ -87,7 +90,7 @@ export default function UpdateWarehouseMap() {
     finally { setIsSavingMap(false); }
   };
 
-  // ⚡️ LUỒNG UPLOAD CSV (ĐÃ VÁ LỖI NGÁO: TÌM ĐÚNG BẰNG TÊN SẢN PHẨM)
+  // ⚡️ LUỒNG UPLOAD CSV
   const handleUploadLocationCsv = () => {
     if (!csvFile) {
         setLocationMessage({ text: 'Vui lòng chọn một file CSV trước.', type: 'error' });
@@ -108,7 +111,6 @@ export default function UpdateWarehouseMap() {
                 const chunk = data.slice(i, i + CHUNK_SIZE);
                 
                 const promises = chunk.map(async (row) => {
-                    // ⚡️ LẤY ĐÚNG TÊN SẢN PHẨM VÀ MÃ VỊ TRÍ THEO Ý ÔNG
                     const productName = String(row['Tên sản phẩm'] || row['Ten san pham'] || row['product_name'] || '').trim();
                     const location = String(row['Mã vị trí'] || row['Vị trí'] || row['location_code'] || '').trim();
 
@@ -116,7 +118,7 @@ export default function UpdateWarehouseMap() {
                         const { data: updatedData, error } = await supabase
                             .from('product_inventories')
                             .update({ location_code: location })
-                            .eq('product_name', productName) // ⚡️ CHỐT TÌM BẰNG TÊN TRONG DATABASE
+                            .eq('product_name', productName)
                             .select('product_id');
                         
                         return (!error && updatedData && updatedData.length > 0) ? true : false;
@@ -148,7 +150,7 @@ export default function UpdateWarehouseMap() {
     });
   };
 
-  // ⚡️ TÌM KIẾM MANUAL: BỔ SUNG TÌM BẰNG TÊN SẢN PHẨM LUÔN CHO TIỆN
+  // ⚡️ TÌM KIẾM MANUAL
   const handleSearchProduct = async (e) => {
     e.preventDefault();
     const searchTerm = manualSearchCode.trim();
@@ -158,7 +160,6 @@ export default function UpdateWarehouseMap() {
     setManualMessage({ text: '', type: '' });
     setSearchProductResult(null);
 
-    // Mở rộng bộ lọc: Ưu tiên tìm đúng Tên SP trước, sau đó mới tìm ID/Mã vạch
     const { data, error } = await supabase
         .from('product_inventories')
         .select('product_id, product_code, product_name, location_code')
@@ -175,6 +176,7 @@ export default function UpdateWarehouseMap() {
     }
   };
 
+  // ⚡️ CẬP NHẬT MANUAL (ĐÃ BỔ SUNG UPDATE ALL SIZES)
   const handleUpdateManualLocation = async (e) => {
     e.preventDefault();
     if (!searchProductResult) return;
@@ -183,21 +185,62 @@ export default function UpdateWarehouseMap() {
     setManualMessage({ text: '', type: '' });
     const newLoc = manualLocation.trim();
 
-    const { data, error } = await supabase
-        .from('product_inventories')
-        .update({ location_code: newLoc })
-        .eq('product_id', searchProductResult.product_id) 
-        .select(); 
+    try {
+        let updatedProducts = [];
+        let query = supabase.from('product_inventories').update({ location_code: newLoc });
 
-    setIsUpdatingManual(false);
+        if (updateAllSizes) {
+            // Regex tìm gốc tên sản phẩm. Bỏ đi phần "- S", "- M", "- L" ở đuôi
+            // Ví dụ: "ALESSIA 636 - Beige - L" -> match[1] sẽ là "ALESSIA 636 - Beige"
+            const match = searchProductResult.product_name.match(/^(.*?)\s*-\s*([SML])$/i);
+            
+            if (match) {
+                const baseName = match[1];
+                const targetNames = [`${baseName} - S`, `${baseName} - M`, `${baseName} - L`];
+                
+                // Update danh sách các tên khớp với 3 size
+                const { data, error } = await query.in('product_name', targetNames).select('product_name');
+                if (error) throw error;
+                updatedProducts = data;
+            } else {
+                // Nếu tên không đúng chuẩn có đuôi size, fallback về update mỗi nó
+                const { data, error } = await query.eq('product_id', searchProductResult.product_id).select('product_name');
+                if (error) throw error;
+                updatedProducts = data;
+            }
+        } else {
+            // Cập nhật 1 sản phẩm bình thường
+            const { data, error } = await query.eq('product_id', searchProductResult.product_id).select('product_name');
+            if (error) throw error;
+            updatedProducts = data;
+        }
 
-    if (error) {
+        if (!updatedProducts || updatedProducts.length === 0) {
+            setManualMessage({ text: `❌ Lỗi ảo: Database từ chối ghi dữ liệu!`, type: 'error' });
+        } else {
+            const count = updatedProducts.length;
+            setManualMessage({ 
+                text: `✅ Đã lưu mã "${newLoc}" cho ${count} sản phẩm: ${updatedProducts.map(p => p.product_name).join(', ')}!`, 
+                type: 'success' 
+            });
+            // Cập nhật lại UI cho sản phẩm đang xem
+            setSearchProductResult({...searchProductResult, location_code: newLoc});
+        }
+    } catch (error) {
         setManualMessage({ text: `❌ Lỗi hệ thống: ${error.message}`, type: 'error' });
-    } else if (!data || data.length === 0) {
-        setManualMessage({ text: `❌ Lỗi ảo: Database từ chối ghi dữ liệu (Vui lòng thử lại)!`, type: 'error' });
-    } else {
-        setManualMessage({ text: `✅ Đã lưu cứng Mã Vị Trí "${newLoc}" cho sản phẩm ${searchProductResult.product_name}!`, type: 'success' });
-        setSearchProductResult(data[0]);
+    } finally {
+        setIsUpdatingManual(false);
+    }
+  };
+
+  // Hàm helper để Reset State khi chuyển tab
+  const handleTabChange = (tabName) => {
+    setActiveTab(tabName);
+    if (tabName === 'manual') {
+        setManualMessage({text:'', type:''}); 
+        setSearchProductResult(null); 
+        setManualSearchCode('');
+        setUpdateAllSizes(false); // Reset checkbox
     }
   };
 
@@ -217,13 +260,13 @@ export default function UpdateWarehouseMap() {
         </div>
 
         <div className="flex bg-slate-100 p-1.5 rounded-xl border border-slate-200/60 overflow-x-auto">
-          <button onClick={() => setActiveTab('map')} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'map' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+          <button onClick={() => handleTabChange('map')} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'map' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
             <LayoutTemplate size={16} /> Dựng Sơ Đồ
           </button>
-          <button onClick={() => setActiveTab('csv')} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'csv' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+          <button onClick={() => handleTabChange('csv')} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'csv' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
             <UploadCloud size={16} /> Nạp file CSV
           </button>
-          <button onClick={() => { setActiveTab('manual'); setManualMessage({text:'', type:''}); setSearchProductResult(null); setManualSearchCode(''); }} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'manual' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+          <button onClick={() => handleTabChange('manual')} className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'manual' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
             <Edit3 size={16} /> Cập nhật Lẻ
           </button>
         </div>
@@ -300,7 +343,7 @@ export default function UpdateWarehouseMap() {
       )}
 
       {/* ========================================== */}
-      {/* TAB 2: UPLOAD CSV IMPORT VỊ TRÍ (ĐÃ CẬP NHẬT GIAO DIỆN HƯỚNG DẪN) */}
+      {/* TAB 2: UPLOAD CSV IMPORT VỊ TRÍ */}
       {/* ========================================== */}
       {activeTab === 'csv' && (
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 space-y-6">
@@ -349,7 +392,7 @@ export default function UpdateWarehouseMap() {
       )}
 
       {/* ========================================== */}
-      {/* TAB 3: CẬP NHẬT LẺ (ĐÃ MỞ RỘNG TÌM BẰNG TÊN) */}
+      {/* TAB 3: CẬP NHẬT LẺ */}
       {/* ========================================== */}
       {activeTab === 'manual' && (
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 space-y-6 max-w-3xl mx-auto">
@@ -411,7 +454,19 @@ export default function UpdateWarehouseMap() {
                                 onChange={(e) => setManualLocation(e.target.value)}
                                 className="w-full px-4 py-3 border border-slate-300 rounded-xl outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 font-bold text-slate-800 bg-white"
                             />
+                            
+                            {/* Checkbox cập nhật tất cả các size */}
+                            <label className="flex items-center gap-2 mt-3 cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors w-fit">
+                                <input 
+                                    type="checkbox" 
+                                    checked={updateAllSizes}
+                                    onChange={(e) => setUpdateAllSizes(e.target.checked)}
+                                    className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                                />
+                                Cập nhật vị trí này cho toàn bộ Size (S, M, L) cùng mẫu
+                            </label>
                         </div>
+
                         <div className="flex justify-end pt-2">
                             <button 
                                 type="submit"
