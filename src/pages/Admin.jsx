@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
-  Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, MapPin, UploadCloud, Lock
+  Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, MapPin, UploadCloud, Lock, RefreshCcw
 } from 'lucide-react';
 import * as Papa from 'papaparse'; // Thư viện đọc CSV
 
@@ -47,6 +47,88 @@ export default function Admin() {
   const [isSyncingMaster, setIsSyncingMaster] = useState(false);
   const [syncMasterStatus, setSyncMasterStatus] = useState('idle');
   const [syncProductMessage, setSyncProductMessage] = useState(''); 
+
+  // ==========================================
+  // ⚡️ THÊM MỚI: ĐỒNG BỘ ĐƠN TRẢ HÀNG
+  // ==========================================
+  const [isSyncingReturns, setIsSyncingReturns] = useState(false);
+  const [syncReturnsMessage, setSyncReturnsMessage] = useState({ text: '', type: '' });
+
+ const handleSyncReturns = async () => {
+    setIsSyncingReturns(true);
+    
+    const platforms = [
+      { id: 8195, name: 'Shopee' },
+      { id: 8855, name: 'TikTok' },
+      { id: 8142, name: 'Lazada' }
+    ];
+    
+    let total = 0;
+    let hasError = false;
+
+    try {
+      for (const platform of platforms) {
+        let currentPage = 1;
+        let hasMoreData = true;
+
+        // React chịu trách nhiệm lặp trang
+        while (hasMoreData) {
+            setSyncReturnsMessage({ 
+                text: `Đang cào dữ liệu ${platform.name} (Trang ${currentPage})... Đã kéo: ${total} đơn`, 
+                type: 'processing' 
+            });
+            
+            const res = await fetch(`${projectUrl}/functions/v1/sync-ecom-returns`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${anonKey}`,
+                    'apikey': anonKey
+                },
+                body: JSON.stringify({ 
+                    platformId: platform.id,
+                    page: currentPage // Gửi trang hiện tại lên Supabase
+                }) 
+            });
+            
+            const textData = await res.text();
+            let data;
+            
+            try { 
+                data = JSON.parse(textData); 
+            } catch(e) { 
+                throw new Error(`Máy chủ bị sập ở sàn ${platform.name} trang ${currentPage}`); 
+            }
+
+            if (!res.ok) {
+                console.error(`❌ Lỗi sàn ${platform.name} trang ${currentPage}:`, data);
+                hasError = true;
+                break; // Có lỗi thì ngừng cào sàn này, chuyển sang sàn tiếp theo
+            }
+            
+            total += (data.syncedCount || 0);
+            
+            // Nhận kết quả xem có trang sau không
+            if (data.hasMoreData) {
+                currentPage = data.nextPage;
+            } else {
+                hasMoreData = false;
+            }
+        }
+      }
+      
+      if (hasError) {
+          setSyncReturnsMessage({ text: `⚠️ Đã cào được ${total} đơn, nhưng bị gián đoạn ở một vài trang.`, type: 'error' });
+      } else {
+          setSyncReturnsMessage({ text: `🎉 Hoàn tất! Đã đồng bộ an toàn ${total} đơn trả hàng từ 3 sàn.`, type: 'success' });
+      }
+      
+    } catch (err) {
+      setSyncReturnsMessage({ text: `❌ Lỗi hệ thống: ${err.message}`, type: 'error' });
+    } finally {
+      setIsSyncingReturns(false);
+    }
+  };
   // ==========================================
   // ⚡️ DỌN DẸP DỮ LIỆU CŨ (CLEANUP)
   // ==========================================
@@ -74,7 +156,7 @@ export default function Admin() {
   };
 
   // ==========================================
-  // ⚡️ MỚI: QUẢN LÝ VỊ TRÍ KHO HÀNG (LOCATION)
+  // ⚡️ QUẢN LÝ VỊ TRÍ KHO HÀNG (LOCATION)
   // ==========================================
   const [csvFile, setCsvFile] = useState(null);
   const [isUploadingCsv, setIsUploadingCsv] = useState(false);
@@ -376,10 +458,6 @@ export default function Admin() {
     setSyncLoading(false);
   };
 
-
-  // ==========================================
-  // ⚡️ LUỒNG UPLOAD CSV IMPORT VỊ TRÍ SẢN PHẨM
-  // ==========================================
   const handleUploadLocationCsv = () => {
     if (!csvFile) {
         setLocationMessage({ text: 'Vui lòng chọn một file CSV trước.', type: 'error' });
@@ -692,6 +770,50 @@ export default function Admin() {
 
             </div>
           </div>
+
+          {/* ================= KHỐI ĐỒNG BỘ ĐƠN TRẢ HÀNG (RETURNS) ================= */}
+          <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+            <h2 className="text-xl font-bold mb-2 text-gray-800 flex items-center gap-2">
+              <RefreshCcw size={20}/> Đồng bộ Đơn Trả Hàng & Hoàn Tiền
+            </h2>
+            <p className="text-sm text-slate-500 mb-6">Chủ động kéo dữ liệu các yêu cầu trả hàng, hoàn tiền từ sàn TMĐT (Shopee, TikTok, Lazada) thay vì đợi lịch tự động cập nhật của Cron Job.</p>
+
+            {syncReturnsMessage.text && (
+              <div className={`p-4 mb-6 rounded-lg font-bold text-sm flex items-center gap-2 ${
+                syncReturnsMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' :
+                syncReturnsMessage.type === 'error' ? 'bg-red-50 text-red-700 border border-red-200' :
+                'bg-blue-50 text-blue-700 border border-blue-200 animate-pulse'
+              }`}>
+                {syncReturnsMessage.type === 'success' && <CheckCircle2 size={18} />}
+                {syncReturnsMessage.type === 'error' && <AlertCircle size={18} />}
+                {syncReturnsMessage.type === 'processing' && <Loader2 size={18} className="animate-spin" />}
+                {syncReturnsMessage.text}
+              </div>
+            )}
+
+            <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-indigo-50/50 p-5 rounded-xl border border-indigo-100 relative overflow-hidden">
+              {!isAdminOrOwner && (
+                  <div className="absolute inset-0 z-10 bg-white/70 backdrop-blur-[1px] flex items-center justify-center rounded-lg">
+                    <p className="text-xs font-bold text-red-600 flex items-center gap-1.5 bg-white px-4 py-2 rounded-lg shadow-sm border border-red-100">
+                      <Lock size={14} /> Chức năng yêu cầu quyền Admin
+                    </p>
+                  </div>
+              )}
+              <div className="flex-1">
+                <p className="text-sm font-bold text-indigo-900">Cập nhật danh sách hoàn tiền</p>
+                <p className="text-[11px] text-indigo-600/80 mt-1">Lấy các yêu cầu trả hàng mới nhất từ API của Nhanh.vn lưu vào cơ sở dữ liệu.</p>
+              </div>
+              <button
+                onClick={handleSyncReturns}
+                disabled={!isAdminOrOwner || isSyncingReturns}
+                className="w-full md:w-auto px-6 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-lg shadow-md hover:bg-indigo-700 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                {isSyncingReturns ? <Loader2 size={18} className="animate-spin" /> : <DownloadCloud size={18} />} Kéo Đơn Trả Hàng
+              </button>
+            </div>
+          </div>
+
+
           {/* ================= KHỐI DỌN DẸP DỮ LIỆU (CLEANUP) ================= */}
           <div className="bg-white p-8 rounded-xl shadow-sm border border-red-200 relative overflow-hidden mt-8">
             {!isOwner && (

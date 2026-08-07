@@ -24,6 +24,7 @@ import SetupZone from './pages/SetupZone';
 import FilterByZone from './pages/FilterByZone';
 import WebhookRetrier from './pages/WebhookRetrier';
 import DashboardDonHoan from './pages/DashboardDonHoan';
+import AWBProcessor from './pages/AWBProcessor'
 
 export default function App() {
   return (
@@ -42,7 +43,7 @@ export default function App() {
           <Route path="bao-cao-don" element={<OrderReport />} />
           <Route path="don-da-in-hom-nay" element={<PrintedOrdersToday />} />
           <Route path="loc-don-theo-day-ke" element={<FilterByZone />} />
-          <Route path="chen-vi-tri-awb" element={<UnderDevelopment />} /> {/* Tạm để UnderDevelopment chờ dev */}
+          <Route path="chen-vi-tri-awb" element={<AWBProcessor />} />
 
           {/* 📦 TAB ĐÓNG GÓI */}
           <Route path="dong-goi-don-hang" element={<UnderDevelopment />} />
