@@ -141,7 +141,7 @@ const pdfLibDoc = await PDFDocument.load(bufferForPdfLib);
 pdfLibDoc.registerFontkit(fontkit);
       // Tải font Roboto Bold (Hỗ trợ Tiếng Việt) trực tiếp từ Google Fonts
       addLog('Đang nhúng font Tiếng Việt...', 'info');
-      const fontUrl = 'https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto-Bold.ttf';
+      const fontUrl = '/Roboto-Bold.ttf';
       const fontResponse = await fetch(fontUrl);
       const fontBytes = await fontResponse.arrayBuffer();
       
