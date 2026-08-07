@@ -280,7 +280,7 @@ pdfLibDoc.registerFontkit(fontkit);
           <LayoutTemplate size={26} strokeWidth={2.5} />
         </div>
         <div>
-          <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">In Vị Trí Lên AWB (Bản Cao Cấp)</h2>
+          <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">Chèn vị trí sản phẩm vào AWB</h2>
           <p className="text-xs text-slate-500 font-medium mt-1">Tự động lót nền trắng, quét mã và chèn vị trí hàng hóa</p>
         </div>
       </div>
@@ -340,7 +340,7 @@ pdfLibDoc.registerFontkit(fontkit);
           {/* Box Settings */}
           <div className="bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-2xl shadow-sm p-6">
             <h3 className="text-sm font-black text-slate-700 uppercase flex items-center gap-2 mb-4">
-              <Settings size={18} /> Thông số (Có thể Click bên hình)
+              <Settings size={18} /> Thông số text vị trí sản phẩm (Tính theo PX)
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
