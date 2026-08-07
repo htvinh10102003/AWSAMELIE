@@ -129,9 +129,14 @@ export default function AWBProcessor() {
     addLog('Bắt đầu đọc quét mã hàng loạt...', 'info');
 
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdfjsDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-      const pdfLibDoc = await PDFDocument.load(arrayBuffer);
+    const baseBuffer = await file.arrayBuffer();
+
+// Nhân bản bộ nhớ thành 2 luồng độc lập để tránh lỗi Detached ArrayBuffer
+const bufferForPdfJs = baseBuffer.slice(0);
+const bufferForPdfLib = baseBuffer.slice(0);
+
+const pdfjsDoc = await pdfjsLib.getDocument({ data: bufferForPdfJs }).promise;
+const pdfLibDoc = await PDFDocument.load(bufferForPdfLib);
       const font = await pdfLibDoc.embedFont(StandardFonts.HelveticaBold);
       
       const totalPages = pdfjsDoc.numPages;
