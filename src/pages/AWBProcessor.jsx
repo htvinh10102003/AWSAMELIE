@@ -1,15 +1,17 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import * as pdfjsLib from 'pdfjs-dist';
+// BẢN SỬA LỖI WORKER: Dùng unpkg đảm bảo luôn chạy trên Vite/Next.js/React CRA
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+
 import { BrowserMultiFormatReader } from '@zxing/library';
-import { supabase } from '../lib/supabase'; // Đảm bảo đường dẫn này đúng với project của bạn
+import { supabase } from '../lib/supabase'; // Đường dẫn tới file supabase của bạn
 import { 
   FileText, UploadCloud, Settings, Download, Loader2, 
-  AlertCircle, CheckCircle2, Play, LayoutTemplate, X
+  AlertCircle, CheckCircle2, Play, LayoutTemplate, X,
+  MousePointerClick, Maximize
 } from 'lucide-react';
 
-// Cấu hình Worker cho pdfjs-dist
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 const codeReader = new BrowserMultiFormatReader();
 
 export default function AWBProcessor() {
@@ -19,76 +21,112 @@ export default function AWBProcessor() {
   const [downloadUrl, setDownloadUrl] = useState(null);
   const [logs, setLogs] = useState([]);
   
-  // Cấu hình tọa độ - Giao diện Settings
+  // Trạng thái cho hệ thống Preview
+  const [previewImg, setPreviewImg] = useState(null);
+  const [pdfDim, setPdfDim] = useState({ width: 0, height: 0 }); // Kích thước PDF (Point)
+  const previewContainerRef = useRef(null);
+
+  // Cấu hình (Tọa độ X, Y giờ tính từ Góc Trái - Trên cùng (Top-Left) cho dễ hình dung)
   const [config, setConfig] = useState({
     x: 20,
-    y: 120,
-    fontSize: 11,
+    y: 150,
+    fontSize: 12,
     lineHeight: 16
   });
 
   const fileInputRef = useRef(null);
 
-  const handleFileChange = (e) => {
+  // ==========================================
+  // HỆ THỐNG LOG
+  // ==========================================
+  const addLog = (message, type = 'info') => {
+    setLogs(prev => [...prev, { message, type, time: new Date() }]);
+  };
+
+  // ==========================================
+  // XỬ LÝ UPLOAD & TẠO PREVIEW
+  // ==========================================
+  const handleFileChange = async (e) => {
     if (e.target.files && e.target.files.length > 0) {
-      setFile(e.target.files[0]);
+      const selectedFile = e.target.files[0];
+      setFile(selectedFile);
       setDownloadUrl(null);
       setLogs([]);
       setProgress({ current: 0, total: 0 });
+      addLog(`Đã tải file: ${selectedFile.name}`, 'info');
+
+      // TẠO PREVIEW TRANG 1
+      try {
+        const arrayBuffer = await selectedFile.arrayBuffer();
+        const pdfjsDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdfjsDoc.getPage(1);
+        
+        const viewport = page.getViewport({ scale: 1.5 }); // Tăng nét
+        setPdfDim({ width: viewport.width / 1.5, height: viewport.height / 1.5 }); // Lưu kích thước gốc
+
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        
+        setPreviewImg(canvas.toDataURL('image/jpeg', 0.8));
+        addLog(`Đã tạo preview thành công. Click vào ảnh để chọn vị trí in!`, 'success');
+      } catch (err) {
+        addLog(`Lỗi tạo preview: ${err.message}`, 'error');
+      }
     }
   };
 
   const removeFile = () => {
     setFile(null);
+    setPreviewImg(null);
     setDownloadUrl(null);
     setLogs([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const addLog = (message, type = 'info') => {
-    setLogs(prev => [...prev, { message, type, time: new Date() }]);
+  // ==========================================
+  // LOGIC CLICK ĐỂ CHỌN TỌA ĐỘ
+  // ==========================================
+  const handlePreviewClick = (e) => {
+    if (!previewContainerRef.current || !pdfDim.width) return;
+    
+    // Lấy kích thước thực tế của vùng hiển thị trên màn hình
+    const rect = previewContainerRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    // Quy đổi tỷ lệ từ màn hình sang đơn vị Point của PDF
+    const scaleX = pdfDim.width / rect.width;
+    const scaleY = pdfDim.height / rect.height;
+
+    setConfig({
+      ...config,
+      x: Math.round(clickX * scaleX),
+      y: Math.round(clickY * scaleY)
+    });
   };
 
-  // Hàm quét mã vạch
-  const extractBarcodeFromPage = async (pdfDocument, pageNum) => {
-    try {
-      const page = await pdfDocument.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 2.0 });
-      const canvas = document.createElement('canvas');
-      const canvasContext = canvas.getContext('2d');
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
-
-      await page.render({ canvasContext, viewport }).promise;
-      const result = await codeReader.decodeFromCanvas(canvas);
-      return result.getText();
-    } catch (error) {
-      return null;
-    }
-  };
-
-  // Kéo dữ liệu từ Supabase
+  // ==========================================
+  // XỬ LÝ CỐT LÕI (QUÉT MÃ & GHI PDF)
+  // ==========================================
   const fetchOrderDetails = async (trackingCode) => {
     if (!trackingCode) return [];
     try {
-      const { data, error } = await supabase.rpc('get_awb_products', {
-        p_tracking_code: trackingCode
-      });
+      const { data, error } = await supabase.rpc('get_awb_products', { p_tracking_code: trackingCode });
       if (error) throw error;
       return data || [];
     } catch (err) {
-      console.error("Lỗi lấy dữ liệu Supabase:", err);
+      console.error(err);
       return [];
     }
   };
 
-  // Logic xử lý chính
   const processPDF = async () => {
     if (!file) return;
     setIsProcessing(true);
-    setLogs([]);
     setDownloadUrl(null);
-    addLog('Bắt đầu đọc file PDF...', 'info');
+    addLog('Bắt đầu đọc quét mã hàng loạt...', 'info');
 
     try {
       const arrayBuffer = await file.arrayBuffer();
@@ -98,32 +136,64 @@ export default function AWBProcessor() {
       
       const totalPages = pdfjsDoc.numPages;
       setProgress({ current: 0, total: totalPages });
-      addLog(`Tổng số đơn hàng (trang): ${totalPages}`, 'info');
 
       for (let i = 1; i <= totalPages; i++) {
-        const barcodeText = await extractBarcodeFromPage(pdfjsDoc, i);
+        // Quét mã vạch (Render ảnh nhỏ -> ZXing)
+        const pageJS = await pdfjsDoc.getPage(i);
+        const viewport = pageJS.getViewport({ scale: 2.0 });
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width; canvas.height = viewport.height;
+        await pageJS.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+        
+        let barcodeText = null;
+        try {
+          const result = await codeReader.decodeFromCanvas(canvas);
+          barcodeText = result.getText();
+        } catch (e) { /* Bỏ qua nếu ko thấy mã */ }
         
         if (barcodeText) {
           const productsInfo = await fetchOrderDetails(barcodeText);
           
           if (productsInfo.length > 0) {
-            const page = pdfLibDoc.getPage(i - 1);
-            let currentY = Number(config.y);
+            const pageLib = pdfLibDoc.getPage(i - 1);
+            
+            // 1. TÍNH TOÁN KHUNG NỀN TRẮNG
+            const padding = 6; // Đệm px
+            const textsToDraw = productsInfo.map(p => `${p.product_name} -- ${p.location_code}`);
+            
+            // Tìm chuỗi dài nhất
+            const maxTextWidth = Math.max(...textsToDraw.map(t => font.widthOfTextAtSize(t, Number(config.fontSize))));
+            const boxWidth = maxTextWidth + (padding * 2);
+            const boxHeight = (textsToDraw.length * Number(config.lineHeight)) + padding;
+            
+            // pdf-lib có trục Y từ Dưới-lên. Cần đảo ngược lại trục Y của người dùng (Trên-xuống)
+            const pdfY_BottomLeft = pageLib.getHeight() - config.y - boxHeight;
 
-            productsInfo.forEach((item) => {
-              const textToDraw = `${item.product_name} -- ${item.location_code}`;
-              page.drawText(textToDraw, {
-                x: Number(config.x),
-                y: currentY,
+            // 2. VẼ NỀN TRẮNG
+            pageLib.drawRectangle({
+              x: Number(config.x),
+              y: pdfY_BottomLeft,
+              width: boxWidth,
+              height: boxHeight,
+              color: rgb(1, 1, 1), // Màu trắng
+            });
+
+            // 3. VẼ CHỮ LÊN NỀN
+            let textY = pdfY_BottomLeft + boxHeight - padding - Number(config.fontSize);
+            textsToDraw.forEach((text) => {
+              pageLib.drawText(text, {
+                x: Number(config.x) + padding,
+                y: textY,
                 size: Number(config.fontSize),
                 font: font,
                 color: rgb(0, 0, 0),
               });
-              currentY -= Number(config.lineHeight);
+              textY -= Number(config.lineHeight);
             });
-            addLog(`Trang ${i}: [${barcodeText}] - Đã chèn ${productsInfo.length} SP`, 'success');
+
+            addLog(`Trang ${i}: [${barcodeText}] - Chèn ${productsInfo.length} SP`, 'success');
           } else {
-            addLog(`Trang ${i}: [${barcodeText}] - Không tìm thấy SP trong kho`, 'warning');
+            addLog(`Trang ${i}: [${barcodeText}] - Không có dữ liệu SP`, 'warning');
           }
         } else {
           addLog(`Trang ${i}: Không quét được mã vạch!`, 'error');
@@ -131,212 +201,178 @@ export default function AWBProcessor() {
         setProgress({ current: i, total: totalPages });
       }
 
-      addLog(`Đang xuất file PDF hoàn chỉnh...`, 'info');
       const modifiedPdfBytes = await pdfLibDoc.save();
       const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
       setDownloadUrl(URL.createObjectURL(blob));
-      addLog(`Xử lý hoàn tất!`, 'success');
+      addLog(`Xử lý hoàn tất! File đã sẵn sàng tải xuống.`, 'success');
 
     } catch (error) {
-      console.error(error);
-      addLog(`Lỗi hệ thống: ${error.message}`, 'error');
+      addLog(`Lỗi: ${error.message}`, 'error');
     } finally {
       setIsProcessing(false);
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 animate-fade-in pb-12 mt-8 font-sans">
+    <div className="max-w-[1400px] mx-auto space-y-6 animate-fade-in pb-12 mt-8 font-sans">
       
       {/* HEADER */}
-      <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl shadow-sm border border-blue-100">
-            <LayoutTemplate size={26} strokeWidth={2.5} />
-          </div>
-          <div>
-            <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">In Vị Trí Lên AWB</h2>
-            <p className="text-xs text-slate-500 font-medium mt-1">Tự động quét mã vạch và chèn vị trí nhặt hàng lên phiếu in</p>
-          </div>
+      <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4">
+        <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl shadow-sm border border-blue-100">
+          <LayoutTemplate size={26} strokeWidth={2.5} />
+        </div>
+        <div>
+          <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">In Vị Trí Lên AWB (Bản Cao Cấp)</h2>
+          <p className="text-xs text-slate-500 font-medium mt-1">Tự động lót nền trắng, quét mã và chèn vị trí hàng hóa</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* CỘT TRÁI: UPLOAD & LOGS (Chiếm 2 phần) */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* ==================================
+            CỘT TRÁI: UPLOAD, SETTINGS, LOGS
+        ================================== */}
+        <div className="lg:col-span-5 flex flex-col gap-6">
           
-          {/* Khu vực Upload */}
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="p-4 bg-slate-50 border-b border-slate-200">
-              <h3 className="text-sm font-black text-slate-700 uppercase flex items-center gap-2">
-                <UploadCloud size={16} /> Tải file PDF vận đơn
-              </h3>
-            </div>
-            <div className="p-6">
-              {!file ? (
-                <div className="border-2 border-dashed border-slate-300 rounded-xl p-10 text-center hover:bg-slate-50 transition-colors cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                  <input 
-                    type="file" 
-                    accept="application/pdf"
-                    className="hidden" 
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                  />
-                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center border border-slate-200 mx-auto mb-4">
-                    <FileText size={28} className="text-slate-400" />
-                  </div>
-                  <p className="text-sm font-bold text-slate-700">Click để chọn hoặc kéo thả file PDF vào đây</p>
-                  <p className="text-xs text-slate-400 mt-2 font-medium">Hỗ trợ file xuất từ Shopee, TikTok, GHTK...</p>
-                </div>
-              ) : (
-                <div className="flex flex-col sm:flex-row items-center justify-between bg-blue-50/50 border border-blue-100 p-4 rounded-xl gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="p-3 bg-white text-blue-500 rounded-lg shadow-sm border border-slate-200">
-                      <FileText size={24} />
-                    </div>
+          {/* Box Upload */}
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden p-6">
+            {!file ? (
+              <div 
+                className="border-2 border-dashed border-slate-300 rounded-xl p-10 text-center hover:bg-slate-50 transition-colors cursor-pointer" 
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input type="file" accept="application/pdf" className="hidden" ref={fileInputRef} onChange={handleFileChange} />
+                <UploadCloud size={36} className="text-slate-400 mx-auto mb-3" />
+                <p className="text-sm font-bold text-slate-700">Tải lên file PDF vận đơn</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div className="flex justify-between items-center bg-blue-50/50 border border-blue-100 p-4 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <FileText size={24} className="text-blue-500" />
                     <div>
-                      <p className="text-sm font-bold text-slate-800">{file.name}</p>
-                      <p className="text-xs text-slate-500 font-medium">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                      <p className="text-sm font-bold text-slate-800 truncate w-48">{file.name}</p>
+                      <p className="text-xs text-slate-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                     </div>
                   </div>
-                  <button onClick={removeFile} disabled={isProcessing} className="p-2 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-50">
+                  <button onClick={removeFile} disabled={isProcessing} className="p-2 text-slate-400 hover:text-red-500">
                     <X size={20} />
                   </button>
                 </div>
-              )}
 
-              {/* Thanh Tiến Trình & Button Xử lý */}
-              <div className="mt-6 flex flex-col sm:flex-row items-center gap-4">
-                {isProcessing ? (
-                  <div className="flex-1 w-full bg-slate-100 h-12 rounded-xl border border-slate-200 flex items-center px-4 gap-3">
-                    <Loader2 size={18} className="animate-spin text-blue-500 shrink-0" />
-                    <div className="flex-1">
-                      <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-blue-500 transition-all duration-300 rounded-full" 
-                          style={{ width: `${(progress.current / (progress.total || 1)) * 100}%` }}
-                        />
-                      </div>
-                    </div>
-                    <span className="text-xs font-bold text-slate-600 whitespace-nowrap">
-                      {progress.current} / {progress.total}
-                    </span>
-                  </div>
-                ) : (
+                <div className="flex items-center gap-2">
                   <button
                     onClick={processPDF}
-                    disabled={!file}
-                    className="flex-1 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-sm"
+                    disabled={isProcessing}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:bg-slate-300 transition-all shadow-sm"
                   >
-                    <Play size={18} fill="currentColor" /> Xử lý file PDF
+                    {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Play size={18} fill="currentColor" />}
+                    {isProcessing ? `Đang xử lý ${progress.current}/${progress.total}` : 'Bắt đầu Xử Lý'}
                   </button>
-                )}
+                  {downloadUrl && !isProcessing && (
+                    <a href={downloadUrl} download={`AWB_Hoan_Thanh.pdf`} className="flex-1 bg-green-50 text-green-700 border border-green-200 font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all">
+                      <Download size={18} /> Tải PDF Mới
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
-                {downloadUrl && !isProcessing && (
-                  <a
-                    href={downloadUrl}
-                    download={`AWB_Da_Xu_Ly_${new Date().getTime()}.pdf`}
-                    className="w-full sm:w-auto bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm"
-                  >
-                    <Download size={18} /> Tải file hoàn thành
-                  </a>
-                )}
+          {/* Box Settings */}
+          <div className="bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-2xl shadow-sm p-6">
+            <h3 className="text-sm font-black text-slate-700 uppercase flex items-center gap-2 mb-4">
+              <Settings size={18} /> Thông số (Có thể Click bên hình)
+            </h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Trục X (Trái-qua)</label>
+                <input type="number" value={config.x} onChange={e => setConfig({...config, x: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Trục Y (Trên-xuống)</label>
+                <input type="number" value={config.y} onChange={e => setConfig({...config, y: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Cỡ chữ</label>
+                <input type="number" value={config.fontSize} onChange={e => setConfig({...config, fontSize: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Dãn dòng</label>
+                <input type="number" value={config.lineHeight} onChange={e => setConfig({...config, lineHeight: e.target.value})} className="w-full px-3 py-2 border rounded-lg text-sm outline-none focus:border-blue-500" />
               </div>
             </div>
           </div>
 
-          {/* Console Log Area */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-sm overflow-hidden flex flex-col h-[300px]">
-            <div className="p-3 bg-slate-800 border-b border-slate-700 flex justify-between items-center shrink-0">
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider">Tiến trình hệ thống</h3>
-            </div>
-            <div className="p-4 overflow-y-auto flex-1 space-y-2 font-mono text-[11px]">
-              {logs.length === 0 ? (
-                <div className="text-slate-500 h-full flex items-center justify-center">Chưa có hoạt động nào...</div>
-              ) : (
-                logs.map((log, idx) => (
-                  <div key={idx} className={`flex items-start gap-2 ${
-                    log.type === 'error' ? 'text-red-400' : 
-                    log.type === 'success' ? 'text-green-400' : 
-                    log.type === 'warning' ? 'text-amber-400' : 'text-blue-300'
-                  }`}>
-                    <span className="text-slate-600 shrink-0">
-                      [{log.time.toLocaleTimeString('vi-VN', { hour12: false })}]
-                    </span>
-                    {log.type === 'error' && <AlertCircle size={14} className="shrink-0 mt-0.5" />}
-                    {log.type === 'success' && <CheckCircle2 size={14} className="shrink-0 mt-0.5" />}
-                    <span>{log.message}</span>
-                  </div>
-                ))
-              )}
+          {/* Box Logs */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-sm overflow-hidden flex flex-col h-[200px]">
+            <div className="p-3 bg-slate-800 text-xs font-black text-slate-400 uppercase tracking-wider shrink-0">Trạng thái hệ thống</div>
+            <div className="p-3 overflow-y-auto flex-1 space-y-1 font-mono text-[11px]">
+              {logs.map((log, idx) => (
+                <div key={idx} className={`flex items-start gap-1.5 ${log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-green-400' : log.type === 'warning' ? 'text-amber-400' : 'text-blue-300'}`}>
+                  <span>[{log.time.toLocaleTimeString('vi-VN')}]</span>
+                  <span>{log.message}</span>
+                </div>
+              ))}
             </div>
           </div>
 
         </div>
 
-        {/* CỘT PHẢI: SETTINGS (Chiếm 1 phần) */}
-        <div className="bg-gradient-to-br from-white to-slate-50 border border-slate-200 rounded-2xl shadow-sm p-6 h-fit">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl shadow-sm border border-orange-100">
-              <Settings size={20} />
-            </div>
-            <h3 className="text-sm font-black text-slate-700 uppercase">Cấu hình tọa độ in</h3>
-          </div>
-
-          <div className="bg-orange-50/50 border border-orange-100 text-orange-800 text-xs font-medium p-3.5 rounded-xl mb-6 leading-relaxed">
-            <p>Tọa độ (X, Y) được tính từ <strong>góc dưới cùng bên trái</strong>. Hãy thử in 1 file vài trang để căn chỉnh tọa độ cho khớp với khổ giấy A6 của bạn.</p>
-          </div>
-
-          <div className="space-y-5">
-            <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Trục X (Cách lề trái)</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={config.x}
-                  onChange={(e) => setConfig({...config, x: e.target.value})}
-                  className="w-full pl-4 pr-10 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-700 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
-                />
-                <span className="absolute right-4 top-3 text-xs font-bold text-slate-400">px</span>
-              </div>
+        {/* ==================================
+            CỘT PHẢI: KHU VỰC PREVIEW PDF
+        ================================== */}
+        <div className="lg:col-span-7">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm h-full overflow-hidden flex flex-col">
+            <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
+              <h3 className="text-sm font-black text-slate-700 uppercase flex items-center gap-2">
+                <Maximize size={16} /> Bản xem trước (Preview)
+              </h3>
+              <span className="text-xs font-bold text-blue-500 bg-blue-50 px-3 py-1 rounded-full flex items-center gap-1">
+                <MousePointerClick size={14} /> Click vào ảnh để đổi vị trí
+              </span>
             </div>
             
-            <div>
-              <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-2">Trục Y (Cách lề dưới)</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={config.y}
-                  onChange={(e) => setConfig({...config, y: e.target.value})}
-                  className="w-full pl-4 pr-10 py-2.5 border border-slate-300 rounded-xl text-sm font-bold text-slate-700 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
-                />
-                <span className="absolute right-4 top-3 text-xs font-bold text-slate-400">px</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200">
-              <div>
-                <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2">Cỡ chữ</label>
-                <input
-                  type="number"
-                  value={config.fontSize}
-                  onChange={(e) => setConfig({...config, fontSize: e.target.value})}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm font-bold text-slate-700 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
-                />
-              </div>
-              <div>
-                <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2">Dãn dòng</label>
-                <input
-                  type="number"
-                  value={config.lineHeight}
-                  onChange={(e) => setConfig({...config, lineHeight: e.target.value})}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm font-bold text-slate-700 bg-white outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
-                />
-              </div>
+            <div className="p-6 flex-1 bg-slate-100 overflow-y-auto flex justify-center items-start">
+              {!previewImg ? (
+                <div className="text-slate-400 text-sm font-bold flex flex-col items-center justify-center h-full gap-3">
+                  <LayoutTemplate size={48} className="opacity-20" />
+                  Vui lòng tải file PDF lên để xem trước
+                </div>
+              ) : (
+                <div 
+                  ref={previewContainerRef}
+                  className="relative bg-white shadow-xl cursor-crosshair group max-w-full"
+                  onClick={handlePreviewClick}
+                >
+                  <img src={previewImg} alt="PDF Preview" className="max-w-full h-auto block select-none pointer-events-none" />
+                  
+                  {/* CỤM MÔ PHỎNG HIỂN THỊ (Mock Box) */}
+                  <div 
+                    className="absolute z-10 pointer-events-none transition-all"
+                    style={{
+                      // Ánh xạ tọa độ PDF (Point) sang tọa độ hiển thị (Phần trăm của box cha)
+                      left: `${(config.x / pdfDim.width) * 100}%`,
+                      top: `${(config.y / pdfDim.height) * 100}%`,
+                      transform: 'translate(0, 0)'
+                    }}
+                  >
+                    {/* Bảng nền trắng + viền chỉ đỏ báo hiệu */}
+                    <div className="bg-white border border-red-500 shadow-md whitespace-nowrap p-[4px]" style={{
+                       // Scale font size giả lập trên màn hình
+                       fontSize: `${(config.fontSize / pdfDim.width) * 100}cqw`, 
+                       lineHeight: `${config.lineHeight}px`
+                    }}>
+                      <div className="font-bold text-black text-[12px] md:text-sm">ÁO MẪU 01 - Đen - M -- KỆ A1</div>
+                      <div className="font-bold text-black text-[12px] md:text-sm">QUẦN MẪU 02 - L -- KỆ B2</div>
+                    </div>
+                    {/* Chấm neo tại tọa độ X, Y */}
+                    <div className="absolute top-0 left-0 w-2 h-2 bg-red-500 rounded-full -translate-x-1/2 -translate-y-1/2"></div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-
         </div>
 
       </div>
