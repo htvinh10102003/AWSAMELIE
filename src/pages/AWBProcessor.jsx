@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
 import * as pdfjsLib from 'pdfjs-dist';
 // BẢN SỬA LỖI WORKER: Dùng unpkg đảm bảo luôn chạy trên Vite/Next.js/React CRA
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -137,6 +138,7 @@ const bufferForPdfLib = baseBuffer.slice(0);
 
 const pdfjsDoc = await pdfjsLib.getDocument({ data: bufferForPdfJs }).promise;
 const pdfLibDoc = await PDFDocument.load(bufferForPdfLib);
+pdfLibDoc.registerFontkit(fontkit);
       // Tải font Roboto Bold (Hỗ trợ Tiếng Việt) trực tiếp từ Google Fonts
       addLog('Đang nhúng font Tiếng Việt...', 'info');
       const fontUrl = 'https://raw.githubusercontent.com/google/fonts/main/ofl/roboto/Roboto-Bold.ttf';
