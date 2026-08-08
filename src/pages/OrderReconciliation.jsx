@@ -283,7 +283,7 @@ export default function OrderReconciliation() {
   };
 
   const handleResetAudit = () => {
-    if (confirm("Ông có chắc chắn muốn xóa tiến trình đối soát này để bắn lại không?")) {
+    if (confirm("Xác nhận quét lại?")) {
       setScannedCodes([]);
       setSurplusOrders([]);
       setIsConfirmed(false);
