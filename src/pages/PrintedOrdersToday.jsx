@@ -88,10 +88,13 @@ const MultiSelect = ({ options, selected, onChange, placeholder }) => {
     );
 };
 
-export default function PrintedOrdersToday() {
+export default function PrintedOrdersByDate() {
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
     const [statusDict, setStatusDict] = useState({});
+    
+    // Thêm state cho Ngày được chọn (mặc định là hôm nay)
+    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     
     // Filters
     const [searchQuery, setSearchQuery] = useState('');
@@ -108,16 +111,17 @@ export default function PrintedOrdersToday() {
     const [channelOptions, setChannelOptions] = useState([]);
     const [carrierOptions, setCarrierOptions] = useState([]);
 
+    // Gọi lại API khi selectedDate thay đổi
     useEffect(() => {
-        fetchPrintedOrdersToday();
-    }, []);
+        fetchPrintedOrders();
+    }, [selectedDate]);
 
     // Reset pagination khi lọc
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchQuery, selectedStatus, selectedChannel, selectedCarrier, pageSize]);
+    }, [searchQuery, selectedStatus, selectedChannel, selectedCarrier, pageSize, selectedDate]);
 
-    const fetchPrintedOrdersToday = async () => {
+    const fetchPrintedOrders = async () => {
         setLoading(true);
         try {
             const { data: stData } = await supabase.from('order_statuses').select('*');
@@ -125,10 +129,11 @@ export default function PrintedOrdersToday() {
             stData?.forEach(s => dict[s.id] = s.name);
             setStatusDict(dict);
 
-            const startOfDay = new Date();
+            // Cập nhật lấy thời gian bắt đầu và kết thúc theo ngày đã chọn
+            const startOfDay = new Date(selectedDate);
             startOfDay.setHours(0, 0, 0, 0);
             
-            const endOfDay = new Date();
+            const endOfDay = new Date(selectedDate);
             endOfDay.setHours(23, 59, 59, 999);
 
             const { data, error } = await supabase
@@ -220,13 +225,16 @@ export default function PrintedOrdersToday() {
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        const dateStr = new Date().toISOString().split('T')[0];
+        // Đổi tên file tải về theo ngày đã chọn
         link.setAttribute("href", url);
-        link.setAttribute("download", `Don_Da_In_${dateStr}.csv`);
+        link.setAttribute("download", `Don_Da_In_${selectedDate}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
     };
+
+    // Format ngày hiển thị ở tiêu đề
+    const formattedDate = new Date(selectedDate).toLocaleDateString('vi-VN');
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-12 mt-8 animate-in fade-in duration-300">
@@ -235,16 +243,16 @@ export default function PrintedOrdersToday() {
             <div className="bg-white/70 backdrop-blur-2xl border border-white/30 px-8 py-6 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-shadow hover:shadow-[0_8px_40px_rgba(0,0,0,0.08)]">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
-                        <PackageCheck className="text-green-600" size={28} /> Đơn đã in hôm nay
+                        <PackageCheck className="text-green-600" size={28} /> Đơn đã in ({formattedDate})
                     </h2>
                     <p className="text-gray-500 text-sm mt-1 flex items-center gap-2">
-                        <CalendarDays size={14} /> Danh sách toàn bộ các đơn hàng đã được in phiếu xuất kho trong ngày.
+                        <CalendarDays size={14} /> Danh sách toàn bộ các đơn hàng đã được in phiếu xuất kho.
                     </p>
                 </div>
                 
                 <div className="flex items-center gap-3 w-full md:w-auto">
                     <button 
-                        onClick={fetchPrintedOrdersToday} 
+                        onClick={fetchPrintedOrders} 
                         disabled={loading}
                         className="px-4 py-2.5 bg-white/80 border border-slate-200 text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-colors shadow-sm disabled:opacity-50"
                     >
@@ -261,8 +269,18 @@ export default function PrintedOrdersToday() {
             </div>
 
             {/* BỘ LỌC */}
-            {/* ⚡️ VÁ LỖI HIỂN THỊ: Thêm relative z-20 để khung lọc luôn nổi lên trên bảng dữ liệu */}
             <div className="relative z-20 bg-white/70 backdrop-blur-xl border border-white/30 p-6 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] flex flex-wrap items-end gap-4">
+                
+                {/* ⚡️ THÊM BỘ CHỌN NGÀY Ở ĐÂY */}
+                <div className="w-full sm:w-48">
+                    <input 
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="w-full px-4 h-11 text-sm font-medium text-gray-700 border border-white/30 rounded-2xl outline-none focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 bg-white/60 backdrop-blur-xl shadow-sm transition-all"
+                    />
+                </div>
+
                 <div className="flex-1 min-w-[200px]">
                     <div className="relative">
                         <input 
@@ -287,18 +305,17 @@ export default function PrintedOrdersToday() {
             </div>
 
             {/* BẢNG DỮ LIỆU */}
-            {/* ⚡️ VÁ LỖI HIỂN THỊ: Khống chế z-index xuống mức 10 để nhường lớp kính cho bộ lọc thả xuống */}
             <div className="relative z-10 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
                 <div className="overflow-x-auto">
                     {loading ? (
                         <div className="p-20 text-center flex flex-col items-center justify-center gap-3">
                             <Loader2 size={32} className="animate-spin text-blue-500" />
-                            <p className="text-gray-500 font-medium text-sm">Đang tải dữ liệu hôm nay...</p>
+                            <p className="text-gray-500 font-medium text-sm">Đang tải dữ liệu...</p>
                         </div>
                     ) : paginatedOrders.length === 0 ? (
                         <div className="p-20 text-center flex flex-col items-center justify-center gap-3">
                             <div className="p-4 bg-slate-100 rounded-full text-slate-400"><Search size={32} /></div>
-                            <p className="text-gray-500 font-medium text-lg">Chưa có đơn nào được in hôm nay.</p>
+                            <p className="text-gray-500 font-medium text-lg">Chưa có đơn nào được in trong ngày này.</p>
                         </div>
                     ) : (
                         <table className="w-full text-sm text-left">
