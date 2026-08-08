@@ -7,12 +7,14 @@ export default function WebhookRetrier() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   
-  // State mới cho ô tick
+  // State mới cho tuỳ chọn lọc đơn chưa có mã vận đơn
   const [filterNoTracking, setFilterNoTracking] = useState(false);
 
+  // Hàm tạo độ trễ
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const handleStart = async () => {
+    // Tách các ID từ textarea
     const rawIds = inputText
       .split(/[\n, ]+/)
       .map(id => id.trim())
@@ -25,40 +27,46 @@ export default function WebhookRetrier() {
     
     let idsToProcess = rawIds;
 
-    // Lọc ID nếu ô tick được chọn
+    // 1. GỌI API SUPABASE ĐỂ LỌC ĐƠN NẾU Ô TICK ĐƯỢC CHỌN
     if (filterNoTracking) {
       try {
-        // GỌI API BACKEND Ở ĐÂY (Thay thế URL bằng endpoint thực tế của bạn)
-        // API này nhận mảng rawIds và trả về mảng các ID chưa có mã vận đơn
-        const response = await fetch('/api/orders/filter-no-tracking', {
+        // Thay bằng Anon Key từ phần Project Settings > API của Supabase
+        const SUPABASE_ANON_KEY = '<ĐIỀN_ANON_KEY_CỦA_BẠN_VÀO_ĐÂY>';
+        const EDGE_FUNCTION_URL = 'https://infljrayvhidhfimksfp.supabase.co/functions/v1/smart-service';
+
+        const response = await fetch(EDGE_FUNCTION_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+          },
           body: JSON.stringify({ ids: rawIds })
         });
         
         if (response.ok) {
           const data = await response.json();
-          idsToProcess = data.filteredIds; // Dữ liệu backend trả về
+          idsToProcess = data.filteredIds || [];
         } else {
-          throw new Error('Lỗi khi lọc đơn hàng từ server');
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Lỗi khi kết nối đến Edge Function');
         }
       } catch (error) {
         console.error("Lỗi filter:", error);
-        alert("Không thể lọc đơn hàng từ database. Vui lòng thử lại!");
+        alert(`Lỗi lọc dữ liệu: ${error.message}`);
         setIsProcessing(false);
         return;
       }
     }
 
     if (idsToProcess.length === 0) {
-      alert("Tất cả các đơn bạn nhập đều đã có mã vận đơn!");
+      alert("Tất cả các đơn bạn nhập đều đã có mã vận đơn, không có ID nào cần cập nhật!");
       setIsProcessing(false);
       return;
     }
 
     setProgress({ current: 0, total: idsToProcess.length });
 
-    // Vòng lặp xử lý Webhook
+    // 2. CHẠY VÒNG LẶP WEBHOOK CHO CÁC ID ĐÃ ĐƯỢC LỌC
     for (let i = 0; i < idsToProcess.length; i++) {
       const orderId = idsToProcess[i];
       const targetUrl = `https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`;
@@ -69,9 +77,15 @@ export default function WebhookRetrier() {
           mode: 'no-cors',
         });
 
-        setResults((prev) => [...prev, { id: orderId, status: 'success' }]);
+        setResults((prev) => [
+          ...prev,
+          { id: orderId, status: 'success' }
+        ]);
       } catch (error) {
-        setResults((prev) => [...prev, { id: orderId, status: 'error', message: error.message }]);
+        setResults((prev) => [
+          ...prev,
+          { id: orderId, status: 'error', message: error.message }
+        ]);
       }
 
       setProgress({ current: i + 1, total: idsToProcess.length });
@@ -101,18 +115,18 @@ export default function WebhookRetrier() {
             disabled={isProcessing}
           ></textarea>
           
-          {/* Ô checkbox mới */}
-          <div className="flex items-center mb-4">
+          {/* Tuỳ chọn lọc Database */}
+          <div className="flex items-center mb-4 p-2 border rounded-md bg-gray-50">
             <input
               type="checkbox"
               id="filterNoTracking"
               checked={filterNoTracking}
               onChange={(e) => setFilterNoTracking(e.target.checked)}
               disabled={isProcessing}
-              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+              className="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
             />
-            <label htmlFor="filterNoTracking" className="ml-2 text-sm font-medium text-gray-900 cursor-pointer select-none">
-              Chỉ cập nhật những đơn chưa có mã vận đơn
+            <label htmlFor="filterNoTracking" className="ml-2 text-sm font-medium text-gray-800 cursor-pointer select-none">
+              Chỉ cập nhật những đơn **chưa có** mã vận đơn
             </label>
           </div>
 
@@ -136,7 +150,6 @@ export default function WebhookRetrier() {
         </div>
 
         {/* Cột 2: Kết quả */}
-        {/* ... (Giữ nguyên như code cũ của bạn) ... */}
         <div className="flex flex-col bg-white p-4 rounded-lg shadow border h-[550px]">
           <div className="font-semibold mb-4 flex justify-between items-center">
             <span>Lịch sử xử lý</span>
