@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { Play, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase'; // Tận dụng cấu hình sẵn có của bạn
 
 export default function WebhookRetrier() {
   const [inputText, setInputText] = useState('');
   const [results, setResults] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
-  
-  // State mới cho tuỳ chọn lọc đơn chưa có mã vận đơn
   const [filterNoTracking, setFilterNoTracking] = useState(false);
 
   // Hàm tạo độ trễ
@@ -27,32 +26,20 @@ export default function WebhookRetrier() {
     
     let idsToProcess = rawIds;
 
-    // 1. GỌI API SUPABASE ĐỂ LỌC ĐƠN NẾU Ô TICK ĐƯỢC CHỌN
+    // 1. GỌI EDGE FUNCTION QUA SUPABASE CLIENT ĐỂ LỌC DATABASE
     if (filterNoTracking) {
       try {
-        // Thay bằng Anon Key từ phần Project Settings > API của Supabase
-        const SUPABASE_ANON_KEY = '<ĐIỀN_ANON_KEY_CỦA_BẠN_VÀO_ĐÂY>';
-        const EDGE_FUNCTION_URL = 'https://infljrayvhidhfimksfp.supabase.co/functions/v1/smart-service';
-
-        const response = await fetch(EDGE_FUNCTION_URL, {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
-          },
-          body: JSON.stringify({ ids: rawIds })
+        // Dùng invoke thay cho fetch thuần
+        const { data, error } = await supabase.functions.invoke('smart-service', {
+          body: { ids: rawIds }
         });
         
-        if (response.ok) {
-          const data = await response.json();
-          idsToProcess = data.filteredIds || [];
-        } else {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Lỗi khi kết nối đến Edge Function');
-        }
+        if (error) throw error;
+        
+        idsToProcess = data?.filteredIds || [];
       } catch (error) {
         console.error("Lỗi filter:", error);
-        alert(`Lỗi lọc dữ liệu: ${error.message}`);
+        alert(`Lỗi lọc dữ liệu từ Supabase: ${error.message}`);
         setIsProcessing(false);
         return;
       }
@@ -89,6 +76,8 @@ export default function WebhookRetrier() {
       }
 
       setProgress({ current: i + 1, total: idsToProcess.length });
+      
+      // Delay 200ms trước khi bắn ID tiếp theo
       await delay(200);
     }
 
@@ -96,18 +85,20 @@ export default function WebhookRetrier() {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6">Công cụ chạy lại Webhook (Nhanh.vn)</h2>
+    <div className="p-6 max-w-6xl mx-auto font-sans animate-fade-in mt-8">
+      <h2 className="text-2xl font-black text-slate-800 uppercase tracking-wide mb-6">
+        Công cụ chạy lại Webhook (Nhanh.vn)
+      </h2>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Cột 1: Nhập liệu */}
-        <div className="flex flex-col bg-white p-4 rounded-lg shadow border">
-          <label className="font-semibold mb-2 flex justify-between">
+        <div className="flex flex-col bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+          <label className="font-bold mb-3 flex justify-between text-slate-700">
             <span>Danh sách ID Đơn hàng</span>
-            <span className="text-sm text-gray-500">Mỗi ID một dòng</span>
+            <span className="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-md">Mỗi ID một dòng</span>
           </label>
           <textarea
-            className="flex-1 w-full p-3 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 font-mono text-sm"
+            className="flex-1 w-full p-4 border border-slate-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4 font-mono text-sm shadow-inner bg-slate-50"
             rows="12"
             placeholder="800305288&#10;800305289&#10;800305290"
             value={inputText}
@@ -116,24 +107,24 @@ export default function WebhookRetrier() {
           ></textarea>
           
           {/* Tuỳ chọn lọc Database */}
-          <div className="flex items-center mb-4 p-2 border rounded-md bg-gray-50">
+          <div className="flex items-center mb-4 p-3 border border-slate-200 rounded-xl bg-blue-50/30">
             <input
               type="checkbox"
               id="filterNoTracking"
               checked={filterNoTracking}
               onChange={(e) => setFilterNoTracking(e.target.checked)}
               disabled={isProcessing}
-              className="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+              className="w-4 h-4 text-blue-600 bg-white border-slate-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
             />
-            <label htmlFor="filterNoTracking" className="ml-2 text-sm font-medium text-gray-800 cursor-pointer select-none">
-              Chỉ cập nhật những đơn **chưa có** mã vận đơn
+            <label htmlFor="filterNoTracking" className="ml-3 text-sm font-bold text-slate-700 cursor-pointer select-none">
+              Chỉ cập nhật những đơn chưa có mã vận đơn
             </label>
           </div>
 
           <button
             onClick={handleStart}
             disabled={isProcessing || !inputText.trim()}
-            className="flex items-center justify-center gap-2 w-full py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
+            className="flex items-center justify-center gap-2 w-full py-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold transition-all shadow-sm"
           >
             {isProcessing ? (
               <>
@@ -142,7 +133,7 @@ export default function WebhookRetrier() {
               </>
             ) : (
               <>
-                <Play className="w-5 h-5" />
+                <Play className="w-5 h-5" fill="currentColor" />
                 Bắt đầu chạy lại
               </>
             )}
@@ -150,17 +141,18 @@ export default function WebhookRetrier() {
         </div>
 
         {/* Cột 2: Kết quả */}
-        <div className="flex flex-col bg-white p-4 rounded-lg shadow border h-[550px]">
-          <div className="font-semibold mb-4 flex justify-between items-center">
+        <div className="flex flex-col bg-white p-6 rounded-2xl shadow-sm border border-slate-200 h-[550px]">
+          <div className="font-bold mb-4 flex justify-between items-center text-slate-700">
             <span>Lịch sử xử lý</span>
-            <span className="text-sm px-2 py-1 bg-green-100 text-green-700 rounded-full">
+            <span className="text-xs px-3 py-1.5 bg-green-50 text-green-700 border border-green-200 rounded-full flex items-center gap-1.5">
+              <CheckCircle2 size={14} />
               Thành công: {results.filter(r => r.status === 'success').length}
             </span>
           </div>
           
-          <div className="flex-1 overflow-y-auto border rounded-md p-2 bg-gray-50">
+          <div className="flex-1 overflow-y-auto border border-slate-200 rounded-xl p-3 bg-slate-50 shadow-inner">
             {results.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-gray-400">
+              <div className="h-full flex items-center justify-center text-slate-400 font-medium text-sm">
                 Chưa có dữ liệu xử lý
               </div>
             ) : (
@@ -168,7 +160,7 @@ export default function WebhookRetrier() {
                 {results.map((item, index) => (
                   <li 
                     key={index} 
-                    className={`flex items-center p-3 rounded-md bg-white border-l-4 shadow-sm ${
+                    className={`flex items-center p-3 rounded-lg bg-white border-l-4 shadow-sm ${
                       item.status === 'success' ? 'border-green-500' : 'border-red-500'
                     }`}
                   >
@@ -177,9 +169,9 @@ export default function WebhookRetrier() {
                     ) : (
                       <AlertCircle className="w-5 h-5 text-red-500 mr-3 shrink-0" />
                     )}
-                    <span className="font-mono">{item.id}</span>
+                    <span className="font-mono text-sm font-medium text-slate-700">{item.id}</span>
                     {item.status === 'error' && (
-                      <span className="ml-auto text-xs text-red-500 truncate">{item.message}</span>
+                      <span className="ml-auto text-xs text-red-500 font-medium truncate pl-2">{item.message}</span>
                     )}
                   </li>
                 ))}
