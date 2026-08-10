@@ -27,16 +27,17 @@ export default function InventoryReport() {
   const [isSearchingPrint, setIsSearchingPrint] = useState(false);
   const [fileLoading, setFileLoading] = useState(false);
 
-  // STATE CHO SETTINGS IN ẤN (Bổ sung cấu hình Code)
+  // STATE CHO SETTINGS IN ẤN (Bổ sung cấu hình Scale)
   const [printConfig, setPrintConfig] = useState({
     shopName: 'AMELIE',
     showShopName: true,
     showProductName: true,
     showPrintDate: false,
-    codeType: 'barcode', // 'barcode' hoặc 'qrcode'
-    barcodeWidth: 1.2,   // Độ đậm nét mã vạch
-    barcodeHeight: 26,   // Chiều cao mã vạch
-    qrSize: 45           // Kích thước mã QR (px)
+    codeType: 'barcode', 
+    barcodeWidth: 1.2,   
+    barcodeHeight: 26,   
+    qrSize: 45,
+    codeScale: 100       // Tỷ lệ scale tổng thể (%)
   });
 
   const searchInputRef = useRef(null);
@@ -92,7 +93,7 @@ export default function InventoryReport() {
     if (!str) return '';
     return String(str)
       .normalize('NFC')
-      .replace(/[\u2013\u2014]/g, '-') // Ép En-dash và Em-dash về dấu gạch ngang chuẩn
+      .replace(/[\u2013\u2014]/g, '-')
       .replace(/\s+/g, ' ')
       .trim()
       .toUpperCase();
@@ -437,7 +438,6 @@ export default function InventoryReport() {
             </svg>
           `;
         } else {
-          // Render layout cho QR code (Thư viện sẽ render canvas vào div .qrcode)
           renderCodeHTML = `
             <div class="qrcode-wrapper">
                <div class="qrcode" data-value="${item.barcode}"></div>
@@ -446,11 +446,12 @@ export default function InventoryReport() {
           `;
         }
 
+        // ⚡️ SỬ DỤNG transform: scale ĐỂ PHÓNG TO/THU NHỎ TOÀN BỘ CODE
         htmlContent += `
           <div class="label">
             ${printConfig.showShopName ? `<div class="shop-name">${printConfig.shopName}</div>` : ''}
             
-            <div class="barcode-container">
+            <div class="barcode-container" style="transform: scale(${printConfig.codeScale / 100}); transform-origin: center center;">
               ${renderCodeHTML}
             </div>
             
@@ -752,6 +753,20 @@ export default function InventoryReport() {
                         <option value="barcode">Mã vạch (Barcode 1D)</option>
                         <option value="qrcode">Mã vuông (QR Code)</option>
                       </select>
+                    </div>
+
+                    {/* CẤU HÌNH TỶ LỆ SCALE CHUNG */}
+                    <div className="pt-2 border-t border-slate-200/60 mt-2">
+                      <div className="flex justify-between mb-1">
+                        <label className="text-[11px] font-bold text-slate-600">Tỷ lệ khung mã (Scale)</label>
+                        <span className="text-[11px] font-bold text-blue-600">{printConfig.codeScale}%</span>
+                      </div>
+                      <input 
+                        type="range" min="50" max="150" step="5" 
+                        value={printConfig.codeScale} 
+                        onChange={e => setPrintConfig({...printConfig, codeScale: Number(e.target.value)})} 
+                        className="w-full accent-blue-600 cursor-pointer" 
+                      />
                     </div>
 
                     {/* CẤU HÌNH BARCODE */}
