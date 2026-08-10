@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import * as pdfjsLib from 'pdfjs-dist';
 
@@ -25,16 +25,17 @@ export default function AWBProcessor() {
   // Trạng thái cho hệ thống Preview
   const [previewImg, setPreviewImg] = useState(null);
   const [pdfDim, setPdfDim] = useState({ width: 0, height: 0 }); 
+  const [previewScale, setPreviewScale] = useState(1); // Scale tỷ lệ thực tế
   const previewContainerRef = useRef(null);
 
-  // Cấu hình linh hoạt mới
+  // Cấu hình linh hoạt
   const [config, setConfig] = useState({
     x: 20,
     y: 150,
-    boxWidth: 200,         // Chiều rộng khung (Tính bằng Point PDF)
+    boxWidth: 200,         
     fontSize: 12,
     lineHeight: 16,
-    textFormat: '{product} -- {location}' // Định dạng hiển thị
+    textFormat: '{product} -- {location}' 
   });
 
   const fileInputRef = useRef(null);
@@ -44,6 +45,25 @@ export default function AWBProcessor() {
     { product_name: 'ÁO MẪU 01 - Đen - M', location_code: 'KỆ A1' },
     { product_name: 'QUẦN MẪU 02 - L', location_code: 'KỆ B2' }
   ];
+
+  // ==========================================
+  // LẮNG NGHE KÍCH THƯỚC CONTAINER ĐỂ SCALE CHUẨN XÁC
+  // ==========================================
+  useEffect(() => {
+    if (!previewContainerRef.current || pdfDim.width === 0) return;
+
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        // Tỷ lệ = Chiều rộng hiển thị thực tế (px) / Chiều rộng gốc của PDF (point)
+        const currentScale = entry.contentRect.width / pdfDim.width;
+        setPreviewScale(currentScale);
+      }
+    });
+
+    resizeObserver.observe(previewContainerRef.current);
+    return () => resizeObserver.disconnect();
+  }, [pdfDim.width]);
+
 
   // ==========================================
   // HỆ THỐNG LOG
@@ -69,6 +89,7 @@ export default function AWBProcessor() {
         const pdfjsDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         const page = await pdfjsDoc.getPage(1);
         
+        // Tăng scale để ảnh nét, sau đó chia lại để lấy kích thước gốc (Point)
         const viewport = page.getViewport({ scale: 1.5 });
         setPdfDim({ width: viewport.width / 1.5, height: viewport.height / 1.5 });
 
@@ -93,9 +114,6 @@ export default function AWBProcessor() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // ==========================================
-  // LOGIC CLICK ĐỂ CHỌN TỌA ĐỘ
-  // ==========================================
   const handlePreviewClick = (e) => {
     if (!previewContainerRef.current || !pdfDim.width) return;
     
@@ -114,7 +132,7 @@ export default function AWBProcessor() {
   };
 
   // ==========================================
-  // XỬ LÝ CỐT LÕI (QUÉT MÃ & GHI PDF)
+  // XỬ LÝ CỐT LÕI
   // ==========================================
   const fetchOrderDetails = async (trackingCode) => {
     if (!trackingCode) return [];
@@ -152,6 +170,9 @@ export default function AWBProcessor() {
       const totalPages = pdfjsDoc.numPages;
       setProgress({ current: 0, total: totalPages });
 
+      // LƯU CÁC MÃ ĐÃ XỬ LÝ ĐỂ TRÁNH TRÙNG LẶP CẢ TRANG & CẢ FILE
+      const processedCodes = new Set();
+
       for (let i = 1; i <= totalPages; i++) {
         const pageJS = await pdfjsDoc.getPage(i);
         let barcodeText = null;
@@ -164,21 +185,26 @@ export default function AWBProcessor() {
           let matches = fullText.match(trackingRegex);
 
           if (matches && matches.length > 0) {
+            // Lọc loại bỏ trùng lặp trong mảng ngay lập tức
+            let uniqueMatches = [...new Set(matches)];
+
             const priorityPrefixes = ['SPX', 'SPEVN', 'JT', 'VN', 'S', '8'];
-            matches.sort((a, b) => {
+            uniqueMatches.sort((a, b) => {
               const aHasPrefix = priorityPrefixes.some(p => a.startsWith(p));
               const bHasPrefix = priorityPrefixes.some(p => b.startsWith(p));
               if (aHasPrefix && !bHasPrefix) return -1;
               if (!aHasPrefix && bHasPrefix) return 1;
               return b.length - a.length; 
             });
-            barcodeText = matches[0].toUpperCase();
+            
+            // Chỉ lấy duy nhất 1 mã đầu tiên
+            barcodeText = uniqueMatches[0].toUpperCase();
           }
         } catch (e) {
           console.warn(`Lỗi đọc text trang ${i}:`, e);
         }
 
-        // CHIẾN THUẬT 2: Quét mã vạch từ ảnh
+        // CHIẾN THUẬT 2: Quét mã vạch từ ảnh (Nếu đọc text thất bại)
         if (!barcodeText) {
           const scales = [2.0, 3.0, 1.5, 4.0];
           for (const scale of scales) {
@@ -197,8 +223,17 @@ export default function AWBProcessor() {
           }
         }
 
-        // VẼ PDF
+        // KIỂM TRA TRÙNG LẶP TOÀN CỤC VÀ VẼ PDF
         if (barcodeText) {
+          if (processedCodes.has(barcodeText)) {
+            addLog(`Trang ${i}: Bỏ qua mã [${barcodeText}] do trùng lặp!`, 'warning');
+            setProgress({ current: i, total: totalPages });
+            continue; // Bỏ qua trang này, chuyển sang trang tiếp theo
+          }
+
+          // Ghi nhận đã xử lý
+          processedCodes.add(barcodeText);
+
           const productsInfo = await fetchOrderDetails(barcodeText);
           
           if (productsInfo.length > 0) {
@@ -208,7 +243,6 @@ export default function AWBProcessor() {
             const safeBoxWidth = Number(config.boxWidth);
             const usableWidth = safeBoxWidth - (padding * 2);
 
-            // Thuật toán tách dòng nếu văn bản dài hơn khung (Text Wrapping)
             productsInfo.forEach(p => {
               const rawString = config.textFormat
                 .replace('{product}', p.product_name || '')
@@ -294,11 +328,7 @@ export default function AWBProcessor() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* ==================================
-            CỘT TRÁI: UPLOAD, SETTINGS, LOGS
-        ================================== */}
         <div className="lg:col-span-5 flex flex-col gap-6">
-          
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden p-6">
             {!file ? (
               <div 
@@ -419,17 +449,16 @@ export default function AWBProcessor() {
                   ref={previewContainerRef}
                   className="relative bg-white shadow-xl cursor-crosshair group max-w-full"
                   onClick={handlePreviewClick}
-                  style={{ containerType: 'inline-size' }}
                 >
                   <img src={previewImg} alt="PDF Preview" className="max-w-full h-auto block select-none pointer-events-none" />
                   
-                  {/* CỤM MÔ PHỎNG HIỂN THỊ (Mock Box) */}
+                  {/* CỤM MÔ PHỎNG HIỂN THỊ (Mock Box) - SCALE TỰ ĐỘNG THEO ẢNH */}
                   <div 
                     className="absolute z-10 pointer-events-none transition-all"
                     style={{
                       left: `${(config.x / pdfDim.width) * 100}%`,
                       top: `${(config.y / pdfDim.height) * 100}%`,
-                      width: `${(config.boxWidth / pdfDim.width) * 100}%`, 
+                      width: `${config.boxWidth * previewScale}px`, 
                       transform: 'translate(0, 0)'
                     }}
                   >
@@ -437,8 +466,8 @@ export default function AWBProcessor() {
                     <div 
                       className="bg-white border border-red-500 shadow-md p-[4px] break-words" 
                       style={{
-                         fontSize: `${(config.fontSize / pdfDim.width) * 100}cqw`, 
-                         lineHeight: `${(config.lineHeight / pdfDim.width) * 100}cqw`
+                         fontSize: `${config.fontSize * previewScale}px`, 
+                         lineHeight: `${config.lineHeight * previewScale}px`
                       }}
                     >
                       {mockProducts.map((p, idx) => (
