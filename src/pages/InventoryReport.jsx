@@ -27,12 +27,16 @@ export default function InventoryReport() {
   const [isSearchingPrint, setIsSearchingPrint] = useState(false);
   const [fileLoading, setFileLoading] = useState(false);
 
-  // STATE CHO SETTINGS IN ẤN
+  // STATE CHO SETTINGS IN ẤN (Bổ sung cấu hình Code)
   const [printConfig, setPrintConfig] = useState({
     shopName: 'AMELIE',
     showShopName: true,
     showProductName: true,
-    showPrintDate: false
+    showPrintDate: false,
+    codeType: 'barcode', // 'barcode' hoặc 'qrcode'
+    barcodeWidth: 1.2,   // Độ đậm nét mã vạch
+    barcodeHeight: 26,   // Chiều cao mã vạch
+    qrSize: 45           // Kích thước mã QR (px)
   });
 
   const searchInputRef = useRef(null);
@@ -303,7 +307,7 @@ export default function InventoryReport() {
   const generatePrintJob = () => {
     const validItems = printItems.filter(i => i.status === 'ok' && i.qty > 0);
     if (validItems.length === 0) {
-      alert("Không có mã vạch hợp lệ nào để in!");
+      alert("Không có mã vạch/QR hợp lệ nào để in!");
       return;
     }
 
@@ -322,17 +326,14 @@ export default function InventoryReport() {
     const printWindow = window.open('', '_blank');
     const today = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
     
-    // ⚡️ ĐIỀU CHỈNH ĐỘ CAO BARCODE ĐỂ NHƯỜNG CHỖ CHO TÊN SP TO HƠN
-    let barcodeHeight = 35;
-    if (printConfig.showShopName && printConfig.showProductName) barcodeHeight = 26; 
-    else if (!printConfig.showShopName && !printConfig.showProductName) barcodeHeight = 55; 
-    
     let htmlContent = `
       <!DOCTYPE html>
       <html>
       <head>
         <title>In Tem Mã Vạch</title>
+        <!-- Import JSBarcode (Cho mã vạch) và QRCodeJS (Cho mã QR) -->
         <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <style>
           @page {
             size: 105mm 22mm;
@@ -374,6 +375,7 @@ export default function InventoryReport() {
           }
           .barcode-container {
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             width: 100%;
@@ -382,15 +384,26 @@ export default function InventoryReport() {
             width: 100%;
             max-height: 12mm;
           }
-          /* ⚡️ ĐÃ CHỈNH SỬA: BỎ NOWRAP ĐỂ XUỐNG DÒNG */
+          .qrcode-wrapper {
+             display: flex;
+             flex-direction: column;
+             align-items: center;
+             justify-content: center;
+          }
+          .qr-text {
+             font-size: 8px;
+             font-weight: bold;
+             margin-top: 2px;
+             letter-spacing: 0.5px;
+          }
           .product-name {
             font-size: 8.5px;
             font-weight: bold;
             line-height: 1.2;
             width: 100%;
-            max-height: 22px; /* Tương đương khoảng 2 dòng */
+            max-height: 22px; 
             overflow: hidden;
-            white-space: normal; /* Cho phép xuống dòng */
+            white-space: normal;
             word-wrap: break-word;
             margin-top: 0.5mm;
           }
@@ -409,20 +422,36 @@ export default function InventoryReport() {
     chunks.forEach(chunk => {
       htmlContent += `<div class="row">`;
       chunk.forEach(item => {
+        let renderCodeHTML = '';
+
+        if (printConfig.codeType === 'barcode') {
+          renderCodeHTML = `
+            <svg class="barcode" 
+                 jsbarcode-value="${item.barcode}"
+                 jsbarcode-displayvalue="true"
+                 jsbarcode-fontsize="08"
+                 jsbarcode-height="${printConfig.barcodeHeight}"
+                 jsbarcode-width="${printConfig.barcodeWidth}"
+                 jsbarcode-margin="0"
+                 jsbarcode-textmargin="2">
+            </svg>
+          `;
+        } else {
+          // Render layout cho QR code (Thư viện sẽ render canvas vào div .qrcode)
+          renderCodeHTML = `
+            <div class="qrcode-wrapper">
+               <div class="qrcode" data-value="${item.barcode}"></div>
+               <div class="qr-text">${item.barcode}</div>
+            </div>
+          `;
+        }
+
         htmlContent += `
           <div class="label">
             ${printConfig.showShopName ? `<div class="shop-name">${printConfig.shopName}</div>` : ''}
             
             <div class="barcode-container">
-              <svg class="barcode" 
-                   jsbarcode-value="${item.barcode}"
-                   jsbarcode-displayvalue="true"
-                   jsbarcode-fontsize="08"
-                   jsbarcode-height="${barcodeHeight}"
-                   jsbarcode-width="1.0"
-                   jsbarcode-margin="0"
-                   jsbarcode-textmargin="2">
-              </svg>
+              ${renderCodeHTML}
             </div>
             
             ${printConfig.showProductName ? `<div class="product-name">${item.name}</div>` : ''}
@@ -438,8 +467,24 @@ export default function InventoryReport() {
 
     htmlContent += `
         <script>
-          JsBarcode(".barcode").init();
-          setTimeout(() => { window.print(); }, 500);
+          if ('${printConfig.codeType}' === 'barcode') {
+            JsBarcode(".barcode").init();
+          } else {
+            // Khởi tạo QRCode cho từng phần tử
+            document.querySelectorAll('.qrcode').forEach(function(el) {
+              new QRCode(el, {
+                text: el.getAttribute('data-value'),
+                width: ${printConfig.qrSize},
+                height: ${printConfig.qrSize},
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.L
+              });
+            });
+          }
+          
+          // Đợi render hoàn tất
+          setTimeout(() => { window.print(); }, 800);
         </script>
       </body>
       </html>
@@ -570,14 +615,14 @@ export default function InventoryReport() {
       {/* ========================================== */}
       {showPrintModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-6xl flex flex-col h-[90vh] overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-7xl flex flex-col h-[90vh] overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
             
             {/* Header Modal */}
             <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 text-blue-700 rounded-xl"><Printer size={20}/></div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">In mã vạch sản phẩm</h3>
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">In mã vạch / QR sản phẩm</h3>
                   <p className="text-[10px] text-slate-500 font-medium">Khổ giấy cuộn: 105x22mm (3 tem/hàng)</p>
                 </div>
               </div>
@@ -692,9 +737,71 @@ export default function InventoryReport() {
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
                     <Settings2 size={18} className="text-slate-700" />
-                    <h3 className="font-black text-sm text-slate-800 uppercase tracking-wide">Cài đặt</h3>
+                    <h3 className="font-black text-sm text-slate-800 uppercase tracking-wide">Cài đặt in ấn</h3>
                   </div>
 
+                  {/* CHỌN LOẠI MÃ */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700">Định dạng mã</span>
+                      <select 
+                        value={printConfig.codeType} 
+                        onChange={e => setPrintConfig({...printConfig, codeType: e.target.value})}
+                        className="text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg p-1.5 outline-none focus:border-blue-500 cursor-pointer"
+                      >
+                        <option value="barcode">Mã vạch (Barcode 1D)</option>
+                        <option value="qrcode">Mã vuông (QR Code)</option>
+                      </select>
+                    </div>
+
+                    {/* CẤU HÌNH BARCODE */}
+                    {printConfig.codeType === 'barcode' && (
+                      <>
+                        <div className="pt-2 border-t border-slate-200/60">
+                          <div className="flex justify-between mb-1">
+                            <label className="text-[11px] font-bold text-slate-600">Độ đậm nét vạch</label>
+                            <span className="text-[11px] font-bold text-blue-600">{printConfig.barcodeWidth}</span>
+                          </div>
+                          <input 
+                            type="range" min="1" max="4" step="0.1" 
+                            value={printConfig.barcodeWidth} 
+                            onChange={e => setPrintConfig({...printConfig, barcodeWidth: Number(e.target.value)})} 
+                            className="w-full accent-blue-600 cursor-pointer" 
+                          />
+                        </div>
+                        <div className="pt-2 border-t border-slate-200/60">
+                          <div className="flex justify-between mb-1">
+                            <label className="text-[11px] font-bold text-slate-600">Chiều cao vạch</label>
+                            <span className="text-[11px] font-bold text-blue-600">{printConfig.barcodeHeight}px</span>
+                          </div>
+                          <input 
+                            type="range" min="15" max="60" step="1" 
+                            value={printConfig.barcodeHeight} 
+                            onChange={e => setPrintConfig({...printConfig, barcodeHeight: Number(e.target.value)})} 
+                            className="w-full accent-blue-600 cursor-pointer" 
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    {/* CẤU HÌNH QR CODE */}
+                    {printConfig.codeType === 'qrcode' && (
+                      <div className="pt-2 border-t border-slate-200/60">
+                        <div className="flex justify-between mb-1">
+                          <label className="text-[11px] font-bold text-slate-600">Kích thước mã QR</label>
+                          <span className="text-[11px] font-bold text-blue-600">{printConfig.qrSize}px</span>
+                        </div>
+                        <input 
+                          type="range" min="30" max="80" step="1" 
+                          value={printConfig.qrSize} 
+                          onChange={e => setPrintConfig({...printConfig, qrSize: Number(e.target.value)})} 
+                          className="w-full accent-blue-600 cursor-pointer" 
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* CẤU HÌNH HIỂN THỊ TEXT */}
                   <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-700">Hiển thị Tên Shop</span>
