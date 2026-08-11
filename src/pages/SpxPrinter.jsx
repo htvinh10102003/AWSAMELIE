@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Printer, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase'; // Đảm bảo đường dẫn này đúng với project của ông
+import { supabase } from '../lib/supabase'; 
 
 export default function SpxPrinter() {
   const [inputText, setInputText] = useState('');
@@ -8,7 +8,6 @@ export default function SpxPrinter() {
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleStart = async () => {
-    // Tách các ID từ textarea
     const rawIds = inputText
       .split(/[\n, ]+/)
       .map(id => id.trim())
@@ -17,26 +16,31 @@ export default function SpxPrinter() {
     if (rawIds.length === 0) return;
 
     setIsProcessing(true);
-    setResults([]); // Reset lịch sử
+    setResults([]); 
 
     try {
-      // 1. GỌI EDGE FUNCTION SUPABASE (Gửi nguyên cục array đi)
+      // Gọi Edge Function, đổi tên param truyền lên là trackingNumbers
       const { data, error } = await supabase.functions.invoke('spx-printer', {
-        body: { orderSns: rawIds }
+        body: { trackingNumbers: rawIds }
       });
       
       if (error) throw error;
 
-      // 2. XỬ LÝ KẾT QUẢ TỪ SPX
-      // SPX thường trả về code = 0 nếu thành công
       if (data && data.code === 0) {
         const taskId = data.data?.task_id;
+        const report = data._custom_report; // Lấy report từ Deno trả về
+        
+        let detailMsg = `Đã gửi in ${report.success_count} đơn hàng.`;
+        if (report.failed_tracks.length > 0) {
+          detailMsg += ` Thất bại ${report.failed_tracks.length} mã: ${report.failed_tracks.join(', ')}`;
+        }
+
         setResults((prev) => [
           { 
             time: new Date().toLocaleTimeString(), 
-            status: 'success', 
+            status: report.failed_tracks.length > 0 ? 'warning' : 'success', 
             message: `Tạo lệnh in thành công! Task ID: ${taskId}`,
-            details: `Đã gửi ${rawIds.length} mã đơn hàng.`
+            details: detailMsg
           },
           ...prev
         ]);
@@ -51,7 +55,7 @@ export default function SpxPrinter() {
           time: new Date().toLocaleTimeString(), 
           status: 'error', 
           message: `Lỗi: ${error.message}`,
-          details: `Không thể gửi ${rawIds.length} mã đơn hàng.`
+          details: `Không thể xử lý yêu cầu in.`
         },
         ...prev
       ]);
@@ -70,13 +74,13 @@ export default function SpxPrinter() {
         {/* Cột 1: Nhập liệu */}
         <div className="flex flex-col bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
           <label className="font-bold mb-3 flex justify-between text-slate-700">
-            <span>Danh sách Mã Đơn (Order SN)</span>
+            <span>Danh sách Mã Vận Đơn (Tracking No.)</span>
             <span className="text-xs text-slate-500 font-medium bg-slate-100 px-2 py-1 rounded-md">Mỗi mã một dòng</span>
           </label>
           <textarea
             className="flex-1 w-full p-4 border border-slate-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-orange-500 mb-6 font-mono text-sm shadow-inner bg-slate-50"
             rows="12"
-            placeholder="VN269404301622476E&#10;VN269404301622477F..."
+            placeholder="SPXVN064251903358&#10;SPXVN064251903359..."
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             disabled={isProcessing}
@@ -90,7 +94,7 @@ export default function SpxPrinter() {
             {isProcessing ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Đang gửi lệnh in lên SPX...
+                Đang dịch mã & Gửi lệnh in...
               </>
             ) : (
               <>
@@ -122,12 +126,15 @@ export default function SpxPrinter() {
                   <li 
                     key={index} 
                     className={`flex flex-col p-4 rounded-xl bg-white border-l-4 shadow-sm ${
-                      item.status === 'success' ? 'border-green-500' : 'border-red-500'
+                      item.status === 'success' ? 'border-green-500' : 
+                      item.status === 'warning' ? 'border-yellow-500' : 'border-red-500'
                     }`}
                   >
                     <div className="flex items-center">
                       {item.status === 'success' ? (
                         <CheckCircle2 className="w-5 h-5 text-green-500 mr-3 shrink-0" />
+                      ) : item.status === 'warning' ? (
+                        <AlertCircle className="w-5 h-5 text-yellow-500 mr-3 shrink-0" />
                       ) : (
                         <AlertCircle className="w-5 h-5 text-red-500 mr-3 shrink-0" />
                       )}
