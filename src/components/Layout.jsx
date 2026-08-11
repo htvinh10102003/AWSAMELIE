@@ -6,7 +6,7 @@ import {
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
   BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2, 
   LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2, Menu,
-  Filter, FileEdit, LayoutGrid, Webhook, History
+  Filter, FileEdit, LayoutGrid, Webhook, History, ShieldAlert
 } from 'lucide-react';
 import TestingNoticeBanner from './TestingNoticeBanner';
 
@@ -31,7 +31,6 @@ export default function Layout() {
   const [isAdjustMenuOpen, setIsAdjustMenuOpen] = useState(false);
 
   useEffect(() => {
-    // Đã thêm điều kiện /tra-cuu-luan-chuyen để auto-open Dropdown Dashboard
     if (location.pathname === '/' || location.pathname.includes('/dashboard-') || location.pathname.includes('/tra-cuu-luan-chuyen')) setIsDashboardOpen(true);
     if (location.pathname.includes('/bao-cao-don') || location.pathname.includes('/don-da-in-hom-nay') || location.pathname.includes('/loc-don-theo-day-ke') || location.pathname.includes('/chen-vi-tri-awb') || location.pathname.includes('/in-don-spx')) setIsPrintOrdersOpen(true);
     if (location.pathname.includes('/dong-goi-') || location.pathname.includes('/toc-do-dong-goi-')) setIsPackingOpen(true);
@@ -65,6 +64,7 @@ export default function Layout() {
   const displayName = user?.user_metadata?.full_name || userEmail.split('@')[0] || 'Đang tải...';
   const avatarLetter = displayName.charAt(0).toUpperCase();
   const isAdmin = user?.user_metadata?.role === 'admin';
+  const isOwner = user?.user_metadata?.is_owner === true;
 
   const reportMenus = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -122,7 +122,6 @@ export default function Layout() {
               const Icon = item.icon;
 
               if (item.id === 'dashboard') {
-                // Thêm tra-cuu-luan-chuyen vào danh sách check active
                 const isChildActive = location.pathname === '/' || location.pathname === '/dashboard-don-hoan' || location.pathname === '/dashboard-kpi' || location.pathname === '/tra-cuu-luan-chuyen';
                 return (
                   <div key={item.id} className="space-y-1.5">
@@ -149,7 +148,6 @@ export default function Layout() {
                           <Target size={16} className={location.pathname === '/dashboard-kpi' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Tổng quan KPI tháng</span>
                         </Link>
-                        {/* Tab tra cứu luân chuyển MỚI THÊM VÀO ĐÂY */}
                         <Link to="/tra-cuu-luan-chuyen" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/tra-cuu-luan-chuyen' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
                           <History size={16} className={location.pathname === '/tra-cuu-luan-chuyen' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Tra cứu luân chuyển</span>
@@ -374,6 +372,12 @@ export default function Layout() {
                   </button>
                   {sidebarExpanded && isAdjustMenuOpen && (
                     <div className="mt-1 mb-2 ml-6 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap">
+                      {isOwner && (
+                        <Link to="/cap-nhat-tinh-nang" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-tinh-nang' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <ShieldAlert size={16} className={location.pathname === '/cap-nhat-tinh-nang' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
+                          <span className="text-sm">Khóa tính năng</span>
+                        </Link>
+                      )}
                       <Link to="/cap-nhat-nguoi-dong-goi" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-nguoi-dong-goi' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
                         <UserCog size={16} className={location.pathname === '/cap-nhat-nguoi-dong-goi' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
                         <span className="text-sm">Người đóng gói</span>
