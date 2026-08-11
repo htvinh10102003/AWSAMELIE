@@ -24,7 +24,9 @@ import SetupZone from './pages/SetupZone';
 import FilterByZone from './pages/FilterByZone';
 import WebhookRetrier from './pages/WebhookRetrier';
 import DashboardDonHoan from './pages/DashboardDonHoan';
-import AWBProcessor from './pages/AWBProcessor'
+import AWBProcessor from './pages/AWBProcessor';
+// Import Component SPX Printer mới tạo
+import SpxPrinter from './pages/SpxPrinter'; 
 
 export default function App() {
   return (
@@ -44,6 +46,8 @@ export default function App() {
           <Route path="don-da-in-hom-nay" element={<PrintedOrdersToday />} />
           <Route path="loc-don-theo-day-ke" element={<FilterByZone />} />
           <Route path="chen-vi-tri-awb" element={<AWBProcessor />} />
+          {/* Route mới thêm cho tool in SPX */}
+          <Route path="in-don-spx" element={<SpxPrinter />} />
 
           {/* 📦 TAB ĐÓNG GÓI */}
           <Route path="dong-goi-don-hang" element={<UnderDevelopment />} />
@@ -81,8 +85,6 @@ export default function App() {
           <Route path="cap-nhat-so-do-kho" element={<ProtectedRoute><UpdateWarehouseMap /></ProtectedRoute>} />
           <Route path="quan-ly-kpi" element={<ProtectedRoute><KPI_Management /></ProtectedRoute>} />
           <Route path="cap-nhat-day-ke" element={<ProtectedRoute><SetupZone /></ProtectedRoute>} />
-          
-          {/* --- ROUTE MỚI THÊM VÀO --- */}
           <Route path="cap-nhat-webhook" element={<ProtectedRoute><WebhookRetrier /></ProtectedRoute>} />
 
         </Route>
