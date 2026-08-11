@@ -25,8 +25,10 @@ import FilterByZone from './pages/FilterByZone';
 import WebhookRetrier from './pages/WebhookRetrier';
 import DashboardDonHoan from './pages/DashboardDonHoan';
 import AWBProcessor from './pages/AWBProcessor';
-// Import Component SPX Printer mới tạo
 import SpxPrinter from './pages/SpxPrinter'; 
+
+// Import Component Tra cứu luân chuyển mới tạo
+import StatusTransitionTracker from './pages/StatusTransitionTracker';
 
 export default function App() {
   return (
@@ -37,16 +39,17 @@ export default function App() {
         <Route path="/" element={<Layout />}>
 
           {/* 📊 TAB DASHBOARD (TỔNG QUAN) */}
-          <Route index element={<Dashboard />} /> {/* Đơn đi hàng ngày */}
+          <Route index element={<Dashboard />} />
           <Route path="dashboard-don-hoan" element={<DashboardDonHoan />} />
           <Route path="dashboard-kpi" element={<KPI_Report />} />
+          {/* Route mới thêm cho chức năng tra cứu trạng thái */}
+          <Route path="tra-cuu-luan-chuyen" element={<StatusTransitionTracker />} />
           
           {/* 🖨️ TAB ĐƠN IN */}
           <Route path="bao-cao-don" element={<OrderReport />} />
           <Route path="don-da-in-hom-nay" element={<PrintedOrdersToday />} />
           <Route path="loc-don-theo-day-ke" element={<FilterByZone />} />
           <Route path="chen-vi-tri-awb" element={<AWBProcessor />} />
-          {/* Route mới thêm cho tool in SPX */}
           <Route path="in-don-spx" element={<SpxPrinter />} />
 
           {/* 📦 TAB ĐÓNG GÓI */}
@@ -55,14 +58,12 @@ export default function App() {
           <Route path="toc-do-dong-goi-nhan-su" element={<UnderDevelopment />} />
           
           {/* 🔄 TAB ĐƠN HOÀN */}
-          {/* Bẻ lái link cũ sang tính năng kiểm tra đơn hoàn mới */}
           <Route path="bao-cao-hoan" element={<Navigate to="/kiem-tra-don-hoan" replace />} />
           <Route path="bao-cao-hoan-tong-hop" element={<UnderDevelopment />} />
           <Route path="kiem-tra-don-hoan" element={<KiemTraDonHoan />} />
           <Route path="xu-ly-don-hoan" element={<ReturnProcessing />} />
 
           {/* 📋 TAB BÁO CÁO KIỂM KÊ */}
-          {/* Bẻ lái link gốc sang thống kê */}
           <Route path="bao-cao-kiem-ke" element={<Navigate to="/thong-ke-kiem-ke" replace />} />
           <Route path="thong-ke-kiem-ke" element={<UnderDevelopment />} />
           <Route path="danh-sach-kiem-ke" element={<UnderDevelopment />} />
@@ -75,10 +76,10 @@ export default function App() {
           <Route path="don-khong-khai-gia" element={<DeclaredFeeReport />} />
           <Route path="doi-soat-kho" element={<OrderReconciliation />} />
           
-          {/* 🔒 KHÓA CỔNG CÀI ĐẶT ADMIN: Bọc ProtectedRoute bảo vệ nghiêm ngặt */}
+          {/* 🔒 KHÓA CỔNG CÀI ĐẶT ADMIN */}
           <Route path="admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
 
-          {/* 🔒 KHÓA CỔNG HIỆU CHỈNH: Được bảo vệ nghiêm ngặt bằng ProtectedRoute */}
+          {/* 🔒 KHÓA CỔNG HIỆU CHỈNH */}
           <Route path="cap-nhat-nguoi-dong-goi" element={<ProtectedRoute><UpdatePacker /></ProtectedRoute>} />
           <Route path="cap-nhat-lich-lam-viec" element={<ProtectedRoute><UpdateSchedule /></ProtectedRoute>} /> 
           <Route path="cap-nhat-san-pham" element={<ProtectedRoute><UpdateProduct /></ProtectedRoute>} />
