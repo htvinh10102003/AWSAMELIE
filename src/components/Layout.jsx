@@ -6,7 +6,7 @@ import {
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
   BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2, 
   LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2, Menu,
-  Filter, FileEdit, LayoutGrid, Webhook
+  Filter, FileEdit, LayoutGrid, Webhook, History
 } from 'lucide-react';
 import TestingNoticeBanner from './TestingNoticeBanner';
 
@@ -16,15 +16,12 @@ export default function Layout() {
   const [user, setUser] = useState(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   
-  // States quản lý sidebar thu gọn / ghim
   const [isSidebarPinned, setIsSidebarPinned] = useState(true);
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
   const sidebarExpanded = isSidebarPinned || isSidebarHovered;
 
-  // STATE MOBILE MENU
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // STATES QUẢN LÝ ĐÓNG/MỞ CÁC MENU DROPDOWN
   const [isDashboardOpen, setIsDashboardOpen] = useState(false);
   const [isPrintOrdersOpen, setIsPrintOrdersOpen] = useState(false);
   const [isPackingOpen, setIsPackingOpen] = useState(false);
@@ -33,10 +30,9 @@ export default function Layout() {
   const [isInventoryReportOpen, setIsInventoryReportOpen] = useState(false);
   const [isAdjustMenuOpen, setIsAdjustMenuOpen] = useState(false);
 
-  // Tự động mở dropdown nếu đang ở trang con
   useEffect(() => {
-    if (location.pathname === '/' || location.pathname.includes('/dashboard-')) setIsDashboardOpen(true);
-    // Đã bổ sung /in-don-spx vào luồng check mở menu Đơn in
+    // Đã thêm điều kiện /tra-cuu-luan-chuyen để auto-open Dropdown Dashboard
+    if (location.pathname === '/' || location.pathname.includes('/dashboard-') || location.pathname.includes('/tra-cuu-luan-chuyen')) setIsDashboardOpen(true);
     if (location.pathname.includes('/bao-cao-don') || location.pathname.includes('/don-da-in-hom-nay') || location.pathname.includes('/loc-don-theo-day-ke') || location.pathname.includes('/chen-vi-tri-awb') || location.pathname.includes('/in-don-spx')) setIsPrintOrdersOpen(true);
     if (location.pathname.includes('/dong-goi-') || location.pathname.includes('/toc-do-dong-goi-')) setIsPackingOpen(true);
     if (location.pathname.includes('/bao-cao-hoan-') || location.pathname.includes('/kiem-tra-don-hoan') || location.pathname.includes('/xu-ly-don-hoan')) setIsReturnOrdersOpen(true);
@@ -70,7 +66,6 @@ export default function Layout() {
   const avatarLetter = displayName.charAt(0).toUpperCase();
   const isAdmin = user?.user_metadata?.role === 'admin';
 
-  // KHAI BÁO CẤU TRÚC MENU MỚI
   const reportMenus = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'print_orders', icon: Printer, label: 'Đơn in' },
@@ -85,7 +80,6 @@ export default function Layout() {
   return (
     <div className="flex h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 font-sans antialiased text-gray-800 tracking-normal selection:bg-blue-500/20 selection:text-blue-700">
       
-      {/* SIDEBAR - Thêm overflow-x-hidden để mượt phần thu/mở */}
       <div
         onMouseEnter={() => setIsSidebarHovered(true)}
         onMouseLeave={() => setIsSidebarHovered(false)}
@@ -99,7 +93,6 @@ export default function Layout() {
         }`}
       >
         
-        {/* Logo + Pin button */}
         <div className="h-16 flex items-center justify-between px-4 relative bg-white/50 backdrop-blur-md border-b border-white/20 rounded-br-2xl whitespace-nowrap">
           <div className="flex items-center">
             <div className="bg-blue-600 p-1.5 rounded-xl shadow-lg shadow-blue-500/20 shrink-0">
@@ -119,7 +112,6 @@ export default function Layout() {
           </button>
         </div>
 
-        {/* Menu */}
         <div className="flex-1 overflow-y-auto overflow-x-hidden py-6 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
           <div className={`px-5 mb-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${sidebarExpanded ? 'opacity-100 h-auto' : 'opacity-0 h-0 overflow-hidden'}`}>
             Báo cáo & Vận hành
@@ -129,9 +121,9 @@ export default function Layout() {
             {reportMenus.map((item) => {
               const Icon = item.icon;
 
-              // 1. DROPDOWN DASHBOARD
               if (item.id === 'dashboard') {
-                const isChildActive = location.pathname === '/' || location.pathname === '/dashboard-don-hoan' || location.pathname === '/dashboard-kpi';
+                // Thêm tra-cuu-luan-chuyen vào danh sách check active
+                const isChildActive = location.pathname === '/' || location.pathname === '/dashboard-don-hoan' || location.pathname === '/dashboard-kpi' || location.pathname === '/tra-cuu-luan-chuyen';
                 return (
                   <div key={item.id} className="space-y-1.5">
                     <button onClick={() => setIsDashboardOpen(!isDashboardOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isDashboardOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
@@ -157,13 +149,17 @@ export default function Layout() {
                           <Target size={16} className={location.pathname === '/dashboard-kpi' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Tổng quan KPI tháng</span>
                         </Link>
+                        {/* Tab tra cứu luân chuyển MỚI THÊM VÀO ĐÂY */}
+                        <Link to="/tra-cuu-luan-chuyen" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/tra-cuu-luan-chuyen' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                          <History size={16} className={location.pathname === '/tra-cuu-luan-chuyen' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
+                          <span className="text-sm">Tra cứu luân chuyển</span>
+                        </Link>
                       </div>
                     )}
                   </div>
                 );
               }
 
-              // 2. DROPDOWN ĐƠN IN
               if (item.id === 'print_orders') {
                 const isChildActive = location.pathname === '/bao-cao-don' || location.pathname === '/don-da-in-hom-nay' || location.pathname === '/loc-don-theo-day-ke' || location.pathname === '/chen-vi-tri-awb' || location.pathname === '/in-don-spx';
                 return (
@@ -195,7 +191,6 @@ export default function Layout() {
                           <FileEdit size={16} className={location.pathname === '/chen-vi-tri-awb' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Chèn vị trí SP vào AWB</span>
                         </Link>
-                        {/* Tab SPX Printer MỚI ĐƯỢC THÊM */}
                         <Link to="/in-don-spx" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/in-don-spx' ? 'bg-orange-50 text-orange-600 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
                           <Printer size={16} className={location.pathname === '/in-don-spx' ? 'text-orange-500' : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">In Đơn SPX Tự Động</span>
@@ -206,7 +201,6 @@ export default function Layout() {
                 );
               }
               
-              // 3. DROPDOWN ĐÓNG GÓI
               if (item.id === 'packing') {
                 const isChildActive = location.pathname.includes('/dong-goi-') || location.pathname.includes('/toc-do-dong-goi-');
                 return (
@@ -243,7 +237,6 @@ export default function Layout() {
                 );
               }
 
-              // 4. DROPDOWN BÁO CÁO ĐƠN HOÀN 
               if (item.id === 'return_orders') {
                 const isChildActive = location.pathname === '/bao-cao-hoan-tong-hop' || location.pathname === '/kiem-tra-don-hoan' || location.pathname === '/xu-ly-don-hoan';
                 return (
@@ -277,7 +270,6 @@ export default function Layout() {
                 );
               }
 
-              // 5. DROPDOWN BÁO CÁO KIỂM KÊ
               if (item.id === 'inventory_check') {
                 const isChildActive = location.pathname === '/thong-ke-kiem-ke' || location.pathname === '/danh-sach-kiem-ke';
                 return (
@@ -307,7 +299,6 @@ export default function Layout() {
                 );
               }
 
-              // 6. DROPDOWN BÁO CÁO TỒN KHO
               if (item.id === 'inventory_report') {
                 const isChildActive = location.pathname === '/bao-cao-ton-kho' || location.pathname === '/vi-tri-san-pham';
                 return (
@@ -337,7 +328,6 @@ export default function Layout() {
                 );
               }
 
-              // 7. RENDER CÁC MỤC ĐƠN LẺ BÌNH THƯỜNG
               const isActive = location.pathname === item.path;
               return (
                 <div key={item.path} className="space-y-1.5">
@@ -416,7 +406,6 @@ export default function Layout() {
           )}
         </div>
         
-        {/* User Profile */}
         <div className="p-4 bg-white/40 backdrop-blur-lg border-t border-white/20 rounded-tr-2xl overflow-hidden whitespace-nowrap">
           <div className={`flex items-center justify-between transition-all duration-300 ${!sidebarExpanded ? 'flex-col gap-2' : ''}`}>
             <div className={`flex items-center gap-3 ${sidebarExpanded ? 'max-w-[75%]' : ''}`}>
@@ -433,9 +422,7 @@ export default function Layout() {
         </div>
       </div>
 
-      {/* MAIN CONTENT */}
       <div className="flex-1 overflow-auto relative bg-transparent">
-        {/* Hamburger menu mobile */}
         <button 
           onClick={() => setMobileMenuOpen(true)}
           className="md:hidden absolute top-4 left-4 z-30 p-2 bg-white/80 backdrop-blur-md rounded-xl shadow-lg hover:bg-white/90 transition-colors"
@@ -451,7 +438,6 @@ export default function Layout() {
         </div>
       </div>
 
-      {/* OVERLAY MOBILE */}
       {mobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 md:hidden"
@@ -459,7 +445,6 @@ export default function Layout() {
         />
       )}
 
-      {/* LOGOUT MODAL */}
       {showLogoutModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
           <div className="bg-white/80 backdrop-blur-2xl border border-white/40 rounded-3xl shadow-2xl w-full max-w-md p-6 transform transition-all duration-300 scale-100">

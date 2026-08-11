@@ -1,468 +1,456 @@
-import { useEffect, useState } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
-  TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
-  Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
-  BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2, 
-  LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2, Menu,
-  Filter, FileEdit, LayoutGrid, Webhook, History
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, 
+  Tooltip, Legend, ResponsiveContainer, ReferenceLine 
+} from 'recharts';
+import { 
+  Calendar, Printer, Truck, Layers, 
+  Package, X, Eye, AlertTriangle 
 } from 'lucide-react';
-import TestingNoticeBanner from './TestingNoticeBanner';
 
-export default function Layout() {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [user, setUser] = useState(null);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-  
-  const [isSidebarPinned, setIsSidebarPinned] = useState(true);
-  const [isSidebarHovered, setIsSidebarHovered] = useState(false);
-  const sidebarExpanded = isSidebarPinned || isSidebarHovered;
+const STATUS_MAP = {
+  40: 'Đã đóng gói', 42: 'Đang đóng gói', 43: 'Chờ thu gom',
+  54: 'Đơn mới', 55: 'Đang xác nhận', 56: 'Đã xác nhận', 57: 'Chờ khách xác nhận',
+  58: 'Hãng vận chuyển hủy đơn', 59: 'Đang chuyển', 60: 'Thành công', 61: 'Thất bại',
+  63: 'Khách hủy', 64: 'Hệ thống hủy', 68: 'Hết hàng',
+  71: 'Đang chuyển hoàn', 72: 'Đã chuyển hoàn', 73: 'Đổi kho xuất hàng', 74: 'Xác nhận hoàn'
+};
 
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+const CANCELED_STATUS_CODES = [58, 63, 64];
+const DISPATCHED_STATUS_CODES = [59, 60, 61, 71, 72];
 
-  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
-  const [isPrintOrdersOpen, setIsPrintOrdersOpen] = useState(false);
-  const [isPackingOpen, setIsPackingOpen] = useState(false);
-  const [isReturnOrdersOpen, setIsReturnOrdersOpen] = useState(false);
-  const [isInventoryCheckOpen, setIsInventoryCheckOpen] = useState(false);
-  const [isInventoryReportOpen, setIsInventoryReportOpen] = useState(false);
-  const [isAdjustMenuOpen, setIsAdjustMenuOpen] = useState(false);
-
-  useEffect(() => {
-    // Đã thêm điều kiện /tra-cuu-luan-chuyen để auto-open Dropdown Dashboard
-    if (location.pathname === '/' || location.pathname.includes('/dashboard-') || location.pathname.includes('/tra-cuu-luan-chuyen')) setIsDashboardOpen(true);
-    if (location.pathname.includes('/bao-cao-don') || location.pathname.includes('/don-da-in-hom-nay') || location.pathname.includes('/loc-don-theo-day-ke') || location.pathname.includes('/chen-vi-tri-awb') || location.pathname.includes('/in-don-spx')) setIsPrintOrdersOpen(true);
-    if (location.pathname.includes('/dong-goi-') || location.pathname.includes('/toc-do-dong-goi-')) setIsPackingOpen(true);
-    if (location.pathname.includes('/bao-cao-hoan-') || location.pathname.includes('/kiem-tra-don-hoan') || location.pathname.includes('/xu-ly-don-hoan')) setIsReturnOrdersOpen(true);
-    if (location.pathname.includes('/thong-ke-kiem-ke') || location.pathname.includes('/danh-sach-kiem-ke')) setIsInventoryCheckOpen(true);
-    if (location.pathname.includes('/bao-cao-ton-kho') || location.pathname.includes('/vi-tri-san-pham')) setIsInventoryReportOpen(true);
-    if (location.pathname.includes('/cap-nhat-')) setIsAdjustMenuOpen(true); 
-  }, [location.pathname]);
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-    };
-    fetchUser();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) navigate('/login');
-      else setUser(session.user);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    navigate('/login');
+export default function Dashboard() {
+  // ⚡️ TỐI ƯU 1: Lấy mặc định 7 ngày gần nhất cho nhẹ Database
+  const getTodayStr = () => new Date().toISOString().split('T')[0];
+  const getLast7DaysStr = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6); // Lùi 6 ngày + hôm nay = 7 ngày
+    return d.toISOString().split('T')[0];
   };
 
-  const userEmail = user?.email || '';
-  const displayName = user?.user_metadata?.full_name || userEmail.split('@')[0] || 'Đang tải...';
-  const avatarLetter = displayName.charAt(0).toUpperCase();
-  const isAdmin = user?.user_metadata?.role === 'admin';
+  const [startDate, setStartDate] = useState(getLast7DaysStr());
+  const [endDate, setEndDate] = useState(getTodayStr());
+  const [loading, setLoading] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [topProductLimit, setTopProductLimit] = useState(5);
 
-  const reportMenus = [
-    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { id: 'print_orders', icon: Printer, label: 'Đơn in' },
-    { id: 'packing', icon: Timer, label: 'Đóng gói' },
-    { id: 'return_orders', icon: Undo2, label: 'Báo cáo đơn hoàn' },
-    { id: 'inventory_check', icon: ClipboardCheck, label: 'Báo cáo kiểm kê' },
-    { path: '/doi-soat-kho', icon: ScanLine, label: 'Đối soát đơn cuối ngày' },
-    { id: 'inventory_report', icon: Boxes, label: 'Báo cáo tồn kho' },
-    { path: '/don-khong-khai-gia', icon: AlertTriangle, label: 'Đơn không khai giá' },
-  ];
+  const [selectedModalDate, setSelectedModalDate] = useState(null);
+  const [modalOrdersList, setModalOrdersList] = useState([]);
+
+  const fetchReportData = async () => {
+    setLoading(true);
+    try {
+      let fetchedOrders = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('orders')
+          .select(`
+            id, created_at, carrier_code, carrier_date, printed_at, status,
+            order_products (product_code, product_name, quantity)
+          `)
+          .or(`printed_at.gte.${startDate}T00:00:00Z,carrier_date.gte.${startDate}T00:00:00Z,created_at.gte.${startDate}T00:00:00Z`)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+          hasMore = false;
+        } else {
+          fetchedOrders = [...fetchedOrders, ...data];
+          if (data.length < pageSize) hasMore = false;
+          else page++;
+        }
+      }
+      setOrders(fetchedOrders);
+    } catch (err) {
+      console.error("❌ Lỗi load báo cáo:", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReportData();
+  }, [startDate, endDate]);
+
+  const formatDateStr = (isoString) => isoString ? isoString.split('T')[0] : null;
+
+  const generateChartData = () => {
+    const chartMap = new Map();
+    let start = new Date(startDate);
+    const end = new Date(endDate);
+    while (start <= end) {
+      const dateStr = start.toISOString().split('T')[0];
+      chartMap.set(dateStr, { date: dateStr, 'Đơn in': 0, 'Đơn đi': 0 });
+      start.setDate(start.getDate() + 1);
+    }
+
+    orders.forEach(order => {
+      const pDate = formatDateStr(order.printed_at);
+      const sDate = formatDateStr(order.carrier_date);
+      if (pDate && chartMap.has(pDate)) chartMap.get(pDate)['Đơn in'] += 1;
+      if (sDate && chartMap.has(sDate)) chartMap.get(sDate)['Đơn đi'] += 1;
+    });
+    return Array.from(chartMap.values());
+  };
+
+  const generatePendingShippingData = () => {
+    const pendingMap = new Map();
+    orders.forEach(order => {
+      if (order.printed_at && !order.carrier_date) {
+        const pDate = formatDateStr(order.printed_at);
+        if (pDate && pDate >= startDate && pDate <= endDate) {
+          if (!pendingMap.has(pDate)) pendingMap.set(pDate, []);
+          pendingMap.get(pDate).push(order);
+        }
+      }
+    });
+
+    return Array.from(pendingMap.entries())
+      .map(([date, list]) => {
+        const canceledCount = list.filter(o => CANCELED_STATUS_CODES.includes(Number(o.status))).length;
+        const dispatchedCount = list.filter(o => DISPATCHED_STATUS_CODES.includes(Number(o.status))).length;
+        return { date, count: list.length, canceledCount, dispatchedCount, ordersList: list };
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+  };
+
+  const generateTopProductsData = () => {
+    const productMap = new Map();
+    orders.forEach(order => {
+      const sDate = formatDateStr(order.carrier_date);
+      if (sDate && sDate >= startDate && sDate <= endDate && order.order_products) {
+        order.order_products.forEach(p => {
+          const code = p.product_code?.trim() || 'CHƯA_RÕ';
+          const name = p.product_name || 'Sản phẩm không tên';
+          const qty = Number(p.quantity || 0);
+          if (!productMap.has(code)) productMap.set(code, { code, name, quantity: 0 });
+          productMap.get(code).quantity += qty;
+        });
+      }
+    });
+
+    return Array.from(productMap.values())
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, topProductLimit);
+  };
+
+  const chartData = generateChartData();
+  const pendingShippingData = generatePendingShippingData();
+  const topProductsData = generateTopProductsData();
+
+  const totalPrintedInRange = chartData.reduce((sum, item) => sum + item['Đơn in'], 0);
+  const totalShippedInRange = chartData.reduce((sum, item) => sum + item['Đơn đi'], 0);
+  const totalPendingNow = pendingShippingData.reduce((sum, item) => sum + item.count, 0);
+  const totalCanceledNow = pendingShippingData.reduce((sum, item) => sum + item.canceledCount, 0);
+  const totalDispatchedNow = pendingShippingData.reduce((sum, item) => sum + item.dispatchedCount, 0);
+
+  // ⚡️ TỐI ƯU 2: Tính toán Trung bình cộng để vẽ line
+  const avgPrinted = chartData.length > 0 ? Math.round(totalPrintedInRange / chartData.length) : 0;
+  const avgShipped = chartData.length > 0 ? Math.round(totalShippedInRange / chartData.length) : 0;
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 font-sans antialiased text-gray-800 tracking-normal selection:bg-blue-500/20 selection:text-blue-700">
-      
-      <div
-        onMouseEnter={() => setIsSidebarHovered(true)}
-        onMouseLeave={() => setIsSidebarHovered(false)}
-        onClick={(e) => {
-          if (e.target.closest('a')) setMobileMenuOpen(false);
-        }}
-        className={`flex-shrink-0 bg-white/70 backdrop-blur-2xl border-r border-white/30 shadow-[0_8px_32px_rgba(0,0,0,0.04)] flex flex-col z-10 transition-all duration-300 ease-in-out relative overflow-x-hidden ${
-          sidebarExpanded ? 'w-64' : 'w-[72px]'
-        } max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:transform max-md:transition-all max-md:duration-300 max-md:ease-in-out max-md:w-64 max-md:shadow-2xl ${
-          mobileMenuOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'
-        }`}
-      >
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 p-3 sm:p-6 md:p-8">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 pb-16 animate-in fade-in duration-300">
         
-        <div className="h-16 flex items-center justify-between px-4 relative bg-white/50 backdrop-blur-md border-b border-white/20 rounded-br-2xl whitespace-nowrap">
-          <div className="flex items-center">
-            <div className="bg-blue-600 p-1.5 rounded-xl shadow-lg shadow-blue-500/20 shrink-0">
-              <PackageSearch className="text-white" size={22} />
-            </div>
-            <h1 className={`text-xl font-black text-gray-900 tracking-tight ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
-              Amelie<span className="text-blue-600 font-semibold">WMS</span>
-            </h1>
+        {/* HEADER & THANH BỘ LỌC NGÀY (Responsive) */}
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center p-5 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm gap-4">
+          <div>
+            <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Báo cáo đơn đi hàng ngày</h2>
+            <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">DESIGNED AND DEVELOPED BY VINH</p>
           </div>
           
-          <button
-            onClick={() => setIsSidebarPinned(!isSidebarPinned)}
-            className={`p-1 rounded-lg hover:bg-white/60 transition-colors shrink-0 ${!sidebarExpanded ? 'absolute right-[18px]' : ''}`}
-            title={isSidebarPinned ? 'Bỏ ghim sidebar' : 'Ghim sidebar'}
-          >
-            {isSidebarPinned ? <PinOff size={14} className="text-gray-500" /> : <Pin size={14} className="text-gray-500" />}
-          </button>
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 bg-white/80 backdrop-blur-md border border-white/40 p-2 sm:p-2.5 rounded-2xl shadow-sm w-full lg:w-auto">
+            <Calendar size={18} className="text-gray-400 ml-1.5 hidden sm:block" />
+            <input 
+              type="date" 
+              value={startDate} 
+              onChange={e => setStartDate(e.target.value)} 
+              className="flex-1 bg-transparent text-xs sm:text-sm font-semibold text-gray-700 outline-none cursor-pointer" 
+            />
+            <span className="text-gray-300 font-bold text-xs sm:text-sm px-1">đến</span>
+            <input 
+              type="date" 
+              value={endDate} 
+              onChange={e => setEndDate(e.target.value)} 
+              className="flex-1 bg-transparent text-xs sm:text-sm font-semibold text-gray-700 outline-none cursor-pointer" 
+            />
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden py-6 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-          <div className={`px-5 mb-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${sidebarExpanded ? 'opacity-100 h-auto' : 'opacity-0 h-0 overflow-hidden'}`}>
-            Báo cáo & Vận hành
+        {/* KHỐI THẺ KPI (Responsive Grid) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="p-5 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm flex items-center gap-4 sm:gap-5 transition-transform hover:-translate-y-1">
+            <div className="p-3 sm:p-4 bg-blue-100/70 rounded-2xl text-blue-600 shadow-sm shrink-0">
+              <Printer size={24} />
+            </div>
+            <div>
+              <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider">Tổng đơn đã in</span>
+              <h4 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">{loading ? "..." : totalPrintedInRange} <span className="text-sm sm:text-base font-medium text-gray-400">đơn</span></h4>
+            </div>
           </div>
-          
-          <nav className="space-y-1.5 px-3 mb-8">
-            {reportMenus.map((item) => {
-              const Icon = item.icon;
 
-              if (item.id === 'dashboard') {
-                // Thêm tra-cuu-luan-chuyen vào danh sách check active
-                const isChildActive = location.pathname === '/' || location.pathname === '/dashboard-don-hoan' || location.pathname === '/dashboard-kpi' || location.pathname === '/tra-cuu-luan-chuyen';
-                return (
-                  <div key={item.id} className="space-y-1.5">
-                    <button onClick={() => setIsDashboardOpen(!isDashboardOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isDashboardOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
-                      <div className="flex items-center shrink-0">
-                        <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
-                      </div>
-                      <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
-                        <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>
-                        {isDashboardOpen ? <ChevronDown size={16} className="text-gray-400 shrink-0"/> : <ChevronRight size={16} className="text-gray-400 shrink-0"/>}
-                      </div>
-                    </button>
-                    {sidebarExpanded && isDashboardOpen && (
-                      <div className="mt-1 mb-2 ml-6 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap">
-                        <Link to="/" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <TrendingUp size={16} className={location.pathname === '/' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Đơn đi hàng ngày</span>
-                        </Link>
-                        <Link to="/dashboard-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/dashboard-don-hoan' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <BarChart2 size={16} className={location.pathname === '/dashboard-don-hoan' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">SL Đơn hoàn theo ngày</span>
-                        </Link>
-                        <Link to="/dashboard-kpi" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/dashboard-kpi' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <Target size={16} className={location.pathname === '/dashboard-kpi' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Tổng quan KPI tháng</span>
-                        </Link>
-                        {/* Tab tra cứu luân chuyển MỚI THÊM VÀO ĐÂY */}
-                        <Link to="/tra-cuu-luan-chuyen" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/tra-cuu-luan-chuyen' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <History size={16} className={location.pathname === '/tra-cuu-luan-chuyen' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Tra cứu luân chuyển</span>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
+          <div className="p-5 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm flex items-center gap-4 sm:gap-5 transition-transform hover:-translate-y-1">
+            <div className="p-3 sm:p-4 bg-emerald-100/70 rounded-2xl text-emerald-600 shadow-sm shrink-0">
+              <Truck size={24} />
+            </div>
+            <div>
+              <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider">Tổng đơn đã đi</span>
+              <h4 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">{loading ? "..." : totalShippedInRange} <span className="text-sm sm:text-base font-medium text-gray-400">đơn</span></h4>
+            </div>
+          </div>
 
-              if (item.id === 'print_orders') {
-                const isChildActive = location.pathname === '/bao-cao-don' || location.pathname === '/don-da-in-hom-nay' || location.pathname === '/loc-don-theo-day-ke' || location.pathname === '/chen-vi-tri-awb' || location.pathname === '/in-don-spx';
-                return (
-                  <div key={item.id} className="space-y-1.5">
-                    <button onClick={() => setIsPrintOrdersOpen(!isPrintOrdersOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isPrintOrdersOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
-                      <div className="flex items-center shrink-0">
-                        <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
-                      </div>
-                      <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
-                        <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>
-                        {isPrintOrdersOpen ? <ChevronDown size={16} className="text-gray-400 shrink-0"/> : <ChevronRight size={16} className="text-gray-400 shrink-0"/>}
-                      </div>
-                    </button>
-                    {sidebarExpanded && isPrintOrdersOpen && (
-                      <div className="mt-1 mb-2 ml-6 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap">
-                        <Link to="/bao-cao-don" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/bao-cao-don' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <Printer size={16} className={location.pathname === '/bao-cao-don' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Đơn có thể in</span>
-                        </Link>
-                        <Link to="/don-da-in-hom-nay" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/don-da-in-hom-nay' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <CheckCircle2 size={16} className={location.pathname === '/don-da-in-hom-nay' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Đơn đã in hôm nay</span>
-                        </Link>
-                        <Link to="/loc-don-theo-day-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/loc-don-theo-day-ke' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <Filter size={16} className={location.pathname === '/loc-don-theo-day-ke' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Lọc đơn chia theo dãy kệ</span>
-                        </Link>
-                        <Link to="/chen-vi-tri-awb" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/chen-vi-tri-awb' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <FileEdit size={16} className={location.pathname === '/chen-vi-tri-awb' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Chèn vị trí SP vào AWB</span>
-                        </Link>
-                        <Link to="/in-don-spx" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/in-don-spx' ? 'bg-orange-50 text-orange-600 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <Printer size={16} className={location.pathname === '/in-don-spx' ? 'text-orange-500' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">In Đơn SPX Tự Động</span>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-              
-              if (item.id === 'packing') {
-                const isChildActive = location.pathname.includes('/dong-goi-') || location.pathname.includes('/toc-do-dong-goi-');
-                return (
-                  <div key={item.id} className="space-y-1.5">
-                    <button onClick={() => setIsPackingOpen(!isPackingOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isPackingOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
-                      <div className="flex items-center shrink-0">
-                        <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
-                      </div>
-                      <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
-                        <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>
-                        {isPackingOpen ? <ChevronDown size={16} className="text-gray-400 shrink-0"/> : <ChevronRight size={16} className="text-gray-400 shrink-0"/>}
-                      </div>
-                    </button>
-                    {sidebarExpanded && isPackingOpen && (
-                      <div className="mt-1 mb-2 ml-6 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap">
-                        <Link to="/dong-goi-don-hang" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/dong-goi-don-hang' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                            <Box size={16} className={location.pathname === '/dong-goi-don-hang' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                            <div className="flex flex-col">
-                              <span className="text-sm">Đóng gói đơn hàng</span>
-                              <span className="text-[10px] text-red-500 font-normal leading-tight mt-0.5">Tab dành cho NVĐG</span>
-                            </div>
-                        </Link>
-                        <Link to="/toc-do-dong-goi-chung" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/toc-do-dong-goi-chung' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <BarChart3 size={16} className={location.pathname === '/toc-do-dong-goi-chung' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Đóng gói chung</span>
-                        </Link>
-                        <Link to="/toc-do-dong-goi-nhan-su" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/toc-do-dong-goi-nhan-su' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <User size={16} className={location.pathname === '/toc-do-dong-goi-nhan-su' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Theo nhân sự</span>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              if (item.id === 'return_orders') {
-                const isChildActive = location.pathname === '/bao-cao-hoan-tong-hop' || location.pathname === '/kiem-tra-don-hoan' || location.pathname === '/xu-ly-don-hoan';
-                return (
-                  <div key={item.id} className="space-y-1.5">
-                    <button onClick={() => setIsReturnOrdersOpen(!isReturnOrdersOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isReturnOrdersOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
-                      <div className="flex items-center shrink-0">
-                        <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
-                      </div>
-                      <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
-                        <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>
-                        {isReturnOrdersOpen ? <ChevronDown size={16} className="text-gray-400 shrink-0"/> : <ChevronRight size={16} className="text-gray-400 shrink-0"/>}
-                      </div>
-                    </button>
-                    {sidebarExpanded && isReturnOrdersOpen && (
-                      <div className="mt-1 mb-2 ml-6 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap">
-                        <Link to="/bao-cao-hoan-tong-hop" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/bao-cao-hoan-tong-hop' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <BarChart3 size={16} className={location.pathname === '/bao-cao-hoan-tong-hop' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Tổng hợp đơn hoàn</span>
-                        </Link>
-                        <Link to="/xu-ly-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/xu-ly-don-hoan' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                        <PackageMinus size={16} className={location.pathname === '/xu-ly-don-hoan' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                        <span className="text-sm">Xử lý Đơn hoàn</span>
-                        </Link>
-                        <Link to="/kiem-tra-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/kiem-tra-don-hoan' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <ScanLine size={16} className={location.pathname === '/kiem-tra-don-hoan' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Kiểm tra & Chốt SL</span>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              if (item.id === 'inventory_check') {
-                const isChildActive = location.pathname === '/thong-ke-kiem-ke' || location.pathname === '/danh-sach-kiem-ke';
-                return (
-                  <div key={item.id} className="space-y-1.5">
-                    <button onClick={() => setIsInventoryCheckOpen(!isInventoryCheckOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isInventoryCheckOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
-                      <div className="flex items-center shrink-0">
-                        <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
-                      </div>
-                      <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
-                        <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>
-                        {isInventoryCheckOpen ? <ChevronDown size={16} className="text-gray-400 shrink-0"/> : <ChevronRight size={16} className="text-gray-400 shrink-0"/>}
-                      </div>
-                    </button>
-                    {sidebarExpanded && isInventoryCheckOpen && (
-                      <div className="mt-1 mb-2 ml-6 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap">
-                        <Link to="/thong-ke-kiem-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/thong-ke-kiem-ke' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <BarChart3 size={16} className={location.pathname === '/thong-ke-kiem-ke' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Báo cáo chung</span>
-                        </Link>
-                        <Link to="/danh-sach-kiem-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/danh-sach-kiem-ke' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <ListChecks size={16} className={location.pathname === '/danh-sach-kiem-ke' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Danh sách cần kiểm kê</span>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              if (item.id === 'inventory_report') {
-                const isChildActive = location.pathname === '/bao-cao-ton-kho' || location.pathname === '/vi-tri-san-pham';
-                return (
-                  <div key={item.id} className="space-y-1.5">
-                    <button onClick={() => setIsInventoryReportOpen(!isInventoryReportOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isInventoryReportOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
-                      <div className="flex items-center shrink-0">
-                        <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
-                      </div>
-                      <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
-                        <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>
-                        {isInventoryReportOpen ? <ChevronDown size={16} className="text-gray-400 shrink-0"/> : <ChevronRight size={16} className="text-gray-400 shrink-0"/>}
-                      </div>
-                    </button>
-                    {sidebarExpanded && isInventoryReportOpen && (
-                      <div className="mt-1 mb-2 ml-6 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap">
-                        <Link to="/bao-cao-ton-kho" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/bao-cao-ton-kho' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <Boxes size={16} className={location.pathname === '/bao-cao-ton-kho' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Tồn kho thực tế</span>
-                        </Link>
-                        <Link to="/vi-tri-san-pham" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/vi-tri-san-pham' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                          <MapPin size={16} className={location.pathname === '/vi-tri-san-pham' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                          <span className="text-sm">Vị trí sản phẩm</span>
-                        </Link>
-                      </div>
-                    )}
-                  </div>
-                );
-              }
-
-              const isActive = location.pathname === item.path;
-              return (
-                <div key={item.path} className="space-y-1.5">
-                  <Link to={item.path} className={`flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group overflow-hidden whitespace-nowrap ${isActive ? 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
-                    <div className="flex items-center shrink-0">
-                      <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors duration-200 ${isActive ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
-                    </div>
-                    <span className={`text-sm ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>{item.label}</span>
-                  </Link>
-                </div>
-              )
-            })}
-          </nav>
-
-          {isAdmin && (
-            <>
-              <div className={`px-5 mb-3 text-[11px] font-bold text-gray-400 uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${sidebarExpanded ? 'opacity-100 h-auto' : 'opacity-0 h-0 overflow-hidden'}`}>
-                Hệ thống
+          <div className="p-5 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm flex items-center gap-4 sm:gap-5 transition-transform hover:-translate-y-1 sm:col-span-2 lg:col-span-1">
+            <div className="p-3 sm:p-4 bg-amber-100/70 rounded-2xl text-amber-600 shadow-sm shrink-0">
+              <Layers size={24} />
+            </div>
+            <div className="flex-1">
+              <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider">Số lượng đơn tồn</span>
+              <div className="text-2xl sm:text-3xl font-black text-amber-600 mt-1 flex items-baseline gap-x-2">
+                <span>{loading ? "..." : totalPendingNow}</span>
+                <span className="text-sm sm:text-base font-medium text-gray-400">đơn</span>
               </div>
-              <nav className="space-y-1.5 px-3">
-                <Link to="/admin" className={`flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group overflow-hidden whitespace-nowrap ${location.pathname === '/admin' ? 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
-                  <div className="flex items-center shrink-0">
-                    <Settings size={20} strokeWidth={location.pathname === '/admin' ? 2.5 : 2} className={`transition-colors duration-200 ${location.pathname === '/admin' ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
-                  </div>
-                  <span className={`text-sm ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>Quản trị Hệ thống</span>
-                </Link>
-                
-                <Link to="/quan-ly-kpi" className={`flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group overflow-hidden whitespace-nowrap ${location.pathname === '/quan-ly-kpi' ? 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
-                  <div className="flex items-center shrink-0">
-                    <Target size={20} strokeWidth={location.pathname === '/quan-ly-kpi' ? 2.5 : 2} className={`transition-colors duration-200 ${location.pathname === '/quan-ly-kpi' ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
-                  </div>
-                  <span className={`text-sm ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>Quản lý KPI & Lỗi</span>
-                </Link>
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {totalCanceledNow > 0 && <span className="text-[10px] sm:text-[11px] font-bold text-red-600 bg-red-50/80 px-2 py-0.5 rounded-full border border-red-100/50">🚫 {totalCanceledNow} hủy</span>}
+                {totalDispatchedNow > 0 && <span className="text-[10px] sm:text-[11px] font-bold text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded-full border border-blue-100/50">📦 {totalDispatchedNow} đã đi</span>}
+              </div>
+            </div>
+          </div>
+        </div>
 
-                <div className="pt-1">
-                  <button onClick={() => setIsAdjustMenuOpen(!isAdjustMenuOpen)} className="w-full flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600 cursor-pointer overflow-hidden whitespace-nowrap">
-                    <div className="flex items-center shrink-0">
-                      <Wrench size={20} strokeWidth={2} className="text-gray-400 group-hover:text-blue-500 transition-colors" />
-                    </div>
-                    <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
-                      <span className="text-sm">Cập nhật & Hiệu chỉnh</span>
-                      {isAdjustMenuOpen ? <ChevronDown size={16} className="text-gray-400 shrink-0"/> : <ChevronRight size={16} className="text-gray-400 shrink-0"/>}
-                    </div>
-                  </button>
-                  {sidebarExpanded && isAdjustMenuOpen && (
-                    <div className="mt-1 mb-2 ml-6 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap">
-                      <Link to="/cap-nhat-nguoi-dong-goi" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-nguoi-dong-goi' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                        <UserCog size={16} className={location.pathname === '/cap-nhat-nguoi-dong-goi' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                        <span className="text-sm">Người đóng gói</span>
-                      </Link>
-                      <Link to="/cap-nhat-lich-lam-viec" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-lich-lam-viec' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                        <CalendarDays size={16} className={location.pathname === '/cap-nhat-lich-lam-viec' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                        <span className="text-sm">Lịch làm việc</span>
-                      </Link>
-                      <Link to="/cap-nhat-san-pham" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-san-pham' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                        <PackageSearch size={16} className={location.pathname === '/cap-nhat-san-pham' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                        <span className="text-sm">Hiệu chỉnh sản phẩm</span>
-                      </Link>
-                      <Link to="/cap-nhat-so-do-kho" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-so-do-kho' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                        <MapPin size={16} className={location.pathname === '/cap-nhat-so-do-kho' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                        <span className="text-sm">Sơ đồ Kho hàng</span>
-                      </Link>
-                      <Link to="/cap-nhat-day-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-day-ke' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                        <LayoutGrid size={16} className={location.pathname === '/cap-nhat-day-ke' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                        <span className="text-sm">Quy ước dãy kệ</span>
-                      </Link>
-                      <Link to="/cap-nhat-webhook" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/cap-nhat-webhook' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
-                        <Webhook size={16} className={location.pathname === '/cap-nhat-webhook' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
-                        <span className="text-sm">Chạy lại Webhook</span>
-                      </Link>
-                    </div>
+        {/* 1. BIỂU ĐỒ BIẾN ĐỘNG (CÓ ĐƯỜNG TRUNG BÌNH) */}
+        <div className="p-4 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm">
+          <h3 className="text-sm sm:text-base font-bold text-gray-800 uppercase tracking-wider mb-6 flex items-center gap-2">
+            <div className="w-1.5 h-5 bg-blue-600 rounded-full" /> Tương quan Đơn in và Đơn đi
+          </h3>
+          <div className="w-full h-64 sm:h-80 -ml-2 sm:ml-0">
+            {loading ? (
+              <div className="w-full h-full flex items-center justify-center text-gray-400 font-semibold animate-pulse text-xs sm:text-sm">Đang quét phân trang dữ liệu...</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" opacity={0.5} />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }} />
+                  <YAxis tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }} 
+                  />
+                  <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', paddingTop: '10px' }} />
+                  
+                  {/* ⚡️ ĐƯỜNG TRUNG BÌNH ĐƠN IN */}
+                  <ReferenceLine 
+                    y={avgPrinted} 
+                    stroke="#3b82f6" 
+                    strokeDasharray="4 4" 
+                    opacity={0.6}
+                    label={{ position: 'insideTopLeft', value: `TB In: ${avgPrinted}`, fill: '#3b82f6', fontSize: 10, fontWeight: 800 }} 
+                  />
+                  {/* ⚡️ ĐƯỜNG TRUNG BÌNH ĐƠN ĐI */}
+                  <ReferenceLine 
+                    y={avgShipped} 
+                    stroke="#10b981" 
+                    strokeDasharray="4 4" 
+                    opacity={0.6}
+                    label={{ position: 'insideTopRight', value: `TB Đi: ${avgShipped}`, fill: '#10b981', fontSize: 10, fontWeight: 800 }} 
+                  />
+
+                  <Bar dataKey="Đơn in" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={24} />
+                  <Bar dataKey="Đơn đi" fill="#10b981" radius={[4, 4, 0, 0]} barSize={24} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        {/* KHỐI CHIA ĐÔI DƯỚI (Responsive) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
+          
+          {/* 2. BẢNG THỐNG KÊ ĐƠN TỒN */}
+          <div className="p-4 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm flex flex-col h-[400px] sm:h-[480px]">
+            <h3 className="text-sm sm:text-base font-bold text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+              <div className="w-1.5 h-5 bg-amber-500 rounded-full" /> Đơn đã in chưa đi
+            </h3>
+            {/* ⚡️ Bọc overflow-x-auto để cuộn ngang trên mobile */}
+            <div className="flex-1 overflow-auto rounded-2xl border border-slate-100 bg-white/50">
+              <table className="w-full text-left text-sm border-collapse min-w-[400px]">
+                <thead>
+                  <tr className="bg-slate-50/80 sticky top-0 backdrop-blur-md text-gray-500 font-bold text-[10px] sm:text-xs uppercase z-10">
+                    <th className="p-3 sm:p-4">Ngày in</th>
+                    <th className="p-3 sm:p-4 text-center">Trạng thái tồn</th>
+                    <th className="p-3 sm:p-4 text-right">Hành động</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
+                  {loading ? (
+                    <tr><td colSpan={3} className="text-center p-10 text-gray-400 animate-pulse text-xs">Đang bóc tách số liệu...</td></tr>
+                  ) : pendingShippingData.length === 0 ? (
+                    <tr><td colSpan={3} className="text-center p-10 text-gray-400 text-xs sm:text-sm">🎉 Không có đơn tồn.</td></tr>
+                  ) : (
+                    pendingShippingData.map(item => (
+                      <tr key={item.date} className="hover:bg-blue-50/30 transition">
+                        <td className="p-3 sm:p-4 text-xs sm:text-sm font-bold text-gray-900 whitespace-nowrap">{item.date}</td>
+                        <td className="p-3 sm:p-4 text-center flex flex-col items-center gap-1">
+                          <span className="px-2.5 py-1 bg-amber-50 border border-amber-200/50 text-amber-700 rounded-full text-[10px] sm:text-xs font-bold whitespace-nowrap">
+                            {item.count} đơn tổng tồn
+                          </span>
+                          <div className="flex gap-1 flex-wrap justify-center max-w-[150px]">
+                            {item.canceledCount > 0 && <span className="text-[9px] sm:text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">🚫 {item.canceledCount}</span>}
+                            {item.dispatchedCount > 0 && <span className="text-[9px] sm:text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">🚚 {item.dispatchedCount}</span>}
+                          </div>
+                        </td>
+                        <td className="p-3 sm:p-4 text-right">
+                          <button 
+                            onClick={() => { setSelectedModalDate(item.date); setModalOrdersList(item.ordersList); }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition"
+                          >
+                            <Eye size={14} /> <span className="hidden sm:inline">Xem</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
                   )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* 3. BÁO CÁO TOP SẢN PHẨM */}
+          <div className="p-4 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm flex flex-col h-[400px] sm:h-[480px]">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-3">
+              <h3 className="text-sm sm:text-base font-bold text-gray-800 uppercase tracking-wider flex items-center gap-2">
+                <div className="w-1.5 h-5 bg-emerald-500 rounded-full" /> Top {topProductLimit} Xuất kho
+              </h3>
+              <select 
+                value={topProductLimit} 
+                onChange={(e) => setTopProductLimit(Number(e.target.value))}
+                className="w-full sm:w-auto text-[11px] sm:text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none text-gray-700 cursor-pointer"
+              >
+                <option value={5}>Xem Top 5</option>
+                <option value={10}>Xem Top 10</option>
+                <option value={20}>Xem Top 20</option>
+              </select>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-4 pr-2 py-1">
+              {loading ? (
+                <div className="text-center text-gray-400 animate-pulse text-xs sm:text-sm py-10">Đang sắp xếp kho hàng...</div>
+              ) : topProductsData.length === 0 ? (
+                <div className="text-center text-gray-400 text-xs sm:text-sm py-10">Chưa có sản phẩm xuất kho.</div>
+              ) : (
+                topProductsData.map((prod, idx) => {
+                  const maxQty = topProductsData[0]?.quantity || 1;
+                  const progressPercent = (prod.quantity / maxQty) * 100;
+                  
+                  return (
+                    <div key={prod.code} className="space-y-1.5">
+                      <div className="flex justify-between items-start text-xs font-bold">
+                        <div className="flex items-start sm:items-center gap-2 sm:gap-3 max-w-[75%]">
+                          <span className="shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-gray-500 font-black text-[10px] sm:text-[11px] mt-0.5 sm:mt-0">{idx + 1}</span>
+                          <div className="flex flex-col truncate">
+                            <span className="text-gray-900 truncate font-semibold text-[11px] sm:text-sm">{prod.name}</span>
+                            <span className="text-[9px] sm:text-[11px] text-gray-400 font-medium mt-0.5">SKU: {prod.code}</span>
+                          </div>
+                        </div>
+                        <span className="shrink-0 text-gray-900 font-black bg-slate-50 border border-slate-200 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-xs sm:text-sm">{prod.quantity} <span className="hidden sm:inline text-[10px] text-gray-400 font-medium">cái</span></span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 sm:h-2 rounded-full overflow-hidden">
+                        <div 
+                          className="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-700" 
+                          style={{ width: `${progressPercent}%` }} 
+                        />
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+
+        </div>
+
+        {/* 4. POPUP MODAL (Responsive Table) */}
+        {selectedModalDate && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 animate-in zoom-in-95 duration-200">
+            <div className="bg-white w-full max-w-4xl rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] sm:max-h-[85vh]">
+              
+              <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl sm:rounded-t-3xl">
+                <div>
+                  <h4 className="text-base sm:text-lg font-black text-slate-800">Chi tiết đơn tồn: {selectedModalDate}</h4>
+                  <p className="text-[11px] sm:text-sm text-slate-500 font-medium mt-0.5">Tìm thấy {modalOrdersList.length} đơn hàng</p>
                 </div>
-              </nav>
-            </>
-          )}
-        </div>
-        
-        <div className="p-4 bg-white/40 backdrop-blur-lg border-t border-white/20 rounded-tr-2xl overflow-hidden whitespace-nowrap">
-          <div className={`flex items-center justify-between transition-all duration-300 ${!sidebarExpanded ? 'flex-col gap-2' : ''}`}>
-            <div className={`flex items-center gap-3 ${sidebarExpanded ? 'max-w-[75%]' : ''}`}>
-              <div className="w-9 h-9 shrink-0 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-black text-sm shadow-md ring-2 ring-white/50 uppercase">{avatarLetter}</div>
-              <div className={`flex flex-col transition-all duration-300 overflow-hidden ${sidebarExpanded ? 'opacity-100 max-w-[150px]' : 'opacity-0 max-w-0 hidden'}`}>
-                <span className="text-sm font-bold text-gray-900 leading-tight truncate capitalize">{displayName}</span>
-                <span className="text-[10px] text-gray-500 font-medium mt-0.5 truncate">{isAdmin ? '🛡️ Admin' : '📦 Nhân viên'}</span>
+                <button 
+                  onClick={() => { setSelectedModalDate(null); setModalOrdersList([]); }} 
+                  className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 transition rounded-xl cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
               </div>
-            </div>
-            <button onClick={() => setShowLogoutModal(true)} title="Đăng xuất" className={`p-2 text-gray-400 hover:text-red-500 transition-colors rounded-xl hover:bg-white/60 cursor-pointer shrink-0 ${!sidebarExpanded ? 'p-1' : ''}`}>
-              <LogOut size={!sidebarExpanded ? 16 : 18} />
-            </button>
-          </div>
-        </div>
-      </div>
 
-      <div className="flex-1 overflow-auto relative bg-transparent">
-        <button 
-          onClick={() => setMobileMenuOpen(true)}
-          className="md:hidden absolute top-4 left-4 z-30 p-2 bg-white/80 backdrop-blur-md rounded-xl shadow-lg hover:bg-white/90 transition-colors"
-        >
-          <Menu size={20} className="text-gray-700" />
-        </button>
+              {/* ⚡️ Bọc overflow-x-auto cho bảng trên điện thoại */}
+              <div className="flex-1 overflow-auto p-0 sm:p-6">
+                <table className="w-full text-left text-[11px] sm:text-sm border-collapse min-w-[500px]">
+                  <thead>
+                    <tr className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] sm:text-xs sticky top-0 z-10">
+                      <th className="p-3 sm:p-4">ID Đơn</th>
+                      <th className="p-3 sm:p-4">Mã vận đơn</th>
+                      <th className="p-3 sm:p-4">Trạng thái</th>
+                      <th className="p-3 sm:p-4 text-right">Sản phẩm</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                    {modalOrdersList.map(order => {
+                      const statusNum = Number(order.status);
+                      const isCanceled = CANCELED_STATUS_CODES.includes(statusNum);
+                      const isDispatched = DISPATCHED_STATUS_CODES.includes(statusNum);
+                      const statusText = STATUS_MAP[order.status] || `Mã lạ (${order.status})`;
 
-        <div className="absolute inset-0 bg-gradient-to-b from-blue-50/20 via-white to-transparent pointer-events-none" />
-        <div className="absolute top-0 left-0 right-0 h-40 bg-gradient-to-b from-blue-50/40 to-transparent pointer-events-none" />
-        <div className="relative z-10 p-8 h-full">
-          {/* <TestingNoticeBanner /> */}
-          <Outlet />
-        </div>
-      </div>
+                      let badgeClass = "bg-slate-100 text-slate-600 border-slate-200";
+                      if (isCanceled) badgeClass = "bg-red-50 text-red-600 border-red-200";
+                      else if (isDispatched) badgeClass = "bg-blue-50 text-blue-600 border-blue-200";
+                      else if ([40, 42, 43].includes(statusNum)) badgeClass = "bg-amber-50 text-amber-700 border-amber-200";
 
-      {mobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 md:hidden"
-          onClick={() => setMobileMenuOpen(false)}
-        />
-      )}
-
-      {showLogoutModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white/80 backdrop-blur-2xl border border-white/40 rounded-3xl shadow-2xl w-full max-w-md p-6 transform transition-all duration-300 scale-100">
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-red-100/80 backdrop-blur-md rounded-full"><LogOut size={20} className="text-red-500" /></div>
-                <h3 className="text-lg font-bold text-gray-900">Xác nhận đăng xuất</h3>
+                      return (
+                        <tr key={order.id} className={`hover:bg-slate-50 transition ${isCanceled ? 'opacity-50' : ''}`}>
+                          <td className="p-3 sm:p-4 font-black text-blue-600">{order.id}</td>
+                          <td className="p-3 sm:p-4">{order.carrier_code || "❌ Chưa có"}</td>
+                          <td className="p-3 sm:p-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 rounded-lg text-[9px] sm:text-[10px] uppercase font-black border ${badgeClass}`}>
+                              {isCanceled ? `🚫 ${statusText}` : isDispatched ? `🚚 ${statusText}` : statusText}
+                            </span>
+                          </td>
+                          <td className="p-3 sm:p-4 text-right text-[10px] sm:text-xs max-w-[150px] sm:max-w-[240px] truncate">
+                            {order.order_products?.length > 0 ? (
+                              order.order_products.map(p => `${p.product_name} (x${p.quantity})`).join(', ')
+                            ) : (
+                              <span className="text-slate-400">Trống</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <button onClick={() => setShowLogoutModal(false)} className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-white/60 rounded-full transition-colors"><X size={18} /></button>
-            </div>
-            <p className="text-gray-600 text-sm mb-6">Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không? Phiên làm việc sẽ kết thúc.</p>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowLogoutModal(false)} className="px-5 py-2.5 rounded-2xl bg-white/60 backdrop-blur-md border border-white/30 text-gray-700 font-medium hover:bg-white/80 transition-all shadow-sm">Hủy</button>
-              <button onClick={handleLogout} className="px-5 py-2.5 rounded-2xl bg-red-500/90 backdrop-blur-md text-white font-medium hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all">Đăng xuất</button>
+
+              <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl sm:rounded-b-3xl flex justify-end">
+                <button 
+                  onClick={() => { setSelectedModalDate(null); setModalOrdersList([]); }} 
+                  className="px-6 py-2 sm:py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs sm:text-sm font-bold rounded-xl transition shadow-sm"
+                >
+                  Đóng
+                </button>
+              </div>
+
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+      </div>
     </div>
   );
 }
