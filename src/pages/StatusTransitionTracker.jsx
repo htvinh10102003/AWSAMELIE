@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Calendar, Search, Filter, Loader2, ArrowRight, 
-  PackageSearch, Clock, User, Box, Hash 
+  PackageSearch, Clock, User, Box, Hash, ChevronDown, 
+  ChevronLeft, ChevronRight, CheckSquare, Square
 } from 'lucide-react';
 
 export default function StatusTransitionTracker() {
@@ -10,17 +11,26 @@ export default function StatusTransitionTracker() {
   const [results, setResults] = useState([]);
   const [statuses, setStatuses] = useState([]);
 
-  // Form State
+  // States: Phân trang
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 50; // Hiển thị 50 dòng mỗi trang
+
+  // States: Bộ lọc cơ bản
   const [filters, setFilters] = useState({
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
-    fromStatus: '',
-    toStatus: '',
     productSearch: '',
     minQuantity: '',
   });
 
-  // Load danh sách trạng thái để đưa vào Dropdown
+  // States: Multi-select Trạng thái
+  const [selectedFromStatuses, setSelectedFromStatuses] = useState([]);
+  const [selectedToStatuses, setSelectedToStatuses] = useState([]);
+  const [isFromOpen, setIsFromOpen] = useState(false);
+  const [isToOpen, setIsToOpen] = useState(false);
+
+  // Load danh sách trạng thái
   useEffect(() => {
     const fetchStatuses = async () => {
       const { data, error } = await supabase
@@ -40,17 +50,39 @@ export default function StatusTransitionTracker() {
     setFilters(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSearch = async () => {
-    if (!filters.fromStatus || !filters.toStatus) {
-      alert("Vui lòng chọn trạng thái ban đầu và trạng thái chuyển mới!");
+  // Hàm toggle chọn nhiều trạng thái
+  const toggleStatus = (type, id) => {
+    if (type === 'from') {
+      setSelectedFromStatuses(prev => 
+        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      );
+    } else {
+      setSelectedToStatuses(prev => 
+        prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+      );
+    }
+  };
+
+  // Gắn page vào hàm fetch để gọi mỗi khi sang trang
+  const fetchData = async (page = 1) => {
+    if (selectedFromStatuses.length === 0 || selectedToStatuses.length === 0) {
+      alert("Vui lòng chọn ít nhất 1 trạng thái ban đầu và 1 trạng thái chuyển mới!");
       return;
     }
 
     setIsLoading(true);
-    setResults([]);
+    
+    // Nếu lọc mới thì clear list cũ
+    if (page === 1) {
+      setResults([]);
+      setCurrentPage(1);
+    }
 
     try {
-      // Bắt đầu query với Inner Join để có thể filter dựa trên bảng con
+      // Tính toán Range cho Phân trang
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
       let query = supabase
         .from('order_histories')
         .select(`
@@ -69,27 +101,31 @@ export default function StatusTransitionTracker() {
               quantity
             )
           )
-        `)
-        .eq('status_old', parseInt(filters.fromStatus))
-        .eq('status_new', parseInt(filters.toStatus))
+        `, { count: 'exact' }) // Cờ count: 'exact' báo cho Supabase trả về tổng số bản ghi thoả mãn
+        .in('status_old', selectedFromStatuses)
+        .in('status_new', selectedToStatuses)
         .gte('created_at', `${filters.startDate}T00:00:00.000Z`)
         .lte('created_at', `${filters.endDate}T23:59:59.999Z`)
         .order('created_at', { ascending: false });
 
-      // Nếu có nhập tên/mã sản phẩm
       if (filters.productSearch.trim()) {
         query = query.ilike('orders.order_products.product_name', `%${filters.productSearch.trim()}%`);
       }
 
-      // Nếu có nhập số lượng tối thiểu
       if (filters.minQuantity) {
         query = query.gte('orders.order_products.quantity', parseFloat(filters.minQuantity));
       }
 
-      const { data, error } = await query;
+      // Áp dụng Phân trang
+      query = query.range(from, to);
+
+      const { data, count, error } = await query;
 
       if (error) throw error;
+      
       setResults(data || []);
+      setTotalCount(count || 0);
+      setCurrentPage(page);
 
     } catch (error) {
       console.error("Lỗi khi truy vấn dữ liệu:", error);
@@ -99,11 +135,16 @@ export default function StatusTransitionTracker() {
     }
   };
 
-  // Helper để lấy tên trạng thái từ ID
+  const handleSearch = () => {
+    fetchData(1); // Click nút tìm kiếm thì luôn về trang 1
+  };
+
   const getStatusName = (id) => {
     const st = statuses.find(s => s.id === id);
     return st ? st.name : `Trạng thái ${id}`;
   };
+
+  const totalPages = Math.ceil(totalCount / pageSize);
 
   return (
     <div className="p-6 max-w-7xl mx-auto font-sans animate-fade-in mt-4">
@@ -117,7 +158,7 @@ export default function StatusTransitionTracker() {
         </div>
       </div>
 
-      {/* BỘ LỌC (FILTERS) */}
+      {/* BỘ LỌC */}
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
           
@@ -151,35 +192,84 @@ export default function StatusTransitionTracker() {
             </div>
           </div>
 
-          {/* Cột 2: Trạng thái */}
+          {/* Cột 2: Trạng thái (Multi-select) */}
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 text-red-500">Trạng thái cũ *</label>
-              <select 
-                name="fromStatus" 
-                value={filters.fromStatus} 
-                onChange={handleFilterChange}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700"
-              >
-                <option value="">-- Chọn trạng thái --</option>
-                {statuses.map(st => (
-                  <option key={st.id} value={st.id}>{st.id} - {st.name}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <div 
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700 cursor-pointer flex justify-between items-center select-none"
+                  onClick={() => setIsFromOpen(!isFromOpen)}
+                >
+                  <span className="truncate">
+                    {selectedFromStatuses.length === 0 
+                      ? '-- Chọn nhiều trạng thái --' 
+                      : `Đã chọn ${selectedFromStatuses.length} trạng thái`}
+                  </span>
+                  <ChevronDown size={16} className={`transition-transform duration-200 ${isFromOpen ? 'rotate-180' : ''}`} />
+                </div>
+                {/* Dropdown Box */}
+                {isFromOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setIsFromOpen(false)}></div>
+                    <div className="absolute z-20 top-full left-0 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto py-1 animate-in slide-in-from-top-2">
+                      {statuses.map(st => (
+                        <div 
+                          key={st.id} 
+                          className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors"
+                          onClick={() => toggleStatus('from', st.id)}
+                        >
+                          {selectedFromStatuses.includes(st.id) ? (
+                            <CheckSquare size={16} className="text-blue-600 shrink-0" />
+                          ) : (
+                            <Square size={16} className="text-slate-300 shrink-0" />
+                          )}
+                          <span className="text-sm font-medium text-slate-700">{st.id} - {st.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
+
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 text-green-600">Trạng thái mới *</label>
-              <select 
-                name="toStatus" 
-                value={filters.toStatus} 
-                onChange={handleFilterChange}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700"
-              >
-                <option value="">-- Chọn trạng thái --</option>
-                {statuses.map(st => (
-                  <option key={st.id} value={st.id}>{st.id} - {st.name}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <div 
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium text-slate-700 cursor-pointer flex justify-between items-center select-none"
+                  onClick={() => setIsToOpen(!isToOpen)}
+                >
+                  <span className="truncate">
+                    {selectedToStatuses.length === 0 
+                      ? '-- Chọn nhiều trạng thái --' 
+                      : `Đã chọn ${selectedToStatuses.length} trạng thái`}
+                  </span>
+                  <ChevronDown size={16} className={`transition-transform duration-200 ${isToOpen ? 'rotate-180' : ''}`} />
+                </div>
+                {/* Dropdown Box */}
+                {isToOpen && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setIsToOpen(false)}></div>
+                    <div className="absolute z-20 top-full left-0 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-xl max-h-60 overflow-y-auto py-1 animate-in slide-in-from-top-2">
+                      {statuses.map(st => (
+                        <div 
+                          key={st.id} 
+                          className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50 cursor-pointer transition-colors"
+                          onClick={() => toggleStatus('to', st.id)}
+                        >
+                          {selectedToStatuses.includes(st.id) ? (
+                            <CheckSquare size={16} className="text-blue-600 shrink-0" />
+                          ) : (
+                            <Square size={16} className="text-slate-300 shrink-0" />
+                          )}
+                          <span className="text-sm font-medium text-slate-700">{st.id} - {st.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
@@ -223,19 +313,12 @@ export default function StatusTransitionTracker() {
           className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 font-bold transition-all shadow-sm"
         >
           {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Filter className="w-5 h-5" />}
-          Lọc dữ liệu
+          {isLoading ? 'Đang truy vấn dữ liệu...' : 'Lọc dữ liệu (Tối đa 50 dòng/trang)'}
         </button>
       </div>
 
       {/* KẾT QUẢ TÌM KIẾM */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-          <span className="font-bold text-slate-700">Kết quả tra cứu</span>
-          <span className="text-xs font-medium px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full">
-            Tìm thấy {results.length} bản ghi
-          </span>
-        </div>
-        
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-bold">
@@ -244,14 +327,14 @@ export default function StatusTransitionTracker() {
                 <th className="px-5 py-4 border-b border-slate-200">Mã đơn hàng</th>
                 <th className="px-5 py-4 border-b border-slate-200">Người thực hiện</th>
                 <th className="px-5 py-4 border-b border-slate-200">Luân chuyển</th>
-                <th className="px-5 py-4 border-b border-slate-200">Chi tiết sản phẩm</th>
+                <th className="px-5 py-4 border-b border-slate-200 w-[300px]">Chi tiết sản phẩm</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {results.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-5 py-12 text-center text-slate-400 font-medium">
-                    {isLoading ? 'Đang tải dữ liệu...' : 'Không có dữ liệu phù hợp với bộ lọc.'}
+                  <td colSpan="5" className="px-5 py-16 text-center text-slate-400 font-medium">
+                    {isLoading ? 'Đang tải dữ liệu...' : 'Không có dữ liệu phù hợp với bộ lọc. Hãy điều chỉnh tiêu chí tìm kiếm.'}
                   </td>
                 </tr>
               ) : (
@@ -279,17 +362,17 @@ export default function StatusTransitionTracker() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2 text-xs font-bold">
-                        <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-md border border-slate-200">
+                        <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded-md border border-slate-200 max-w-[120px] truncate" title={getStatusName(row.status_old)}>
                           {getStatusName(row.status_old)}
                         </span>
-                        <ArrowRight size={14} className="text-slate-400" />
-                        <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-200">
+                        <ArrowRight size={14} className="text-slate-400 shrink-0" />
+                        <span className="px-2 py-1 bg-blue-50 text-blue-600 rounded-md border border-blue-200 max-w-[120px] truncate" title={getStatusName(row.status_new)}>
                           {getStatusName(row.status_new)}
                         </span>
                       </div>
                     </td>
-                    <td className="px-5 py-3 max-w-[300px]">
-                      <div className="space-y-2">
+                    <td className="px-5 py-3">
+                      <div className="space-y-2 max-h-32 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200">
                         {row.orders?.order_products?.map((product, idx) => (
                           <div key={idx} className="flex items-start gap-2 text-xs bg-slate-50 p-2 rounded-lg border border-slate-100">
                             <Box size={14} className="text-blue-500 shrink-0 mt-0.5" />
@@ -313,6 +396,34 @@ export default function StatusTransitionTracker() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* COMPONENT PHÂN TRANG */}
+        <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-4 border-t border-slate-200 bg-white gap-4">
+          <div className="text-sm text-slate-500">
+            Hiển thị <span className="font-bold text-slate-700">{totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> đến <span className="font-bold text-slate-700">{Math.min(currentPage * pageSize, totalCount)}</span> trong tổng số <span className="font-bold text-blue-600">{totalCount}</span> kết quả
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => fetchData(currentPage - 1)}
+              disabled={currentPage === 1 || isLoading}
+              className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Trang trước"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-sm font-medium text-slate-600 px-3 py-1.5 bg-slate-50 rounded-lg border border-slate-100">
+              Trang {currentPage} / {totalPages || 1}
+            </span>
+            <button
+              onClick={() => fetchData(currentPage + 1)}
+              disabled={currentPage >= totalPages || isLoading}
+              className="p-2 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="Trang sau"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       </div>
     </div>
