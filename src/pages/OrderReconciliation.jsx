@@ -76,7 +76,7 @@ export default function OrderReconciliation() {
       if (error) throw error;
       setSessions(data || []);
     } catch (err) {
-      console.error("Lỗi tải danh sách phiên:", err.message);
+      console.error("Lỗi tải danh sách biên bản:", err.message);
     } finally {
       setLoadingSessions(false);
     }
@@ -87,7 +87,7 @@ export default function OrderReconciliation() {
   }, [view]);
 
   const handleCreateSession = async () => {
-    const sessionName = `Phiên đối soát - ${new Date().toLocaleString('vi-VN')}`;
+    const sessionName = `Biên bản đối soát - ${new Date().toLocaleString('vi-VN')}`;
     try {
       const { data, error } = await supabase.from('reconciliation_sessions').insert([{
         session_name: sessionName,
@@ -100,20 +100,20 @@ export default function OrderReconciliation() {
       if (error) throw error;
       handleOpenSession(data);
     } catch (err) {
-      alert("Lỗi tạo phiên mới: " + err.message);
+      alert("Lỗi tạo biên bản mới: " + err.message);
     }
   };
 
   const handleDeleteSession = async (sessionId, e) => {
     e.stopPropagation(); // Ngăn mở session
-    if (!confirm("🚨 CẢNH BÁO: Bạn có chắc chắn muốn xóa vĩnh viễn phiên này không?")) return;
+    if (!confirm("🚨 CẢNH BÁO: Bạn có chắc chắn muốn xóa vĩnh viễn biên bản này không?")) return;
     
     try {
       const { error } = await supabase.from('reconciliation_sessions').delete().eq('id', sessionId);
       if (error) throw error;
       fetchSessions(); // Tải lại danh sách
     } catch (err) {
-      alert("Lỗi khi xóa phiên: " + err.message);
+      alert("Lỗi khi xóa biên bản: " + err.message);
     }
   };
 
@@ -286,7 +286,7 @@ export default function OrderReconciliation() {
       setCurrentSession(prev => ({...prev, ...updates}));
       setAlertBanner({ type: 'success', message: '🎉 Đã chốt và lưu cứng dữ liệu đối soát thành công!' });
     } catch (err) {
-      alert("Lỗi khi chốt phiên: " + err.message);
+      alert("Lỗi khi chốt biên bản: " + err.message);
       setIsConfirmed(false);
     } finally {
       setLoading(false);
@@ -294,7 +294,7 @@ export default function OrderReconciliation() {
   };
 
   const handleResetAudit = async () => {
-    if (confirm("Xác nhận quét lại từ đầu? Lịch sử quét và chốt sổ hiện tại sẽ bị xóa sạch.")) {
+    if (confirm("Xác nhận quét lại từ đầu? Lịch sử quét và biên bản hiện tại sẽ bị xóa sạch.")) {
       setScannedCodes([]);
       setSurplusOrders([]);
       setIsConfirmed(false);
@@ -382,9 +382,9 @@ export default function OrderReconciliation() {
           <div>
             <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
               <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><List size={20} /></span>
-              QUẢN LÝ PHIÊN ĐỐI SOÁT
+              QUẢN LÝ BIÊN BẢN ĐỐI SOÁT
             </h2>
-            <p className="text-xs text-slate-400 font-medium mt-1">Tạo phiên mới hoặc chọn phiên cũ để tiếp tục làm việc</p>
+            <p className="text-xs text-slate-400 font-medium mt-1">Tạo biên bản mới hoặc chọn biên bản cũ để tiếp tục làm việc</p>
           </div>
         </div>
 
@@ -395,16 +395,16 @@ export default function OrderReconciliation() {
               <input type="date" value={newAuditDate} onChange={e => setNewAuditDate(e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium outline-none focus:border-blue-500" />
             </div>
             <button onClick={handleCreateSession} className="w-full sm:w-auto px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg shadow-sm transition flex items-center justify-center gap-2">
-              <Plus size={18} /> Tạo Phiên Mới
+              <Plus size={18} /> Tạo Biên Bản Mới
             </button>
           </div>
 
           <div>
-            <h3 className="text-sm font-bold text-slate-800 mb-3">Danh sách phiên gần đây</h3>
+            <h3 className="text-sm font-bold text-slate-800 mb-3">Danh sách biên bản gần đây</h3>
             {loadingSessions ? (
               <p className="text-sm text-slate-500 text-center py-4">Đang tải...</p>
             ) : sessions.length === 0 ? (
-              <p className="text-sm text-slate-500 text-center py-4 border rounded-xl border-dashed">Chưa có phiên đối soát nào.</p>
+              <p className="text-sm text-slate-500 text-center py-4 border rounded-xl border-dashed">Chưa có biên bản đối soát nào.</p>
             ) : (
               <div className="space-y-3">
                 {sessions.map(session => (
@@ -428,7 +428,7 @@ export default function OrderReconciliation() {
                         <button 
                           onClick={(e) => handleDeleteSession(session.id, e)} 
                           className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-md transition" 
-                          title="Xóa phiên"
+                          title="Xóa biên bản"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -492,8 +492,10 @@ export default function OrderReconciliation() {
         {isConfirmed ? (
           <div className="py-4">
              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3"><CheckCircle2 size={32} /></div>
-             <h3 className="text-lg font-black text-emerald-700">PHIÊN ĐÃ CHỐT SỔ</h3>
-             <p className="text-sm text-slate-500 font-medium mt-1">Dữ liệu đã được lưu cứng vĩnh viễn. Để quét thêm cho phiên này, hãy bấm Quét lại bên dưới.</p>
+             <h3 className="text-lg font-black text-emerald-700">BIÊN BẢN ĐÃ CHỐT</h3>
+             <p className="text-sm text-slate-500 font-medium mt-1">
+               Biên bản đã chốt.
+             </p>
           </div>
         ) : (
           <>
@@ -528,24 +530,25 @@ export default function OrderReconciliation() {
                 <p className="text-xs text-slate-400 mt-2">Đưa mã vạch vào khung để quét tự động</p>
               </div>
             )}
+
+            {/* Chỉ hiện 2 nút này khi CHƯA CHỐT SỔ */}
+            <div className="flex justify-center gap-2 sm:gap-3 pt-4 flex-wrap border-t border-slate-100 mt-4">
+              <button 
+                onClick={handleConfirmSession} 
+                disabled={scannedCodes.length === 0 || loading}
+                className="px-4 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer"
+              >
+                {loading ? 'Đang lưu...' : '✓ Chốt biên bản & Lưu Log'}
+              </button>
+              <button 
+                onClick={handleResetAudit}
+                className="px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 size={13} /> Quét lại từ đầu
+              </button>
+            </div>
           </>
         )}
-
-        <div className="flex justify-center gap-2 sm:gap-3 pt-4 flex-wrap border-t border-slate-100 mt-4">
-          <button 
-            onClick={handleConfirmSession} 
-            disabled={isConfirmed || scannedCodes.length === 0 || loading}
-            className="px-4 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer"
-          >
-            {loading ? 'Đang lưu...' : '✓ Chốt sổ & Lưu Log'}
-          </button>
-          <button 
-            onClick={handleResetAudit}
-            className="px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5"
-          >
-            <Trash2 size={13} /> Quét lại từ đầu
-          </button>
-        </div>
       </div>
 
       {/* KPI */}
@@ -658,7 +661,7 @@ export default function OrderReconciliation() {
             {!isConfirmed ? (
               <div className="text-center text-amber-500 text-xs py-10 flex flex-col items-center justify-center gap-2 font-medium">
                 <AlertCircle size={28} className="text-amber-300" />
-                <span>Bấm nút "Chốt sổ" ở trên để xem số hàng thiếu.</span>
+                <span>Bấm nút "Chốt biên bản" ở trên để xem số hàng thiếu.</span>
               </div>
             ) : allMissing.length === 0 ? (
               <div className="text-center text-emerald-600 font-bold text-xs py-10 flex flex-col items-center justify-center gap-1.5">
