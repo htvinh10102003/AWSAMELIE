@@ -2,13 +2,21 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
-  Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, MapPin, UploadCloud, Lock, RefreshCcw
+  Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, MapPin, UploadCloud, Lock, RefreshCcw, User, ShieldAlert
 } from 'lucide-react';
 import * as Papa from 'papaparse'; // Thư viện đọc CSV
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState('configs'); 
   const [currentUserMeta, setCurrentUserMeta] = useState({});
+  const [currentUserEmail, setCurrentUserEmail] = useState('');
+  
+  // Profile State
+  const [profileName, setProfileName] = useState('');
+  const [profilePassword, setProfilePassword] = useState('');
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
+
   const [users, setUsers] = useState([]);
   const [userForm, setUserForm] = useState({ email: '', password: '', fullName: '', role: 'user' });
   const [showPassword, setShowPassword] = useState(false);
@@ -18,6 +26,10 @@ export default function Admin() {
 
   const [editingUser, setEditingUser] = useState(null); 
   const [editForm, setEditForm] = useState({ fullName: '', role: 'user' });
+  
+  // Upgrade Owner State
+  const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false);
+  const [upgradePassword, setUpgradePassword] = useState('');
 
   const [apiConfigs, setApiConfigs] = useState({ nhanh_app_id: '', nhanh_business_id: '', nhanh_secret_key: '', nhanh_access_code: '' });
   const [apiLoading, setApiLoading] = useState(false);
@@ -71,7 +83,6 @@ export default function Admin() {
         let currentPage = 1;
         let hasMoreData = true;
 
-        // React chịu trách nhiệm lặp trang
         while (hasMoreData) {
             setSyncReturnsMessage({ 
                 text: `Đang cào dữ liệu ${platform.name} (Trang ${currentPage})... Đã kéo: ${total} đơn`, 
@@ -87,7 +98,7 @@ export default function Admin() {
                 },
                 body: JSON.stringify({ 
                     platformId: platform.id,
-                    page: currentPage // Gửi trang hiện tại lên Supabase
+                    page: currentPage
                 }) 
             });
             
@@ -103,12 +114,11 @@ export default function Admin() {
             if (!res.ok) {
                 console.error(`❌ Lỗi sàn ${platform.name} trang ${currentPage}:`, data);
                 hasError = true;
-                break; // Có lỗi thì ngừng cào sàn này, chuyển sang sàn tiếp theo
+                break; 
             }
             
             total += (data.syncedCount || 0);
             
-            // Nhận kết quả xem có trang sau không
             if (data.hasMoreData) {
                 currentPage = data.nextPage;
             } else {
@@ -129,6 +139,7 @@ export default function Admin() {
       setIsSyncingReturns(false);
     }
   };
+
   // ==========================================
   // ⚡️ DỌN DẸP DỮ LIỆU CŨ (CLEANUP)
   // ==========================================
@@ -143,7 +154,6 @@ export default function Admin() {
     setCleanMessage({ text: 'Đang quét và xóa dữ liệu... Vui lòng không đóng trang.', type: 'processing' });
     
     try {
-      // Gọi hàm RPC trực tiếp xuống Database Supabase
       const { error } = await supabase.rpc('cleanup_old_data', { days_old: parseInt(cleanDays) });
       
       if (error) throw error;
@@ -165,6 +175,7 @@ export default function Admin() {
 
   const projectUrl = "https://infljrayvhidhfimksfp.supabase.co";
   const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluZmxqcmF5dmhpZGhmaW1rc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzAyNjksImV4cCI6MjA5NjkwNjI2OX0.ap1UnciJ5OccAvC-l5sm-JGqObTkEC038Kjf2L_IFr0";
+  const SUPER_OWNER_EMAIL = "contact.hotavinh@gmail.com";
 
   const getDynamicPriorityOptions = () => {
     const options = filterConfigs.allowed_statuses.map(statusId => {
@@ -186,7 +197,11 @@ export default function Admin() {
 
   const loadCurrentUserData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (user) setCurrentUserMeta(user.user_metadata || {});
+    if (user) {
+      setCurrentUserEmail(user.email || '');
+      setCurrentUserMeta(user.user_metadata || {});
+      setProfileName(user.user_metadata?.full_name || '');
+    }
   };
 
   const fetchData = async () => {
@@ -256,6 +271,34 @@ export default function Admin() {
     } finally { setLoading(false); }
   };
 
+  // Profile Update (Cá nhân tự đổi)
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    if (!profileName.trim()) {
+      setProfileMessage('❌ Tên không được để trống.');
+      return;
+    }
+    setProfileLoading(true);
+    try {
+      const updates = { data: { full_name: profileName } };
+      if (profilePassword) {
+        if (profilePassword.length < 6) throw new Error('Mật khẩu mới phải có ít nhất 6 ký tự.');
+        updates.password = profilePassword;
+      }
+      
+      const { error } = await supabase.auth.updateUser(updates);
+      if (error) throw error;
+      
+      setProfileMessage('✅ Đã cập nhật hồ sơ cá nhân thành công!');
+      setProfilePassword('');
+      await loadCurrentUserData();
+    } catch (err) {
+      setProfileMessage(`❌ Lỗi: ${err.message}`);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   const handleCreateUser = async (e) => {
     e.preventDefault();
     if (!userForm.email || !userForm.password || !userForm.fullName) {
@@ -278,6 +321,8 @@ export default function Admin() {
       fullName: targetUser.user_metadata?.full_name || '',
       role: targetUser.user_metadata?.role || 'user'
     });
+    setShowUpgradeConfirm(false);
+    setUpgradePassword('');
   };
 
   const handleSaveEditedInfo = async (e) => {
@@ -301,7 +346,42 @@ export default function Admin() {
     } finally { setLoading(false); }
   };
 
+  // Nâng cấp Owner (Có xác thực mật khẩu)
+  const handleUpgradeToOwner = async (e) => {
+    e.preventDefault();
+    if (!upgradePassword) {
+      alert('Vui lòng nhập mật khẩu của bạn để xác nhận!'); return;
+    }
+    setLoading(true);
+    try {
+      // 1. Dùng email của phiên hiện tại + mật khẩu nhập vào để SignIn xác nhận
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: currentUserEmail,
+        password: upgradePassword
+      });
+      if (verifyError) throw new Error('Mật khẩu xác nhận không chính xác!');
+
+      // 2. Gọi Edge Function để cấp quyền Owner
+      await callUserManagementApi({
+        action: 'update_info',
+        userId: editingUser.id,
+        isOwner: true 
+      });
+
+      setUserMessage(`🎉 Đã cấp quyền Owner thành công cho [${editingUser.email}]`);
+      setEditingUser(null);
+      await fetchSystemUsers();
+    } catch (err) {
+      alert(`❌ Lỗi nâng cấp: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleDeleteUser = async (targetUser) => {
+    if (targetUser.email === SUPER_OWNER_EMAIL) {
+      alert('Không thể xóa tài khoản Super Owner!'); return;
+    }
     if (!confirm(`🚨 BẠN CÓ CHẮC MUỐN XÓA VĨNH VIỄN tài khoản [${targetUser.user_metadata?.full_name || targetUser.email}] không?`)) return;
     setActionLoadingId(targetUser.id);
     try {
@@ -509,7 +589,7 @@ export default function Admin() {
   };
 
   const dynamicOptions = getDynamicPriorityOptions();
-  const isOwner = currentUserMeta.is_owner === true;
+  const isOwner = currentUserMeta.is_owner === true || currentUserEmail === SUPER_OWNER_EMAIL;
   const isAdminOrOwner = isOwner || currentUserMeta.role === 'admin';
 
   return (
@@ -529,20 +609,77 @@ export default function Admin() {
 
         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60 flex-wrap">
           <button onClick={() => { setActiveTab('configs'); setUserMessage(''); }} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'configs' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 cursor-pointer'}`}>
-            Cấu hình
+            Cấu hình API
           </button>
           <button onClick={() => { setActiveTab('users_management'); setUserMessage(''); }} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'users_management' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 cursor-pointer'}`}>
-            User
+            Quản lý Users
+          </button>
+          <button onClick={() => { setActiveTab('profile'); setUserMessage(''); }} className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'profile' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 cursor-pointer'}`}>
+            Hồ sơ của tôi
           </button>
         </div>
       </div>
 
-      {userMessage && (
-        <div className={`p-4 rounded-xl border text-xs font-bold flex items-center gap-2 ${userMessage.includes('✅') ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+      {userMessage && activeTab !== 'profile' && (
+        <div className={`p-4 rounded-xl border text-xs font-bold flex items-center gap-2 ${userMessage.includes('✅') || userMessage.includes('🎉') ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
           <CheckCircle2 size={16} /> {userMessage}
         </div>
       )}
 
+      {/* RENDER TAB 3: HỒ SƠ CÁ NHÂN */}
+      {activeTab === 'profile' && (
+        <div className="animate-in fade-in duration-300 max-w-2xl mx-auto">
+          <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+            <div className="flex items-center gap-4 border-b border-slate-100 pb-6 mb-6">
+              <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-2xl shadow-inner">
+                <User size={32} />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">{currentUserMeta.full_name || 'Chưa cập nhật tên'}</h2>
+                <p className="text-sm font-medium text-slate-500">{currentUserEmail}</p>
+                <div className="mt-2 flex gap-2">
+                  <span className={`px-2.5 py-0.5 border rounded-md text-[10px] font-black uppercase ${currentUserMeta.role === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                    {currentUserMeta.role === 'admin' ? 'Admin' : 'Nhân viên'}
+                  </span>
+                  {isOwner && (
+                    <span className="px-2.5 py-0.5 border rounded-md text-[10px] font-black uppercase bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1">
+                      <ShieldAlert size={10} /> Owner
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {profileMessage && (
+              <div className={`p-4 mb-6 rounded-lg font-medium text-sm flex items-center gap-2 ${profileMessage.includes('✅') ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>
+                {profileMessage.includes('✅') ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+                {profileMessage}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateProfile} className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Họ và tên hiển thị</label>
+                <input type="text" value={profileName} onChange={(e) => setProfileName(e.target.value)} className="w-full px-4 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-500 font-medium" placeholder="Nhập tên của bạn..." />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">Mật khẩu mới <span className="text-slate-400 font-normal">(Bỏ trống nếu không muốn đổi)</span></label>
+                <div className="relative">
+                  <input type={showPassword ? "text" : "password"} value={profilePassword} onChange={(e) => setProfilePassword(e.target.value)} className="w-full pl-4 pr-10 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-500 font-medium" placeholder="Nhập ít nhất 6 ký tự..." />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer">
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+              <div className="pt-4 border-t border-slate-100">
+                <button type="submit" disabled={profileLoading} className="w-full sm:w-auto px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-2">
+                  {profileLoading && <Loader2 size={16} className="animate-spin" />} Cập nhật Hồ Sơ
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* RENDER TAB 1: CẤU HÌNH HỆ THỐNG */}
       {activeTab === 'configs' && (
@@ -952,40 +1089,48 @@ export default function Admin() {
                     {users.map(u => {
                       const uRole = u.user_metadata?.role || 'user';
                       const uName = u.user_metadata?.full_name || 'Chưa cập nhật';
-                      const isTargetOwner = u.user_metadata?.is_owner === true;
+                      const isTargetOwner = u.user_metadata?.is_owner === true || u.email === SUPER_OWNER_EMAIL;
+                      const isMe = u.email === currentUserEmail;
 
                       return (
                         <tr key={u.id} className="hover:bg-slate-50/50 transition">
                           <td className="py-3 px-4">
-                            <div className="font-bold text-slate-800">{uName} {isTargetOwner && <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded font-black ml-1">OWNER</span>}</div>
+                            <div className="font-bold text-slate-800">{uName} {isMe && <span className="text-[9px] bg-green-100 text-green-700 px-1 py-0.5 rounded font-black ml-1">(Bạn)</span>}</div>
                             <div className="text-[10px] text-slate-400 mt-0.5">{u.email}</div>
                           </td>
                           <td className="py-3 px-4 text-center">
-                            <span className={`px-2.5 py-0.5 border rounded-md text-[10px] font-black uppercase ${uRole === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                              {uRole === 'admin' ? 'Admin' : 'User'}
+                            <span className={`px-2.5 py-0.5 border rounded-md text-[10px] font-black uppercase ${isTargetOwner ? 'bg-amber-100 text-amber-800 border-amber-200' : uRole === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                              {isTargetOwner ? 'Owner' : uRole === 'admin' ? 'Admin' : 'User'}
                             </span>
                           </td>
                           <td className="py-3 px-6">
                             <div className="flex items-center justify-center gap-2">
-                              <button
-                                onClick={() => handleOpenEditModal(u)}
-                                disabled={actionLoadingId === u.id || (isTargetOwner && !isOwner)}
-                                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold border transition text-[10px] shadow-sm cursor-pointer bg-white text-blue-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50`}
-                                title="Chỉnh sửa thông tin thành viên"
-                              >
-                                <Pencil size={12} /> Sửa
-                              </button>
+                              {/* Chỉ Owner mới có quyền chỉnh sửa tài khoản người khác. User thường tự sửa ở Profile Tab */}
+                              {isOwner ? (
+                                <>
+                                  <button
+                                    onClick={() => handleOpenEditModal(u)}
+                                    disabled={actionLoadingId === u.id || (isTargetOwner && u.email !== SUPER_OWNER_EMAIL && currentUserEmail !== SUPER_OWNER_EMAIL)}
+                                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold border transition text-[10px] shadow-sm cursor-pointer bg-white text-blue-600 border-slate-200 hover:bg-slate-50 disabled:opacity-50`}
+                                    title="Chỉnh sửa thông tin thành viên"
+                                  >
+                                    <Pencil size={12} /> Sửa
+                                  </button>
 
-                              <button
-                                onClick={() => handleDeleteUser(u)}
-                                disabled={actionLoadingId === u.id || !isOwner || isTargetOwner}
-                                className={`p-1.5 rounded-lg border transition shadow-sm cursor-pointer ${
-                                  !isOwner || isTargetOwner ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed' : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
-                                }`}
-                                title="Xóa tài khoản vĩnh viễn"
-                              >
-                                {actionLoadingId === u.id ? <Loader2 size={12} className="animate-spin" /> : <UserX size={12} />}
-                              </button>
+                                  <button
+                                    onClick={() => handleDeleteUser(u)}
+                                    disabled={actionLoadingId === u.id || u.email === SUPER_OWNER_EMAIL || isMe}
+                                    className={`p-1.5 rounded-lg border transition shadow-sm cursor-pointer ${
+                                      u.email === SUPER_OWNER_EMAIL || isMe ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed' : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                                    }`}
+                                    title="Xóa tài khoản vĩnh viễn"
+                                  >
+                                    {actionLoadingId === u.id ? <Loader2 size={12} className="animate-spin" /> : <UserX size={12} />}
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1 justify-center"><Lock size={10}/> Khóa</span>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1026,6 +1171,7 @@ export default function Admin() {
                   value={editForm.fullName} 
                   onChange={e => setEditForm({...editForm, fullName: e.target.value})}
                   className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white focus:border-blue-500 font-bold" 
+                  disabled={editingUser.email === SUPER_OWNER_EMAIL && currentUserEmail !== SUPER_OWNER_EMAIL}
                 />
               </div>
 
@@ -1034,19 +1180,49 @@ export default function Admin() {
                 <select 
                   value={editForm.role} 
                   onChange={e => setEditForm({...editForm, role: e.target.value})}
-                  disabled={!isOwner} 
+                  disabled={!isOwner || (editingUser.user_metadata?.is_owner === true)} 
                   className="w-full px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 outline-none focus:bg-white disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <option value="user">Nhân viên kho (User)</option>
                   <option value="admin">Quản trị viên (Admin)</option>
                 </select>
-                {!isOwner && <p className="text-[10px] text-amber-600 font-medium mt-1">⚠️ Chỉ tài khoản Owner mới được phép thay đổi cấp bậc tài khoản.</p>}
               </div>
+              
+              {/* VÙNG NÂNG CẤP LÊN OWNER */}
+              {isOwner && editForm.role === 'admin' && !(editingUser.user_metadata?.is_owner === true) && (
+                <div className="mt-4 p-4 border border-amber-200 bg-amber-50 rounded-xl space-y-3">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="text-[11px] font-black text-amber-800 flex items-center gap-1.5"><ShieldAlert size={14}/> Nâng cấp quyền Owner</h4>
+                      <p className="text-[10px] text-amber-700 font-medium mt-1 pr-2">Tài khoản này sẽ có quyền hạn cao nhất ngang với bạn (trừ Super Owner). Hành động này không thể hoàn tác bằng giao diện thường.</p>
+                    </div>
+                    <button type="button" onClick={() => setShowUpgradeConfirm(!showUpgradeConfirm)} className="text-[10px] bg-white border border-amber-300 text-amber-700 px-2 py-1 rounded font-bold hover:bg-amber-100 whitespace-nowrap cursor-pointer">
+                      {showUpgradeConfirm ? 'Hủy' : 'Bật nâng cấp'}
+                    </button>
+                  </div>
+                  
+                  {showUpgradeConfirm && (
+                    <div className="pt-2 border-t border-amber-200/50 mt-2 animate-in slide-in-from-top-2">
+                      <label className="block mb-1 text-[10px] text-amber-800">Nhập mật khẩu của BẠN để xác nhận:</label>
+                      <input 
+                        type="password" 
+                        value={upgradePassword}
+                        onChange={(e) => setUpgradePassword(e.target.value)}
+                        className="w-full px-3 py-1.5 border border-amber-300 rounded-lg outline-none focus:ring-2 focus:ring-amber-200 font-medium bg-white" 
+                        placeholder="Mật khẩu của bạn..."
+                      />
+                      <button type="button" onClick={handleUpgradeToOwner} disabled={loading} className="mt-2 w-full bg-amber-600 hover:bg-amber-700 text-white py-1.5 rounded-lg shadow-sm transition font-bold text-[11px] flex justify-center gap-1 cursor-pointer">
+                        {loading && <Loader2 size={12} className="animate-spin" />} Xác nhận nâng cấp lên Owner
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 mt-2">
-                <button type="button" onClick={() => setEditingUser(null)} className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition cursor-pointer">Hủy bỏ</button>
+                <button type="button" onClick={() => setEditingUser(null)} className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition cursor-pointer">Đóng</button>
                 <button type="submit" disabled={loading} className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition shadow-md cursor-pointer flex items-center gap-1">
-                  {loading && <Loader2 size={12} className="animate-spin" />} Cập nhật ngay
+                  {loading && <Loader2 size={12} className="animate-spin" />} Lưu thông tin
                 </button>
               </div>
             </form>
