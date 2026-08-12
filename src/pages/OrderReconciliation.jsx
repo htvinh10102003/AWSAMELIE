@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
-  ScanBarcode, Calendar, Trash2, PackagePlus, PackageMinus, AlertCircle, CheckCircle2, XCircle, CheckCircle, Download, Camera, CameraOff, RefreshCw
+  ScanBarcode, Calendar, Trash2, PackagePlus, PackageMinus, AlertCircle, CheckCircle2, XCircle, CheckCircle, Download, Camera, CameraOff, RefreshCw, List, Plus, ChevronLeft, Clock
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 
@@ -20,7 +20,16 @@ const CANCELED_STATUS_CODES = [58, 63, 64];
 export default function OrderReconciliation() {
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   
-  const [auditDate, setAuditDate] = useState(getTodayStr());
+  // VIEW STATE: 'list' (Danh sách phiên) | 'audit' (Trang đối soát)
+  const [view, setView] = useState('list');
+  
+  // SESSIONS STATE
+  const [sessions, setSessions] = useState([]);
+  const [currentSession, setCurrentSession] = useState(null);
+  const [newAuditDate, setNewAuditDate] = useState(getTodayStr());
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
+  // AUDIT STATE
   const [inputCode, setInputCode] = useState('');
   const [todayOrders, setTodayOrders] = useState([]);
   const [scannedCodes, setScannedCodes] = useState([]);
@@ -30,29 +39,86 @@ export default function OrderReconciliation() {
   const [loading, setLoading] = useState(false);
   const [alertBanner, setAlertBanner] = useState(null);
 
-  // Camera
+  // CAMERA STATE
   const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [cameraErrorMsg, setCameraErrorMsg] = useState(''); // thông báo lỗi camera
+  const [cameraErrorMsg, setCameraErrorMsg] = useState(''); 
   const scannerRef = useRef(null);
   const cameraContainerRef = useRef(null);
 
-  // Popup trùng mã
+  // POPUP STATE
   const [showDuplicatePopup, setShowDuplicatePopup] = useState(false);
   const [duplicateCode, setDuplicateCode] = useState('');
 
   const inputRef = useRef(null);
-  const audioCtxRef = useRef(null); // Dùng cho Web Audio
+  const audioCtxRef = useRef(null); 
 
-  // Tập trung input khi không mở camera
+  // ==========================================
+  // QUẢN LÝ PHIÊN (SESSIONS)
+  // ==========================================
+  const fetchSessions = async () => {
+    setLoadingSessions(true);
+    try {
+      const { data, error } = await supabase
+        .from('reconciliation_sessions')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setSessions(data || []);
+    } catch (err) {
+      console.error("Lỗi tải danh sách phiên:", err.message);
+    } finally {
+      setLoadingSessions(false);
+    }
+  };
+
   useEffect(() => {
-    if (inputRef.current && !isCameraOpen) inputRef.current.focus();
-  }, [scannedCodes, inputCode, alertBanner, isCameraOpen]);
+    fetchSessions();
+  }, [view]); // Load lại session mỗi khi quay về list
 
+  const handleCreateSession = async () => {
+    const sessionName = `Phiên đối soát - ${new Date().toLocaleString('vi-VN')}`;
+    try {
+      const { data, error } = await supabase.from('reconciliation_sessions').insert([{
+        session_name: sessionName,
+        audit_date: newAuditDate,
+        status: 'draft',
+        scanned_codes: [],
+        surplus_orders: []
+      }]).select().single();
+
+      if (error) throw error;
+      
+      handleOpenSession(data);
+    } catch (err) {
+      alert("Lỗi tạo phiên mới: " + err.message);
+    }
+  };
+
+  const handleOpenSession = (sessionData) => {
+    setCurrentSession(sessionData);
+    // Phục hồi dữ liệu từ phiên cũ
+    setScannedCodes(sessionData.scanned_codes || []);
+    setSurplusOrders(sessionData.surplus_orders || []);
+    setIsConfirmed(sessionData.status === 'completed');
+    setView('audit');
+  };
+
+  const handleBackToList = () => {
+    if (isCameraOpen) stopCamera();
+    setView('list');
+    setCurrentSession(null);
+    setAlertBanner(null);
+  };
+
+  // ==========================================
+  // LOGIC ĐỐI SOÁT CỦA PHIÊN HIỆN TẠI
+  // ==========================================
   const fetchTodayOrders = async () => {
+    if (!currentSession) return;
     setLoading(true);
     try {
-      const startOfDay = new Date(`${auditDate}T00:00:00`).toISOString();
-      const endOfDay = new Date(`${auditDate}T23:59:59.999`).toISOString();
+      const startOfDay = new Date(`${currentSession.audit_date}T00:00:00`).toISOString();
+      const endOfDay = new Date(`${currentSession.audit_date}T23:59:59.999`).toISOString();
 
       const { data, error } = await supabase
         .from('orders')
@@ -65,11 +131,6 @@ export default function OrderReconciliation() {
 
       if (error) throw error;
       setTodayOrders(data || []);
-      setScannedCodes([]);
-      setSurplusOrders([]);
-      setIsConfirmed(false);
-      setAlertBanner(null);
-      setShowDuplicatePopup(false);
     } catch (err) {
       console.error("❌ Lỗi tải đơn hàng đối soát:", err.message);
     } finally {
@@ -78,24 +139,32 @@ export default function OrderReconciliation() {
   };
 
   useEffect(() => {
-    fetchTodayOrders();
-  }, [auditDate]);
+    if (view === 'audit') {
+      fetchTodayOrders();
+    }
+  }, [view, currentSession]);
+
+  useEffect(() => {
+    if (inputRef.current && !isCameraOpen && view === 'audit') {
+      inputRef.current.focus();
+    }
+  }, [scannedCodes, inputCode, alertBanner, isCameraOpen, view]);
 
   const expectedCorrect = todayOrders.filter(o => !EXCLUDED_STATUS_CODES.includes(Number(o.status)) && !CANCELED_STATUS_CODES.includes(Number(o.status)));
   const expectedCanceled = todayOrders.filter(o => CANCELED_STATUS_CODES.includes(Number(o.status)));
+  const missingCorrect = expectedCorrect.filter(o => !isScanned(o));
+  const missingCanceled = expectedCanceled.filter(o => !isScanned(o));
+  const allMissing = [...missingCorrect, ...missingCanceled];
 
-  const isScanned = (order) => scannedCodes.includes(order.id) || (order.carrier_code && scannedCodes.includes(order.carrier_code));
+  function isScanned(order) {
+    return scannedCodes.includes(order.id) || (order.carrier_code && scannedCodes.includes(order.carrier_code));
+  }
 
-  // Phát âm thanh bằng Web Audio API
   const playSound = (type) => {
     try {
-      if (!audioCtxRef.current) {
-        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-      }
+      if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
       const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') {
-        ctx.resume();
-      }
+      if (ctx.state === 'suspended') ctx.resume();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -113,16 +182,12 @@ export default function OrderReconciliation() {
         osc.start(ctx.currentTime);
         osc.stop(ctx.currentTime + 0.4);
       }
-    } catch (e) {
-      // Bỏ qua lỗi âm thanh
-    }
+    } catch (e) {}
   };
 
-  // Xử lý khi quét được một mã (từ input hoặc camera)
   const processBarcode = useCallback(async (code) => {
-    if (!code) return;
+    if (!code || isConfirmed) return;
 
-    // Kiểm tra trùng lặp
     if (scannedCodes.includes(code)) {
       setDuplicateCode(code);
       setShowDuplicatePopup(true);
@@ -138,7 +203,6 @@ export default function OrderReconciliation() {
 
     if (matchedOrder) {
       const statusCode = Number(matchedOrder.status);
-      
       if (CANCELED_STATUS_CODES.includes(statusCode)) {
         setAlertBanner({ type: 'danger', message: `🚨 ĐƠN HÀNG HỦY! Mã ${matchedOrder.id} đã bị [${STATUS_MAP[statusCode]}]. Lọc ra rã hàng ngay!` });
       } else if (EXCLUDED_STATUS_CODES.includes(statusCode)) {
@@ -165,160 +229,215 @@ export default function OrderReconciliation() {
     }
     
     setInputCode('');
-  }, [scannedCodes, todayOrders]);
+  }, [scannedCodes, todayOrders, isConfirmed]);
 
-  // Submit từ input tay
   const handleBarcodeSubmit = (e) => {
     e.preventDefault();
     processBarcode(inputCode.trim());
   };
 
-  // Đóng popup trùng mã
-  const closeDuplicatePopup = () => {
-    setShowDuplicatePopup(false);
-    setDuplicateCode('');
+  // LƯU LOG PHIÊN KHI BẤM ĐỐI SOÁT
+  const handleConfirmSession = async () => {
+    setIsConfirmed(true);
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('reconciliation_sessions').update({
+        status: 'completed',
+        completed_at: new Date().toISOString(),
+        total_printed: todayOrders.length,
+        total_expected: expectedCorrect.length,
+        total_canceled: expectedCanceled.length,
+        total_scanned: scannedCodes.length,
+        total_missing: allMissing.length,
+        total_surplus: surplusOrders.length,
+        scanned_codes: scannedCodes,
+        surplus_orders: surplusOrders
+      }).eq('id', currentSession.id);
+
+      if (error) throw error;
+      setAlertBanner({ type: 'success', message: '🎉 Đã lưu log phiên đối soát thành công!' });
+    } catch (err) {
+      alert("Lỗi khi lưu log phiên: " + err.message);
+      setIsConfirmed(false);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Camera
+  // CÁC HÀM TIỆN ÍCH CAMERA / XUẤT EXCEL / POPUP
+  const closeDuplicatePopup = () => { setShowDuplicatePopup(false); setDuplicateCode(''); };
+
   const startCamera = async () => {
     setCameraErrorMsg('');
     setIsCameraOpen(true);
     try {
       const html5QrCode = new Html5Qrcode("camera-container");
       scannerRef.current = html5QrCode;
-      
       await html5QrCode.start(
         { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-        },
-        (decodedText) => {
-          // Gọi xử lý mã
-          processBarcode(decodedText);
-        },
-        (errorMessage) => {
-          // Lỗi quét, có thể bỏ qua
-        }
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => processBarcode(decodedText),
+        (errorMessage) => {}
       );
     } catch (err) {
-      console.error("Không thể mở camera:", err);
-      setCameraErrorMsg('Không thể truy cập camera. Hãy kiểm tra quyền trong trình duyệt hoặc thử lại.');
+      setCameraErrorMsg('Không thể truy cập camera. Hãy kiểm tra quyền.');
       setIsCameraOpen(false);
     }
   };
 
   const stopCamera = async () => {
     if (scannerRef.current) {
-      try {
-        await scannerRef.current.stop();
-        scannerRef.current.clear();
-      } catch (e) {
-        console.warn("Lỗi khi dừng camera:", e);
-      }
+      try { await scannerRef.current.stop(); scannerRef.current.clear(); } catch (e) {}
       scannerRef.current = null;
     }
     setIsCameraOpen(false);
     setCameraErrorMsg('');
   };
 
-  // Khi popup trùng hiển thị => tạm dừng camera
   useEffect(() => {
-    if (showDuplicatePopup && scannerRef.current && isCameraOpen) {
-      scannerRef.current.pause();
-    } else if (!showDuplicatePopup && scannerRef.current && isCameraOpen) {
-      scannerRef.current.resume();
-    }
+    if (showDuplicatePopup && scannerRef.current && isCameraOpen) scannerRef.current.pause();
+    else if (!showDuplicatePopup && scannerRef.current && isCameraOpen) scannerRef.current.resume();
   }, [showDuplicatePopup, isCameraOpen]);
 
-  // Cleanup
   useEffect(() => {
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current.stop().catch(() => {});
-      }
-    };
+    return () => { if (scannerRef.current) scannerRef.current.stop().catch(() => {}); };
   }, []);
 
-  const handleToggleCamera = () => {
-    if (isCameraOpen) {
-      stopCamera();
-    } else {
-      startCamera();
-    }
-  };
+  const handleToggleCamera = () => { if (isCameraOpen) stopCamera(); else startCamera(); };
 
-  // Xuất Excel
   const handleExportCorrectOrdersExcel = () => {
     const scannedCorrectOrders = expectedCorrect.filter(o => isScanned(o));
-    if (scannedCorrectOrders.length === 0) {
-      alert("Ông chưa quét được đơn đúng nào để xuất Excel cả!");
-      return;
-    }
+    if (scannedCorrectOrders.length === 0) return alert("Chưa quét được đơn đúng nào để xuất Excel!");
 
-    let csvContent = "\uFEFF"; 
-    csvContent += "Mã Đơn Hàng (ID),Mã Vận Đơn,Trạng Thái Sàn,Mã Sản Phẩm,Tên Sản Phẩm,Số Lượng,Lý Do Không Đóng Được (Ghi chú tay)\n";
-
+    let csvContent = "\uFEFFMã Đơn Hàng (ID),Mã Vận Đơn,Trạng Thái Sàn,Mã Sản Phẩm,Tên Sản Phẩm,Số Lượng,Lý Do Không Đóng Được\n";
     scannedCorrectOrders.forEach(order => {
       const carrierCode = order.carrier_code || '---';
       const statusText = STATUS_MAP[order.status] || order.status;
-      
       if (order.order_products && order.order_products.length > 0) {
-        order.order_products.forEach(p => {
-          csvContent += `"${order.id}","${carrierCode}","${statusText}","${p.product_code || '---'}","${p.product_name}","${p.quantity}",""\n`;
-        });
+        order.order_products.forEach(p => { csvContent += `"${order.id}","${carrierCode}","${statusText}","${p.product_code || '---'}","${p.product_name}","${p.quantity}",""\n`; });
       } else {
         csvContent += `"${order.id}","${carrierCode}","${statusText}","---","Đơn trống sản phẩm","0",""\n`;
       }
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Bao_Cao_Don_Ket_${auditDate}.csv`);
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = `Bao_Cao_Don_Ket_${currentSession.audit_date}.csv`;
     link.click();
-    document.body.removeChild(link);
   };
 
-  const handleResetAudit = () => {
-    if (confirm("Xác nhận quét lại?")) {
+  const handleResetAudit = async () => {
+    if (confirm("Xác nhận quét lại từ đầu cho phiên này? Toàn bộ lịch sử quét hiện tại sẽ bị xóa.")) {
       setScannedCodes([]);
       setSurplusOrders([]);
       setIsConfirmed(false);
       setAlertBanner(null);
       setShowDuplicatePopup(false);
       if (isCameraOpen) stopCamera();
+      
+      // Xóa log tạm trên DB
+      await supabase.from('reconciliation_sessions').update({
+        status: 'draft', scanned_codes: [], surplus_orders: [], completed_at: null
+      }).eq('id', currentSession.id);
     }
   };
 
-  const missingCorrect = expectedCorrect.filter(o => !isScanned(o));
-  const missingCanceled = expectedCanceled.filter(o => !isScanned(o));
-  const allMissing = [...missingCorrect, ...missingCanceled];
 
+  // ==========================================
+  // RENDER: VIEW DANH SÁCH PHIÊN
+  // ==========================================
+  if (view === 'list') {
+    return (
+      <div className="space-y-6 pb-10 px-2 sm:px-0">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
+          <div>
+            <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><List size={20} /></span>
+              QUẢN LÝ PHIÊN ĐỐI SOÁT
+            </h2>
+            <p className="text-xs text-slate-400 font-medium mt-1">Tạo phiên mới hoặc chọn phiên cũ để tiếp tục làm việc</p>
+          </div>
+        </div>
+
+        <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm space-y-6">
+          {/* Form tạo mới */}
+          <div className="flex flex-col sm:flex-row gap-3 items-end p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
+            <div className="flex-1 w-full">
+              <label className="block text-xs font-bold text-slate-700 mb-1">Ngày dữ liệu đơn in cần đối soát</label>
+              <input type="date" value={newAuditDate} onChange={e => setNewAuditDate(e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium outline-none focus:border-blue-500" />
+            </div>
+            <button onClick={handleCreateSession} className="w-full sm:w-auto px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg shadow-sm transition flex items-center justify-center gap-2">
+              <Plus size={18} /> Tạo Phiên Mới
+            </button>
+          </div>
+
+          {/* Danh sách */}
+          <div>
+            <h3 className="text-sm font-bold text-slate-800 mb-3">Danh sách phiên gần đây</h3>
+            {loadingSessions ? (
+              <p className="text-sm text-slate-500 text-center py-4">Đang tải...</p>
+            ) : sessions.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-4 border rounded-xl border-dashed">Chưa có phiên đối soát nào.</p>
+            ) : (
+              <div className="space-y-3">
+                {sessions.map(session => (
+                  <div key={session.id} onClick={() => handleOpenSession(session)} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border border-slate-200 rounded-xl hover:border-blue-400 hover:shadow-md transition cursor-pointer bg-white group">
+                    <div>
+                      <h4 className="font-bold text-slate-800 group-hover:text-blue-700">{session.session_name}</h4>
+                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
+                        <Calendar size={12} /> Ngày Check: {session.audit_date}
+                        <span className="mx-1">•</span>
+                        <Clock size={12} /> Tạo lúc: {new Date(session.created_at).toLocaleTimeString('vi-VN')}
+                      </p>
+                    </div>
+                    <div className="mt-3 sm:mt-0 flex items-center gap-3">
+                      {session.status === 'completed' ? (
+                        <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-lg flex items-center gap-1"><CheckCircle2 size={14}/> Đã chốt</span>
+                      ) : (
+                        <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold rounded-lg flex items-center gap-1"><RefreshCw size={14} className="animate-spin-slow"/> Đang quét</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // RENDER: VIEW TRANG ĐỐI SOÁT
+  // ==========================================
   return (
     <div className="space-y-4 sm:space-y-6 pb-10 px-2 sm:px-0">
       
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
-        <div>
-          <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-            <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><ScanBarcode size={18} /></span>
-            ĐỐI SOÁT PHIẾU IN TRẢ VỀ CUỐI NGÀY
-          </h2>
-          <p className="text-xs text-slate-400 font-medium mt-0.5">Checklist đối soát hàng tồn, hàng hủy và thừa kho tự động</p>
+        <div className="flex items-center gap-3">
+          <button onClick={handleBackToList} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition" title="Quay lại danh sách">
+            <ChevronLeft size={20} />
+          </button>
+          <div>
+            <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><ScanBarcode size={18} /></span>
+              ĐỐI SOÁT PHIẾU IN TRẢ VỀ
+            </h2>
+            <p className="text-xs text-slate-400 font-medium mt-0.5">{currentSession?.session_name}</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 p-2 rounded-xl shadow-inner w-full sm:w-auto">
-          <Calendar size={16} className="text-slate-400 ml-1" />
-          <input type="date" value={auditDate} onChange={e => setAuditDate(e.target.value)} className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer flex-1" />
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl shadow-inner font-bold text-slate-700 text-sm">
+          <Calendar size={16} className="text-blue-500" />
+          Ngày check: {currentSession?.audit_date}
         </div>
       </div>
 
       {alertBanner && (
-        <div className={`p-3 sm:p-4 font-black text-xs sm:text-sm rounded-2xl shadow-lg flex items-center gap-3 animate-bounce ${alertBanner.type === 'danger' ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'}`}>
-          <XCircle size={20} className="flex-shrink-0" />
+        <div className={`p-3 sm:p-4 font-black text-xs sm:text-sm rounded-2xl shadow-lg flex items-center gap-3 animate-bounce ${alertBanner.type === 'success' ? 'bg-emerald-600 text-white' : alertBanner.type === 'danger' ? 'bg-red-600 text-white' : 'bg-amber-500 text-white'}`}>
+          {alertBanner.type === 'success' ? <CheckCircle2 size={20} className="flex-shrink-0" /> : <XCircle size={20} className="flex-shrink-0" />}
           <span>{alertBanner.message}</span>
         </div>
       )}
@@ -333,10 +452,7 @@ export default function OrderReconciliation() {
               Mã <span className="font-black text-slate-800">{duplicateCode}</span> đã được quét trước đó.<br/>
               Vui lòng kiểm tra lại hàng hoặc bỏ qua.
             </p>
-            <button
-              onClick={closeDuplicatePopup}
-              className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition w-full"
-            >
+            <button onClick={closeDuplicatePopup} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition w-full">
               Đã hiểu
             </button>
           </div>
@@ -345,66 +461,61 @@ export default function OrderReconciliation() {
 
       {/* Khu vực quét mã */}
       <div className="bg-white p-4 sm:p-6 border border-slate-200 rounded-2xl shadow-sm text-center max-w-xl mx-auto space-y-4">
-        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Quét mã vạch tại đây </label>
-        
-        <form onSubmit={handleBarcodeSubmit} className="relative max-w-md mx-auto flex items-center gap-2">
-          <input 
-            ref={inputRef}
-            type="text"
-            placeholder="Bắn mã vạch đơn trả về ..."
-            value={inputCode}
-            onChange={e => setInputCode(e.target.value)}
-            disabled={isConfirmed || isCameraOpen}
-            className="flex-1 text-center text-sm font-bold tracking-wide py-2.5 sm:py-3 px-3 sm:px-4 bg-slate-50 border-2 border-dashed border-blue-400 rounded-xl outline-none focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition disabled:opacity-50"
-          />
-          <button
-            type="button"
-            onClick={handleToggleCamera}
-            disabled={isConfirmed || showDuplicatePopup}
-            className={`p-2.5 sm:p-3 rounded-xl border-2 font-bold text-xs flex items-center gap-1.5 transition ${
-              isCameraOpen 
-                ? 'bg-red-50 border-red-300 text-red-600 hover:bg-red-100' 
-                : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100'
-            } disabled:opacity-50`}
-            title={isCameraOpen ? "Tắt camera" : "Quét bằng camera"}
-          >
-            {isCameraOpen ? <CameraOff size={18} /> : <Camera size={18} />}
-            <span className="hidden sm:inline">{isCameraOpen ? 'Tắt' : 'Camera'}</span>
-          </button>
-        </form>
-
-        {cameraErrorMsg && (
-          <div className="mt-2 text-red-600 text-xs font-medium flex flex-col items-center gap-1">
-            <span>{cameraErrorMsg}</span>
-            <button
-              onClick={() => startCamera()}
-              className="flex items-center gap-1 px-3 py-1 bg-red-50 border border-red-200 rounded-lg text-red-700 font-bold hover:bg-red-100 transition"
-            >
-              <RefreshCw size={12} /> Thử lại
-            </button>
+        {isConfirmed ? (
+          <div className="py-4">
+             <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3"><CheckCircle2 size={32} /></div>
+             <h3 className="text-lg font-black text-emerald-700">PHIÊN ĐÃ CHỐT SỔ</h3>
+             <p className="text-sm text-slate-500 font-medium mt-1">Bạn không thể quét thêm mã vào phiên này. Để làm lại, hãy bấm Quét Lại bên dưới.</p>
           </div>
+        ) : (
+          <>
+            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Quét mã vạch tại đây </label>
+            <form onSubmit={handleBarcodeSubmit} className="relative max-w-md mx-auto flex items-center gap-2">
+              <input ref={inputRef} type="text" placeholder="Bắn mã vạch đơn trả về ..." value={inputCode} onChange={e => setInputCode(e.target.value)} disabled={isCameraOpen}
+                className="flex-1 text-center text-sm font-bold tracking-wide py-2.5 sm:py-3 px-3 sm:px-4 bg-slate-50 border-2 border-dashed border-blue-400 rounded-xl outline-none focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition disabled:opacity-50"
+              />
+              <button type="button" onClick={handleToggleCamera} disabled={showDuplicatePopup}
+                className={`p-2.5 sm:p-3 rounded-xl border-2 font-bold text-xs flex items-center gap-1.5 transition ${
+                  isCameraOpen ? 'bg-red-50 border-red-300 text-red-600 hover:bg-red-100' : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100'
+                } disabled:opacity-50`}
+                title={isCameraOpen ? "Tắt camera" : "Quét bằng camera"}
+              >
+                {isCameraOpen ? <CameraOff size={18} /> : <Camera size={18} />}
+                <span className="hidden sm:inline">{isCameraOpen ? 'Tắt' : 'Camera'}</span>
+              </button>
+            </form>
+
+            {cameraErrorMsg && (
+              <div className="mt-2 text-red-600 text-xs font-medium flex flex-col items-center gap-1">
+                <span>{cameraErrorMsg}</span>
+                <button onClick={() => startCamera()} className="flex items-center gap-1 px-3 py-1 bg-red-50 border border-red-200 rounded-lg text-red-700 font-bold hover:bg-red-100 transition">
+                  <RefreshCw size={12} /> Thử lại
+                </button>
+              </div>
+            )}
+
+            {isCameraOpen && !cameraErrorMsg && (
+              <div className="mt-4 flex flex-col items-center">
+                <div id="camera-container" ref={cameraContainerRef} className="w-full max-w-xs sm:max-w-sm rounded-xl overflow-hidden border-2 border-blue-200 shadow-lg" style={{ minHeight: '200px' }} />
+                <p className="text-xs text-slate-400 mt-2">Đưa mã vạch vào khung để quét tự động</p>
+              </div>
+            )}
+          </>
         )}
 
-        {isCameraOpen && !cameraErrorMsg && (
-          <div className="mt-4 flex flex-col items-center">
-            <div id="camera-container" ref={cameraContainerRef} className="w-full max-w-xs sm:max-w-sm rounded-xl overflow-hidden border-2 border-blue-200 shadow-lg" style={{ minHeight: '200px' }} />
-            <p className="text-xs text-slate-400 mt-2">Đưa mã vạch vào khung để quét tự động</p>
-          </div>
-        )}
-
-        <div className="flex justify-center gap-2 sm:gap-3 pt-2 flex-wrap">
+        <div className="flex justify-center gap-2 sm:gap-3 pt-4 flex-wrap border-t border-slate-100 mt-4">
           <button 
-            onClick={() => setIsConfirmed(true)} 
-            disabled={isConfirmed || scannedCodes.length === 0}
+            onClick={handleConfirmSession} 
+            disabled={isConfirmed || scannedCodes.length === 0 || loading}
             className="px-4 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer"
           >
-            ✓ Đối soát
+            {loading ? 'Đang lưu...' : '✓ Đối soát & Lưu Log'}
           </button>
           <button 
             onClick={handleResetAudit}
             className="px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition cursor-pointer flex items-center gap-1.5"
           >
-            <Trash2 size={13} /> Quét lại
+            <Trash2 size={13} /> Quét lại từ đầu
           </button>
         </div>
       </div>
@@ -433,7 +544,7 @@ export default function OrderReconciliation() {
         </div>
       </div>
 
-      {/* Checklist - responsive 1 cột trên mobile, 2 cột trên desktop */}
+      {/* Checklist */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         
         {/* Đơn đúng cần trả */}
@@ -443,16 +554,10 @@ export default function OrderReconciliation() {
               <span className="p-1 bg-emerald-50 rounded-md"><CheckCircle size={14} /></span>
               Đơn tồn ({expectedCorrect.length})
             </h3>
-            <button
-              onClick={handleExportCorrectOrdersExcel}
-              disabled={expectedCorrect.filter(o=>isScanned(o)).length === 0}
-              className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white disabled:text-slate-400 text-[10px] sm:text-[11px] font-bold rounded-lg shadow transition cursor-pointer"
-            >
+            <button onClick={handleExportCorrectOrdersExcel} disabled={expectedCorrect.filter(o=>isScanned(o)).length === 0} className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 text-white disabled:text-slate-400 text-[10px] sm:text-[11px] font-bold rounded-lg shadow transition cursor-pointer">
               <Download size={12} /> Excel
             </button>
           </div>
-          <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium -mt-1 mb-3">Checklist các đơn in hôm nay đáng lẽ phải thu lại từ kho</p>
-          
           <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-3 pr-1 max-h-[350px]">
             {expectedCorrect.length === 0 ? (
               <div className="text-center text-slate-400 text-xs py-10">Tất cả đơn in đã được đóng và bàn giao!</div>
@@ -462,23 +567,8 @@ export default function OrderReconciliation() {
                 return (
                   <div key={order.id + idx} className={`p-2 sm:p-3 border rounded-xl space-y-1.5 transition-all duration-300 ${scanned ? 'bg-emerald-50/60 border-emerald-300 opacity-60' : 'bg-white border-slate-200 shadow-sm'}`}>
                     <div className="flex justify-between items-start text-xs font-bold">
-                      <div className="flex flex-col">
-                        <span className={scanned ? 'text-emerald-700 font-black' : 'text-slate-800 font-black'}>ID: {order.id}</span>
-                        <span className="text-[10px] text-slate-400 font-medium mt-0.5">Mã vận đơn: {order.carrier_code || '---'}</span>
-                      </div>
-                      {scanned ? (
-                        <CheckCircle2 size={18} className="text-emerald-500" />
-                      ) : (
-                        <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[9px] rounded font-black whitespace-nowrap uppercase">Chưa thấy mã</span>
-                      )}
-                    </div>
-                    <div className={`pt-1.5 border-t space-y-1 ${scanned ? 'border-emerald-200/50' : 'border-slate-100'}`}>
-                      {order.order_products?.map((p, pIdx) => (
-                        <div key={pIdx} className="text-[11px] text-slate-600 flex justify-between font-medium">
-                          <span className="truncate max-w-[75%]">📦 {p.product_name}</span>
-                          <span className="font-bold">x{p.quantity}</span>
-                        </div>
-                      ))}
+                      <div className="flex flex-col"><span className={scanned ? 'text-emerald-700' : 'text-slate-800'}>ID: {order.id}</span><span className="text-[10px] text-slate-400 font-medium">Mã vận đơn: {order.carrier_code || '---'}</span></div>
+                      {scanned ? <CheckCircle2 size={18} className="text-emerald-500" /> : <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[9px] rounded font-black uppercase">Chưa thấy</span>}
                     </div>
                   </div>
                 )
@@ -490,11 +580,8 @@ export default function OrderReconciliation() {
         {/* Đơn hủy */}
         <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
           <h3 className="text-xs sm:text-sm font-bold text-red-600 uppercase tracking-wider mb-3 sm:mb-4 flex items-center gap-1.5">
-            <span className="p-1 bg-red-50 rounded-md"><XCircle size={14} /></span>
-            Đơn bị hủy ({expectedCanceled.length})
+            <span className="p-1 bg-red-50 rounded-md"><XCircle size={14} /></span> Đơn bị hủy ({expectedCanceled.length})
           </h3>
-          <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium -mt-1 mb-3">Các đơn bị khách/sàn hủy trong ngày. Bắt buộc phải tìm để rã hàng!</p>
-          
           <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-3 pr-1 max-h-[350px]">
             {expectedCanceled.length === 0 ? (
               <div className="text-center text-slate-400 text-xs py-10">Tuyệt vời, không có đơn nào bị hủy!</div>
@@ -504,16 +591,8 @@ export default function OrderReconciliation() {
                 return (
                   <div key={order.id + idx} className={`p-2 sm:p-3 border rounded-xl space-y-1.5 transition-all duration-300 ${scanned ? 'bg-red-50 border-red-300 opacity-60' : 'bg-white border-red-200 shadow-sm animate-pulse'}`}>
                     <div className="flex justify-between items-start gap-2 text-xs font-bold">
-                      <div className="flex flex-col">
-                        <span className={scanned ? 'text-red-800 font-black' : 'text-red-600 font-black'}>ID: {order.id}</span>
-                        <span className="text-[10px] text-slate-500 font-medium">Mã vận đơn: {order.carrier_code || '---'}</span>
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className="px-2 py-0.5 bg-red-100 border border-red-200 text-red-700 text-[9px] rounded font-black whitespace-nowrap uppercase">
-                          {STATUS_MAP[order.status] || 'Đã hủy'}
-                        </span>
-                        {scanned && <CheckCircle2 size={16} className="text-red-500" />}
-                      </div>
+                      <div className="flex flex-col"><span className={scanned ? 'text-red-800' : 'text-red-600'}>ID: {order.id}</span></div>
+                      {scanned && <CheckCircle2 size={16} className="text-red-500" />}
                     </div>
                   </div>
                 )
@@ -525,11 +604,8 @@ export default function OrderReconciliation() {
         {/* Hàng thừa */}
         <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
           <h3 className="text-xs sm:text-sm font-bold text-slate-600 uppercase tracking-wider mb-3 sm:mb-4 flex items-center gap-1.5">
-            <span className="p-1 bg-slate-50 rounded-md"><PackagePlus size={14} /></span>
-            Hàng thừa ({surplusOrders.length})
+            <span className="p-1 bg-slate-50 rounded-md"><PackagePlus size={14} /></span> Hàng thừa ({surplusOrders.length})
           </h3>
-          <p className="text-[10px] sm:text-[11px] text-slate-400 font-medium -mt-1 mb-3">Đơn quét nhầm từ ngày khác hoặc đơn đã đóng gói xuất kho từ trước</p>
-          
           <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-3 pr-1 max-h-[350px]">
             {surplusOrders.length === 0 ? (
               <div className="text-center text-slate-400 text-xs py-10">Chưa quét trúng mã hàng lạc nào.</div>
@@ -537,13 +613,7 @@ export default function OrderReconciliation() {
               surplusOrders.map((order, idx) => (
                 <div key={order.id + idx} className="p-2 sm:p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
                   <div className="flex justify-between gap-2 text-xs font-bold">
-                    <div className="flex flex-col">
-                      <span className="text-slate-700 font-black">ID: {order.id}</span>
-                      <span className="text-[10px] text-slate-400 font-medium">Mã VC: {order.carrier_code || '---'}</span>
-                    </div>
-                    <span className="px-1.5 py-0.5 bg-white border border-slate-200 text-slate-600 text-[10px] rounded whitespace-nowrap">
-                      Sàn báo: {STATUS_MAP[order.status] || order.status}
-                    </span>
+                    <div className="flex flex-col"><span className="text-slate-700">ID: {order.id}</span></div>
                   </div>
                 </div>
               ))
@@ -554,29 +624,22 @@ export default function OrderReconciliation() {
         {/* Hàng thiếu */}
         <div className="p-4 sm:p-6 bg-amber-50/50 border border-amber-200/50 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
           <h3 className="text-xs sm:text-sm font-bold text-amber-600 uppercase tracking-wider mb-3 sm:mb-4 flex items-center gap-1.5">
-            <span className="p-1 bg-amber-100 rounded-md"><PackageMinus size={14} /></span>
-            Hàng thiếu ({isConfirmed ? allMissing.length : '?'})
+            <span className="p-1 bg-amber-100 rounded-md"><PackageMinus size={14} /></span> Hàng thiếu ({isConfirmed ? allMissing.length : '?'})
           </h3>
-          <p className="text-[10px] sm:text-[11px] text-amber-700/60 font-medium -mt-1 mb-3">Tổng hợp các đơn dự kiến tồn hoặc hủy nhưng kho không đem nộp lại</p>
-          
           <div className="flex-1 overflow-y-auto space-y-2 sm:space-y-3 pr-1 max-h-[350px]">
             {!isConfirmed ? (
               <div className="text-center text-amber-500 text-xs py-10 flex flex-col items-center justify-center gap-2 font-medium">
                 <AlertCircle size={28} className="text-amber-300" />
-                <span>Bấm nút "Đối soát" ở trên để xem danh sách hàng thiếu.</span>
+                <span>Bấm nút "Đối soát" ở trên để chốt số hàng thiếu.</span>
               </div>
             ) : allMissing.length === 0 ? (
               <div className="text-center text-emerald-600 font-bold text-xs py-10 flex flex-col items-center justify-center gap-1.5">
-                <CheckCircle2 size={32} className="text-emerald-500" />
-                <span>Đã nhận đủ đơn !</span>
+                <CheckCircle2 size={32} className="text-emerald-500" /><span>Đã nhận đủ đơn !</span>
               </div>
             ) : (
               allMissing.map(order => (
                 <div key={order.id} className="p-2 sm:p-3 bg-white border border-amber-200 rounded-xl space-y-1">
-                  <div className="text-xs font-bold flex justify-between">
-                    <span className="text-amber-800 font-black">ID: {order.id}</span>
-                    <span className="text-[10px] text-slate-400 font-medium text-right">Mã: {order.carrier_code || '---'}<br/>{STATUS_MAP[order.status]}</span>
-                  </div>
+                  <div className="text-xs font-bold flex justify-between"><span className="text-amber-800">ID: {order.id}</span></div>
                 </div>
               ))
             )}
@@ -584,7 +647,6 @@ export default function OrderReconciliation() {
         </div>
 
       </div>
-
     </div>
   );
 }
