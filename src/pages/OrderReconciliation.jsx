@@ -20,7 +20,7 @@ const CANCELED_STATUS_CODES = [58, 63, 64];
 export default function OrderReconciliation() {
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   
-  // VIEW STATE: 'list' (Danh sách phiên) | 'audit' (Trang đối soát)
+  const [currentUserMeta, setCurrentUserMeta] = useState({});
   const [view, setView] = useState('list');
   
   // SESSIONS STATE
@@ -39,18 +39,29 @@ export default function OrderReconciliation() {
   const [loading, setLoading] = useState(false);
   const [alertBanner, setAlertBanner] = useState(null);
 
-  // CAMERA STATE
+  // CAMERA & POPUP STATE
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraErrorMsg, setCameraErrorMsg] = useState(''); 
   const scannerRef = useRef(null);
   const cameraContainerRef = useRef(null);
-
-  // POPUP STATE
   const [showDuplicatePopup, setShowDuplicatePopup] = useState(false);
   const [duplicateCode, setDuplicateCode] = useState('');
 
   const inputRef = useRef(null);
   const audioCtxRef = useRef(null); 
+
+  // ==========================================
+  // KHỞI TẠO USER VÀ PHÂN QUYỀN
+  // ==========================================
+  useEffect(() => {
+    const loadUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) setCurrentUserMeta(user.user_metadata || {});
+    };
+    loadUser();
+  }, []);
+
+  const isAdminOrOwner = currentUserMeta.is_owner === true || currentUserMeta.role === 'admin';
 
   // ==========================================
   // QUẢN LÝ PHIÊN (SESSIONS)
@@ -72,8 +83,8 @@ export default function OrderReconciliation() {
   };
 
   useEffect(() => {
-    fetchSessions();
-  }, [view]); // Load lại session mỗi khi quay về list
+    if (view === 'list') fetchSessions();
+  }, [view]);
 
   const handleCreateSession = async () => {
     const sessionName = `Phiên đối soát - ${new Date().toLocaleString('vi-VN')}`;
@@ -87,16 +98,27 @@ export default function OrderReconciliation() {
       }]).select().single();
 
       if (error) throw error;
-      
       handleOpenSession(data);
     } catch (err) {
       alert("Lỗi tạo phiên mới: " + err.message);
     }
   };
 
+  const handleDeleteSession = async (sessionId, e) => {
+    e.stopPropagation(); // Ngăn mở session
+    if (!confirm("🚨 CẢNH BÁO: Bạn có chắc chắn muốn xóa vĩnh viễn phiên này không?")) return;
+    
+    try {
+      const { error } = await supabase.from('reconciliation_sessions').delete().eq('id', sessionId);
+      if (error) throw error;
+      fetchSessions(); // Tải lại danh sách
+    } catch (err) {
+      alert("Lỗi khi xóa phiên: " + err.message);
+    }
+  };
+
   const handleOpenSession = (sessionData) => {
     setCurrentSession(sessionData);
-    // Phục hồi dữ liệu từ phiên cũ
     setScannedCodes(sessionData.scanned_codes || []);
     setSurplusOrders(sessionData.surplus_orders || []);
     setIsConfirmed(sessionData.status === 'completed');
@@ -138,11 +160,12 @@ export default function OrderReconciliation() {
     }
   };
 
+  // Chỉ kéo dữ liệu Live nếu phiên Đang Quét (Draft). Phiên đã chốt (Completed) không cần kéo.
   useEffect(() => {
-    if (view === 'audit') {
+    if (view === 'audit' && currentSession?.status !== 'completed') {
       fetchTodayOrders();
     }
-  }, [view, currentSession]);
+  }, [view, currentSession?.status]);
 
   useEffect(() => {
     if (inputRef.current && !isCameraOpen && view === 'audit') {
@@ -150,15 +173,25 @@ export default function OrderReconciliation() {
     }
   }, [scannedCodes, inputCode, alertBanner, isCameraOpen, view]);
 
-  const expectedCorrect = todayOrders.filter(o => !EXCLUDED_STATUS_CODES.includes(Number(o.status)) && !CANCELED_STATUS_CODES.includes(Number(o.status)));
-  const expectedCanceled = todayOrders.filter(o => CANCELED_STATUS_CODES.includes(Number(o.status)));
+  // 🚀 TÍNH TOÁN DỮ LIỆU: Phân nhánh giữa LIVE DATA và FROZEN DATA (Dữ liệu đã chốt)
+  const isScanned = (order) => scannedCodes.includes(order.id) || (order.carrier_code && scannedCodes.includes(order.carrier_code));
+
+  const expectedCorrect = isConfirmed 
+      ? (currentSession?.expected_correct || []) 
+      : todayOrders.filter(o => !EXCLUDED_STATUS_CODES.includes(Number(o.status)) && !CANCELED_STATUS_CODES.includes(Number(o.status)));
+      
+  const expectedCanceled = isConfirmed 
+      ? (currentSession?.expected_canceled || []) 
+      : todayOrders.filter(o => CANCELED_STATUS_CODES.includes(Number(o.status)));
+
   const missingCorrect = expectedCorrect.filter(o => !isScanned(o));
   const missingCanceled = expectedCanceled.filter(o => !isScanned(o));
-  const allMissing = [...missingCorrect, ...missingCanceled];
+  
+  const allMissing = isConfirmed 
+      ? (currentSession?.missing_orders || []) 
+      : [...missingCorrect, ...missingCanceled];
 
-  function isScanned(order) {
-    return scannedCodes.includes(order.id) || (order.carrier_code && scannedCodes.includes(order.carrier_code));
-  }
+  const totalPrintedCount = isConfirmed ? currentSession?.total_printed : todayOrders.length;
 
   const playSound = (type) => {
     try {
@@ -170,17 +203,11 @@ export default function OrderReconciliation() {
       osc.connect(gain);
       gain.connect(ctx.destination);
       if (type === 'success') {
-        osc.frequency.value = 880;
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.15);
+        osc.frequency.value = 880; gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.15);
       } else if (type === 'error') {
-        osc.frequency.value = 330;
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.4);
+        osc.frequency.value = 330; gain.gain.setValueAtTime(0.3, ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
       }
     } catch (e) {}
   };
@@ -211,11 +238,7 @@ export default function OrderReconciliation() {
       }
       setScannedCodes(prev => [...prev, code]);
     } else {
-      const { data } = await supabase
-        .from('orders')
-        .select(`id, carrier_code, status, order_products (product_code, product_name, quantity)`)
-        .or(`id.eq.${code},carrier_code.eq.${code}`)
-        .maybeSingle();
+      const { data } = await supabase.from('orders').select(`id, carrier_code, status, order_products (product_code, product_name, quantity)`).or(`id.eq.${code},carrier_code.eq.${code}`).maybeSingle();
 
       if (data) {
         setSurplusOrders(prev => [...prev, data]);
@@ -231,36 +254,61 @@ export default function OrderReconciliation() {
     setInputCode('');
   }, [scannedCodes, todayOrders, isConfirmed]);
 
-  const handleBarcodeSubmit = (e) => {
-    e.preventDefault();
-    processBarcode(inputCode.trim());
-  };
+  const handleBarcodeSubmit = (e) => { e.preventDefault(); processBarcode(inputCode.trim()); };
 
-  // LƯU LOG PHIÊN KHI BẤM ĐỐI SOÁT
+  // ==========================================
+  // LƯU LOG PHIÊN - ĐÓNG BĂNG DỮ LIỆU
+  // ==========================================
   const handleConfirmSession = async () => {
     setIsConfirmed(true);
     setLoading(true);
     try {
-      const { error } = await supabase.from('reconciliation_sessions').update({
+      const updates = {
         status: 'completed',
         completed_at: new Date().toISOString(),
-        total_printed: todayOrders.length,
+        total_printed: totalPrintedCount,
         total_expected: expectedCorrect.length,
         total_canceled: expectedCanceled.length,
         total_scanned: scannedCodes.length,
         total_missing: allMissing.length,
         total_surplus: surplusOrders.length,
         scanned_codes: scannedCodes,
-        surplus_orders: surplusOrders
-      }).eq('id', currentSession.id);
+        surplus_orders: surplusOrders,
+        // 🚀 Snapshot dữ liệu cố định vào DB
+        expected_correct: expectedCorrect,
+        expected_canceled: expectedCanceled,
+        missing_orders: allMissing
+      };
 
+      const { error } = await supabase.from('reconciliation_sessions').update(updates).eq('id', currentSession.id);
       if (error) throw error;
-      setAlertBanner({ type: 'success', message: '🎉 Đã lưu log phiên đối soát thành công!' });
+      
+      setCurrentSession(prev => ({...prev, ...updates}));
+      setAlertBanner({ type: 'success', message: '🎉 Đã chốt và lưu cứng dữ liệu đối soát thành công!' });
     } catch (err) {
-      alert("Lỗi khi lưu log phiên: " + err.message);
+      alert("Lỗi khi chốt phiên: " + err.message);
       setIsConfirmed(false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetAudit = async () => {
+    if (confirm("Xác nhận quét lại từ đầu? Lịch sử quét và chốt sổ hiện tại sẽ bị xóa sạch.")) {
+      setScannedCodes([]);
+      setSurplusOrders([]);
+      setIsConfirmed(false);
+      setAlertBanner(null);
+      setShowDuplicatePopup(false);
+      if (isCameraOpen) stopCamera();
+      
+      const resetData = {
+        status: 'draft', scanned_codes: [], surplus_orders: [], completed_at: null,
+        expected_correct: null, expected_canceled: null, missing_orders: null
+      };
+
+      await supabase.from('reconciliation_sessions').update(resetData).eq('id', currentSession.id);
+      setCurrentSession(prev => ({...prev, ...resetData}));
     }
   };
 
@@ -273,11 +321,8 @@ export default function OrderReconciliation() {
     try {
       const html5QrCode = new Html5Qrcode("camera-container");
       scannerRef.current = html5QrCode;
-      await html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => processBarcode(decodedText),
-        (errorMessage) => {}
+      await html5QrCode.start( { facingMode: "environment" }, { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => processBarcode(decodedText), (errorMessage) => {}
       );
     } catch (err) {
       setCameraErrorMsg('Không thể truy cập camera. Hãy kiểm tra quyền.');
@@ -327,23 +372,6 @@ export default function OrderReconciliation() {
     link.click();
   };
 
-  const handleResetAudit = async () => {
-    if (confirm("Xác nhận quét lại từ đầu cho phiên này? Toàn bộ lịch sử quét hiện tại sẽ bị xóa.")) {
-      setScannedCodes([]);
-      setSurplusOrders([]);
-      setIsConfirmed(false);
-      setAlertBanner(null);
-      setShowDuplicatePopup(false);
-      if (isCameraOpen) stopCamera();
-      
-      // Xóa log tạm trên DB
-      await supabase.from('reconciliation_sessions').update({
-        status: 'draft', scanned_codes: [], surplus_orders: [], completed_at: null
-      }).eq('id', currentSession.id);
-    }
-  };
-
-
   // ==========================================
   // RENDER: VIEW DANH SÁCH PHIÊN
   // ==========================================
@@ -361,7 +389,6 @@ export default function OrderReconciliation() {
         </div>
 
         <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm space-y-6">
-          {/* Form tạo mới */}
           <div className="flex flex-col sm:flex-row gap-3 items-end p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
             <div className="flex-1 w-full">
               <label className="block text-xs font-bold text-slate-700 mb-1">Ngày dữ liệu đơn in cần đối soát</label>
@@ -372,7 +399,6 @@ export default function OrderReconciliation() {
             </button>
           </div>
 
-          {/* Danh sách */}
           <div>
             <h3 className="text-sm font-bold text-slate-800 mb-3">Danh sách phiên gần đây</h3>
             {loadingSessions ? (
@@ -386,16 +412,26 @@ export default function OrderReconciliation() {
                     <div>
                       <h4 className="font-bold text-slate-800 group-hover:text-blue-700">{session.session_name}</h4>
                       <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
-                        <Calendar size={12} /> Ngày Check: {session.audit_date}
+                        <Calendar size={12} /> Dữ liệu ngày: {session.audit_date}
                         <span className="mx-1">•</span>
                         <Clock size={12} /> Tạo lúc: {new Date(session.created_at).toLocaleTimeString('vi-VN')}
                       </p>
                     </div>
-                    <div className="mt-3 sm:mt-0 flex items-center gap-3">
+                    <div className="mt-3 sm:mt-0 flex items-center gap-2">
                       {session.status === 'completed' ? (
-                        <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-lg flex items-center gap-1"><CheckCircle2 size={14}/> Đã chốt</span>
+                        <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-lg flex items-center gap-1"><CheckCircle2 size={14}/> Đã chốt</span>
                       ) : (
-                        <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold rounded-lg flex items-center gap-1"><RefreshCw size={14} className="animate-spin-slow"/> Đang quét</span>
+                        <span className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold rounded-lg flex items-center gap-1"><RefreshCw size={14} className="animate-spin-slow"/> Đang quét</span>
+                      )}
+                      
+                      {isAdminOrOwner && (
+                        <button 
+                          onClick={(e) => handleDeleteSession(session.id, e)} 
+                          className="p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-md transition" 
+                          title="Xóa phiên"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -414,7 +450,6 @@ export default function OrderReconciliation() {
   return (
     <div className="space-y-4 sm:space-y-6 pb-10 px-2 sm:px-0">
       
-      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
         <div className="flex items-center gap-3">
           <button onClick={handleBackToList} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition" title="Quay lại danh sách">
@@ -431,7 +466,7 @@ export default function OrderReconciliation() {
 
         <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl shadow-inner font-bold text-slate-700 text-sm">
           <Calendar size={16} className="text-blue-500" />
-          Ngày check: {currentSession?.audit_date}
+          Dữ liệu check: {currentSession?.audit_date}
         </div>
       </div>
 
@@ -442,30 +477,23 @@ export default function OrderReconciliation() {
         </div>
       )}
 
-      {/* Popup trùng mã */}
       {showDuplicatePopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
           <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-xs w-full text-center space-y-4">
             <div className="text-4xl">⚠️</div>
             <h3 className="text-lg font-black text-red-600">Mã đã quét rồi!</h3>
-            <p className="text-sm text-slate-600 font-medium">
-              Mã <span className="font-black text-slate-800">{duplicateCode}</span> đã được quét trước đó.<br/>
-              Vui lòng kiểm tra lại hàng hoặc bỏ qua.
-            </p>
-            <button onClick={closeDuplicatePopup} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition w-full">
-              Đã hiểu
-            </button>
+            <p className="text-sm text-slate-600 font-medium">Mã <span className="font-black text-slate-800">{duplicateCode}</span> đã được quét trước đó.<br/>Vui lòng kiểm tra lại hàng.</p>
+            <button onClick={closeDuplicatePopup} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition w-full">Đã hiểu</button>
           </div>
         </div>
       )}
 
-      {/* Khu vực quét mã */}
       <div className="bg-white p-4 sm:p-6 border border-slate-200 rounded-2xl shadow-sm text-center max-w-xl mx-auto space-y-4">
         {isConfirmed ? (
           <div className="py-4">
              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3"><CheckCircle2 size={32} /></div>
              <h3 className="text-lg font-black text-emerald-700">PHIÊN ĐÃ CHỐT SỔ</h3>
-             <p className="text-sm text-slate-500 font-medium mt-1">Bạn không thể quét thêm mã vào phiên này. Để làm lại, hãy bấm Quét Lại bên dưới.</p>
+             <p className="text-sm text-slate-500 font-medium mt-1">Dữ liệu đã được lưu cứng vĩnh viễn. Để quét thêm cho phiên này, hãy bấm Quét lại bên dưới.</p>
           </div>
         ) : (
           <>
@@ -509,7 +537,7 @@ export default function OrderReconciliation() {
             disabled={isConfirmed || scannedCodes.length === 0 || loading}
             className="px-4 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer"
           >
-            {loading ? 'Đang lưu...' : '✓ Đối soát & Lưu Log'}
+            {loading ? 'Đang lưu...' : '✓ Chốt sổ & Lưu Log'}
           </button>
           <button 
             onClick={handleResetAudit}
@@ -520,11 +548,11 @@ export default function OrderReconciliation() {
         </div>
       </div>
 
-      {/* KPI - responsive grid */}
+      {/* KPI */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl shadow-sm text-center">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tổng đơn in</span>
-          <span className="text-base sm:text-lg font-black text-slate-900 block mt-0.5">{loading ? "..." : todayOrders.length}</span>
+          <span className="text-base sm:text-lg font-black text-slate-900 block mt-0.5">{loading ? "..." : totalPrintedCount}</span>
         </div>
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl shadow-sm text-center">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Đơn cần trả</span>
@@ -630,7 +658,7 @@ export default function OrderReconciliation() {
             {!isConfirmed ? (
               <div className="text-center text-amber-500 text-xs py-10 flex flex-col items-center justify-center gap-2 font-medium">
                 <AlertCircle size={28} className="text-amber-300" />
-                <span>Bấm nút "Đối soát" ở trên để chốt số hàng thiếu.</span>
+                <span>Bấm nút "Chốt sổ" ở trên để xem số hàng thiếu.</span>
               </div>
             ) : allMissing.length === 0 ? (
               <div className="text-center text-emerald-600 font-bold text-xs py-10 flex flex-col items-center justify-center gap-1.5">
