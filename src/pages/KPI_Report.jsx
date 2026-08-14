@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
   Activity, Loader2, CalendarDays, Target, BarChart3, 
   TrendingDown, CheckCircle2, AlertTriangle, FileWarning, 
-  HelpCircle, ChevronDown, ChevronUp, User, Users, Award
+  HelpCircle, ChevronDown, ChevronUp, User, Users, Award, Download
 } from 'lucide-react';
 
 export default function KPI_Report() {
@@ -21,15 +21,18 @@ export default function KPI_Report() {
 
   const [summary, setSummary] = useState({ avgScore: 0, topStaff: null, totalIssues: 0 });
 
+  // State lưu trữ dữ liệu gốc để xuất Excel
+  const [rawExportLogs, setRawExportLogs] = useState([]);
+  const [rawExportVars, setRawExportVars] = useState([]);
+
   useEffect(() => {
     generateReport();
   }, [selectedMonth, reportDept]);
 
-  // ⚡️ BỘ BIÊN DỊCH TOÁN HỌC AN TOÀN (Hỗ trợ IF, ABS, MAX, MIN)
+  // ⚡️ BỘ BIÊN DỊCH TOÁN HỌC AN TOÀN
   const safeEvalFormula = (formulaStr) => {
     if (!formulaStr || !formulaStr.trim()) return 0;
     try {
-      // Định nghĩa hàm IF chuẩn Excel
       const IF = (condition, valueIfTrue, valueIfFalse) => condition ? valueIfTrue : valueIfFalse;
       const ABS = Math.abs;
       const MAX = Math.max;
@@ -51,7 +54,6 @@ export default function KPI_Report() {
     setLoading(true);
     setExpandedStaff(null);
     try {
-      // 1. Fetch Criteria
       const { data: allCriteria } = await supabase.from('kpi_criteria').select('*');
       if (!allCriteria || allCriteria.length === 0) {
         setActiveDepartments([]); setStaffReports([]); setLoading(false); return;
@@ -68,7 +70,6 @@ export default function KPI_Report() {
 
       const deptCriteria = allCriteria.filter(c => c.department === currentDept);
 
-      // 2. Mốc thời gian
       const [year, month] = selectedMonth.split('-');
       const startD = new Date(`${selectedMonth}-01`);
       const endOfMonth = new Date(year, month, 0);
@@ -84,7 +85,6 @@ export default function KPI_Report() {
       }
       const numValidDays = daysInMonth.length || 1;
 
-      // 3. Fetch Data
       const [ 
         { data: deptStaffs }, { data: errorDefs }, { data: errorLogs }, { data: varLogs }, { data: globalVarsData }
       ] = await Promise.all([
@@ -99,7 +99,34 @@ export default function KPI_Report() {
         setStaffReports([]); setLoading(false); return;
       }
 
-      // Xử lý đếm đơn hàng tự động
+      // LƯU RAW DATA ĐỂ XUẤT EXCEL
+      const enrichedErrorLogs = (errorLogs || []).map(log => {
+        const errDef = errorDefs?.find(e => e.id === log.error_id);
+        const staffDef = deptStaffs?.find(s => s.id === log.staff_id);
+        return {
+            date: log.error_date,
+            dept: log.department,
+            staffName: staffDef ? staffDef.full_name : 'Lỗi Tập Thể',
+            errorName: errDef ? errDef.name : 'Unknown',
+            applyTo: errDef ? errDef.apply_to : 'department',
+            tracking: log.tracking_code || '',
+            note: log.note || ''
+        };
+      });
+      setRawExportLogs(enrichedErrorLogs);
+
+      const enrichedVarLogs = (varLogs || []).map(v => {
+        const varDef = globalVarsData?.find(gv => gv.code === v.variable_code);
+        return {
+           date: v.record_date,
+           name: varDef ? varDef.name : v.variable_code,
+           code: v.variable_code,
+           value: v.value
+        }
+      });
+      setRawExportVars(enrichedVarLogs);
+
+      // Tính biến Auto
       const isDailyAutoRequired = globalVarsData?.some(v => v.source.startsWith('auto_'));
       const dailyCounts = {};
       let tongDongThang = 0, tongDiThang = 0, tongInThang = 0;
@@ -117,7 +144,7 @@ export default function KPI_Report() {
           await Promise.all(promises);
       }
 
-      // 4. Lõi tính toán
+      // Lõi tính toán
       const computeCrit = (crit, targetErrLogs, targetTotalErrs) => {
           let mathStr = crit.formula || '';
 
@@ -125,7 +152,6 @@ export default function KPI_Report() {
               let sumRaw = 0;
               daysInMonth.forEach(day => {
                   let mathStrDay = mathStr;
-                  
                   globalVarsData?.forEach(v => {
                       let vVal = 0;
                       if (v.source === 'fixed') vVal = Number(v.fixed_value) || 0;
@@ -148,10 +174,7 @@ export default function KPI_Report() {
                   let dayRaw = 0;
                   if (mathStrDay.trim() !== '') {
                       dayRaw = safeEvalFormula(mathStrDay);
-                  } else { 
-                      dayRaw = errsToday; 
-                  }
-                  
+                  } else { dayRaw = errsToday; }
                   sumRaw += dayRaw;
               });
               return sumRaw / numValidDays;
@@ -177,9 +200,7 @@ export default function KPI_Report() {
               let rawValue = 0;
               if (mathStr.trim() !== '') {
                   rawValue = safeEvalFormula(mathStr);
-              } else { 
-                  rawValue = targetTotalErrs; 
-              }
+              } else { rawValue = targetTotalErrs; }
               return rawValue;
           }
       };
@@ -190,7 +211,6 @@ export default function KPI_Report() {
       let highestScore = -1;
       let topStaffName = '';
 
-      // 5. Tính điểm từng Nhân viên
       const reports = deptStaffs.map(staff => {
         let totalWeightAccum = 0;
         let totalScoreAccum = 0;
@@ -205,7 +225,6 @@ export default function KPI_Report() {
           let rawValue = computeCrit(crit, staffErrorLogs, staffTotalErrors);
           rawValue = Math.round(rawValue * 100) / 100;
 
-          // Bộ lọc Luật Trừ Điểm
           let penalty = 0;
           if (crit.scoring_rules && Array.isArray(crit.scoring_rules)) {
             crit.scoring_rules.forEach(rule => {
@@ -257,6 +276,89 @@ export default function KPI_Report() {
     setLoading(false);
   };
 
+  // ==========================================
+  // XUẤT EXCEL (RAW DATA)
+  // ==========================================
+  const escapeCSV = (str) => {
+    if (str === null || str === undefined) return '""';
+    const stringified = String(str);
+    return `"${stringified.replace(/"/g, '""')}"`;
+  };
+
+  const handleExportExcel = () => {
+    if (staffReports.length === 0) return alert('Không có dữ liệu để xuất!');
+    
+    let csvContent = "";
+    
+    // PHẦN 1: TỔNG HỢP ĐIỂM KPI
+    csvContent += "--- PHAN 1: TONG HOP DIEM KPI ---\n";
+    csvContent += "Thang,Bo phan,Nhan vien,Chi tieu,Chu ky tinh,Ket qua do luong,Diem phat,Diem chot,Diem toi da\n";
+    
+    staffReports.forEach(staff => {
+      staff.criteriaDetails.forEach(crit => {
+        csvContent += [
+          escapeCSV(selectedMonth),
+          escapeCSV(reportDept),
+          escapeCSV(staff.full_name),
+          escapeCSV(crit.name),
+          escapeCSV(crit.eval_mode === 'daily_average' ? 'Trung binh Ngay' : 'Cong don ca Thang'),
+          escapeCSV(crit.rawValue),
+          escapeCSV(crit.penalty),
+          escapeCSV(crit.score),
+          escapeCSV(crit.weight)
+        ].join(",") + "\n";
+      });
+      csvContent += [
+        escapeCSV(selectedMonth),
+        escapeCSV(reportDept),
+        escapeCSV(staff.full_name + " (TONG KET)"),
+        '""', '""', '""',
+        escapeCSV("-" + staff.totalPenalty),
+        escapeCSV(staff.totalScore),
+        escapeCSV(staff.totalWeight)
+      ].join(",") + "\n";
+    });
+
+    // PHẦN 2: LỊCH SỬ LỖI
+    csvContent += "\n\n--- PHAN 2: RAW DATA - LICH SU VI PHAM THEO NGAY ---\n";
+    csvContent += "Ngay,Bo phan,Nhan vien,Ten loi,Phan loai,Ma don hang,Ghi chu\n";
+    
+    rawExportLogs.forEach(log => {
+      csvContent += [
+        escapeCSV(log.date),
+        escapeCSV(log.dept),
+        escapeCSV(log.staffName),
+        escapeCSV(log.errorName),
+        escapeCSV(log.applyTo === 'individual' ? 'Ca nhan' : 'Tap the'),
+        escapeCSV(log.tracking),
+        escapeCSV(log.note)
+      ].join(",") + "\n";
+    });
+
+    // PHẦN 3: LỊCH SỬ BIẾN
+    csvContent += "\n\n--- PHAN 3: RAW DATA - CHI SO BIEN THU CONG THEO NGAY ---\n";
+    csvContent += "Ngay,Ma bien,Ten bien,Gia tri\n";
+    rawExportVars.forEach(v => {
+      csvContent += [
+        escapeCSV(v.date),
+        escapeCSV(v.code),
+        escapeCSV(v.name),
+        escapeCSV(v.value)
+      ].join(",") + "\n";
+    });
+
+    // Blob download an toàn với UTF-8 BOM
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `Data_KPI_${reportDept}_${selectedMonth}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   const getScoreColor = (score, weight) => {
     if (weight === 0) return 'text-slate-400';
     const ratio = score / weight;
@@ -270,24 +372,36 @@ export default function KPI_Report() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12 p-4 mt-4 animate-in fade-in duration-300">
+    <div className="max-w-7xl mx-auto space-y-6 pb-12 p-4 md:p-6 lg:p-8 mt-4 animate-in fade-in duration-300">
       
-      <div className="bg-white p-6 md:p-8 border border-slate-200 rounded-3xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+      {/* Header */}
+      <div className="bg-white p-5 md:p-8 border border-slate-200 rounded-3xl shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div className="flex items-center gap-4">
-          <div className="p-3.5 bg-indigo-50 text-indigo-600 rounded-2xl shadow-sm"><BarChart3 size={28} strokeWidth={2.5}/></div>
+          <div className="p-3.5 bg-indigo-50 text-indigo-600 rounded-2xl shadow-sm">
+            <BarChart3 size={28} strokeWidth={2.5}/>
+          </div>
           <div>
-            <h2 className="text-2xl font-black text-slate-800 tracking-tight">BẢNG THỐNG KÊ KPI NHÂN SỰ</h2>
-            <p className="text-sm font-medium text-slate-500 mt-1">Đánh giá hiệu suất chi tiết tới từng cá nhân</p>
+            <h2 className="text-lg md:text-2xl font-black text-slate-800 tracking-tight">BẢNG THỐNG KÊ KPI NHÂN SỰ</h2>
+            <p className="text-xs md:text-sm font-medium text-slate-500 mt-1">Đánh giá hiệu suất chi tiết tới từng cá nhân</p>
           </div>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto bg-slate-50 p-2.5 rounded-2xl border border-slate-200/60 shadow-inner">
-          <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm border border-slate-200 w-full sm:w-auto">
-            <CalendarDays size={18} className="text-indigo-600" />
-            <input 
-              type="month" value={selectedMonth} onChange={e=>setSelectedMonth(e.target.value)} 
-              className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer w-full" 
-            />
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
+          {/* NÚT XUẤT EXCEL MỚI */}
+          <button onClick={handleExportExcel} disabled={loading} className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md transition disabled:opacity-50 flex items-center justify-center gap-2">
+            <Download size={18} /> Xuất Excel
+          </button>
+
+          <div className="flex items-center w-full sm:w-auto bg-slate-50 p-2 rounded-2xl border border-slate-200/60 shadow-inner">
+            <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm border border-slate-200 w-full lg:w-auto">
+              <CalendarDays size={18} className="text-indigo-600 shrink-0" />
+              <input 
+                type="month" 
+                value={selectedMonth} 
+                onChange={e => setSelectedMonth(e.target.value)} 
+                className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer w-full" 
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -295,54 +409,62 @@ export default function KPI_Report() {
       {loading ? (
         <div className="py-32 flex flex-col items-center justify-center text-slate-400 font-bold bg-white rounded-3xl shadow-sm border border-slate-200">
           <Loader2 className="animate-spin mb-4 text-indigo-500" size={40}/>
-          <p>Hệ thống đang nội suy công thức và tính điểm cho từng người...</p>
+          <p className="text-sm md:text-base text-center px-6">Hệ thống đang nội suy công thức và tính điểm cho từng người...</p>
         </div>
       ) : activeDepartments.length === 0 ? (
         <div className="py-32 flex flex-col items-center justify-center text-center bg-white rounded-3xl shadow-sm border border-slate-200">
           <Target size={56} className="text-slate-300 mb-4" />
           <h3 className="text-xl font-black text-slate-700 mb-2">Hệ thống chưa thiết lập KPI</h3>
-          <p className="text-sm font-medium text-slate-500 max-w-md">Vui lòng chuyển sang mục <b className="text-indigo-600">Quản lý KPI & Lỗi</b> để cài đặt cấu trúc thưởng phạt.</p>
+          <p className="text-sm font-medium text-slate-500 max-w-md px-6">Vui lòng chuyển sang mục <b className="text-indigo-600">Quản lý KPI & Lỗi</b> để cài đặt cấu trúc thưởng phạt.</p>
         </div>
       ) : (
         <>
-          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+          {/* Department Tabs */}
+          <div className="flex gap-2 md:gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
             {activeDepartments.map(dept => (
               <button 
-                key={dept} onClick={() => setReportDept(dept)} 
-                className={`px-6 py-3 rounded-2xl text-sm font-black whitespace-nowrap transition-all border shadow-sm ${reportDept === dept ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-200' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}
+                key={dept} 
+                onClick={() => setReportDept(dept)} 
+                className={`px-4 md:px-6 py-2.5 md:py-3 rounded-2xl text-xs md:text-sm font-black whitespace-nowrap transition-all border shadow-sm ${
+                  reportDept === dept 
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-200' 
+                    : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                }`}
               >
                 Nhân sự {dept}
               </button>
             ))}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
+            <div className="bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
               <div className="absolute -right-4 -top-4 text-blue-50 opacity-50"><Users size={100}/></div>
-              <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2 relative z-10">TỔNG NHÂN SỰ</p>
+              <p className="text-xs md:text-sm font-bold text-slate-500 uppercase tracking-wider mb-2 relative z-10">TỔNG NHÂN SỰ</p>
               <div className="flex items-baseline gap-2 relative z-10">
-                <span className="text-5xl font-black tracking-tighter text-blue-600">{staffReports.length}</span>
-                <span className="text-lg font-bold text-slate-400">người</span>
+                <span className="text-4xl md:text-5xl font-black tracking-tighter text-blue-600">{staffReports.length}</span>
+                <span className="text-base md:text-lg font-bold text-slate-400">người</span>
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
+            <div className="bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
               <div className="absolute -right-4 -top-4 text-emerald-50 opacity-50"><Activity size={100}/></div>
-              <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2 relative z-10">ĐIỂM TRUNG BÌNH KHO</p>
+              <p className="text-xs md:text-sm font-bold text-slate-500 uppercase tracking-wider mb-2 relative z-10">ĐIỂM TB KHO</p>
               <div className="flex items-baseline gap-2 relative z-10">
-                <span className="text-5xl font-black tracking-tighter text-emerald-600">{summary.avgScore}</span>
-                <span className="text-lg font-bold text-slate-400">điểm</span>
+                <span className="text-4xl md:text-5xl font-black tracking-tighter text-emerald-600">{summary.avgScore}</span>
+                <span className="text-base md:text-lg font-bold text-slate-400">điểm</span>
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-3xl border border-amber-200 bg-amber-50 shadow-sm relative overflow-hidden group">
+            <div className="bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-amber-200 bg-amber-50 shadow-sm relative overflow-hidden">
               <div className="absolute -right-4 -top-4 text-amber-100 opacity-50"><Award size={100}/></div>
-              <p className="text-sm font-bold text-amber-600 uppercase tracking-wider mb-2 relative z-10">NHÂN SỰ XUẤT SẮC NHẤT</p>
-              <div className="text-2xl font-black text-amber-800 relative z-10 line-clamp-2 mt-3">{summary.topStaff || 'Chưa có'}</div>
+              <p className="text-xs md:text-sm font-bold text-amber-600 uppercase tracking-wider mb-2 relative z-10">XUẤT SẮC NHẤT</p>
+              <div className="text-xl md:text-2xl font-black text-amber-800 relative z-10 line-clamp-2 mt-2">{summary.topStaff || 'Chưa có'}</div>
             </div>
           </div>
 
-          <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+          {/* DESKTOP TABLE */}
+          <div className="hidden md:block bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <div>
                 <h3 className="text-lg font-black text-slate-800">BẢNG ĐIỂM CHI TIẾT TỪNG NHÂN VIÊN</h3>
@@ -354,13 +476,13 @@ export default function KPI_Report() {
               <div className="py-20 text-center text-slate-500 font-bold">Chưa có nhân sự nào được khai báo trong bộ phận này.</div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full text-left border-collapse min-w-[700px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider w-1/3">Nhân sự</th>
-                      <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Tỉ trọng <br/><span className="text-[10px] font-medium normal-case">(Base)</span></th>
-                      <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Tổng Phạt <br/><span className="text-[10px] font-medium normal-case">(Penalty)</span></th>
-                      <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Điểm Đạt <br/><span className="text-[10px] font-medium normal-case">(Chốt)</span></th>
+                      <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Tỉ trọng<br/><span className="text-[10px] font-medium normal-case">(Base)</span></th>
+                      <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Tổng Phạt<br/><span className="text-[10px] font-medium normal-case">(Penalty)</span></th>
+                      <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Điểm Đạt<br/><span className="text-[10px] font-medium normal-case">(Chốt)</span></th>
                       <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-right">Chi tiết</th>
                     </tr>
                   </thead>
@@ -371,10 +493,15 @@ export default function KPI_Report() {
 
                       return (
                         <React.Fragment key={staff.id}>
-                          <tr onClick={() => toggleExpand(staff.id)} className={`transition-colors cursor-pointer ${isExpanded ? 'bg-indigo-50/40' : 'hover:bg-slate-50/80'} ${idx === 0 ? 'bg-amber-50/20' : ''}`}>
+                          <tr 
+                            onClick={() => toggleExpand(staff.id)} 
+                            className={`transition-colors cursor-pointer ${isExpanded ? 'bg-indigo-50/40' : 'hover:bg-slate-50/80'} ${idx === 0 ? 'bg-amber-50/20' : ''}`}
+                          >
                             <td className="py-5 px-6">
                               <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shadow-sm border ${idx === 0 ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shadow-sm border ${
+                                  idx === 0 ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'
+                                }`}>
                                   {idx === 0 ? <Award size={18}/> : staff.full_name.charAt(0)}
                                 </div>
                                 <div>
@@ -386,11 +513,17 @@ export default function KPI_Report() {
                                 </div>
                               </div>
                             </td>
-                            <td className="py-5 px-6 text-center"><span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-sm font-black">{staff.totalWeight}</span></td>
                             <td className="py-5 px-6 text-center">
-                              {staff.totalPenalty > 0 ? <span className="inline-block px-2.5 py-1 bg-red-50 border border-red-100 text-red-600 rounded-md text-xs font-black">-{staff.totalPenalty}</span> : <span className="text-slate-300 text-sm font-bold">-</span>}
+                              <span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-sm font-black">{staff.totalWeight}</span>
                             </td>
-                            <td className="py-5 px-6 text-center"><span className={`text-xl font-black ${scoreColor}`}>{staff.totalScore}</span></td>
+                            <td className="py-5 px-6 text-center">
+                              {staff.totalPenalty > 0 
+                                ? <span className="inline-block px-2.5 py-1 bg-red-50 border border-red-100 text-red-600 rounded-md text-xs font-black">-{staff.totalPenalty}</span> 
+                                : <span className="text-slate-300 text-sm font-bold">-</span>}
+                            </td>
+                            <td className="py-5 px-6 text-center">
+                              <span className={`text-xl font-black ${scoreColor}`}>{staff.totalScore}</span>
+                            </td>
                             <td className="py-5 px-6 text-right">
                               <button className={`p-2 rounded-full transition-colors ${isExpanded ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
                                 {isExpanded ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
@@ -406,7 +539,7 @@ export default function KPI_Report() {
                                     <FileWarning size={14}/> Bóc tách Chỉ tiêu của {staff.full_name}
                                   </h4>
                                   <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-                                    <table className="w-full text-left text-sm">
+                                    <table className="w-full text-left text-sm min-w-[600px]">
                                       <thead className="bg-slate-100 border-b border-slate-200">
                                         <tr>
                                           <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase">Tên Chỉ Tiêu</th>
@@ -421,7 +554,9 @@ export default function KPI_Report() {
                                             <td className="py-4 px-5">
                                               <div className="font-bold text-slate-700">{crit.name}</div>
                                               {crit.formula ? (
-                                                <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center gap-1"><HelpCircle size={10}/> {crit.formula}</div>
+                                                <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center gap-1">
+                                                  <HelpCircle size={10}/> {crit.formula}
+                                                </div>
                                               ) : (
                                                 <div className="text-[10px] text-slate-400 mt-1">Đếm lỗi vi phạm trực tiếp</div>
                                               )}
@@ -430,7 +565,9 @@ export default function KPI_Report() {
                                               {crit.rawValue} <span className="text-[10px] font-normal">{crit.calc_type === 'ratio' ? '%' : 'lượt'}</span>
                                             </td>
                                             <td className="py-4 px-5 text-center">
-                                              {crit.penalty > 0 ? <span className="text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded">-{crit.penalty}</span> : <span className="text-slate-300">-</span>}
+                                              {crit.penalty > 0 
+                                                ? <span className="text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded">-{crit.penalty}</span> 
+                                                : <span className="text-slate-300">-</span>}
                                             </td>
                                             <td className="py-4 px-5 text-center">
                                               <span className={`font-black ${getScoreColor(crit.score, crit.weight)}`}>{crit.score} / {crit.weight}</span>
@@ -450,6 +587,93 @@ export default function KPI_Report() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+
+          {/* MOBILE CARDS */}
+          <div className="md:hidden space-y-4">
+            {staffReports.length === 0 ? (
+              <div className="py-16 text-center text-slate-500 font-bold bg-white rounded-2xl border border-slate-200">
+                Chưa có nhân sự nào được khai báo trong bộ phận này.
+              </div>
+            ) : (
+              staffReports.map((staff, idx) => {
+                const isExpanded = expandedStaff === staff.id;
+                const scoreColor = getScoreColor(staff.totalScore, staff.totalWeight);
+
+                return (
+                  <div 
+                    key={staff.id} 
+                    className={`bg-white border rounded-2xl shadow-sm overflow-hidden transition-all ${
+                      idx === 0 ? 'border-amber-200 bg-amber-50/30' : 'border-slate-200'
+                    }`}
+                  >
+                    <button 
+                      onClick={() => toggleExpand(staff.id)} 
+                      className="w-full p-4 flex items-center justify-between text-left"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shadow-sm border ${
+                          idx === 0 ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'
+                        }`}>
+                          {idx === 0 ? <Award size={18}/> : staff.full_name.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                            {staff.full_name}
+                            {idx === 0 && <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded uppercase tracking-wider">Top 1</span>}
+                          </div>
+                          <div className="text-[11px] text-slate-400 font-medium uppercase mt-0.5">{staff.role}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <div className={`text-lg font-black ${scoreColor}`}>{staff.totalScore}</div>
+                          <div className="text-[10px] text-slate-400 font-medium">/ {staff.totalWeight}</div>
+                        </div>
+                        {isExpanded ? <ChevronUp size={18} className="text-slate-400"/> : <ChevronDown size={18} className="text-slate-400"/>}
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="border-t border-slate-100 bg-slate-50/80 p-4 animate-in slide-in-from-top-2 duration-300">
+                        <h4 className="text-xs font-black text-indigo-800 uppercase tracking-widest mb-3 flex items-center gap-2">
+                          <FileWarning size={14}/> Bóc tách chỉ tiêu
+                        </h4>
+                        <div className="space-y-2">
+                          {staff.criteriaDetails.map(crit => (
+                            <div key={crit.id} className="bg-white rounded-xl border border-slate-200 p-3">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="font-bold text-sm text-slate-700">{crit.name}</div>
+                                <div className={`font-black text-sm shrink-0 ${getScoreColor(crit.score, crit.weight)}`}>
+                                  {crit.score}/{crit.weight}
+                                </div>
+                              </div>
+                              {crit.formula ? (
+                                <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center gap-1">
+                                  <HelpCircle size={10}/> {crit.formula}
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-slate-400 mt-1">Đếm lỗi vi phạm trực tiếp</div>
+                              )}
+                              <div className="flex items-center justify-between mt-2 text-xs">
+                                <span className="text-slate-500">
+                                  Kết quả: <span className="font-bold text-slate-700">{crit.rawValue} {crit.calc_type === 'ratio' ? '%' : 'lượt'}</span>
+                                </span>
+                                <span className="text-slate-500">
+                                  Phạt: {crit.penalty > 0 
+                                    ? <span className="text-red-500 font-bold">-{crit.penalty}</span> 
+                                    : <span className="text-slate-300">-</span>}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </>
