@@ -1,102 +1,96 @@
-import React, { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Lock, Loader2 } from 'lucide-react';
+import { Loader2, Lock, ShieldAlert } from 'lucide-react';
 
 export default function FeatureGuard({ featureId, subFeatureId, children }) {
+  const [loading, setLoading] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
-  const [message, setMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isOwner, setIsOwner] = useState(false);
 
   useEffect(() => {
-    const processConfig = (configValue) => {
-      if (!configValue) return;
-      const config = JSON.parse(configValue);
-      
-      // Check lớp 1: Khóa toàn cục phân hệ lớn
-      if (config.isLocked) {
-        setIsLocked(true);
-        setMessage(config.message || 'Phân hệ này đang được bảo trì toàn bộ.');
-        return;
-      }
-
-      // Check lớp 2: Khóa từng chức năng nhỏ (nếu có truyền subFeatureId)
-      if (subFeatureId && config.subs && config.subs[subFeatureId]?.isLocked) {
-        setIsLocked(true);
-        setMessage(config.subs[subFeatureId].message || 'Chức năng này đang được bảo trì.');
-        return;
-      }
-
-      // Nếu lọt qua hết thì là Mở
-      setIsLocked(false);
-      setMessage('');
-    };
-
-    const fetchConfig = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('system_configs')
-          .select('value')
-          .eq('key', `feature_lock_${featureId}`)
-          .single();
-
-        if (data && data.value) {
-          processConfig(data.value);
-        }
-      } catch (error) {
-        console.error("Lỗi khi tải cấu hình tính năng:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchConfig();
-
-    const subscription = supabase
-      .channel(`system_configs_changes_${featureId}_${subFeatureId || 'main'}`)
-      .on('postgres_changes', { 
-        event: '*', // Lắng nghe mọi thay đổi (INSERT, UPDATE)
-        schema: 'public', 
-        table: 'system_configs',
-        filter: `key=eq.feature_lock_${featureId}` 
-      }, (payload) => {
-        if (payload.new && payload.new.value) {
-          processConfig(payload.new.value);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(subscription);
-    };
+    checkLockStatus();
   }, [featureId, subFeatureId]);
 
-  if (isLoading) {
+  const checkLockStatus = async () => {
+    setLoading(true);
+    try {
+      // 1. Lấy thông tin user hiện tại
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // 2. Kiểm tra xem có phải Owner không (Đặc quyền bypass)
+      const ownerCheck = user?.user_metadata?.is_owner === true;
+      setIsOwner(ownerCheck);
+
+      // Nếu là Owner -> Bỏ qua đoạn check khóa, cho vào thẳng luôn
+      if (ownerCheck) {
+        // Vẫn gọi DB ngầm để kiểm tra trạng thái khóa (mục đích là để hiện cái cảnh báo màu cam cho Owner biết tính năng này đang khóa)
+        const { data } = await supabase
+          .from('feature_locks')
+          .select('is_locked')
+          .eq('feature_id', featureId)
+          .eq('sub_feature_id', subFeatureId)
+          .single();
+          
+        if (data && data.is_locked) setIsLocked(true);
+        setLoading(false);
+        return;
+      }
+
+      // 3. Nếu là User thường hoặc Admin -> Kiểm tra xem tính năng có bị khóa không
+      const { data, error } = await supabase
+        .from('feature_locks')
+        .select('is_locked')
+        .eq('feature_id', featureId)
+        .eq('sub_feature_id', subFeatureId)
+        .single();
+
+      if (data && data.is_locked) {
+        setIsLocked(true);
+      } else {
+        setIsLocked(false);
+      }
+    } catch (err) {
+      console.error("Lỗi kiểm tra khóa tính năng:", err);
+    }
+    setLoading(false);
+  };
+
+  if (loading) {
     return (
-      <div className="h-[50vh] w-full flex items-center justify-center bg-transparent">
-        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+      <div className="w-full h-full min-h-[60vh] flex flex-col items-center justify-center">
+        <Loader2 className="animate-spin text-blue-500 mb-2" size={32} />
+        <p className="text-slate-400 font-medium text-sm">Đang tải tính năng...</p>
       </div>
     );
   }
 
-  return (
-    <div className="relative h-full w-full">
-      <div className={`h-full w-full transition-all duration-300 ${isLocked ? 'pointer-events-none select-none blur-[3px] grayscale-[30%]' : ''}`}>
-        {children}
-      </div>
-
-      {isLocked && (
-        <div className="absolute inset-0 z-[100] bg-slate-900/10 backdrop-blur-[2px] flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full text-center border border-slate-200">
-            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
-              <Lock size={32} />
-            </div>
-            <h3 className="text-xl font-black text-slate-800 mb-2 uppercase">Tính năng đang khóa</h3>
-            <p className="text-slate-600 font-medium leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
-              {message}
-            </p>
+  // 🚨 CHẶN TRUY CẬP: Tính năng bị khóa và người dùng KHÔNG PHẢI Owner
+  if (isLocked && !isOwner) {
+    return (
+      <div className="w-full h-full min-h-[60vh] flex flex-col items-center justify-center animate-in fade-in zoom-in duration-300">
+        <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-sm text-center max-w-lg">
+          <div className="w-20 h-20 bg-slate-50 text-slate-400 flex items-center justify-center rounded-full mx-auto mb-6 shadow-inner border border-slate-100">
+            <Lock size={36} strokeWidth={2.5} />
           </div>
+          <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Tính năng đang bảo trì</h2>
+          <p className="text-slate-500 font-medium leading-relaxed mb-6">
+            Tính năng này tạm thời bị khóa để nâng cấp hoặc xử lý sự cố. Vui lòng quay lại sau hoặc liên hệ Quản trị viên.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ CHO PHÉP TRUY CẬP
+  return (
+    <>
+      {/* Tính năng thông minh: Báo cho Owner biết họ đang test một tính năng đã bị khóa đối với nhân viên */}
+      {isLocked && isOwner && (
+        <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 bg-amber-100 text-amber-800 text-xs font-black rounded-lg border border-amber-200 shadow-sm animate-in slide-in-from-top-2">
+          <ShieldAlert size={14} /> CHẾ ĐỘ TEST (OWNER BYPASS): Tính năng này hiện đang bị khóa đối với Admin và User.
         </div>
       )}
-    </div>
+      {children}
+    </>
   );
 }
