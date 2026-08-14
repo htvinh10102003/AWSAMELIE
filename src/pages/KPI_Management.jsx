@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
   Target, Plus, Trash2, Save, Loader2, CheckCircle2, 
   Edit, ChevronLeft, Calculator, AlertTriangle, FileWarning,
-  Users, Variable, UserPlus, HelpCircle, FlaskConical, Play
+  Users, Variable, UserPlus, HelpCircle, FlaskConical, Play, BookOpen
 } from 'lucide-react';
 
 const DEPARTMENTS = ['Đóng hàng', 'Vận đơn', 'Lead kho'];
@@ -131,6 +131,9 @@ export default function KPI_Management() {
       return;
     }
 
+    // Tự động sửa lỗi 1 dấu bằng
+    mathStr = mathStr.replace(/([^<>=!])=([^=])/g, '$1==$2');
+
     // Thay thế biến theo giá trị giả lập
     Object.keys(testInputs).forEach(token => {
       const val = Number(testInputs[token]) || 0;
@@ -197,11 +200,37 @@ export default function KPI_Management() {
     }
   };
 
-  // Trích xuất danh sách biến đang có trong công thức để sinh bảng nhập test
   const extractTokens = (formula) => {
     if (!formula) return [];
     const matches = formula.match(/\[[A-Za-z0-9_]+\]/g);
     return matches ? [...new Set(matches)] : [];
+  };
+
+  // ⚡️ HÀM DỊCH CÔNG THỨC SANG CHỮ
+  const getReadableFormula = (rawFormula) => {
+    if (!rawFormula) return '';
+    let text = rawFormula;
+
+    // Thay thế biến hệ thống
+    text = text.replace(/\[TONG_LOI\]/g, '[Tổng lỗi bộ phận]');
+    
+    // Thay thế lỗi vi phạm
+    errorList.forEach(e => {
+      text = text.replace(new RegExp(`\\[LOI_${e.id}\\]`, 'g'), `[Lỗi: ${e.name}]`);
+    });
+
+    // Thay thế biến số chung
+    globalVars.forEach(v => {
+      text = text.replace(new RegExp(`\\[${v.code}\\]`, 'g'), `[${v.name}]`);
+    });
+
+    // Làm gọn các hàm logic (giúp dễ đọc hơn)
+    text = text.replace(/IF\(/g, 'NẾU ( ');
+    text = text.replace(/MAX\(/g, 'LỚN NHẤT ( ');
+    text = text.replace(/MIN\(/g, 'NHỎ NHẤT ( ');
+    text = text.replace(/ABS\(/g, 'TUYỆT ĐỐI ( ');
+
+    return text;
   };
 
   // ==========================================
@@ -298,6 +327,7 @@ export default function KPI_Management() {
     fetchData();
   };
 
+
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12 mt-4 p-4 animate-in fade-in duration-300">
 
@@ -393,7 +423,7 @@ export default function KPI_Management() {
                         <button onClick={() => handleStartEditCriteria(crit)} className="px-4 py-2 bg-white border border-slate-200 text-blue-600 font-bold rounded-xl hover:bg-blue-50 shadow-sm flex items-center gap-2">
                           <Edit size={14} /> Sửa
                         </button>
-                        <button onClick={() => handleDeleteCriteria(crit.id)} className="px-3 py-2 bg-white border border-slate-200 text-red-500 font-bold rounded-xl hover:bg-red-50 shadow-sm"><Trash2 size={16}/></button>
+                        <button onClick={() => handleDeleteCriteria(crit.id)} className="px-3 py-2 bg-white border border-slate-200 text-red-500 font-bold rounded-xl hover:bg-red-50 shadow-sm"><Trash2 size={16} /></button>
                       </div>
                     </div>
                   ))}
@@ -429,10 +459,10 @@ export default function KPI_Management() {
                       <input type="number" value={editingCriteria.weight} onChange={e=>setEditingCriteria({...editingCriteria, weight: e.target.value})} className="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-blue-600 text-center" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Đơn vị đo</label>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Đơn vị</label>
                       <select value={editingCriteria.calc_type} onChange={e=>setEditingCriteria({...editingCriteria, calc_type: e.target.value})} className="w-full px-2 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none cursor-pointer">
-                        <option value="count">Điểm / Số lượng</option>
-                        <option value="ratio">Tỉ lệ (%)</option>
+                        <option value="count">Số/Đơn</option>
+                        <option value="ratio">%</option>
                       </select>
                     </div>
                   </div>
@@ -475,6 +505,18 @@ export default function KPI_Management() {
                     placeholder="VD: IF([V_TONG_DON] < 1000, 100, ([TONG_LOI] / [V_TONG_DON]) * 100)" 
                     className="w-full p-4 bg-white border border-indigo-200 rounded-xl font-mono text-indigo-900 font-bold outline-none shadow-inner"
                   ></textarea>
+
+                  {/* ⚡️ BẢN DỊCH CÔNG THỨC */}
+                  {editingCriteria.formula && (
+                    <div className="mt-2 p-3 bg-white/70 border border-indigo-200/60 rounded-xl shadow-sm">
+                      <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                        <BookOpen size={12}/> Diễn giải công thức
+                      </p>
+                      <div className="text-sm font-medium text-slate-700 leading-relaxed italic">
+                        {getReadableFormula(editingCriteria.formula)}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 🧪 BẢNG KIỂM TRA & TẠM TÍNH THỬ NGHIỆM */}
                   <div className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-sm mt-4">
@@ -572,7 +614,7 @@ export default function KPI_Management() {
                         {rule.type === 'linear_penalty' && (
                           <div className="grid grid-cols-3 gap-2">
                              <div><label className="block text-[10px] font-bold text-amber-500 uppercase mb-1">Bắt đầu &gt;</label><input type="number" step="0.01" value={rule.min} onChange={e=>updateRule(rule.id, 'min', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200"/></div>
-                             <div><label className="block text-[10px] font-bold text-amber-500 uppercase mb-1">Mỗi bước vượt</label><input type="number" step="0.01" value={rule.step} onChange={e=>updateRule(rule.id, 'step', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200"/></div>
+                             <div><label className="block text-[10px] font-bold text-amber-500 uppercase mb-1">Mỗi bước vượt</label><input type="number" step="0.01" value={rule.step} onChange={e=>updateRule(rule.id, 'step', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200 text-amber-700"/></div>
                              <div><label className="block text-[10px] font-bold text-red-500 uppercase mb-1">Phạt thêm</label><input type="number" step="0.1" value={rule.penalty} onChange={e=>updateRule(rule.id, 'penalty', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-black bg-red-50 border-red-200 text-red-600"/></div>
                           </div>
                         )}
