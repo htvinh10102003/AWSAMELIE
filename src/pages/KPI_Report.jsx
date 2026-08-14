@@ -19,6 +19,10 @@ export default function KPI_Report() {
   const [staffReports, setStaffReports] = useState([]);
   const [expandedStaff, setExpandedStaff] = useState(null);
 
+  // States quản lý Ngày thiếu dữ liệu
+  const [missingDataDays, setMissingDataDays] = useState([]);
+  const [activeDataDays, setActiveDataDays] = useState(0);
+
   const [summary, setSummary] = useState({ avgScore: 0, topStaff: null, totalIssues: 0 });
   const [rawExportLogs, setRawExportLogs] = useState([]);
   const [rawExportVars, setRawExportVars] = useState([]);
@@ -80,7 +84,6 @@ export default function KPI_Report() {
           const dd = String(d.getDate()).padStart(2, '0');
           daysInMonth.push(`${yyyy}-${mm}-${dd}`);
       }
-      const numValidDays = daysInMonth.length || 1;
 
       const [ 
         { data: deptStaffs }, { data: allErrors }, { data: allErrorLogs }, { data: varLogs }, { data: globalVarsData }
@@ -96,7 +99,7 @@ export default function KPI_Report() {
         setStaffReports([]); setLoading(false); return;
       }
 
-      // XỬ LÝ RAW EXCEL DATA (Giữ nguyên)
+      // XỬ LÝ RAW EXCEL DATA
       const warehouseErrorLogs = (allErrorLogs || []).filter(log => allErrors?.find(e => e.id === log.error_id)?.apply_to === 'warehouse');
       const deptErrorLogs = (allErrorLogs || []).filter(log => allErrors?.find(e => e.id === log.error_id)?.apply_to === 'department' && log.department === currentDept);
 
@@ -138,11 +141,36 @@ export default function KPI_Report() {
           await Promise.all(promises);
       }
 
-      // ⚡️ TIỀN XỬ LÝ (PRE-CALCULATE) TỔNG THEO THÁNG CỦA MỌI BIẾN SỐ
-      // Điều này giải quyết bài toán: Tính tổng cả tháng của 1 biến bất kỳ
+      // ⚡️ XÁC ĐỊNH SỐ NGÀY HỢP LỆ ĐỂ CHIA TRUNG BÌNH (Bỏ qua ngày thiếu dữ liệu)
+      const usedManualVars = globalVarsData?.filter(v => v.source === 'daily_manual' && deptCriteria.some(c => c.formula?.includes(`[${v.code}]`)));
+      const deptUsesAutoVars = globalVarsData?.some(v => v.source.startsWith('auto_') && deptCriteria.some(c => c.formula?.includes(`[${v.code}]`)));
+
+      const activeDays = [];
+      const missingDays = [];
+
+      daysInMonth.forEach(day => {
+          let isWorkingDay = true;
+          
+          if (usedManualVars?.length > 0) {
+              // Bắt buộc phải điền ít nhất 1 biến thủ công trong nhóm biến cần dùng
+              const hasLog = varLogs?.some(l => l.record_date === day && usedManualVars.some(uv => uv.code === l.variable_code));
+              if (!hasLog) isWorkingDay = false; // Thiếu dữ liệu biến!
+          } else if (deptUsesAutoVars) {
+              // Không dùng biến thủ công, kiểm tra xem có đơn hoặc lỗi không (tránh ngày nghỉ)
+              const hasOrders = dailyCounts[day]?.packed > 0 || dailyCounts[day]?.shipped > 0 || dailyCounts[day]?.printed > 0;
+              const hasErrors = allErrorLogs?.some(l => l.error_date === day && l.department === currentDept);
+              if (!hasOrders && !hasErrors) isWorkingDay = false;
+          }
+
+          if (isWorkingDay) activeDays.push(day);
+          else missingDays.push(day);
+      });
+
+      setMissingDataDays(missingDays);
+      setActiveDataDays(activeDays.length);
+
+      // TIỀN XỬ LÝ (PRE-CALCULATE) TỔNG THEO THÁNG CỦA MỌI BIẾN SỐ
       const precalculatedMonthlySums = {};
-      
-      // Bước 1: Tính tổng tháng cho các biến Gốc
       globalVarsData?.forEach(v => {
           if (v.source === 'fixed') precalculatedMonthlySums[v.code] = Number(v.fixed_value) || 0;
           else if (v.source === 'daily_manual' || v.source === 'monthly_manual') {
@@ -153,24 +181,21 @@ export default function KPI_Report() {
           else if (v.source === 'auto_printed_day') precalculatedMonthlySums[v.code] = tongInThang;
       });
 
-      // Bước 2: Gán giá trị cho các biến Phái sinh (sum_monthly) từ kết quả của Bước 1
       globalVarsData?.forEach(v => {
-          if (v.source === 'sum_monthly') {
-              precalculatedMonthlySums[v.code] = precalculatedMonthlySums[v.target_code] || 0;
-          }
+          if (v.source === 'sum_monthly') precalculatedMonthlySums[v.code] = precalculatedMonthlySums[v.target_code] || 0;
       });
 
-      // LÕI TÍNH TOÁN CÔNG THỨC
+      // LÕI TÍNH TOÁN CÔNG THỨC CHO TỪNG CHỈ TIÊU
       const computeCrit = (crit, targetErrLogs, targetTotalErrs) => {
           let mathStr = crit.formula || '';
 
           if (crit.eval_mode === 'daily_average') {
               let sumRaw = 0;
-              daysInMonth.forEach(day => {
+              // ⚠️ CHỈ CHẠY VÒNG LẶP TRÊN CÁC NGÀY CÓ DỮ LIỆU (activeDays)
+              activeDays.forEach(day => {
                   let mathStrDay = mathStr;
                   globalVarsData?.forEach(v => {
                       let vVal = 0;
-                      // NẾU LÀ BIẾN TỔNG THÁNG THÌ LẤY TỪ CACHE PRE-CALCULATE
                       if (v.source === 'sum_monthly') vVal = precalculatedMonthlySums[v.target_code] || 0;
                       else if (v.source === 'fixed') vVal = Number(v.fixed_value) || 0;
                       else if (v.source === 'daily_manual' || v.source === 'monthly_manual') {
@@ -196,9 +221,10 @@ export default function KPI_Report() {
                   } else { dayRaw = errsToday; }
                   sumRaw += dayRaw;
               });
-              return sumRaw / numValidDays;
+              // ⚠️ CHIA TRUNG BÌNH CHO SỐ NGÀY THỰC TẾ
+              return sumRaw / (activeDays.length || 1);
           } else {
-              // CỘNG DỒN CẢ THÁNG THÌ LẤY THẲNG TRONG BỘ NHỚ ĐỆM PRE-CALCULATE CHO MƯỢT
+              // CỘNG DỒN CẢ THÁNG
               globalVarsData?.forEach(v => {
                   let vVal = precalculatedMonthlySums[v.code] || 0;
                   mathStr = mathStr.replace(new RegExp(`\\[${v.code}\\]`, 'g'), vVal);
@@ -375,6 +401,11 @@ export default function KPI_Report() {
     setExpandedStaff(expandedStaff === staffId ? null : staffId);
   };
 
+  // Tạo text hiển thị cho mảng ngày bị thiếu (nếu nhiều quá thì rút gọn)
+  const missingDisplay = missingDataDays.length > 10 
+    ? missingDataDays.slice(0, 10).map(d => d.split('-').reverse().slice(0,2).join('/')).join(', ') + ` ...và ${missingDataDays.length - 10} ngày khác`
+    : missingDataDays.map(d => d.split('-').reverse().slice(0,2).join('/')).join(', ');
+
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12 p-4 md:p-6 lg:p-8 mt-4 animate-in fade-in duration-300">
       
@@ -421,6 +452,23 @@ export default function KPI_Report() {
         </div>
       ) : (
         <>
+          {/* BANNER CẢNH BÁO THIẾU DỮ LIỆU */}
+          {missingDataDays.length > 0 && (
+            <div className="bg-amber-50 border border-amber-200 p-4 md:p-5 rounded-3xl flex items-start gap-3 shadow-sm animate-in slide-in-from-top-2">
+              <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={24} />
+              <div>
+                <h4 className="text-sm md:text-base font-black text-amber-900 uppercase tracking-tight">Cảnh báo thiếu dữ liệu / Ngày nghỉ</h4>
+                <p className="text-xs md:text-sm font-medium text-amber-700 mt-1">
+                  Hệ thống không ghi nhận được số liệu hoạt động trong các ngày: <span className="font-bold ml-1">{missingDisplay}</span>.
+                </p>
+                <div className="mt-2 text-xs md:text-sm font-medium text-amber-800 bg-amber-100/50 inline-block px-3 py-1.5 rounded-lg border border-amber-200/50">
+                  <span className="opacity-75">Hệ thống tính điểm TB: </span> 
+                  Điểm trung bình cộng hiện tại chỉ được chia cho <b className="text-amber-900 font-black">{activeDataDays} ngày</b> thực tế có dữ liệu.
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2 md:gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
             {activeDepartments.map(dept => (
               <button 
