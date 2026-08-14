@@ -70,9 +70,6 @@ export default function KPI_Management() {
 
   const showMsg = (text) => { setMessage(text); setTimeout(() => setMessage(''), 3000); };
 
-  // ==========================================
-  // TAB 1: LOGIC CHỈ TIÊU & TẠM TÍNH
-  // ==========================================
   const totalWeight = criteriaList.reduce((sum, item) => sum + Number(item.weight), 0);
 
   const handleCreateNewCriteria = () => {
@@ -119,7 +116,14 @@ export default function KPI_Management() {
   const removeRule = (id) => setEditingCriteria(prev => ({ ...prev, scoring_rules: prev.scoring_rules.filter(r => r.id !== id) }));
   const insertToFormula = (str) => setEditingCriteria(prev => ({ ...prev, formula: (prev.formula || '') + str }));
 
-  // TRÌNH TÍNH THỬ NGHIỆM TẠM TÍNH (TEST RUNNER) MỚI
+  // ⚡️ BỘ QUÉT BIẾN SỐ (Đã hỗ trợ bắt dấu gạch ngang của UUID)
+  const extractTokens = (formula) => {
+    if (!formula) return [];
+    const matches = formula.match(/\[[A-Za-z0-9_\-]+\]/g);
+    return matches ? [...new Set(matches)] : [];
+  };
+
+  // TRÌNH TÍNH THỬ NGHIỆM TẠM TÍNH (TEST RUNNER)
   const runTestFormula = () => {
     setTestError('');
     setTestResult(null);
@@ -136,7 +140,9 @@ export default function KPI_Management() {
       const val = Number(testInputs[token]) || 0;
       mathStr = mathStr.split(token).join(val);
     });
-    mathStr = mathStr.replace(/\[[A-Za-z0-9_]+\]/g, '0');
+    
+    // ⚡️ ÉP TẤT CẢ BIẾN CHƯA ĐIỀN THÀNH 0 ĐỂ TRÁNH LỖI INVALID TOKEN
+    mathStr = mathStr.replace(/\[[A-Za-z0-9_\-]+\]/g, '0');
 
     try {
       const IF = (condition, valueIfTrue, valueIfFalse) => condition ? valueIfTrue : valueIfFalse;
@@ -157,7 +163,6 @@ export default function KPI_Management() {
       const weight = Number(editingCriteria.weight) || 0;
       
       let finalPenalty = 0;
-      let baseKpiScore = (editingCriteria.formula && editingCriteria.formula.trim() !== '') ? finalRaw : 100;
       const hasRules = editingCriteria.scoring_rules && editingCriteria.scoring_rules.length > 0;
 
       if (hasRules) {
@@ -176,14 +181,14 @@ export default function KPI_Management() {
         });
       }
 
+      // ⚡️ LOGIC CHUẨN: Cứ có luật trừ là Thang điểm gốc bắt đầu từ 100
       let finalKpiScore = 0;
-      if (!hasRules && editingCriteria.calc_type === 'count') {
+      if (!hasRules) {
           finalKpiScore = finalRaw;
       } else {
-          finalKpiScore = Math.max(0, baseKpiScore - finalPenalty);
+          finalKpiScore = Math.max(0, 100 - finalPenalty);
       }
 
-      // ⚡️ TÍNH RA ĐIỂM QUY ĐỔI % TỈ TRỌNG CHUẨN XÁC
       const weightedScore = Math.round((finalKpiScore * (weight / 100)) * 100) / 100;
 
       setTestResult({
@@ -191,17 +196,11 @@ export default function KPI_Management() {
         penalty: finalPenalty,
         finalKpiScore: finalKpiScore,
         weightedScore: weightedScore,
-        mode: !hasRules && editingCriteria.calc_type === 'count' ? 'direct' : 'deduction'
+        mode: !hasRules ? 'direct' : 'deduction'
       });
     } catch (err) {
       setTestError('Cú pháp công thức bị lỗi: ' + err.message);
     }
-  };
-
-  const extractTokens = (formula) => {
-    if (!formula) return [];
-    const matches = formula.match(/\[[A-Za-z0-9_]+\]/g);
-    return matches ? [...new Set(matches)] : [];
   };
 
   const getReadableFormula = (rawFormula) => {
@@ -308,7 +307,6 @@ export default function KPI_Management() {
     fetchData();
   };
 
-
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12 mt-4 p-4 animate-in fade-in duration-300">
 
@@ -390,7 +388,7 @@ export default function KPI_Management() {
                           <span className="px-2 py-0.5 bg-slate-200 text-slate-600 font-bold rounded text-[10px] uppercase">
                             {crit.eval_mode === 'daily_average' ? 'TB Ngày' : 'Cộng Dồn'}
                           </span>
-                          {(!crit.scoring_rules || crit.scoring_rules.length === 0) && crit.calc_type === 'count' && (
+                          {(!crit.scoring_rules || crit.scoring_rules.length === 0) && (
                             <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-bold rounded text-[10px] uppercase">
                               Lấy trực tiếp điểm CT
                             </span>

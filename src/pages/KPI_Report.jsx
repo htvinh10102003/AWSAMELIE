@@ -17,9 +17,7 @@ export default function KPI_Report() {
   
   const [activeDepartments, setActiveDepartments] = useState([]);
   const [staffReports, setStaffReports] = useState([]);
-  
   const [expandedStaff, setExpandedStaff] = useState(null);
-  // State quản lý việc mở rộng bảng xem chi tiết ngày của từng chỉ tiêu
   const [expandedCrit, setExpandedCrit] = useState(null); 
 
   const [missingDataDays, setMissingDataDays] = useState([]);
@@ -35,6 +33,8 @@ export default function KPI_Report() {
 
   const safeEvalFormula = (formulaStr) => {
     if (!formulaStr || !formulaStr.trim()) return 0;
+    
+    // Tự động sửa lỗi 1 dấu bằng
     let cleanFormula = formulaStr.replace(/([^<>=!])=([^=])/g, '$1==$2');
 
     try {
@@ -136,10 +136,26 @@ export default function KPI_Report() {
           const promises = [];
           daysInMonth.forEach(day => {
               dailyCounts[day] = { packed: 0, shipped: 0, printed: 0 };
+              
               promises.push(
-                  supabase.from('orders').select('*', { count: 'exact', head: true }).in('status', [40, 42]).gte('packed_at', `${day}T00:00:00Z`).lte('packed_at', `${day}T23:59:59Z`).then(({count}) => { dailyCounts[day].packed = count || 0; tongDongThang += count || 0; }),
-                  supabase.from('orders').select('*', { count: 'exact', head: true }).gte('carrier_date', `${day}T00:00:00Z`).lte('carrier_date', `${day}T23:59:59Z`).then(({count}) => { dailyCounts[day].shipped = count || 0; tongDiThang += count || 0; }),
-                  supabase.from('orders').select('*', { count: 'exact', head: true }).gte('printed_at', `${day}T00:00:00Z`).lte('printed_at', `${day}T23:59:59Z`).then(({count}) => { dailyCounts[day].printed = count || 0; tongInThang += count || 0; })
+                  supabase.from('orders').select('id', { count: 'exact', head: true })
+                      .gte('packed_at', `${day}T00:00:00+07:00`)
+                      .lte('packed_at', `${day}T23:59:59+07:00`)
+                      .then(({count}) => { dailyCounts[day].packed = count || 0; tongDongThang += count || 0; })
+              );
+              
+              promises.push(
+                  supabase.from('orders').select('id', { count: 'exact', head: true })
+                      .gte('carrier_date', `${day}T00:00:00+07:00`)
+                      .lte('carrier_date', `${day}T23:59:59+07:00`)
+                      .then(({count}) => { dailyCounts[day].shipped = count || 0; tongDiThang += count || 0; })
+              );
+              
+              promises.push(
+                  supabase.from('orders').select('id', { count: 'exact', head: true })
+                      .gte('printed_at', `${day}T00:00:00+07:00`)
+                      .lte('printed_at', `${day}T23:59:59+07:00`)
+                      .then(({count}) => { dailyCounts[day].printed = count || 0; tongInThang += count || 0; })
               );
           });
           await Promise.all(promises);
@@ -184,7 +200,6 @@ export default function KPI_Report() {
           if (v.source === 'sum_monthly') precalculatedMonthlySums[v.code] = precalculatedMonthlySums[v.target_code] || 0;
       });
 
-      // ⚡️ NÂNG CẤP LÕI: Trả về cả danh sách chi tiết điểm từng ngày
       const computeCrit = (crit, targetErrLogs, targetTotalErrs) => {
           let mathStr = crit.formula || '';
           const dailyDetails = [];
@@ -197,9 +212,10 @@ export default function KPI_Report() {
               if (isWorkingDay) {
                   globalVarsData?.forEach(v => {
                       let vVal = 0;
-                      if (v.source === 'sum_monthly') vVal = precalculatedMonthlySums[v.target_code] || 0;
-                      else if (v.source === 'fixed') vVal = Number(v.fixed_value) || 0;
-                      else if (v.source === 'daily_manual' || v.source === 'monthly_manual') {
+                      if (['sum_monthly', 'monthly_manual', 'fixed'].includes(v.source)) {
+                          vVal = precalculatedMonthlySums[v.code] || 0;
+                      }
+                      else if (v.source === 'daily_manual') {
                           vVal = (varLogs || []).filter(l => l.record_date === day && l.variable_code === v.code).reduce((s,l) => s + Number(l.value), 0);
                       }
                       else if (v.source === 'auto_packed_day') vVal = dailyCounts[day]?.packed || 0;
@@ -270,8 +286,6 @@ export default function KPI_Report() {
           const finalRawValue = Math.round(rawValue * 100) / 100;
 
           let penalty = 0;
-          let baseKpiScore = (crit.formula && crit.formula.trim() !== '') ? finalRawValue : 100;
-          
           const hasRules = crit.scoring_rules && Array.isArray(crit.scoring_rules) && crit.scoring_rules.length > 0;
 
           if (hasRules) {
@@ -288,11 +302,12 @@ export default function KPI_Report() {
             });
           }
 
+          // ⚡️ LOGIC CHUẨN: Có luật trừ -> Điểm gốc bằng 100, không có -> Lấy kết quả công thức
           let finalKpiScore = 0;
-          if (!hasRules && crit.calc_type === 'count') {
+          if (!hasRules) {
             finalKpiScore = finalRawValue;
           } else {
-            finalKpiScore = Math.max(0, baseKpiScore - penalty);
+            finalKpiScore = Math.max(0, 100 - penalty);
           }
 
           const weightedScore = Math.round((finalKpiScore * (weight / 100)) * 100) / 100;
@@ -308,7 +323,7 @@ export default function KPI_Report() {
             penalty, 
             finalKpiScore,
             weightedScore, 
-            isDirectScore: !hasRules && crit.calc_type === 'count' 
+            isDirectScore: !hasRules
           };
         });
 
@@ -423,7 +438,7 @@ export default function KPI_Report() {
 
   const toggleExpand = (staffId) => {
     setExpandedStaff(expandedStaff === staffId ? null : staffId);
-    setExpandedCrit(null); // Reset lại chi tiết ngày khi thu gọn nhân viên
+    setExpandedCrit(null);
   };
 
   const missingDisplay = missingDataDays.length > 10 
@@ -534,7 +549,6 @@ export default function KPI_Report() {
             </div>
           </div>
 
-          {/* DESKTOP TABLE */}
           <div className="hidden md:block bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <div>
@@ -668,7 +682,6 @@ export default function KPI_Report() {
                                                 </td>
                                               </tr>
                                               
-                                              {/* ⚡️ BẢNG CHI TIẾT THEO NGÀY */}
                                               {isCritExp && (
                                                 <tr>
                                                   <td colSpan="5" className="p-0 bg-indigo-50/40 border-b-2 border-indigo-100">
@@ -712,7 +725,6 @@ export default function KPI_Report() {
             )}
           </div>
 
-          {/* MOBILE CARDS */}
           <div className="md:hidden space-y-4">
             {staffReports.length === 0 ? (
               <div className="py-16 text-center text-slate-500 font-bold bg-white rounded-2xl border border-slate-200">
@@ -789,7 +801,6 @@ export default function KPI_Report() {
                                   <div className="text-[10px] text-slate-400 mt-1">Đếm lỗi vi phạm trực tiếp</div>
                                 )}
                                 
-                                {/* ⚡️ BẢNG CHI TIẾT THEO NGÀY (MOBILE) */}
                                 {isCritExp && (
                                   <div className="mt-3 pt-3 border-t border-indigo-100 animate-in slide-in-from-top-2 duration-200">
                                     <h5 className="text-[10px] font-black text-indigo-800 uppercase tracking-widest mb-2 flex items-center gap-1.5">
