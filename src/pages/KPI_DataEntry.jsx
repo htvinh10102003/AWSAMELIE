@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   CalendarDays, Target, CheckCircle2, AlertCircle, FileEdit, 
-  Trash2, Plus, Loader2, FileWarning, Hash, BookOpen, UserX, Save
+  Trash2, Plus, Loader2, FileWarning, Hash, BookOpen, UserX, Save, Check
 } from 'lucide-react';
 
 const DEPARTMENTS = ['Đóng hàng', 'Vận đơn', 'Lead kho'];
@@ -24,6 +24,8 @@ export default function KPI_DataEntry() {
 
   const [errorLogs, setErrorLogs] = useState([]);
   const [variableValues, setVariableValues] = useState({});
+  // Thêm state lưu giá trị gốc để đối chiếu xem ô nào bị thay đổi (chưa lưu)
+  const [originalValues, setOriginalValues] = useState({});
 
   const [errorForm, setErrorForm] = useState({ error_id: '', staff_id: '', tracking_code: '', note: '' });
 
@@ -74,8 +76,10 @@ export default function KPI_DataEntry() {
           valMap[d.variable_code] = d.value;
         });
         setVariableValues(valMap);
+        setOriginalValues(valMap); // Lưu lại bản sao gốc
       } else {
         setVariableValues({});
+        setOriginalValues({});
       }
     }
     setLoading(false);
@@ -133,11 +137,61 @@ export default function KPI_DataEntry() {
       });
 
       if (error) throw error;
+      
+      // Cập nhật lại giá trị gốc sau khi lưu thành công
+      setOriginalValues(prev => ({...prev, [variableCode]: Number(val)}));
       showMsg(`Đã lưu số liệu cho biến [${variableCode}] thành công!`);
     } catch (err) {
       showMsg(`Lỗi lưu biến: ${err.message}`, 'error');
     }
     setSavingVar(null);
+  };
+
+  const handleSaveAllDirtyVariables = async () => {
+    const upsertPayload = [];
+    const updatedOriginals = { ...originalValues };
+
+    globalVars.forEach(v => {
+      // Chỉ lấy những biến có sự thay đổi (dirty)
+      const currentVal = variableValues[v.code];
+      const origVal = originalValues[v.code];
+      
+      // Bỏ qua nếu chưa nhập gì hoặc không thay đổi
+      if (currentVal !== undefined && currentVal !== '' && String(currentVal) !== String(origVal)) {
+        upsertPayload.push({
+          variable_code: v.code,
+          record_date: selectedDate,
+          value: Number(currentVal)
+        });
+        updatedOriginals[v.code] = Number(currentVal);
+      }
+    });
+
+    if (upsertPayload.length === 0) {
+      return showMsg('Không có dữ liệu nào mới cần lưu!', 'error');
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('kpi_variable_logs').upsert(upsertPayload, {
+        onConflict: 'variable_code, record_date'
+      });
+      if (error) throw error;
+      
+      setOriginalValues(updatedOriginals); // Cập nhật lại toàn bộ gốc
+      showMsg(`Đã lưu thành công ${upsertPayload.length} biến bị thay đổi!`);
+    } catch (err) {
+      showMsg(`Lỗi lưu biến: ${err.message}`, 'error');
+    }
+    setLoading(false);
+  };
+
+  // Hàm kiểm tra xem ô input có bị thay đổi so với DB không
+  const isVariableDirty = (code) => {
+    const current = variableValues[code];
+    const original = originalValues[code];
+    if ((current === undefined || current === '') && original === undefined) return false;
+    return String(current) !== String(original);
   };
 
   return (
@@ -286,12 +340,12 @@ export default function KPI_DataEntry() {
       )}
 
       {activeTab === 'variables' && (
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm max-w-4xl mx-auto">
+        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm max-w-4xl mx-auto relative">
           <div className="mb-6 pb-4 border-b border-slate-100">
              <h3 className="font-black text-slate-800 uppercase text-base flex items-center gap-2 mb-1">
                <FileEdit size={20} className="text-indigo-600"/> Nhập số liệu Thủ công
              </h3>
-             <p className="text-sm text-slate-500 font-medium">Các biến số dưới đây áp dụng chung cho <b className="text-slate-700">TOÀN HỆ THỐNG</b>. Các biến được lưu riêng rẽ theo từng dòng để tiện quản lý.</p>
+             <p className="text-sm text-slate-500 font-medium">Các biến số dưới đây áp dụng chung cho <b className="text-slate-700">TOÀN HỆ THỐNG</b>. Những ô có viền cam là <b className="text-amber-600">chưa được lưu</b>.</p>
           </div>
 
           {loading ? (
@@ -311,36 +365,41 @@ export default function KPI_DataEntry() {
                     <CalendarDays size={16}/> Nhập liệu Hàng ngày
                   </h4>
                   <div className="space-y-3">
-                    {globalVars.filter(v => v.source === 'daily_manual').map(v => (
-                      <div key={v.code} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-blue-50/30 hover:bg-blue-50/60 p-4 rounded-2xl border border-blue-100 shadow-sm transition">
-                        <div className="flex-1">
-                          <p className="text-sm font-bold text-slate-800">{v.name}</p>
-                          <p className="text-[10px] font-mono font-bold text-slate-400 mt-1 uppercase">Mã: {v.code}</p>
+                    {globalVars.filter(v => v.source === 'daily_manual').map(v => {
+                      const isDirty = isVariableDirty(v.code);
+                      return (
+                        <div key={v.code} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl border shadow-sm transition-all duration-300 ${isDirty ? 'bg-amber-50/40 border-amber-300 shadow-amber-100' : 'bg-blue-50/30 border-blue-100 hover:bg-blue-50/60'}`}>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-bold text-slate-800">{v.name}</p>
+                              {isDirty && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black rounded-md uppercase animate-pulse">⚠️ Chưa lưu</span>}
+                            </div>
+                            <p className="text-[10px] font-mono font-bold text-slate-400 mt-1 uppercase">Mã: {v.code}</p>
+                          </div>
+                          <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <input 
+                              type="number" 
+                              value={variableValues[v.code] !== undefined ? variableValues[v.code] : ''} 
+                              onChange={e => setVariableValues({...variableValues, [v.code]: e.target.value})}
+                              placeholder="0" 
+                              className={`w-full sm:w-32 px-4 py-2.5 bg-white border-2 rounded-xl text-lg font-black outline-none focus:ring-4 text-center shadow-inner transition-colors ${isDirty ? 'border-amber-400 text-amber-700 focus:border-amber-500 focus:ring-amber-50' : 'border-slate-200 text-indigo-700 focus:border-indigo-500 focus:ring-indigo-50'}`} 
+                            />
+                            <button 
+                              onClick={() => handleSaveSingleVariable(v.code)} 
+                              disabled={savingVar === v.code || !isDirty} 
+                              className={`px-4 py-2.5 text-white rounded-xl shadow-md transition-all flex items-center justify-center shrink-0 ${!isDirty ? 'bg-slate-300 cursor-not-allowed shadow-none' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                              title={isDirty ? "Lưu số liệu này" : "Đã lưu"}
+                            >
+                              {savingVar === v.code ? <Loader2 size={18} className="animate-spin" /> : !isDirty ? <Check size={18} /> : <Save size={18} />}
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                          <input 
-                            type="number" 
-                            value={variableValues[v.code] !== undefined ? variableValues[v.code] : ''} 
-                            onChange={e => setVariableValues({...variableValues, [v.code]: e.target.value})}
-                            placeholder="0" 
-                            className="w-full sm:w-32 px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-lg font-black text-indigo-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 text-center shadow-inner transition" 
-                          />
-                          <button 
-                            onClick={() => handleSaveSingleVariable(v.code)} 
-                            disabled={savingVar === v.code} 
-                            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md transition disabled:opacity-50 flex items-center justify-center shrink-0"
-                            title="Lưu số liệu này"
-                          >
-                            {savingVar === v.code ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
 
-              {/* ĐƯỜNG NGĂN CÁCH */}
               {globalVars.filter(v => v.source === 'daily_manual').length > 0 && globalVars.filter(v => v.source === 'monthly_manual').length > 0 && (
                 <hr className="border-slate-100" />
               )}
@@ -348,37 +407,58 @@ export default function KPI_DataEntry() {
               {/* PHẦN 2: BIẾN HÀNG THÁNG */}
               {globalVars.filter(v => v.source === 'monthly_manual').length > 0 && (
                 <div>
-                  <h4 className="text-sm font-black text-amber-800 uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <h4 className="text-sm font-black text-emerald-800 uppercase tracking-widest mb-2 flex items-center gap-2">
                     <Target size={16}/> Nhập liệu Cuối tháng
                   </h4>
-                  <p className="text-[11px] text-amber-600 font-medium mb-4">Lưu ý: Chỉ cần nhập 1 lần vào ngày cuối cùng của tháng (nhớ chọn đúng ngày ở ô chọn ngày phía trên).</p>
+                  <p className="text-[11px] text-emerald-600 font-medium mb-4">Lưu ý: Chỉ cần nhập 1 lần vào ngày cuối cùng của tháng (nhớ chọn đúng ngày ở ô chọn ngày phía trên).</p>
                   
                   <div className="space-y-3">
-                    {globalVars.filter(v => v.source === 'monthly_manual').map(v => (
-                      <div key={v.code} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-amber-50/30 hover:bg-amber-50/60 p-4 rounded-2xl border border-amber-100 shadow-sm transition">
-                        <div className="flex-1">
-                          <p className="text-sm font-bold text-slate-800">{v.name}</p>
-                          <p className="text-[10px] font-mono font-bold text-slate-400 mt-1 uppercase">Mã: {v.code}</p>
+                    {globalVars.filter(v => v.source === 'monthly_manual').map(v => {
+                      const isDirty = isVariableDirty(v.code);
+                      return (
+                        <div key={v.code} className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl border shadow-sm transition-all duration-300 ${isDirty ? 'bg-amber-50/40 border-amber-300 shadow-amber-100' : 'bg-emerald-50/30 border-emerald-100 hover:bg-emerald-50/60'}`}>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-bold text-slate-800">{v.name}</p>
+                              {isDirty && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black rounded-md uppercase animate-pulse">⚠️ Chưa lưu</span>}
+                            </div>
+                            <p className="text-[10px] font-mono font-bold text-slate-400 mt-1 uppercase">Mã: {v.code}</p>
+                          </div>
+                          <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <input 
+                              type="number" 
+                              value={variableValues[v.code] !== undefined ? variableValues[v.code] : ''} 
+                              onChange={e => setVariableValues({...variableValues, [v.code]: e.target.value})}
+                              placeholder="0" 
+                              className={`w-full sm:w-32 px-4 py-2.5 bg-white border-2 rounded-xl text-lg font-black outline-none focus:ring-4 text-center shadow-inner transition-colors ${isDirty ? 'border-amber-400 text-amber-700 focus:border-amber-500 focus:ring-amber-50' : 'border-slate-200 text-emerald-700 focus:border-emerald-500 focus:ring-emerald-50'}`} 
+                            />
+                            <button 
+                              onClick={() => handleSaveSingleVariable(v.code)} 
+                              disabled={savingVar === v.code || !isDirty} 
+                              className={`px-4 py-2.5 text-white rounded-xl shadow-md transition-all flex items-center justify-center shrink-0 ${!isDirty ? 'bg-slate-300 cursor-not-allowed shadow-none' : 'bg-emerald-600 hover:bg-emerald-700'}`}
+                              title={isDirty ? "Lưu số liệu này" : "Đã lưu"}
+                            >
+                              {savingVar === v.code ? <Loader2 size={18} className="animate-spin" /> : !isDirty ? <Check size={18} /> : <Save size={18} />}
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 w-full sm:w-auto">
-                          <input 
-                            type="number" 
-                            value={variableValues[v.code] !== undefined ? variableValues[v.code] : ''} 
-                            onChange={e => setVariableValues({...variableValues, [v.code]: e.target.value})}
-                            placeholder="0" 
-                            className="w-full sm:w-32 px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-lg font-black text-indigo-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 text-center shadow-inner transition" 
-                          />
-                          <button 
-                            onClick={() => handleSaveSingleVariable(v.code)} 
-                            disabled={savingVar === v.code} 
-                            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl shadow-md transition disabled:opacity-50 flex items-center justify-center shrink-0"
-                            title="Lưu số liệu này"
-                          >
-                            {savingVar === v.code ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* NÚT LƯU TOÀN BỘ CÁC Ô CHƯA LƯU */}
+              {Object.keys(variableValues).some(code => isVariableDirty(code)) && (
+                <div className="sticky bottom-4 pt-6 mt-6 border-t border-slate-100 flex justify-end bg-white/90 backdrop-blur-sm p-4 rounded-2xl shadow-lg border-2 border-amber-200 z-10 animate-in slide-in-from-bottom-4">
+                  <div className="flex items-center gap-4 w-full sm:w-auto justify-between">
+                    <span className="text-sm font-bold text-amber-700 flex items-center gap-2">
+                      <AlertCircle size={18}/> Có thay đổi chưa lưu!
+                    </span>
+                    <button onClick={handleSaveAllDirtyVariables} disabled={loading} className="px-8 py-3.5 bg-amber-500 text-white font-black rounded-xl shadow-lg hover:bg-amber-600 transition-all disabled:opacity-50 flex items-center gap-2">
+                      {loading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                      LƯU TẤT CẢ THAY ĐỔI
+                    </button>
                   </div>
                 </div>
               )}
