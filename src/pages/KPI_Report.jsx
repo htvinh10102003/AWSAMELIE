@@ -276,7 +276,7 @@ export default function KPI_Report() {
         <div className="flex items-center gap-4">
           <div className="p-3.5 bg-indigo-50 text-indigo-600 rounded-2xl shadow-sm"><BarChart3 size={28} strokeWidth={2.5}/></div>
           <div>
-            <h2 className="text-2xl font-black text-slate-800 tracking-tight">BẢNG LƯƠNG KPI NHÂN SỰ</h2>
+            <h2 className="text-2xl font-black text-slate-800 tracking-tight">BẢNG THỐNG KÊ KPI NHÂN SỰ</h2>
             <p className="text-sm font-medium text-slate-500 mt-1">Đánh giá hiệu suất chi tiết tới từng cá nhân</p>
           </div>
         </div>
