@@ -25,6 +25,28 @@ export default function KPI_Report() {
     generateReport();
   }, [selectedMonth, reportDept]);
 
+  // ⚡️ BỘ BIÊN DỊCH TOÁN HỌC AN TOÀN (Hỗ trợ IF, ABS, MAX, MIN)
+  const safeEvalFormula = (formulaStr) => {
+    if (!formulaStr || !formulaStr.trim()) return 0;
+    try {
+      // Định nghĩa hàm IF chuẩn Excel
+      const IF = (condition, valueIfTrue, valueIfFalse) => condition ? valueIfTrue : valueIfFalse;
+      const ABS = Math.abs;
+      const MAX = Math.max;
+      const MIN = Math.min;
+      const ROUND = (val, decimals = 2) => Math.round(val * Math.pow(10, decimals)) / Math.pow(10, decimals);
+
+      const fn = new Function('IF', 'ABS', 'MAX', 'MIN', 'ROUND', 'return ' + formulaStr);
+      const res = fn(IF, ABS, MAX, MIN, ROUND);
+      
+      if (!isFinite(res) || isNaN(res)) return 0;
+      return res;
+    } catch (e) {
+      console.error("Lỗi tính toán công thức:", formulaStr, e);
+      return 0;
+    }
+  };
+
   const generateReport = async () => {
     setLoading(true);
     setExpandedStaff(null);
@@ -46,12 +68,11 @@ export default function KPI_Report() {
 
       const deptCriteria = allCriteria.filter(c => c.department === currentDept);
 
-      // 2. Mốc thời gian (Xác định các ngày trong tháng)
+      // 2. Mốc thời gian
       const [year, month] = selectedMonth.split('-');
       const startD = new Date(`${selectedMonth}-01`);
       const endOfMonth = new Date(year, month, 0);
       const today = new Date();
-      // Nếu là tháng hiện tại, chỉ tính trung bình cộng đến ngày hôm nay. Nếu tháng cũ, tính đến cuối tháng.
       const actualEndD = (endOfMonth > today) ? today : endOfMonth;
 
       const daysInMonth = [];
@@ -63,7 +84,7 @@ export default function KPI_Report() {
       }
       const numValidDays = daysInMonth.length || 1;
 
-      // 3. Fetch Data đồng loạt
+      // 3. Fetch Data
       const [ 
         { data: deptStaffs }, { data: errorDefs }, { data: errorLogs }, { data: varLogs }, { data: globalVarsData }
       ] = await Promise.all([
@@ -78,7 +99,7 @@ export default function KPI_Report() {
         setStaffReports([]); setLoading(false); return;
       }
 
-      // Xử lý đếm đơn hàng tự động TỪNG NGÀY (nếu có sử dụng biến auto)
+      // Xử lý đếm đơn hàng tự động
       const isDailyAutoRequired = globalVarsData?.some(v => v.source.startsWith('auto_'));
       const dailyCounts = {};
       let tongDongThang = 0, tongDiThang = 0, tongInThang = 0;
@@ -96,17 +117,15 @@ export default function KPI_Report() {
           await Promise.all(promises);
       }
 
-      // 4. Lõi xử lý Tính toán (Bộ vi xử lý trung tâm)
+      // 4. Lõi tính toán
       const computeCrit = (crit, targetErrLogs, targetTotalErrs) => {
           let mathStr = crit.formula || '';
 
           if (crit.eval_mode === 'daily_average') {
-              // 🧮 TRUNG BÌNH CỘNG TỪNG NGÀY
               let sumRaw = 0;
               daysInMonth.forEach(day => {
                   let mathStrDay = mathStr;
                   
-                  // Thay biến số toàn cầu (chỉ lấy giá trị của ngày đó)
                   globalVarsData?.forEach(v => {
                       let vVal = 0;
                       if (v.source === 'fixed') vVal = Number(v.fixed_value) || 0;
@@ -119,7 +138,6 @@ export default function KPI_Report() {
                       mathStrDay = mathStrDay.replace(new RegExp(`\\[${v.code}\\]`, 'g'), vVal);
                   });
 
-                  // Thay biến lỗi của ngày hôm đó
                   errorDefs?.forEach(e => {
                       const countErrDay = targetErrLogs.filter(l => l.error_date === day && l.error_id === e.id).length;
                       mathStrDay = mathStrDay.replace(new RegExp(`\\[LOI_${e.id}\\]`, 'g'), countErrDay);
@@ -127,17 +145,17 @@ export default function KPI_Report() {
                   const errsToday = targetErrLogs.filter(l => l.error_date === day).length;
                   mathStrDay = mathStrDay.replace(/\[TONG_LOI\]/g, errsToday);
 
-                  // Chạy công thức ngày
                   let dayRaw = 0;
                   if (mathStrDay.trim() !== '') {
-                      try { dayRaw = new Function('return ' + mathStrDay)(); if(!isFinite(dayRaw)||isNaN(dayRaw)) dayRaw=0; } catch(e){}
-                  } else { dayRaw = errsToday; }
+                      dayRaw = safeEvalFormula(mathStrDay);
+                  } else { 
+                      dayRaw = errsToday; 
+                  }
                   
                   sumRaw += dayRaw;
               });
               return sumRaw / numValidDays;
           } else {
-              // 🧮 CỘNG DỒN CẢ THÁNG
               globalVarsData?.forEach(v => {
                   let vVal = 0;
                   if (v.source === 'fixed') vVal = Number(v.fixed_value) || 0;
@@ -158,20 +176,21 @@ export default function KPI_Report() {
 
               let rawValue = 0;
               if (mathStr.trim() !== '') {
-                  try { rawValue = new Function('return ' + mathStr)(); if(!isFinite(rawValue)||isNaN(rawValue)) rawValue=0; } catch(e){}
-              } else { rawValue = targetTotalErrs; }
+                  rawValue = safeEvalFormula(mathStr);
+              } else { 
+                  rawValue = targetTotalErrs; 
+              }
               return rawValue;
           }
       };
 
-      // Tách Lỗi Tập Thể để tính
       const deptErrorLogs = (errorLogs || []).filter(log => errorDefs?.find(e => e.id === log.error_id)?.apply_to === 'department');
 
       let totalScoreSum = 0;
       let highestScore = -1;
       let topStaffName = '';
 
-      // 5. TÍNH TOÁN KPI CHO TỪNG NHÂN VIÊN
+      // 5. Tính điểm từng Nhân viên
       const reports = deptStaffs.map(staff => {
         let totalWeightAccum = 0;
         let totalScoreAccum = 0;

@@ -298,7 +298,7 @@ export default function KPI_Management() {
                   {/* Cụm chèn Biến số */}
                   <div className="flex flex-wrap gap-2 items-center">
                     <span className="text-[11px] font-bold text-slate-500 uppercase w-full sm:w-auto mr-2">1. Chèn Biến:</span>
-                    <button type="button" onClick={()=>insertToFormula('[TONG_LOI]')} className="text-[10px] font-black bg-white border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded shadow-sm hover:bg-indigo-50 transition">LỖI THUỘC BỘ PHẬN</button>
+                    <button type="button" onClick={()=>insertToFormula('[TONG_LOI]')} className="text-[10px] font-black bg-white border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded shadow-sm hover:bg-indigo-50 transition">LỖI BỘ PHẬN</button>
                     {errorList.map(e => (
                        <button key={e.id} type="button" onClick={()=>insertToFormula(`[LOI_${e.id}]`)} className="text-[10px] font-black bg-red-50 border border-red-200 text-red-700 px-3 py-1.5 rounded shadow-sm hover:bg-red-100 transition">LỖI: {e.name}</button>
                     ))}
@@ -309,30 +309,35 @@ export default function KPI_Management() {
 
                   {/* Cụm chèn Phép toán điều kiện Nâng cao */}
                   <div className="flex flex-wrap gap-2 items-center pt-3 border-t border-indigo-100/50">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase w-full sm:w-auto mr-2">2. Điều kiện & Hàm:</span>
-                    <button type="button" onClick={()=>insertToFormula(' > ')} className="text-[10px] font-bold bg-slate-800 text-white px-2 py-1.5 rounded hover:bg-slate-700 transition">Lớn hơn (&gt;)</button>
-                    <button type="button" onClick={()=>insertToFormula(' < ')} className="text-[10px] font-bold bg-slate-800 text-white px-2 py-1.5 rounded hover:bg-slate-700 transition">Nhỏ hơn (&lt;)</button>
-                    <button type="button" onClick={()=>insertToFormula(' || ')} className="text-[10px] font-bold bg-slate-800 text-white px-2 py-1.5 rounded hover:bg-slate-700 transition">Hoặc (||)</button>
-                    <button type="button" onClick={()=>insertToFormula(' ?  :  ')} className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-1.5 rounded hover:bg-amber-200 transition border border-amber-300">Nếu...Thì... ( ? : )</button>
-                    <button type="button" onClick={()=>insertToFormula(' Math.abs(  ) ')} className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-1.5 rounded hover:bg-emerald-200 transition border border-emerald-300">Tuyệt đối (abs)</button>
-                    <button type="button" onClick={()=>insertToFormula(' Math.max( , ) ')} className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-1.5 rounded hover:bg-emerald-200 transition border border-emerald-300">Lớn nhất (max)</button>
+                    <span className="text-[11px] font-bold text-slate-500 uppercase w-full sm:w-auto mr-2">2. Hàm & Phép so sánh:</span>
+                    <button type="button" onClick={()=>insertToFormula(' IF(điều_kiện, đúng, sai) ')} className="text-[10px] font-black bg-blue-600 text-white px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 transition">✨ Hàm IF( ĐK, Đúng, Sai )</button>
+                    <button type="button" onClick={()=>insertToFormula(' < ')} className="text-[10px] font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&lt;</button>
+                    <button type="button" onClick={()=>insertToFormula(' <= ')} className="text-[10px] font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&le;</button>
+                    <button type="button" onClick={()=>insertToFormula(' > ')} className="text-[10px] font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&gt;</button>
+                    <button type="button" onClick={()=>insertToFormula(' >= ')} className="text-[10px] font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&ge;</button>
+                    <button type="button" onClick={()=>insertToFormula(' == ')} className="text-[10px] font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">Bằng (==)</button>
+                    <button type="button" onClick={()=>insertToFormula(' != ')} className="text-[10px] font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">Khác (!=)</button>
+                    <button type="button" onClick={()=>insertToFormula(' ABS( ) ')} className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1.5 rounded hover:bg-emerald-200 transition border border-emerald-300">ABS()</button>
+                    <button type="button" onClick={()=>insertToFormula(' MAX( , ) ')} className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1.5 rounded hover:bg-emerald-200 transition border border-emerald-300">MAX()</button>
                   </div>
 
                   <textarea 
                     value={editingCriteria.formula} 
                     onChange={e=>setEditingCriteria({...editingCriteria, formula: e.target.value})} 
                     rows="3" 
-                    placeholder="VD: [V1] > [V2] ? [V1] : [V2]" 
+                    placeholder="VD: IF([V_TONG_DON] < 1000, 100, ([TONG_LOI] / [V_TONG_DON]) * 100)" 
                     className="w-full p-4 bg-white border border-indigo-200 rounded-xl font-mono text-indigo-900 font-bold outline-none shadow-inner"
                   ></textarea>
 
-                  <div className="text-[11px] text-indigo-800 bg-white/60 p-3.5 rounded-xl border border-indigo-100 shadow-sm">
-                    <p className="font-black mb-1.5 flex items-center gap-1"><HelpCircle size={14}/> Hướng dẫn công thức nâng cao:</p>
-                    <ul className="list-disc pl-5 space-y-1.5 font-medium">
-                      <li><strong>Toán tử 3 ngôi (Nếu...Thì):</strong> <code>[V1] &gt; [V2] ? [V1] : [V2]</code> <i>(Nếu V1 lớn hơn V2, lấy V1, ngược lại lấy V2)</i></li>
-                      <li><strong>Giá trị tuyệt đối:</strong> <code>Math.abs([V1] - [V2])</code> <i>(Khoảng cách giữa V1 và V2 luôn là số dương)</i></li>
-                      <li><strong>Lấy số lớn nhất/nhỏ nhất:</strong> <code>Math.max([V1], [V2])</code> hoặc <code>Math.min([V1], [V2])</code></li>
-                      <li><strong>Điều kiện Hoặc:</strong> <code>[V1] || [V2]</code> <i>(Nếu V1 bằng 0, tự động lấy giá trị V2)</i></li>
+                  <div className="text-[11px] text-indigo-800 bg-white/70 p-3.5 rounded-xl border border-indigo-100 shadow-sm space-y-1.5">
+                    <p className="font-black flex items-center gap-1"><HelpCircle size={14}/> Các mẫu công thức logic thường dùng:</p>
+                    <ul className="list-disc pl-5 space-y-1 font-medium">
+                      <li><strong>Nếu số đơn &lt; 1000 thì đạt 100 điểm, ngược lại tính theo tỷ lệ lỗi:</strong><br/>
+                        <code className="text-indigo-950 font-bold bg-indigo-50 px-1 py-0.5 rounded">IF([V_TONG_DON] &lt; 1000, 100, ([TONG_LOI] / [V_TONG_DON]) * 100)</code>
+                      </li>
+                      <li><strong>Nếu không có lỗi nào thì cho 100, nếu có lỗi thì trừ 5đ/lỗi:</strong><br/>
+                        <code className="text-indigo-950 font-bold bg-indigo-50 px-1 py-0.5 rounded">IF([TONG_LOI] == 0, 100, 100 - ([TONG_LOI] * 5))</code>
+                      </li>
                     </ul>
                   </div>
                 </div>
