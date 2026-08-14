@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
   Activity, Loader2, CalendarDays, Target, BarChart3, 
   TrendingDown, CheckCircle2, AlertTriangle, FileWarning, 
-  HelpCircle, ChevronDown, ChevronUp, User, Users, Award, ShieldAlert
+  HelpCircle, ChevronDown, ChevronUp, User, Users, Award
 } from 'lucide-react';
 
 export default function KPI_Report() {
@@ -29,7 +29,7 @@ export default function KPI_Report() {
     setLoading(true);
     setExpandedStaff(null);
     try {
-      // 1. Fetch Danh sách Chỉ tiêu & Xác định Bộ phận
+      // 1. Fetch Criteria
       const { data: allCriteria } = await supabase.from('kpi_criteria').select('*');
       if (!allCriteria || allCriteria.length === 0) {
         setActiveDepartments([]); setStaffReports([]); setLoading(false); return;
@@ -46,103 +46,144 @@ export default function KPI_Report() {
 
       const deptCriteria = allCriteria.filter(c => c.department === currentDept);
 
-      // 2. Mốc thời gian
+      // 2. Mốc thời gian (Xác định các ngày trong tháng)
       const [year, month] = selectedMonth.split('-');
-      const startDate = `${selectedMonth}-01`;
-      const endDate = new Date(year, month, 0).toISOString().split('T')[0];
+      const startD = new Date(`${selectedMonth}-01`);
+      const endOfMonth = new Date(year, month, 0);
+      const today = new Date();
+      // Nếu là tháng hiện tại, chỉ tính trung bình cộng đến ngày hôm nay. Nếu tháng cũ, tính đến cuối tháng.
+      const actualEndD = (endOfMonth > today) ? today : endOfMonth;
+
+      const daysInMonth = [];
+      for (let d = new Date(startD); d <= actualEndD; d.setDate(d.getDate() + 1)) {
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          daysInMonth.push(`${yyyy}-${mm}-${dd}`);
+      }
+      const numValidDays = daysInMonth.length || 1;
 
       // 3. Fetch Data đồng loạt
       const [ 
-        { data: deptStaffs },
-        { data: errorDefs },
-        { data: errorLogs }, 
-        { data: varLogs },
-        { count: tongDong },
-        { count: tongDi },
-        { count: tongIn }
+        { data: deptStaffs }, { data: errorDefs }, { data: errorLogs }, { data: varLogs }, { data: globalVarsData }
       ] = await Promise.all([
         supabase.from('warehouse_staff').select('*').eq('role', currentDept),
         supabase.from('kpi_errors').select('*').eq('department', currentDept),
-        supabase.from('kpi_error_logs').select('*').eq('department', currentDept).gte('error_date', startDate).lte('error_date', endDate),
-        supabase.from('kpi_variable_logs').select('*').gte('record_date', startDate).lte('record_date', endDate),
-        supabase.from('orders').select('*', { count: 'exact', head: true }).in('status', [40, 42]).gte('packed_at', `${startDate}T00:00:00Z`).lte('packed_at', `${endDate}T23:59:59Z`),
-        supabase.from('orders').select('*', { count: 'exact', head: true }).gte('carrier_date', `${startDate}T00:00:00Z`).lte('carrier_date', `${endDate}T23:59:59Z`),
-        supabase.from('orders').select('*', { count: 'exact', head: true }).gte('printed_at', `${startDate}T00:00:00Z`).lte('printed_at', `${endDate}T23:59:59Z`)
+        supabase.from('kpi_error_logs').select('*').eq('department', currentDept).gte('error_date', daysInMonth[0]).lte('error_date', daysInMonth[daysInMonth.length-1]),
+        supabase.from('kpi_variable_logs').select('*').gte('record_date', daysInMonth[0]).lte('record_date', daysInMonth[daysInMonth.length-1]),
+        supabase.from('kpi_global_variables').select('*')
       ]);
 
       if (!deptStaffs || deptStaffs.length === 0) {
         setStaffReports([]); setLoading(false); return;
       }
 
-      // Tách sẵn Lỗi Tập Thể để tính nhanh
-      const deptErrorLogs = (errorLogs || []).filter(log => {
-         const def = errorDefs?.find(e => e.id === log.error_id);
-         return !def || def.apply_to === 'department';
-      });
+      // Xử lý đếm đơn hàng tự động TỪNG NGÀY (nếu có sử dụng biến auto)
+      const isDailyAutoRequired = globalVarsData?.some(v => v.source.startsWith('auto_'));
+      const dailyCounts = {};
+      let tongDongThang = 0, tongDiThang = 0, tongInThang = 0;
+
+      if (isDailyAutoRequired) {
+          const promises = [];
+          daysInMonth.forEach(day => {
+              dailyCounts[day] = { packed: 0, shipped: 0, printed: 0 };
+              promises.push(
+                  supabase.from('orders').select('*', { count: 'exact', head: true }).in('status', [40, 42]).gte('packed_at', `${day}T00:00:00Z`).lte('packed_at', `${day}T23:59:59Z`).then(({count}) => { dailyCounts[day].packed = count || 0; tongDongThang += count || 0; }),
+                  supabase.from('orders').select('*', { count: 'exact', head: true }).gte('carrier_date', `${day}T00:00:00Z`).lte('carrier_date', `${day}T23:59:59Z`).then(({count}) => { dailyCounts[day].shipped = count || 0; tongDiThang += count || 0; }),
+                  supabase.from('orders').select('*', { count: 'exact', head: true }).gte('printed_at', `${day}T00:00:00Z`).lte('printed_at', `${day}T23:59:59Z`).then(({count}) => { dailyCounts[day].printed = count || 0; tongInThang += count || 0; })
+              );
+          });
+          await Promise.all(promises);
+      }
+
+      // 4. Lõi xử lý Tính toán (Bộ vi xử lý trung tâm)
+      const computeCrit = (crit, targetErrLogs, targetTotalErrs) => {
+          let mathStr = crit.formula || '';
+
+          if (crit.eval_mode === 'daily_average') {
+              // 🧮 TRUNG BÌNH CỘNG TỪNG NGÀY
+              let sumRaw = 0;
+              daysInMonth.forEach(day => {
+                  let mathStrDay = mathStr;
+                  
+                  // Thay biến số toàn cầu (chỉ lấy giá trị của ngày đó)
+                  globalVarsData?.forEach(v => {
+                      let vVal = 0;
+                      if (v.source === 'fixed') vVal = Number(v.fixed_value) || 0;
+                      else if (v.source === 'daily_manual' || v.source === 'monthly_manual') {
+                          vVal = (varLogs || []).filter(l => l.record_date === day && l.variable_code === v.code).reduce((s,l) => s + Number(l.value), 0);
+                      }
+                      else if (v.source === 'auto_packed_day') vVal = dailyCounts[day]?.packed || 0;
+                      else if (v.source === 'auto_shipped_day') vVal = dailyCounts[day]?.shipped || 0;
+                      else if (v.source === 'auto_printed_day') vVal = dailyCounts[day]?.printed || 0;
+                      mathStrDay = mathStrDay.replace(new RegExp(`\\[${v.code}\\]`, 'g'), vVal);
+                  });
+
+                  // Thay biến lỗi của ngày hôm đó
+                  errorDefs?.forEach(e => {
+                      const countErrDay = targetErrLogs.filter(l => l.error_date === day && l.error_id === e.id).length;
+                      mathStrDay = mathStrDay.replace(new RegExp(`\\[LOI_${e.id}\\]`, 'g'), countErrDay);
+                  });
+                  const errsToday = targetErrLogs.filter(l => l.error_date === day).length;
+                  mathStrDay = mathStrDay.replace(/\[TONG_LOI\]/g, errsToday);
+
+                  // Chạy công thức ngày
+                  let dayRaw = 0;
+                  if (mathStrDay.trim() !== '') {
+                      try { dayRaw = new Function('return ' + mathStrDay)(); if(!isFinite(dayRaw)||isNaN(dayRaw)) dayRaw=0; } catch(e){}
+                  } else { dayRaw = errsToday; }
+                  
+                  sumRaw += dayRaw;
+              });
+              return sumRaw / numValidDays;
+          } else {
+              // 🧮 CỘNG DỒN CẢ THÁNG
+              globalVarsData?.forEach(v => {
+                  let vVal = 0;
+                  if (v.source === 'fixed') vVal = Number(v.fixed_value) || 0;
+                  else if (v.source === 'daily_manual' || v.source === 'monthly_manual') {
+                      vVal = (varLogs || []).filter(l => l.variable_code === v.code).reduce((s,l) => s + Number(l.value), 0);
+                  }
+                  else if (v.source === 'auto_packed_day') vVal = tongDongThang;
+                  else if (v.source === 'auto_shipped_day') vVal = tongDiThang;
+                  else if (v.source === 'auto_printed_day') vVal = tongInThang;
+                  mathStr = mathStr.replace(new RegExp(`\\[${v.code}\\]`, 'g'), vVal);
+              });
+
+              errorDefs?.forEach(e => {
+                  const countErrMonth = targetErrLogs.filter(l => l.error_id === e.id).length;
+                  mathStr = mathStr.replace(new RegExp(`\\[LOI_${e.id}\\]`, 'g'), countErrMonth);
+              });
+              mathStr = mathStr.replace(/\[TONG_LOI\]/g, targetTotalErrs);
+
+              let rawValue = 0;
+              if (mathStr.trim() !== '') {
+                  try { rawValue = new Function('return ' + mathStr)(); if(!isFinite(rawValue)||isNaN(rawValue)) rawValue=0; } catch(e){}
+              } else { rawValue = targetTotalErrs; }
+              return rawValue;
+          }
+      };
+
+      // Tách Lỗi Tập Thể để tính
+      const deptErrorLogs = (errorLogs || []).filter(log => errorDefs?.find(e => e.id === log.error_id)?.apply_to === 'department');
 
       let totalScoreSum = 0;
       let highestScore = -1;
       let topStaffName = '';
 
-      // 4. TÍNH TOÁN KPI CHO TỪNG NHÂN VIÊN
+      // 5. TÍNH TOÁN KPI CHO TỪNG NHÂN VIÊN
       const reports = deptStaffs.map(staff => {
         let totalWeightAccum = 0;
         let totalScoreAccum = 0;
         let totalPenaltyAccum = 0;
 
-        // Lỗi Cá nhân của nhân viên này
         const individualErrorLogs = (errorLogs || []).filter(log => log.staff_id === staff.id);
-        const staffTotalErrors = deptErrorLogs.length + individualErrorLogs.length; // Tổng lỗi NV phải chịu = Lỗi chung + Lỗi riêng
+        const staffErrorLogs = [...deptErrorLogs, ...individualErrorLogs];
+        const staffTotalErrors = staffErrorLogs.length;
 
         const criteriaDetails = deptCriteria.map(crit => {
-          let mathStr = crit.formula || '';
-          let rawValue = 0;
           const weight = Number(crit.weight) || 0;
-
-          // Xử lý Thay biến
-          if (crit.variables && Array.isArray(crit.variables)) {
-            crit.variables.forEach(v => {
-              let vValue = 0;
-              if (v.source === 'fixed') vValue = Number(v.value) || 0;
-              else if (v.source === 'error_count') {
-                const isIndividual = errorDefs?.find(e => e.id === v.error_id)?.apply_to === 'individual';
-                if (isIndividual) {
-                   // Chỉ đếm lỗi của chính nhân viên này
-                   vValue = individualErrorLogs.filter(log => log.error_id === v.error_id).length;
-                } else {
-                   // Đếm lỗi tập thể
-                   vValue = deptErrorLogs.filter(log => log.error_id === v.error_id).length;
-                }
-              }
-              else if (v.source === 'daily_manual' || v.source === 'monthly_manual') {
-                vValue = (varLogs || []).filter(log => log.variable_code === v.code).reduce((sum, log) => sum + Number(log.value), 0);
-              }
-              else if (v.source.includes('auto_packed')) vValue = tongDong || 0;
-              else if (v.source.includes('auto_shipped')) vValue = tongDi || 0;
-              else if (v.source.includes('auto_printed')) vValue = tongIn || 0;
-
-              const regex = new RegExp(`\\[${v.code}\\]`, 'g');
-              mathStr = mathStr.replace(regex, vValue);
-            });
-          }
-
-          mathStr = mathStr.replace(/\[TONG_LOI\]/g, staffTotalErrors);
-
-          // Tính toán công thức
-          if (mathStr.trim() !== '') {
-            try {
-              rawValue = new Function('return ' + mathStr)();
-              if (!isFinite(rawValue) || isNaN(rawValue)) rawValue = 0; 
-            } catch (e) { rawValue = 0; }
-          } else {
-            // Default nếu không ghi công thức
-            rawValue = crit.variables.filter(v => v.source === 'error_count').reduce((sum, v) => {
-               const isIndividual = errorDefs?.find(e => e.id === v.error_id)?.apply_to === 'individual';
-               if (isIndividual) return sum + individualErrorLogs.filter(l => l.error_id === v.error_id).length;
-               return sum + deptErrorLogs.filter(l => l.error_id === v.error_id).length;
-            }, 0);
-          }
-
+          let rawValue = computeCrit(crit, staffErrorLogs, staffTotalErrors);
           rawValue = Math.round(rawValue * 100) / 100;
 
           // Bộ lọc Luật Trừ Điểm
@@ -171,7 +212,6 @@ export default function KPI_Report() {
           return { ...crit, rawValue, penalty, score };
         });
 
-        // Chốt điểm nhân viên
         const finalTotalScore = Math.round(totalScoreAccum * 100) / 100;
         totalScoreSum += finalTotalScore;
         if (finalTotalScore > highestScore) { highestScore = finalTotalScore; topStaffName = staff.full_name; }
@@ -185,7 +225,6 @@ export default function KPI_Report() {
         };
       });
 
-      // Sort by highest score
       reports.sort((a, b) => b.totalScore - a.totalScore);
       setStaffReports(reports);
 
@@ -214,7 +253,6 @@ export default function KPI_Report() {
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12 p-4 mt-4 animate-in fade-in duration-300">
       
-      {/* HEADER TÙY CHỈNH THÁNG & BỘ PHẬN */}
       <div className="bg-white p-6 md:p-8 border border-slate-200 rounded-3xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
         <div className="flex items-center gap-4">
           <div className="p-3.5 bg-indigo-50 text-indigo-600 rounded-2xl shadow-sm"><BarChart3 size={28} strokeWidth={2.5}/></div>
@@ -248,7 +286,6 @@ export default function KPI_Report() {
         </div>
       ) : (
         <>
-          {/* TAB ĐIỀU HƯỚNG BỘ PHẬN */}
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
             {activeDepartments.map(dept => (
               <button 
@@ -260,7 +297,6 @@ export default function KPI_Report() {
             ))}
           </div>
 
-          {/* KHỐI OVERVIEW NHÂN SỰ */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden group">
               <div className="absolute -right-4 -top-4 text-blue-50 opacity-50"><Users size={100}/></div>
@@ -287,7 +323,6 @@ export default function KPI_Report() {
             </div>
           </div>
 
-          {/* BẢNG XẾP HẠNG & CHI TIẾT */}
           <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <div>
@@ -317,11 +352,7 @@ export default function KPI_Report() {
 
                       return (
                         <React.Fragment key={staff.id}>
-                          {/* DÒNG NHÂN SỰ CHÍNH */}
-                          <tr 
-                            onClick={() => toggleExpand(staff.id)} 
-                            className={`transition-colors cursor-pointer ${isExpanded ? 'bg-indigo-50/40' : 'hover:bg-slate-50/80'} ${idx === 0 ? 'bg-amber-50/20' : ''}`}
-                          >
+                          <tr onClick={() => toggleExpand(staff.id)} className={`transition-colors cursor-pointer ${isExpanded ? 'bg-indigo-50/40' : 'hover:bg-slate-50/80'} ${idx === 0 ? 'bg-amber-50/20' : ''}`}>
                             <td className="py-5 px-6">
                               <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shadow-sm border ${idx === 0 ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>
@@ -336,21 +367,11 @@ export default function KPI_Report() {
                                 </div>
                               </div>
                             </td>
+                            <td className="py-5 px-6 text-center"><span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-sm font-black">{staff.totalWeight}</span></td>
                             <td className="py-5 px-6 text-center">
-                              <span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-sm font-black">{staff.totalWeight}</span>
+                              {staff.totalPenalty > 0 ? <span className="inline-block px-2.5 py-1 bg-red-50 border border-red-100 text-red-600 rounded-md text-xs font-black">-{staff.totalPenalty}</span> : <span className="text-slate-300 text-sm font-bold">-</span>}
                             </td>
-                            <td className="py-5 px-6 text-center">
-                              {staff.totalPenalty > 0 ? (
-                                <span className="inline-block px-2.5 py-1 bg-red-50 border border-red-100 text-red-600 rounded-md text-xs font-black">-{staff.totalPenalty}</span>
-                              ) : (
-                                <span className="text-slate-300 text-sm font-bold">-</span>
-                              )}
-                            </td>
-                            <td className="py-5 px-6 text-center">
-                              <span className={`text-xl font-black ${scoreColor}`}>
-                                {staff.totalScore}
-                              </span>
-                            </td>
+                            <td className="py-5 px-6 text-center"><span className={`text-xl font-black ${scoreColor}`}>{staff.totalScore}</span></td>
                             <td className="py-5 px-6 text-right">
                               <button className={`p-2 rounded-full transition-colors ${isExpanded ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
                                 {isExpanded ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
@@ -358,7 +379,6 @@ export default function KPI_Report() {
                             </td>
                           </tr>
 
-                          {/* KHUNG HIỂN THỊ CHI TIẾT DƯỚI DẠNG ACCORDION */}
                           {isExpanded && (
                             <tr className="bg-slate-50/80 border-b-2 border-indigo-100">
                               <td colSpan="5" className="p-0">
@@ -391,9 +411,7 @@ export default function KPI_Report() {
                                               {crit.rawValue} <span className="text-[10px] font-normal">{crit.calc_type === 'ratio' ? '%' : 'lượt'}</span>
                                             </td>
                                             <td className="py-4 px-5 text-center">
-                                              {crit.penalty > 0 ? (
-                                                <span className="text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded">-{crit.penalty}</span>
-                                              ) : <span className="text-slate-300">-</span>}
+                                              {crit.penalty > 0 ? <span className="text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded">-{crit.penalty}</span> : <span className="text-slate-300">-</span>}
                                             </td>
                                             <td className="py-4 px-5 text-center">
                                               <span className={`font-black ${getScoreColor(crit.score, crit.weight)}`}>{crit.score} / {crit.weight}</span>
