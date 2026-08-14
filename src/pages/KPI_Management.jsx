@@ -11,6 +11,7 @@ const DEPARTMENTS = ['Đóng hàng', 'Vận đơn', 'Lead kho'];
 const VAR_SOURCES = [
   { id: 'daily_manual', name: 'Nhập tay hàng ngày' },
   { id: 'monthly_manual', name: 'Nhập tay cuối tháng' },
+  { id: 'sum_monthly', name: '✨ Tổng cộng một Biến khác (Cả tháng)' }, // NGUỒN BIẾN MỚI
   { id: 'auto_packed_day', name: 'Auto: Đơn đã đóng / Ngày' },
   { id: 'auto_printed_day', name: 'Auto: Đơn đã in / Ngày' },
   { id: 'auto_shipped_day', name: 'Auto: Đơn đã đi / Ngày' },
@@ -25,21 +26,19 @@ const RULE_TYPES = [
 ];
 
 export default function KPI_Management() {
-  const [activeTab, setActiveTab] = useState('criteria'); // criteria, errors, variables, staff
+  const [activeTab, setActiveTab] = useState('criteria');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [selectedDept, setSelectedDept] = useState(DEPARTMENTS[0]);
 
-  // Data States
   const [criteriaList, setCriteriaList] = useState([]);
   const [errorList, setErrorList] = useState([]);
   const [globalVars, setGlobalVars] = useState([]);
   const [staffList, setStaffList] = useState([]);
 
-  // Form States
   const [editingCriteria, setEditingCriteria] = useState(null);
   const [errorForm, setErrorForm] = useState({ id: null, name: '', apply_to: 'individual' });
-  const [varForm, setVarForm] = useState({ id: null, code: '', name: '', source: 'daily_manual', fixed_value: 0 });
+  const [varForm, setVarForm] = useState({ id: null, code: '', name: '', source: 'daily_manual', fixed_value: 0, target_code: '' });
   const [staffForm, setStaffForm] = useState({ full_name: '', role: DEPARTMENTS[0] });
 
   useEffect(() => {
@@ -56,7 +55,6 @@ export default function KPI_Management() {
       supabase.from('kpi_global_variables').select('*').order('created_at', { ascending: true }),
       supabase.from('warehouse_staff').select('*').order('role', { ascending: true })
     ]);
-    
     if (crits) setCriteriaList(crits);
     if (errs) setErrorList(errs);
     if (vars) setGlobalVars(vars);
@@ -67,7 +65,7 @@ export default function KPI_Management() {
   const showMsg = (text) => { setMessage(text); setTimeout(() => setMessage(''), 3000); };
 
   // ==========================================
-  // TAB 1: LOGIC CHỈ TIÊU
+  // TAB 1: CHỈ TIÊU
   // ==========================================
   const totalWeight = criteriaList.reduce((sum, item) => sum + Number(item.weight), 0);
 
@@ -99,64 +97,60 @@ export default function KPI_Management() {
   const insertToFormula = (str) => setEditingCriteria(prev => ({ ...prev, formula: prev.formula + str }));
 
   // ==========================================
-  // TAB 2: LOGIC TỪ ĐIỂN LỖI
+  // TAB 2: TỪ ĐIỂN LỖI
   // ==========================================
-  const handleEditError = (err) => {
-    setErrorForm({ id: err.id, name: err.name, apply_to: err.apply_to });
-  };
-  
-  const handleCancelEditError = () => {
-    setErrorForm({ id: null, name: '', apply_to: 'individual' });
-  };
+  const handleEditError = (err) => setErrorForm({ id: err.id, name: err.name, apply_to: err.apply_to });
+  const handleCancelEditError = () => setErrorForm({ id: null, name: '', apply_to: 'individual' });
 
   const handleSaveError = async (e) => {
     e.preventDefault();
     if (!errorForm.name.trim()) return;
     setLoading(true);
-    
     try {
-      if (errorForm.id) {
-        await supabase.from('kpi_errors').update({
-          name: errorForm.name,
-          apply_to: errorForm.apply_to
-        }).eq('id', errorForm.id);
-        showMsg('✅ Cập nhật Lỗi thành công!');
-      } else {
-        await supabase.from('kpi_errors').insert([{ 
-          department: selectedDept, 
-          name: errorForm.name, 
-          apply_to: errorForm.apply_to 
-        }]);
-        showMsg('✅ Thêm Lỗi mới thành công!');
-      }
+      if (errorForm.id) await supabase.from('kpi_errors').update({ name: errorForm.name, apply_to: errorForm.apply_to }).eq('id', errorForm.id);
+      else await supabase.from('kpi_errors').insert([{ department: selectedDept, name: errorForm.name, apply_to: errorForm.apply_to }]);
+      showMsg(errorForm.id ? '✅ Cập nhật Lỗi thành công!' : '✅ Thêm Lỗi mới thành công!');
       handleCancelEditError();
       fetchData();
-    } catch (err) {
-      alert("Lỗi khi lưu: " + err.message);
-    }
+    } catch (err) { alert("Lỗi khi lưu: " + err.message); }
     setLoading(false);
   };
 
   const handleDeleteError = async (id) => {
-    if(!confirm('🚨 Bạn có chắc muốn xóa lỗi này? Các bản ghi vi phạm cũ liên quan có thể mất tên hiển thị.')) return;
+    if(!confirm('🚨 Bạn có chắc muốn xóa lỗi này?')) return;
     await supabase.from('kpi_errors').delete().eq('id', id);
     fetchData();
   };
 
   // ==========================================
-  // TAB 3: LOGIC BIẾN SỐ CHUNG
+  // TAB 3: BIẾN SỐ CHUNG
   // ==========================================
   const handleEditVariable = (variable) => {
-    setVarForm({ id: variable.id, code: variable.code, name: variable.name, source: variable.source, fixed_value: variable.fixed_value || 0 });
+    setVarForm({ 
+      id: variable.id, 
+      code: variable.code, 
+      name: variable.name, 
+      source: variable.source, 
+      fixed_value: variable.fixed_value || 0,
+      target_code: variable.target_code || ''
+    });
   };
-  const handleCancelEditVariable = () => setVarForm({ id: null, code: '', name: '', source: 'daily_manual', fixed_value: 0 });
+  const handleCancelEditVariable = () => setVarForm({ id: null, code: '', name: '', source: 'daily_manual', fixed_value: 0, target_code: '' });
 
   const handleSaveVariable = async (e) => {
     e.preventDefault();
     if (!varForm.code.trim() || !varForm.name.trim()) return;
+    if (varForm.source === 'sum_monthly' && !varForm.target_code) return alert('Vui lòng chọn Biến gốc để tính tổng!');
+
     setLoading(true);
     const cleanCode = varForm.code.toUpperCase().replace(/\s+/g, '_');
-    const payload = { code: cleanCode, name: varForm.name, source: varForm.source, fixed_value: varForm.fixed_value };
+    const payload = { 
+      code: cleanCode, 
+      name: varForm.name, 
+      source: varForm.source, 
+      fixed_value: varForm.fixed_value,
+      target_code: varForm.source === 'sum_monthly' ? varForm.target_code : null
+    };
 
     try {
       if (varForm.id) {
@@ -168,11 +162,12 @@ export default function KPI_Management() {
       }
       handleCancelEditVariable();
       fetchData();
-    } catch(err) { alert("Lỗi: Mã biến này có thể đã tồn tại hoặc do lỗi mạng!"); }
+    } catch(err) { alert("Lỗi: Mã biến này có thể đã tồn tại!"); }
     setLoading(false);
   };
+
   const handleDeleteVariable = async (id) => {
-    if(!confirm('🚨 Xóa biến này sẽ xóa luôn dữ liệu nhập liệu cũ của nó. Chắc chắn xóa?')) return;
+    if(!confirm('🚨 Xóa biến này sẽ xóa luôn dữ liệu nhập liệu cũ. Chắc chắn xóa?')) return;
     await supabase.from('kpi_global_variables').delete().eq('id', id);
     fetchData();
   };
@@ -190,10 +185,11 @@ export default function KPI_Management() {
     showMsg('✅ Thêm nhân sự thành công!');
   };
   const handleDeleteStaff = async (id) => {
-    if(!confirm('🚨 Xóa nhân sự này? Các log lỗi của họ sẽ bị ảnh hưởng.')) return;
+    if(!confirm('🚨 Xóa nhân sự này?')) return;
     await supabase.from('warehouse_staff').delete().eq('id', id);
     fetchData();
   };
+
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12 mt-4 p-4 animate-in fade-in duration-300">
@@ -223,7 +219,6 @@ export default function KPI_Management() {
         </div>
       </div>
 
-      {/* CHỌN BỘ PHẬN GLOBAL */}
       {!editingCriteria && ['criteria', 'errors'].includes(activeTab) && (
         <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-3">
@@ -337,7 +332,6 @@ export default function KPI_Management() {
                 <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2"><span className="w-6 h-6 bg-blue-100 text-blue-700 flex items-center justify-center rounded-full text-xs">2</span> Công thức quy đổi</h4>
                 <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
                   
-                  {/* Cụm chèn Biến số */}
                   <div className="flex flex-wrap gap-2 items-center">
                     <span className="text-[11px] font-bold text-slate-500 uppercase w-full sm:w-auto mr-2">1. Chèn Biến:</span>
                     <button type="button" onClick={()=>insertToFormula('[TONG_LOI]')} className="text-[10px] font-black bg-white border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded shadow-sm hover:bg-indigo-50 transition">LỖI BỘ PHẬN</button>
@@ -349,7 +343,6 @@ export default function KPI_Management() {
                     ))}
                   </div>
 
-                  {/* Cụm chèn Phép toán điều kiện Nâng cao */}
                   <div className="flex flex-wrap gap-2 items-center pt-3 border-t border-indigo-100/50">
                     <span className="text-[11px] font-bold text-slate-500 uppercase w-full sm:w-auto mr-2">2. Hàm & Phép so sánh:</span>
                     <button type="button" onClick={()=>insertToFormula(' IF(điều_kiện, đúng, sai) ')} className="text-[10px] font-black bg-blue-600 text-white px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 transition">✨ Hàm IF( ĐK, Đúng, Sai )</button>
@@ -520,12 +513,27 @@ export default function KPI_Management() {
             <form onSubmit={handleSaveVariable} className="space-y-4 text-sm font-bold text-slate-600">
               <div><label className="block mb-1">Mã biến (Không dấu)</label><input required value={varForm.code} onChange={e=>setVarForm({...varForm, code: e.target.value})} placeholder="VD: V_TONG_DON" className="w-full px-4 py-2.5 border rounded-xl uppercase" /></div>
               <div><label className="block mb-1">Tên mô tả</label><input required value={varForm.name} onChange={e=>setVarForm({...varForm, name: e.target.value})} className="w-full px-4 py-2.5 border rounded-xl" /></div>
+              
               <div>
                 <label className="block mb-1">Phương thức lấy dữ liệu</label>
-                <select value={varForm.source} onChange={e=>setVarForm({...varForm, source: e.target.value})} className="w-full px-4 py-2.5 border rounded-xl bg-slate-50 cursor-pointer">
+                <select value={varForm.source} onChange={e=>setVarForm({...varForm, source: e.target.value})} className="w-full px-4 py-2.5 border rounded-xl bg-slate-50 cursor-pointer text-blue-700">
                   {VAR_SOURCES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
+
+              {/* NẾU LÀ BIẾN CỘNG DỒN -> HIỆN DROPDOWN CHỌN BIẾN GỐC */}
+              {varForm.source === 'sum_monthly' && (
+                <div className="animate-in slide-in-from-top-2">
+                  <label className="block mb-1 text-amber-600 flex items-center gap-1">Chọn Biến gốc để tính tổng <span className="text-red-500">*</span></label>
+                  <select value={varForm.target_code} onChange={e=>setVarForm({...varForm, target_code: e.target.value})} className="w-full px-4 py-2.5 border border-amber-200 rounded-xl bg-amber-50 font-bold text-amber-800 outline-none cursor-pointer shadow-sm">
+                    <option value="">-- Click để chọn biến --</option>
+                    {globalVars.filter(v => v.source !== 'sum_monthly' && v.code !== varForm.code).map(v => (
+                      <option key={v.id} value={v.code}>[{v.code}] {v.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {varForm.source === 'fixed' && <div><label className="block mb-1">Giá trị cố định</label><input type="number" value={varForm.fixed_value} onChange={e=>setVarForm({...varForm, fixed_value: e.target.value})} className="w-full px-4 py-2.5 border rounded-xl bg-amber-50 text-amber-700" /></div>}
               
               <div className="flex gap-2 mt-4 pt-2">
@@ -545,7 +553,11 @@ export default function KPI_Management() {
                   <div>
                     <span className="font-mono text-xs bg-slate-800 text-white px-2 py-1 rounded font-black mr-3">[{v.code}]</span>
                     <span className="font-bold text-sm text-slate-800">{v.name}</span>
-                    <p className="text-xs text-slate-500 mt-1">Nguồn: {VAR_SOURCES.find(s => s.id === v.source)?.name} {v.source === 'fixed' && <strong className="text-amber-600">(= {v.fixed_value})</strong>}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                       Nguồn: <span className="font-bold">{VAR_SOURCES.find(s => s.id === v.source)?.name}</span> 
+                       {v.source === 'fixed' && <strong className="text-amber-600 ml-1">(= {v.fixed_value})</strong>}
+                       {v.source === 'sum_monthly' && <strong className="text-indigo-600 ml-1">(Từ gốc [{v.target_code}])</strong>}
+                    </p>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => handleEditVariable(v)} className="text-blue-500 hover:text-blue-700 bg-blue-50 p-2 rounded-lg transition"><Edit size={16}/></button>

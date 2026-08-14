@@ -86,7 +86,7 @@ export default function KPI_Report() {
         { data: deptStaffs }, { data: allErrors }, { data: allErrorLogs }, { data: varLogs }, { data: globalVarsData }
       ] = await Promise.all([
         supabase.from('warehouse_staff').select('*').eq('role', currentDept),
-        supabase.from('kpi_errors').select('*'), // Lấy toàn bộ lỗi để map ID cho đúng
+        supabase.from('kpi_errors').select('*'), 
         supabase.from('kpi_error_logs').select('*').gte('error_date', daysInMonth[0]).lte('error_date', daysInMonth[daysInMonth.length-1]),
         supabase.from('kpi_variable_logs').select('*').gte('record_date', daysInMonth[0]).lte('record_date', daysInMonth[daysInMonth.length-1]),
         supabase.from('kpi_global_variables').select('*')
@@ -96,20 +96,12 @@ export default function KPI_Report() {
         setStaffReports([]); setLoading(false); return;
       }
 
-      // 1. Phân tách Lỗi Toàn Kho và Lỗi Tập thể
-      const warehouseErrorLogs = (allErrorLogs || []).filter(log => {
-        const def = allErrors?.find(e => e.id === log.error_id);
-        return def?.apply_to === 'warehouse';
-      });
+      // XỬ LÝ RAW EXCEL DATA (Giữ nguyên)
+      const warehouseErrorLogs = (allErrorLogs || []).filter(log => allErrors?.find(e => e.id === log.error_id)?.apply_to === 'warehouse');
+      const deptErrorLogs = (allErrorLogs || []).filter(log => allErrors?.find(e => e.id === log.error_id)?.apply_to === 'department' && log.department === currentDept);
 
-      const deptErrorLogs = (allErrorLogs || []).filter(log => {
-        const def = allErrors?.find(e => e.id === log.error_id);
-        return def?.apply_to === 'department' && log.department === currentDept;
-      });
-
-      // LƯU RAW DATA ĐỂ XUẤT EXCEL
       const allExportLogs = [...warehouseErrorLogs, ...deptErrorLogs, ...(allErrorLogs || []).filter(log => log.department === currentDept && log.staff_id)];
-      const enrichedErrorLogs = allExportLogs.map(log => {
+      setRawExportLogs(allExportLogs.map(log => {
         const errDef = allErrors?.find(e => e.id === log.error_id);
         const staffDef = deptStaffs?.find(s => s.id === log.staff_id);
         return {
@@ -121,21 +113,14 @@ export default function KPI_Report() {
             tracking: log.tracking_code || '',
             note: log.note || ''
         };
-      });
-      setRawExportLogs(enrichedErrorLogs);
+      }));
 
-      const enrichedVarLogs = (varLogs || []).map(v => {
+      setRawExportVars((varLogs || []).map(v => {
         const varDef = globalVarsData?.find(gv => gv.code === v.variable_code);
-        return {
-           date: v.record_date,
-           name: varDef ? varDef.name : v.variable_code,
-           code: v.variable_code,
-           value: v.value
-        }
-      });
-      setRawExportVars(enrichedVarLogs);
+        return { date: v.record_date, name: varDef ? varDef.name : v.variable_code, code: v.variable_code, value: v.value };
+      }));
 
-      // Tính biến Auto
+      // TÍNH TOÁN BIẾN AUTO TỪ BẢNG ĐƠN HÀNG
       const isDailyAutoRequired = globalVarsData?.some(v => v.source.startsWith('auto_'));
       const dailyCounts = {};
       let tongDongThang = 0, tongDiThang = 0, tongInThang = 0;
@@ -153,7 +138,29 @@ export default function KPI_Report() {
           await Promise.all(promises);
       }
 
-      // Lõi tính toán
+      // ⚡️ TIỀN XỬ LÝ (PRE-CALCULATE) TỔNG THEO THÁNG CỦA MỌI BIẾN SỐ
+      // Điều này giải quyết bài toán: Tính tổng cả tháng của 1 biến bất kỳ
+      const precalculatedMonthlySums = {};
+      
+      // Bước 1: Tính tổng tháng cho các biến Gốc
+      globalVarsData?.forEach(v => {
+          if (v.source === 'fixed') precalculatedMonthlySums[v.code] = Number(v.fixed_value) || 0;
+          else if (v.source === 'daily_manual' || v.source === 'monthly_manual') {
+              precalculatedMonthlySums[v.code] = (varLogs || []).filter(l => l.variable_code === v.code).reduce((s,l) => s + Number(l.value), 0);
+          }
+          else if (v.source === 'auto_packed_day') precalculatedMonthlySums[v.code] = tongDongThang;
+          else if (v.source === 'auto_shipped_day') precalculatedMonthlySums[v.code] = tongDiThang;
+          else if (v.source === 'auto_printed_day') precalculatedMonthlySums[v.code] = tongInThang;
+      });
+
+      // Bước 2: Gán giá trị cho các biến Phái sinh (sum_monthly) từ kết quả của Bước 1
+      globalVarsData?.forEach(v => {
+          if (v.source === 'sum_monthly') {
+              precalculatedMonthlySums[v.code] = precalculatedMonthlySums[v.target_code] || 0;
+          }
+      });
+
+      // LÕI TÍNH TOÁN CÔNG THỨC
       const computeCrit = (crit, targetErrLogs, targetTotalErrs) => {
           let mathStr = crit.formula || '';
 
@@ -163,13 +170,16 @@ export default function KPI_Report() {
                   let mathStrDay = mathStr;
                   globalVarsData?.forEach(v => {
                       let vVal = 0;
-                      if (v.source === 'fixed') vVal = Number(v.fixed_value) || 0;
+                      // NẾU LÀ BIẾN TỔNG THÁNG THÌ LẤY TỪ CACHE PRE-CALCULATE
+                      if (v.source === 'sum_monthly') vVal = precalculatedMonthlySums[v.target_code] || 0;
+                      else if (v.source === 'fixed') vVal = Number(v.fixed_value) || 0;
                       else if (v.source === 'daily_manual' || v.source === 'monthly_manual') {
                           vVal = (varLogs || []).filter(l => l.record_date === day && l.variable_code === v.code).reduce((s,l) => s + Number(l.value), 0);
                       }
                       else if (v.source === 'auto_packed_day') vVal = dailyCounts[day]?.packed || 0;
                       else if (v.source === 'auto_shipped_day') vVal = dailyCounts[day]?.shipped || 0;
                       else if (v.source === 'auto_printed_day') vVal = dailyCounts[day]?.printed || 0;
+                      
                       mathStrDay = mathStrDay.replace(new RegExp(`\\[${v.code}\\]`, 'g'), vVal);
                   });
 
@@ -188,15 +198,9 @@ export default function KPI_Report() {
               });
               return sumRaw / numValidDays;
           } else {
+              // CỘNG DỒN CẢ THÁNG THÌ LẤY THẲNG TRONG BỘ NHỚ ĐỆM PRE-CALCULATE CHO MƯỢT
               globalVarsData?.forEach(v => {
-                  let vVal = 0;
-                  if (v.source === 'fixed') vVal = Number(v.fixed_value) || 0;
-                  else if (v.source === 'daily_manual' || v.source === 'monthly_manual') {
-                      vVal = (varLogs || []).filter(l => l.variable_code === v.code).reduce((s,l) => s + Number(l.value), 0);
-                  }
-                  else if (v.source === 'auto_packed_day') vVal = tongDongThang;
-                  else if (v.source === 'auto_shipped_day') vVal = tongDiThang;
-                  else if (v.source === 'auto_printed_day') vVal = tongInThang;
+                  let vVal = precalculatedMonthlySums[v.code] || 0;
                   mathStr = mathStr.replace(new RegExp(`\\[${v.code}\\]`, 'g'), vVal);
               });
 
