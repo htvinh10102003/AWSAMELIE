@@ -14,43 +14,34 @@ export default function FeatureGuard({ featureId, subFeatureId, children }) {
   const checkLockStatus = async () => {
     setLoading(true);
     try {
-      // 1. Lấy thông tin user hiện tại
       const { data: { user } } = await supabase.auth.getUser();
       
-      // 2. Kiểm tra xem có phải Owner không (Đặc quyền bypass)
-      const ownerCheck = user?.user_metadata?.is_owner === true;
+      // 1. Kiểm tra Owner chặt chẽ hơn (Đề phòng chuỗi 'true' hoặc role 'owner')
+      const ownerCheck = 
+        user?.user_metadata?.is_owner === true || 
+        user?.user_metadata?.is_owner === 'true' || 
+        user?.user_metadata?.role === 'owner';
+        
       setIsOwner(ownerCheck);
 
-      // Nếu là Owner -> Bỏ qua đoạn check khóa, cho vào thẳng luôn
-      if (ownerCheck) {
-        // Vẫn gọi DB ngầm để kiểm tra trạng thái khóa (mục đích là để hiện cái cảnh báo màu cam cho Owner biết tính năng này đang khóa)
-        const { data } = await supabase
-          .from('feature_locks')
-          .select('is_locked')
-          .eq('feature_id', featureId)
-          .eq('sub_feature_id', subFeatureId)
-          .single();
-          
-        if (data && data.is_locked) setIsLocked(true);
-        setLoading(false);
-        return;
-      }
-
-      // 3. Nếu là User thường hoặc Admin -> Kiểm tra xem tính năng có bị khóa không
+      // 2. Truy vấn DB (ÔNG NHỚ SỬA TÊN BẢNG 'feature_locks' NẾU TRƯỚC ĐÓ ÔNG DÙNG TÊN KHÁC NHÉ)
       const { data, error } = await supabase
         .from('feature_locks')
-        .select('is_locked')
+        .select('*')
         .eq('feature_id', featureId)
         .eq('sub_feature_id', subFeatureId)
-        .single();
+        .maybeSingle(); // Dùng maybeSingle thay vì single để tránh văng lỗi nếu chưa có record
 
-      if (data && data.is_locked) {
-        setIsLocked(true);
-      } else {
-        setIsLocked(false);
+      if (error) {
+        console.error(`[FeatureGuard] Lỗi đọc bảng khóa (${featureId}):`, error.message);
       }
+
+      // 3. Chốt trạng thái khóa
+      const lockedStatus = data?.is_locked === true || data?.is_locked === 'true';
+      setIsLocked(lockedStatus);
+
     } catch (err) {
-      console.error("Lỗi kiểm tra khóa tính năng:", err);
+      console.error("[FeatureGuard] Lỗi hệ thống:", err);
     }
     setLoading(false);
   };
@@ -58,13 +49,13 @@ export default function FeatureGuard({ featureId, subFeatureId, children }) {
   if (loading) {
     return (
       <div className="w-full h-full min-h-[60vh] flex flex-col items-center justify-center">
-        <Loader2 className="animate-spin text-blue-500 mb-2" size={32} />
+        <Loader2 className="animate-spin text-indigo-500 mb-2" size={32} />
         <p className="text-slate-400 font-medium text-sm">Đang tải tính năng...</p>
       </div>
     );
   }
 
-  // 🚨 CHẶN TRUY CẬP: Tính năng bị khóa và người dùng KHÔNG PHẢI Owner
+  // 🚨 CHẶN TRUY CẬP: Tính năng BỊ KHÓA và người dùng KHÔNG PHẢI OWNER
   if (isLocked && !isOwner) {
     return (
       <div className="w-full h-full min-h-[60vh] flex flex-col items-center justify-center animate-in fade-in zoom-in duration-300">
@@ -84,7 +75,7 @@ export default function FeatureGuard({ featureId, subFeatureId, children }) {
   // ✅ CHO PHÉP TRUY CẬP
   return (
     <>
-      {/* Tính năng thông minh: Báo cho Owner biết họ đang test một tính năng đã bị khóa đối với nhân viên */}
+      {/* Cảnh báo cho Owner biết tính năng này đang khóa với người khác */}
       {isLocked && isOwner && (
         <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 bg-amber-100 text-amber-800 text-xs font-black rounded-lg border border-amber-200 shadow-sm animate-in slide-in-from-top-2">
           <ShieldAlert size={14} /> CHẾ ĐỘ TEST (OWNER BYPASS): Tính năng này hiện đang bị khóa đối với Admin và User.
