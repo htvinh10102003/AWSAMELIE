@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
   Target, Plus, Trash2, Save, Loader2, CheckCircle2, 
   Edit, ChevronLeft, Calculator, AlertTriangle, FileWarning,
-  Users, Variable, UserPlus, HelpCircle
+  Users, Variable, UserPlus, HelpCircle, FlaskConical, Play
 } from 'lucide-react';
 
 const DEPARTMENTS = ['Đóng hàng', 'Vận đơn', 'Lead kho'];
@@ -11,7 +11,7 @@ const DEPARTMENTS = ['Đóng hàng', 'Vận đơn', 'Lead kho'];
 const VAR_SOURCES = [
   { id: 'daily_manual', name: 'Nhập tay hàng ngày' },
   { id: 'monthly_manual', name: 'Nhập tay cuối tháng' },
-  { id: 'sum_monthly', name: '✨ Tổng cộng một Biến khác (Cả tháng)' }, // NGUỒN BIẾN MỚI
+  { id: 'sum_monthly', name: '✨ Tổng cộng một Biến khác (Cả tháng)' },
   { id: 'auto_packed_day', name: 'Auto: Đơn đã đóng / Ngày' },
   { id: 'auto_printed_day', name: 'Auto: Đơn đã in / Ngày' },
   { id: 'auto_shipped_day', name: 'Auto: Đơn đã đi / Ngày' },
@@ -36,10 +36,16 @@ export default function KPI_Management() {
   const [globalVars, setGlobalVars] = useState([]);
   const [staffList, setStaffList] = useState([]);
 
+  // Form States
   const [editingCriteria, setEditingCriteria] = useState(null);
   const [errorForm, setErrorForm] = useState({ id: null, name: '', apply_to: 'individual' });
   const [varForm, setVarForm] = useState({ id: null, code: '', name: '', source: 'daily_manual', fixed_value: 0, target_code: '' });
   const [staffForm, setStaffForm] = useState({ full_name: '', role: DEPARTMENTS[0] });
+
+  // State phục vụ Test & Tạm tính công thức
+  const [testInputs, setTestInputs] = useState({});
+  const [testResult, setTestResult] = useState(null);
+  const [testError, setTestError] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -65,14 +71,32 @@ export default function KPI_Management() {
   const showMsg = (text) => { setMessage(text); setTimeout(() => setMessage(''), 3000); };
 
   // ==========================================
-  // TAB 1: CHỈ TIÊU
+  // TAB 1: LOGIC CHỈ TIÊU & TẠM TÍNH
   // ==========================================
   const totalWeight = criteriaList.reduce((sum, item) => sum + Number(item.weight), 0);
 
-  const handleCreateNewCriteria = () => setEditingCriteria({ department: selectedDept, name: '', weight: 0, calc_type: 'count', eval_mode: 'aggregated', formula: '', scoring_rules: [] });
+  const handleCreateNewCriteria = () => {
+    setEditingCriteria({ department: selectedDept, name: '', weight: 0, calc_type: 'count', eval_mode: 'aggregated', formula: '', scoring_rules: [] });
+    setTestInputs({});
+    setTestResult(null);
+    setTestError('');
+  };
+
+  const handleStartEditCriteria = (crit) => {
+    setEditingCriteria({ ...crit, scoring_rules: crit.scoring_rules || [] });
+    setTestInputs({});
+    setTestResult(null);
+    setTestError('');
+  };
 
   const handleSaveCriteria = async () => {
     if (!editingCriteria.name) return alert('Tên chỉ tiêu không được để trống!');
+    
+    // Validate: Tính % bắt buộc phải có luật trừ điểm
+    if (editingCriteria.calc_type === 'ratio' && (!editingCriteria.scoring_rules || editingCriteria.scoring_rules.length === 0)) {
+      return alert('Chỉ tiêu tính theo Tỉ lệ (%) bắt buộc phải cấu hình Luật trừ điểm!');
+    }
+
     setLoading(true);
     try {
       if (editingCriteria.id) await supabase.from('kpi_criteria').update(editingCriteria).eq('id', editingCriteria.id);
@@ -91,10 +115,94 @@ export default function KPI_Management() {
     fetchData();
   };
 
-  const addRule = () => setEditingCriteria(prev => ({ ...prev, scoring_rules: [...prev.scoring_rules, { id: Date.now().toString(), type: 'no_penalty', min: 0, max: 0, penalty: 0, step: 0 }] }));
+  const addRule = () => setEditingCriteria(prev => ({ ...prev, scoring_rules: [...(prev.scoring_rules || []), { id: Date.now().toString(), type: 'no_penalty', min: 0, max: 0, penalty: 0, step: 0 }] }));
   const updateRule = (id, field, val) => setEditingCriteria(prev => ({ ...prev, scoring_rules: prev.scoring_rules.map(r => r.id === id ? { ...r, [field]: val } : r) }));
   const removeRule = (id) => setEditingCriteria(prev => ({ ...prev, scoring_rules: prev.scoring_rules.filter(r => r.id !== id) }));
-  const insertToFormula = (str) => setEditingCriteria(prev => ({ ...prev, formula: prev.formula + str }));
+  const insertToFormula = (str) => setEditingCriteria(prev => ({ ...prev, formula: (prev.formula || '') + str }));
+
+  // TRÌNH TÍNH THỬ NGHIỆM TẠM TÍNH (TEST RUNNER)
+  const runTestFormula = () => {
+    setTestError('');
+    setTestResult(null);
+
+    let mathStr = editingCriteria.formula || '';
+    if (!mathStr.trim()) {
+      setTestError('Công thức đang để trống!');
+      return;
+    }
+
+    // Thay thế biến theo giá trị giả lập
+    Object.keys(testInputs).forEach(token => {
+      const val = Number(testInputs[token]) || 0;
+      mathStr = mathStr.split(token).join(val);
+    });
+
+    // Thay thế bất kỳ biến nào chưa được nhập giả lập bằng 0
+    mathStr = mathStr.replace(/\[[A-Za-z0-9_]+\]/g, '0');
+
+    try {
+      const IF = (condition, valueIfTrue, valueIfFalse) => condition ? valueIfTrue : valueIfFalse;
+      const ABS = Math.abs;
+      const MAX = Math.max;
+      const MIN = Math.min;
+      const ROUND = (val, decimals = 2) => Math.round(val * Math.pow(10, decimals)) / Math.pow(10, decimals);
+
+      const fn = new Function('IF', 'ABS', 'MAX', 'MIN', 'ROUND', 'return ' + mathStr);
+      const rawRes = fn(IF, ABS, MAX, MIN, ROUND);
+
+      if (!isFinite(rawRes) || isNaN(rawRes)) {
+        setTestError('Kết quả tính ra không hợp lệ (NaN hoặc chia cho 0)');
+        return;
+      }
+
+      const finalRaw = Math.round(rawRes * 100) / 100;
+      
+      // Tính thử điểm đạt
+      let finalScore = 0;
+      let finalPenalty = 0;
+      const weight = Number(editingCriteria.weight) || 0;
+
+      if (!editingCriteria.scoring_rules || editingCriteria.scoring_rules.length === 0) {
+        if (editingCriteria.calc_type === 'count') {
+          finalScore = finalRaw; // Lấy trực tiếp kết quả
+        } else {
+          finalScore = weight;
+        }
+      } else {
+        editingCriteria.scoring_rules.forEach(rule => {
+          const min = Number(rule.min) || 0;
+          const max = Number(rule.max) || 0;
+          const penalty = Number(rule.penalty) || 0;
+          const step = Number(rule.step) || 0;
+
+          if (rule.type === 'fixed_penalty' && finalRaw > min && finalRaw <= max) finalPenalty += penalty;
+          else if (rule.type === 'linear_penalty' && finalRaw > min && step > 0) {
+            const stepsOver = Math.floor((finalRaw - min) / step);
+            if (stepsOver > 0) finalPenalty += (stepsOver * penalty);
+          }
+          else if (rule.type === 'per_error') finalPenalty += (finalRaw * penalty);
+        });
+
+        finalScore = Math.max(0, weight - finalPenalty);
+      }
+
+      setTestResult({
+        raw: finalRaw,
+        penalty: finalPenalty,
+        score: finalScore,
+        mode: (!editingCriteria.scoring_rules || editingCriteria.scoring_rules.length === 0) && editingCriteria.calc_type === 'count' ? 'direct' : 'deduction'
+      });
+    } catch (err) {
+      setTestError('Cú pháp công thức bị lỗi: ' + err.message);
+    }
+  };
+
+  // Trích xuất danh sách biến đang có trong công thức để sinh bảng nhập test
+  const extractTokens = (formula) => {
+    if (!formula) return [];
+    const matches = formula.match(/\[[A-Za-z0-9_]+\]/g);
+    return matches ? [...new Set(matches)] : [];
+  };
 
   // ==========================================
   // TAB 2: TỪ ĐIỂN LỖI
@@ -190,7 +298,6 @@ export default function KPI_Management() {
     fetchData();
   };
 
-
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12 mt-4 p-4 animate-in fade-in duration-300">
 
@@ -237,7 +344,7 @@ export default function KPI_Management() {
       {message && <div className="p-4 bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 rounded-2xl flex items-center gap-2 shadow-sm animate-in slide-in-from-top-2"><CheckCircle2 size={18}/> {message}</div>}
 
       {/* ========================================================================= */}
-      {/* TAB 1: CHỈ TIÊU & BUILDER                                                 */}
+      {/* TAB 1: CHỈ TIÊU & BUILDER CÓ TẠM TÍNH                                    */}
       {/* ========================================================================= */}
       {activeTab === 'criteria' && (
         <>
@@ -272,16 +379,21 @@ export default function KPI_Management() {
                           <span className="px-2 py-0.5 bg-slate-200 text-slate-600 font-bold rounded text-[10px] uppercase">
                             {crit.eval_mode === 'daily_average' ? 'TB Ngày' : 'Cộng Dồn'}
                           </span>
+                          {(!crit.scoring_rules || crit.scoring_rules.length === 0) && crit.calc_type === 'count' && (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-bold rounded text-[10px] uppercase">
+                              Lấy trực tiếp điểm CT
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs font-mono text-slate-500 bg-white p-2 rounded-lg border border-slate-100 mt-2 inline-block">
                           Công thức: {crit.formula || '(Luật trực tiếp từ số lượng vi phạm)'}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 w-full md:w-auto">
-                        <button onClick={() => setEditingCriteria(crit)} className="px-4 py-2 bg-white border border-slate-200 text-blue-600 font-bold rounded-xl hover:bg-blue-50 shadow-sm flex items-center gap-2">
+                        <button onClick={() => handleStartEditCriteria(crit)} className="px-4 py-2 bg-white border border-slate-200 text-blue-600 font-bold rounded-xl hover:bg-blue-50 shadow-sm flex items-center gap-2">
                           <Edit size={14} /> Sửa
                         </button>
-                        <button onClick={() => handleDeleteCriteria(crit.id)} className="px-3 py-2 bg-white border border-slate-200 text-red-500 font-bold rounded-xl hover:bg-red-50 shadow-sm"><Trash2 size={16} /></button>
+                        <button onClick={() => handleDeleteCriteria(crit.id)} className="px-3 py-2 bg-white border border-slate-200 text-red-500 font-bold rounded-xl hover:bg-red-50 shadow-sm"><Trash2 size={16}/></button>
                       </div>
                     </div>
                   ))}
@@ -317,10 +429,10 @@ export default function KPI_Management() {
                       <input type="number" value={editingCriteria.weight} onChange={e=>setEditingCriteria({...editingCriteria, weight: e.target.value})} className="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-blue-600 text-center" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Đơn vị</label>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Đơn vị đo</label>
                       <select value={editingCriteria.calc_type} onChange={e=>setEditingCriteria({...editingCriteria, calc_type: e.target.value})} className="w-full px-2 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none cursor-pointer">
-                        <option value="count">Số/Đơn</option>
-                        <option value="ratio">%</option>
+                        <option value="count">Điểm / Số lượng</option>
+                        <option value="ratio">Tỉ lệ (%)</option>
                       </select>
                     </div>
                   </div>
@@ -364,29 +476,79 @@ export default function KPI_Management() {
                     className="w-full p-4 bg-white border border-indigo-200 rounded-xl font-mono text-indigo-900 font-bold outline-none shadow-inner"
                   ></textarea>
 
-                  <div className="text-[11px] text-indigo-800 bg-white/70 p-3.5 rounded-xl border border-indigo-100 shadow-sm space-y-1.5">
-                    <p className="font-black flex items-center gap-1"><HelpCircle size={14}/> Các mẫu công thức logic thường dùng:</p>
-                    <ul className="list-disc pl-5 space-y-1 font-medium">
-                      <li><strong>Nếu số đơn &lt; 1000 thì đạt 100 điểm, ngược lại tính theo tỷ lệ lỗi:</strong><br/>
-                        <code className="text-indigo-950 font-bold bg-indigo-50 px-1 py-0.5 rounded">IF([V_TONG_DON] &lt; 1000, 100, ([TONG_LOI] / [V_TONG_DON]) * 100)</code>
-                      </li>
-                      <li><strong>Nếu không có lỗi nào thì cho 100, nếu có lỗi thì trừ 5đ/lỗi:</strong><br/>
-                        <code className="text-indigo-950 font-bold bg-indigo-50 px-1 py-0.5 rounded">IF([TONG_LOI] == 0, 100, 100 - ([TONG_LOI] * 5))</code>
-                      </li>
-                    </ul>
+                  {/* 🧪 BẢNG KIỂM TRA & TẠM TÍNH THỬ NGHIỆM */}
+                  <div className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-sm mt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2 text-indigo-950 font-black text-xs uppercase tracking-wider">
+                        <FlaskConical size={16} className="text-indigo-600" /> Tạm tính & Kiểm tra công thức
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={runTestFormula} 
+                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow transition flex items-center gap-1.5"
+                      >
+                        <Play size={14} /> Chạy thử
+                      </button>
+                    </div>
+
+                    {extractTokens(editingCriteria.formula).length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+                        {extractTokens(editingCriteria.formula).map(token => (
+                          <div key={token} className="bg-slate-50 p-2 rounded-xl border border-slate-200">
+                            <label className="block text-[10px] font-mono font-bold text-slate-500 truncate">{token}</label>
+                            <input 
+                              type="number" 
+                              value={testInputs[token] !== undefined ? testInputs[token] : ''} 
+                              onChange={e => setTestInputs({...testInputs, [token]: e.target.value})} 
+                              placeholder="0" 
+                              className="w-full mt-1 bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-800 outline-none"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic mb-2">Chưa có biến số nào trong công thức để nhập giả lập.</p>
+                    )}
+
+                    {testError && (
+                      <div className="p-2.5 bg-red-50 text-red-700 border border-red-200 rounded-xl text-xs font-bold animate-in fade-in">
+                        ❌ {testError}
+                      </div>
+                    )}
+
+                    {testResult && (
+                      <div className="p-3 bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 animate-in fade-in">
+                        <div>
+                          <strong>Kết quả đo lường:</strong> <span className="font-black text-sm text-emerald-700">{testResult.raw} {editingCriteria.calc_type === 'ratio' ? '%' : 'điểm/lượt'}</span>
+                        </div>
+                        <div>
+                          <strong>Trừ điểm:</strong> <span className="font-black text-red-600">-{testResult.penalty}</span>
+                        </div>
+                        <div className="bg-white px-3 py-1 rounded-lg border border-emerald-200 font-black text-sm text-emerald-800">
+                          Điểm KPI chốt: {testResult.score} {testResult.mode === 'direct' && <span className="text-[10px] text-slate-400 font-normal">(Lấy trực tiếp)</span>}
+                        </div>
+                      </div>
+                    )}
                   </div>
+
                 </div>
               </div>
 
               {/* 3. Scoring Rules */}
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2"><span className="w-6 h-6 bg-blue-100 text-blue-700 flex items-center justify-center rounded-full text-xs">3</span> Luật trừ điểm</h4>
+                  <div>
+                    <h4 className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                      <span className="w-6 h-6 bg-blue-100 text-blue-700 flex items-center justify-center rounded-full text-xs">3</span> 
+                      Luật trừ điểm (Không bắt buộc với chỉ tiêu tính Điểm trực tiếp)
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Nếu không thêm luật phạt nào, hệ thống sẽ lấy trực tiếp kết quả công thức làm điểm KPI.</p>
+                  </div>
                   <button onClick={addRule} className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 flex items-center gap-1"><Plus size={14}/> Thêm luật</button>
                 </div>
                 
                 <div className="space-y-3">
-                  {editingCriteria.scoring_rules.map(rule => (
+                  {(editingCriteria.scoring_rules || []).map(rule => (
                     <div key={rule.id} className="p-4 bg-white border border-slate-200 rounded-2xl shadow-sm relative group">
                       <button onClick={()=>removeRule(rule.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -410,7 +572,7 @@ export default function KPI_Management() {
                         {rule.type === 'linear_penalty' && (
                           <div className="grid grid-cols-3 gap-2">
                              <div><label className="block text-[10px] font-bold text-amber-500 uppercase mb-1">Bắt đầu &gt;</label><input type="number" step="0.01" value={rule.min} onChange={e=>updateRule(rule.id, 'min', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200"/></div>
-                             <div><label className="block text-[10px] font-bold text-amber-500 uppercase mb-1">Mỗi bước vượt</label><input type="number" step="0.01" value={rule.step} onChange={e=>updateRule(rule.id, 'step', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200 text-amber-700"/></div>
+                             <div><label className="block text-[10px] font-bold text-amber-500 uppercase mb-1">Mỗi bước vượt</label><input type="number" step="0.01" value={rule.step} onChange={e=>updateRule(rule.id, 'step', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200"/></div>
                              <div><label className="block text-[10px] font-bold text-red-500 uppercase mb-1">Phạt thêm</label><input type="number" step="0.1" value={rule.penalty} onChange={e=>updateRule(rule.id, 'penalty', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-black bg-red-50 border-red-200 text-red-600"/></div>
                           </div>
                         )}
@@ -521,7 +683,6 @@ export default function KPI_Management() {
                 </select>
               </div>
 
-              {/* NẾU LÀ BIẾN CỘNG DỒN -> HIỆN DROPDOWN CHỌN BIẾN GỐC */}
               {varForm.source === 'sum_monthly' && (
                 <div className="animate-in slide-in-from-top-2">
                   <label className="block mb-1 text-amber-600 flex items-center gap-1">Chọn Biến gốc để tính tổng <span className="text-red-500">*</span></label>
