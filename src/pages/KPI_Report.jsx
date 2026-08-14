@@ -20,8 +20,6 @@ export default function KPI_Report() {
   const [expandedStaff, setExpandedStaff] = useState(null);
 
   const [summary, setSummary] = useState({ avgScore: 0, topStaff: null, totalIssues: 0 });
-
-  // State lưu trữ dữ liệu gốc để xuất Excel
   const [rawExportLogs, setRawExportLogs] = useState([]);
   const [rawExportVars, setRawExportVars] = useState([]);
 
@@ -29,7 +27,6 @@ export default function KPI_Report() {
     generateReport();
   }, [selectedMonth, reportDept]);
 
-  // ⚡️ BỘ BIÊN DỊCH TOÁN HỌC AN TOÀN
   const safeEvalFormula = (formulaStr) => {
     if (!formulaStr || !formulaStr.trim()) return 0;
     try {
@@ -86,11 +83,11 @@ export default function KPI_Report() {
       const numValidDays = daysInMonth.length || 1;
 
       const [ 
-        { data: deptStaffs }, { data: errorDefs }, { data: errorLogs }, { data: varLogs }, { data: globalVarsData }
+        { data: deptStaffs }, { data: allErrors }, { data: allErrorLogs }, { data: varLogs }, { data: globalVarsData }
       ] = await Promise.all([
         supabase.from('warehouse_staff').select('*').eq('role', currentDept),
-        supabase.from('kpi_errors').select('*').eq('department', currentDept),
-        supabase.from('kpi_error_logs').select('*').eq('department', currentDept).gte('error_date', daysInMonth[0]).lte('error_date', daysInMonth[daysInMonth.length-1]),
+        supabase.from('kpi_errors').select('*'), // Lấy toàn bộ lỗi để map ID cho đúng
+        supabase.from('kpi_error_logs').select('*').gte('error_date', daysInMonth[0]).lte('error_date', daysInMonth[daysInMonth.length-1]),
         supabase.from('kpi_variable_logs').select('*').gte('record_date', daysInMonth[0]).lte('record_date', daysInMonth[daysInMonth.length-1]),
         supabase.from('kpi_global_variables').select('*')
       ]);
@@ -99,14 +96,26 @@ export default function KPI_Report() {
         setStaffReports([]); setLoading(false); return;
       }
 
+      // 1. Phân tách Lỗi Toàn Kho và Lỗi Tập thể
+      const warehouseErrorLogs = (allErrorLogs || []).filter(log => {
+        const def = allErrors?.find(e => e.id === log.error_id);
+        return def?.apply_to === 'warehouse';
+      });
+
+      const deptErrorLogs = (allErrorLogs || []).filter(log => {
+        const def = allErrors?.find(e => e.id === log.error_id);
+        return def?.apply_to === 'department' && log.department === currentDept;
+      });
+
       // LƯU RAW DATA ĐỂ XUẤT EXCEL
-      const enrichedErrorLogs = (errorLogs || []).map(log => {
-        const errDef = errorDefs?.find(e => e.id === log.error_id);
+      const allExportLogs = [...warehouseErrorLogs, ...deptErrorLogs, ...(allErrorLogs || []).filter(log => log.department === currentDept && log.staff_id)];
+      const enrichedErrorLogs = allExportLogs.map(log => {
+        const errDef = allErrors?.find(e => e.id === log.error_id);
         const staffDef = deptStaffs?.find(s => s.id === log.staff_id);
         return {
             date: log.error_date,
             dept: log.department,
-            staffName: staffDef ? staffDef.full_name : 'Lỗi Tập Thể',
+            staffName: staffDef ? staffDef.full_name : errDef?.apply_to === 'warehouse' ? 'Toàn bộ kho' : 'Tập thể bộ phận',
             errorName: errDef ? errDef.name : 'Unknown',
             applyTo: errDef ? errDef.apply_to : 'department',
             tracking: log.tracking_code || '',
@@ -164,7 +173,7 @@ export default function KPI_Report() {
                       mathStrDay = mathStrDay.replace(new RegExp(`\\[${v.code}\\]`, 'g'), vVal);
                   });
 
-                  errorDefs?.forEach(e => {
+                  allErrors?.forEach(e => {
                       const countErrDay = targetErrLogs.filter(l => l.error_date === day && l.error_id === e.id).length;
                       mathStrDay = mathStrDay.replace(new RegExp(`\\[LOI_${e.id}\\]`, 'g'), countErrDay);
                   });
@@ -191,7 +200,7 @@ export default function KPI_Report() {
                   mathStr = mathStr.replace(new RegExp(`\\[${v.code}\\]`, 'g'), vVal);
               });
 
-              errorDefs?.forEach(e => {
+              allErrors?.forEach(e => {
                   const countErrMonth = targetErrLogs.filter(l => l.error_id === e.id).length;
                   mathStr = mathStr.replace(new RegExp(`\\[LOI_${e.id}\\]`, 'g'), countErrMonth);
               });
@@ -205,8 +214,6 @@ export default function KPI_Report() {
           }
       };
 
-      const deptErrorLogs = (errorLogs || []).filter(log => errorDefs?.find(e => e.id === log.error_id)?.apply_to === 'department');
-
       let totalScoreSum = 0;
       let highestScore = -1;
       let topStaffName = '';
@@ -216,8 +223,8 @@ export default function KPI_Report() {
         let totalScoreAccum = 0;
         let totalPenaltyAccum = 0;
 
-        const individualErrorLogs = (errorLogs || []).filter(log => log.staff_id === staff.id);
-        const staffErrorLogs = [...deptErrorLogs, ...individualErrorLogs];
+        const individualErrorLogs = (allErrorLogs || []).filter(log => log.staff_id === staff.id);
+        const staffErrorLogs = [...warehouseErrorLogs, ...deptErrorLogs, ...individualErrorLogs];
         const staffTotalErrors = staffErrorLogs.length;
 
         const criteriaDetails = deptCriteria.map(crit => {
@@ -269,16 +276,13 @@ export default function KPI_Report() {
       setSummary({
         avgScore: reports.length > 0 ? Math.round((totalScoreSum / reports.length) * 100) / 100 : 0,
         topStaff: topStaffName,
-        totalIssues: errorLogs ? errorLogs.length : 0
+        totalIssues: allErrorLogs ? allErrorLogs.length : 0
       });
 
     } catch (err) { console.error("Lỗi tạo báo cáo KPI:", err); }
     setLoading(false);
   };
 
-  // ==========================================
-  // XUẤT EXCEL (RAW DATA)
-  // ==========================================
   const escapeCSV = (str) => {
     if (str === null || str === undefined) return '""';
     const stringified = String(str);
@@ -290,7 +294,6 @@ export default function KPI_Report() {
     
     let csvContent = "";
     
-    // PHẦN 1: TỔNG HỢP ĐIỂM KPI
     csvContent += "--- PHAN 1: TONG HOP DIEM KPI ---\n";
     csvContent += "Thang,Bo phan,Nhan vien,Chi tieu,Chu ky tinh,Ket qua do luong,Diem phat,Diem chot,Diem toi da\n";
     
@@ -319,7 +322,6 @@ export default function KPI_Report() {
       ].join(",") + "\n";
     });
 
-    // PHẦN 2: LỊCH SỬ LỖI
     csvContent += "\n\n--- PHAN 2: RAW DATA - LICH SU VI PHAM THEO NGAY ---\n";
     csvContent += "Ngay,Bo phan,Nhan vien,Ten loi,Phan loai,Ma don hang,Ghi chu\n";
     
@@ -329,13 +331,12 @@ export default function KPI_Report() {
         escapeCSV(log.dept),
         escapeCSV(log.staffName),
         escapeCSV(log.errorName),
-        escapeCSV(log.applyTo === 'individual' ? 'Ca nhan' : 'Tap the'),
+        escapeCSV(log.applyTo === 'individual' ? 'Ca nhan' : log.applyTo === 'warehouse' ? 'Toan kho' : 'Tap the'),
         escapeCSV(log.tracking),
         escapeCSV(log.note)
       ].join(",") + "\n";
     });
 
-    // PHẦN 3: LỊCH SỬ BIẾN
     csvContent += "\n\n--- PHAN 3: RAW DATA - CHI SO BIEN THU CONG THEO NGAY ---\n";
     csvContent += "Ngay,Ma bien,Ten bien,Gia tri\n";
     rawExportVars.forEach(v => {
@@ -347,7 +348,6 @@ export default function KPI_Report() {
       ].join(",") + "\n";
     });
 
-    // Blob download an toàn với UTF-8 BOM
     const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -374,7 +374,6 @@ export default function KPI_Report() {
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12 p-4 md:p-6 lg:p-8 mt-4 animate-in fade-in duration-300">
       
-      {/* Header */}
       <div className="bg-white p-5 md:p-8 border border-slate-200 rounded-3xl shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div className="flex items-center gap-4">
           <div className="p-3.5 bg-indigo-50 text-indigo-600 rounded-2xl shadow-sm">
@@ -387,7 +386,6 @@ export default function KPI_Report() {
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
-          {/* NÚT XUẤT EXCEL MỚI */}
           <button onClick={handleExportExcel} disabled={loading} className="w-full sm:w-auto px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md transition disabled:opacity-50 flex items-center justify-center gap-2">
             <Download size={18} /> Xuất Excel
           </button>
@@ -419,7 +417,6 @@ export default function KPI_Report() {
         </div>
       ) : (
         <>
-          {/* Department Tabs */}
           <div className="flex gap-2 md:gap-3 overflow-x-auto pb-2 scrollbar-hide -mx-1 px-1">
             {activeDepartments.map(dept => (
               <button 
@@ -436,7 +433,6 @@ export default function KPI_Report() {
             ))}
           </div>
 
-          {/* Summary Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
             <div className="bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
               <div className="absolute -right-4 -top-4 text-blue-50 opacity-50"><Users size={100}/></div>
@@ -463,7 +459,6 @@ export default function KPI_Report() {
             </div>
           </div>
 
-          {/* DESKTOP TABLE */}
           <div className="hidden md:block bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <div>
@@ -590,7 +585,6 @@ export default function KPI_Report() {
             )}
           </div>
 
-          {/* MOBILE CARDS */}
           <div className="md:hidden space-y-4">
             {staffReports.length === 0 ? (
               <div className="py-16 text-center text-slate-500 font-bold bg-white rounded-2xl border border-slate-200">

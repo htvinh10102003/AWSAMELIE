@@ -12,21 +12,18 @@ export default function KPI_DataEntry() {
 
   const [selectedDept, setSelectedDept] = useState(DEPARTMENTS[0]);
   const [selectedDate, setSelectedDate] = useState(getTodayStr());
-  const [activeTab, setActiveTab] = useState('errors'); // 'errors', 'variables'
+  const [activeTab, setActiveTab] = useState('errors');
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
 
-  // Dữ liệu Từ điển
   const [errorDict, setErrorDict] = useState([]);
   const [staffList, setStaffList] = useState([]);
   const [globalVars, setGlobalVars] = useState([]);
 
-  // Dữ liệu Ghi nhận (Logs)
   const [errorLogs, setErrorLogs] = useState([]);
   const [variableValues, setVariableValues] = useState({});
 
-  // Form State
   const [errorForm, setErrorForm] = useState({ error_id: '', staff_id: '', tracking_code: '', note: '' });
 
   useEffect(() => {
@@ -42,13 +39,11 @@ export default function KPI_DataEntry() {
     setTimeout(() => setMessage({ text: '', type: '' }), 3000); 
   };
 
-  // ==========================================
-  // FETCH DATA
-  // ==========================================
   const fetchDictionary = async () => {
     const [{ data: errs }, { data: staffs }, { data: vars }] = await Promise.all([
-      supabase.from('kpi_errors').select('*').eq('department', selectedDept),
-      supabase.from('warehouse_staff').select('*').eq('role', selectedDept), // Lấy NV theo bộ phận
+      // Lấy lỗi của bộ phận này HOẶC lỗi toàn kho
+      supabase.from('kpi_errors').select('*').or(`department.eq.${selectedDept},apply_to.eq.warehouse`),
+      supabase.from('warehouse_staff').select('*').eq('role', selectedDept),
       supabase.from('kpi_global_variables').select('*').in('source', ['daily_manual', 'monthly_manual'])
     ]);
     if (errs) setErrorDict(errs);
@@ -86,9 +81,6 @@ export default function KPI_DataEntry() {
     setLoading(false);
   };
 
-  // ==========================================
-  // LOGIC: LỖI VI PHẠM
-  // ==========================================
   const selectedErrorDef = errorDict.find(e => e.id === errorForm.error_id);
   const isIndividualError = selectedErrorDef?.apply_to === 'individual';
 
@@ -124,9 +116,6 @@ export default function KPI_DataEntry() {
     fetchLogs();
   };
 
-  // ==========================================
-  // LOGIC: BIẾN THỦ CÔNG DÙNG CHUNG
-  // ==========================================
   const handleSaveVariables = async () => {
     setLoading(true);
     try {
@@ -161,7 +150,6 @@ export default function KPI_DataEntry() {
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12 mt-4 p-4 animate-in fade-in duration-300">
 
-      {/* HEADER & TABS */}
       <div className="bg-white p-6 border border-slate-200 rounded-3xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl"><FileEdit size={24} strokeWidth={2.5}/></div>
@@ -180,7 +168,6 @@ export default function KPI_DataEntry() {
         </div>
       </div>
 
-      {/* BỘ LỌC NGÀY VÀ BỘ PHẬN */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           {activeTab === 'errors' ? (
@@ -212,13 +199,8 @@ export default function KPI_DataEntry() {
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* TAB 1: GHI SỔ LỖI VI PHẠM                                                 */}
-      {/* ========================================================================= */}
       {activeTab === 'errors' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* Form Nhập Lỗi */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm h-fit">
             <h3 className="font-black text-slate-800 uppercase text-sm mb-5 pb-3 border-b border-slate-100 flex items-center gap-2">
               <Plus size={18} className="text-red-500"/> Kê khai vi phạm
@@ -229,11 +211,10 @@ export default function KPI_DataEntry() {
                 <label className="block mb-1.5 text-slate-500 uppercase text-xs">Loại lỗi vi phạm <span className="text-red-500">*</span></label>
                 <select required value={errorForm.error_id} onChange={e=>{ setErrorForm({...errorForm, error_id: e.target.value, staff_id: ''}); }} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none cursor-pointer focus:bg-white focus:ring-2 focus:ring-indigo-100 transition">
                   <option value="">-- Chọn lỗi --</option>
-                  {errorDict.map(err => <option key={err.id} value={err.id}>{err.name} {err.apply_to === 'individual' ? '(Cá nhân)' : '(Tập thể)'}</option>)}
+                  {errorDict.map(err => <option key={err.id} value={err.id}>{err.name} {err.apply_to === 'individual' ? '(Cá nhân)' : err.apply_to === 'warehouse' ? '(Toàn kho)' : '(Tập thể)'}</option>)}
                 </select>
               </div>
 
-              {/* NẾU LÀ LỖI CÁ NHÂN -> HIỂN THỊ CHỌN TÊN NHÂN VIÊN */}
               {isIndividualError && (
                 <div className="animate-in slide-in-from-top-2">
                   <label className="block mb-1.5 text-amber-600 uppercase text-xs flex items-center gap-1"><UserX size={14}/> Nhân viên mắc lỗi <span className="text-red-500">*</span></label>
@@ -260,7 +241,6 @@ export default function KPI_DataEntry() {
             </form>
           </div>
 
-          {/* Bảng Lịch sử Lỗi trong ngày */}
           <div className="lg:col-span-2 space-y-4">
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
               <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
@@ -281,6 +261,8 @@ export default function KPI_DataEntry() {
                 ) : (
                   errorLogs.map(log => {
                     const isIndividual = log.kpi_errors?.apply_to === 'individual';
+                    const isWarehouse = log.kpi_errors?.apply_to === 'warehouse';
+
                     return (
                       <div key={log.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 relative group hover:border-slate-300 transition">
                         <button onClick={() => handleDeleteErrorLog(log.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500 transition"><Trash2 size={18}/></button>
@@ -290,8 +272,10 @@ export default function KPI_DataEntry() {
                           </h5>
                           {isIndividual ? (
                             <p className="text-xs font-bold text-amber-700 bg-amber-100 inline-block px-2.5 py-0.5 rounded-md mb-2">👤 Cá nhân: {log.warehouse_staff?.full_name || 'Không xác định'}</p>
+                          ) : isWarehouse ? (
+                            <p className="text-xs font-bold text-purple-700 bg-purple-100 inline-block px-2.5 py-0.5 rounded-md mb-2">🏢 Lỗi toàn kho (Phạt tất cả)</p>
                           ) : (
-                            <p className="text-xs font-bold text-blue-700 bg-blue-100 inline-block px-2.5 py-0.5 rounded-md mb-2">🏢 Lỗi tập thể</p>
+                            <p className="text-xs font-bold text-blue-700 bg-blue-100 inline-block px-2.5 py-0.5 rounded-md mb-2">👥 Lỗi tập thể bộ phận</p>
                           )}
                           <br/>
                           {log.tracking_code && <p className="text-xs font-bold text-indigo-600 bg-white inline-block px-2 py-0.5 rounded border border-indigo-100 mb-1">Mã: {log.tracking_code}</p>}
@@ -305,13 +289,9 @@ export default function KPI_DataEntry() {
               </div>
             </div>
           </div>
-
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* TAB 2: NHẬP BIẾN THỦ CÔNG                                                 */}
-      {/* ========================================================================= */}
       {activeTab === 'variables' && (
         <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm max-w-3xl mx-auto">
           <div className="mb-6 pb-4 border-b border-slate-100">

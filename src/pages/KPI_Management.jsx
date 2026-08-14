@@ -38,8 +38,8 @@ export default function KPI_Management() {
 
   // Form States
   const [editingCriteria, setEditingCriteria] = useState(null);
-  const [errorForm, setErrorForm] = useState({ name: '', apply_to: 'individual' });
-  const [varForm, setVarForm] = useState({ id: null, code: '', name: '', source: 'daily_manual', fixed_value: 0 }); // Thêm id để phục vụ Update
+  const [errorForm, setErrorForm] = useState({ id: null, name: '', apply_to: 'individual' });
+  const [varForm, setVarForm] = useState({ id: null, code: '', name: '', source: 'daily_manual', fixed_value: 0 });
   const [staffForm, setStaffForm] = useState({ full_name: '', role: DEPARTMENTS[0] });
 
   useEffect(() => {
@@ -52,7 +52,7 @@ export default function KPI_Management() {
       { data: crits }, { data: errs }, { data: vars }, { data: staffs }
     ] = await Promise.all([
       supabase.from('kpi_criteria').select('*').eq('department', selectedDept).order('created_at', { ascending: true }),
-      supabase.from('kpi_errors').select('*').eq('department', selectedDept).order('created_at', { ascending: false }),
+      supabase.from('kpi_errors').select('*').or(`department.eq.${selectedDept},apply_to.eq.warehouse`).order('created_at', { ascending: false }),
       supabase.from('kpi_global_variables').select('*').order('created_at', { ascending: true }),
       supabase.from('warehouse_staff').select('*').order('role', { ascending: true })
     ]);
@@ -99,72 +99,78 @@ export default function KPI_Management() {
   const insertToFormula = (str) => setEditingCriteria(prev => ({ ...prev, formula: prev.formula + str }));
 
   // ==========================================
-  // TAB 2: TỪ ĐIỂN LỖI
+  // TAB 2: LOGIC TỪ ĐIỂN LỖI
   // ==========================================
-  const handleAddError = async (e) => {
+  const handleEditError = (err) => {
+    setErrorForm({ id: err.id, name: err.name, apply_to: err.apply_to });
+  };
+  
+  const handleCancelEditError = () => {
+    setErrorForm({ id: null, name: '', apply_to: 'individual' });
+  };
+
+  const handleSaveError = async (e) => {
     e.preventDefault();
     if (!errorForm.name.trim()) return;
     setLoading(true);
-    await supabase.from('kpi_errors').insert([{ department: selectedDept, name: errorForm.name, apply_to: errorForm.apply_to }]);
-    setErrorForm({ name: '', apply_to: 'individual' });
-    fetchData();
-    showMsg('✅ Thêm Lỗi thành công!');
+    
+    try {
+      if (errorForm.id) {
+        await supabase.from('kpi_errors').update({
+          name: errorForm.name,
+          apply_to: errorForm.apply_to
+        }).eq('id', errorForm.id);
+        showMsg('✅ Cập nhật Lỗi thành công!');
+      } else {
+        await supabase.from('kpi_errors').insert([{ 
+          department: selectedDept, 
+          name: errorForm.name, 
+          apply_to: errorForm.apply_to 
+        }]);
+        showMsg('✅ Thêm Lỗi mới thành công!');
+      }
+      handleCancelEditError();
+      fetchData();
+    } catch (err) {
+      alert("Lỗi khi lưu: " + err.message);
+    }
+    setLoading(false);
   };
+
   const handleDeleteError = async (id) => {
-    if(!confirm('🚨 Bạn có chắc muốn xóa lỗi này?')) return;
+    if(!confirm('🚨 Bạn có chắc muốn xóa lỗi này? Các bản ghi vi phạm cũ liên quan có thể mất tên hiển thị.')) return;
     await supabase.from('kpi_errors').delete().eq('id', id);
     fetchData();
   };
 
   // ==========================================
-  // TAB 3: BIẾN SỐ CHUNG (THÊM / SỬA / XÓA)
+  // TAB 3: LOGIC BIẾN SỐ CHUNG
   // ==========================================
   const handleEditVariable = (variable) => {
-    setVarForm({
-      id: variable.id,
-      code: variable.code,
-      name: variable.name,
-      source: variable.source,
-      fixed_value: variable.fixed_value || 0
-    });
+    setVarForm({ id: variable.id, code: variable.code, name: variable.name, source: variable.source, fixed_value: variable.fixed_value || 0 });
   };
-
-  const handleCancelEditVariable = () => {
-    setVarForm({ id: null, code: '', name: '', source: 'daily_manual', fixed_value: 0 });
-  };
+  const handleCancelEditVariable = () => setVarForm({ id: null, code: '', name: '', source: 'daily_manual', fixed_value: 0 });
 
   const handleSaveVariable = async (e) => {
     e.preventDefault();
     if (!varForm.code.trim() || !varForm.name.trim()) return;
     setLoading(true);
-    
-    // Auto format code
     const cleanCode = varForm.code.toUpperCase().replace(/\s+/g, '_');
-    const payload = {
-      code: cleanCode,
-      name: varForm.name,
-      source: varForm.source,
-      fixed_value: varForm.fixed_value
-    };
+    const payload = { code: cleanCode, name: varForm.name, source: varForm.source, fixed_value: varForm.fixed_value };
 
     try {
       if (varForm.id) {
-        // CẬP NHẬT BIẾN TỒN TẠI
         await supabase.from('kpi_global_variables').update(payload).eq('id', varForm.id);
         showMsg('✅ Đã cập nhật thông tin Biến!');
       } else {
-        // TẠO MỚI
         await supabase.from('kpi_global_variables').insert([payload]);
         showMsg('✅ Đã khởi tạo Biến số chung mới!');
       }
       handleCancelEditVariable();
       fetchData();
-    } catch(err) { 
-      alert("Lỗi: Mã biến này có thể đã tồn tại hoặc do lỗi mạng!"); 
-    }
+    } catch(err) { alert("Lỗi: Mã biến này có thể đã tồn tại hoặc do lỗi mạng!"); }
     setLoading(false);
   };
-
   const handleDeleteVariable = async (id) => {
     if(!confirm('🚨 Xóa biến này sẽ xóa luôn dữ liệu nhập liệu cũ của nó. Chắc chắn xóa?')) return;
     await supabase.from('kpi_global_variables').delete().eq('id', id);
@@ -189,7 +195,6 @@ export default function KPI_Management() {
     fetchData();
   };
 
-
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-12 mt-4 p-4 animate-in fade-in duration-300">
 
@@ -206,10 +211,10 @@ export default function KPI_Management() {
           <button onClick={() => {setActiveTab('criteria'); setEditingCriteria(null);}} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'criteria' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
             <Calculator size={16} /> Chỉ tiêu
           </button>
-          <button onClick={() => {setActiveTab('errors'); setEditingCriteria(null);}} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'errors' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          <button onClick={() => {setActiveTab('errors'); setEditingCriteria(null); handleCancelEditError();}} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'errors' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
             <FileWarning size={16} /> Từ điển Lỗi
           </button>
-          <button onClick={() => {setActiveTab('variables'); setEditingCriteria(null);}} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'variables' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          <button onClick={() => {setActiveTab('variables'); setEditingCriteria(null); handleCancelEditVariable();}} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'variables' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
             <Variable size={16} /> Biến số chung
           </button>
           <button onClick={() => {setActiveTab('staff'); setEditingCriteria(null);}} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-all ${activeTab === 'staff' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
@@ -218,7 +223,7 @@ export default function KPI_Management() {
         </div>
       </div>
 
-      {/* CHỌN BỘ PHẬN GLOBAL (Chỉ hiện ở Tab Chỉ tiêu và Lỗi) */}
+      {/* CHỌN BỘ PHẬN GLOBAL */}
       {!editingCriteria && ['criteria', 'errors'].includes(activeTab) && (
         <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex items-center gap-3">
@@ -245,9 +250,7 @@ export default function KPI_Management() {
             <div className="space-y-6 animate-in fade-in">
               <div className={`p-6 rounded-3xl border shadow-sm flex items-center justify-between ${totalWeight === 100 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
                 <div>
-                  <h3 className={`text-sm font-bold uppercase tracking-wider ${totalWeight === 100 ? 'text-emerald-700' : 'text-amber-700'}`}>
-                    Tổng tỉ trọng KPI ({selectedDept})
-                  </h3>
+                  <h3 className={`text-sm font-bold uppercase tracking-wider ${totalWeight === 100 ? 'text-emerald-700' : 'text-amber-700'}`}>Tổng tỉ trọng KPI ({selectedDept})</h3>
                   <p className="text-xs font-medium text-slate-600 mt-1">Tổng các chỉ tiêu bắt buộc phải đạt 100%.</p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -438,46 +441,65 @@ export default function KPI_Management() {
       )}
 
       {/* ========================================================================= */}
-      {/* CÁC TAB KHÁC GIỮ NGUYÊN                                                   */}
+      {/* TAB 2: TỪ ĐIỂN LỖI                                                        */}
       {/* ========================================================================= */}
       {activeTab === 'errors' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm h-fit">
-            <h3 className="font-black text-slate-800 uppercase text-sm mb-5 pb-3 border-b flex items-center gap-2"><Plus size={18} className="text-emerald-600"/> Thêm Lỗi Mới</h3>
-            <form onSubmit={handleAddError} className="space-y-4">
+            <h3 className="font-black text-slate-800 uppercase text-sm mb-5 pb-3 border-b flex items-center gap-2">
+              {errorForm.id ? <Edit size={18} className="text-amber-600"/> : <Plus size={18} className="text-emerald-600"/>} 
+              {errorForm.id ? 'Cập nhật Lỗi' : 'Thêm Lỗi Mới'}
+            </h3>
+            <form onSubmit={handleSaveError} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Tên lỗi hiển thị</label>
                 <input required value={errorForm.name} onChange={e=>setErrorForm({...errorForm, name: e.target.value})} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold focus:border-blue-500 shadow-sm" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase">Áp dụng xử phạt cho</label>
-                <div className="flex gap-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex flex-col gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
                   <label className="flex items-center gap-2 text-sm font-bold cursor-pointer">
                     <input type="radio" name="apply" checked={errorForm.apply_to === 'individual'} onChange={() => setErrorForm({...errorForm, apply_to: 'individual'})} className="accent-blue-600" />
                     Cá nhân
                   </label>
                   <label className="flex items-center gap-2 text-sm font-bold cursor-pointer">
                     <input type="radio" name="apply" checked={errorForm.apply_to === 'department'} onChange={() => setErrorForm({...errorForm, apply_to: 'department'})} className="accent-blue-600" />
-                    Tập thể
+                    Tập thể (Bộ phận hiện tại)
+                  </label>
+                  <label className="flex items-center gap-2 text-sm font-bold cursor-pointer text-purple-700">
+                    <input type="radio" name="apply" checked={errorForm.apply_to === 'warehouse'} onChange={() => setErrorForm({...errorForm, apply_to: 'warehouse'})} className="accent-purple-600" />
+                    Toàn bộ kho (Mọi bộ phận)
                   </label>
                 </div>
               </div>
-              <button disabled={loading} className="w-full py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700">Lưu vào hệ thống</button>
+              <div className="flex gap-2 mt-4 pt-2">
+                 {errorForm.id && <button type="button" onClick={handleCancelEditError} className="w-1/3 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition font-bold">Hủy</button>}
+                 <button disabled={loading} className={`${errorForm.id ? 'w-2/3' : 'w-full'} py-3 bg-emerald-600 text-white font-bold rounded-xl hover:bg-emerald-700 transition`}>
+                   {errorForm.id ? 'Lưu thay đổi' : 'Lưu vào hệ thống'}
+                 </button>
+              </div>
             </form>
           </div>
 
           <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b">Danh sách lỗi ({errorList.length})</h4>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
               {errorList.map(err => (
-                <div key={err.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <div key={err.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-blue-300 transition">
                   <div>
                     <span className="font-bold text-sm text-slate-700">{err.name}</span>
-                    <span className={`ml-3 px-2 py-0.5 rounded text-[10px] font-bold ${err.apply_to === 'individual' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                      {err.apply_to === 'individual' ? 'Lỗi Cá Nhân' : 'Lỗi Tập Thể'}
+                    <span className={`ml-3 px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                      err.apply_to === 'individual' ? 'bg-amber-100 text-amber-700' : 
+                      err.apply_to === 'warehouse' ? 'bg-purple-100 text-purple-700' : 
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {err.apply_to === 'individual' ? 'Lỗi Cá Nhân' : err.apply_to === 'warehouse' ? 'Lỗi Toàn Kho' : 'Lỗi Tập Thể'}
                     </span>
                   </div>
-                  <button onClick={() => handleDeleteError(err.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={16}/></button>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleEditError(err)} className="text-blue-500 hover:text-blue-700 bg-blue-50 p-2 rounded-lg transition"><Edit size={16}/></button>
+                    <button onClick={() => handleDeleteError(err.id)} className="text-red-400 hover:text-red-600 bg-red-50 p-2 rounded-lg transition"><Trash2 size={16}/></button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -485,6 +507,9 @@ export default function KPI_Management() {
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* TAB 3: BIẾN SỐ CHUNG                                                      */}
+      {/* ========================================================================= */}
       {activeTab === 'variables' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm h-fit">
@@ -533,6 +558,9 @@ export default function KPI_Management() {
         </div>
       )}
 
+      {/* ========================================================================= */}
+      {/* TAB 4: NHÂN SỰ                                                            */}
+      {/* ========================================================================= */}
       {activeTab === 'staff' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm h-fit">
