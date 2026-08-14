@@ -39,7 +39,7 @@ export default function KPI_Management() {
   // Form States
   const [editingCriteria, setEditingCriteria] = useState(null);
   const [errorForm, setErrorForm] = useState({ name: '', apply_to: 'individual' });
-  const [varForm, setVarForm] = useState({ code: '', name: '', source: 'daily_manual', fixed_value: 0 });
+  const [varForm, setVarForm] = useState({ id: null, code: '', name: '', source: 'daily_manual', fixed_value: 0 }); // Thêm id để phục vụ Update
   const [staffForm, setStaffForm] = useState({ full_name: '', role: DEPARTMENTS[0] });
 
   useEffect(() => {
@@ -99,7 +99,7 @@ export default function KPI_Management() {
   const insertToFormula = (str) => setEditingCriteria(prev => ({ ...prev, formula: prev.formula + str }));
 
   // ==========================================
-  // TAB 2, 3, 4: Logic Quản lý
+  // TAB 2: TỪ ĐIỂN LỖI
   // ==========================================
   const handleAddError = async (e) => {
     e.preventDefault();
@@ -116,25 +116,64 @@ export default function KPI_Management() {
     fetchData();
   };
 
-  const handleAddVariable = async (e) => {
+  // ==========================================
+  // TAB 3: BIẾN SỐ CHUNG (THÊM / SỬA / XÓA)
+  // ==========================================
+  const handleEditVariable = (variable) => {
+    setVarForm({
+      id: variable.id,
+      code: variable.code,
+      name: variable.name,
+      source: variable.source,
+      fixed_value: variable.fixed_value || 0
+    });
+  };
+
+  const handleCancelEditVariable = () => {
+    setVarForm({ id: null, code: '', name: '', source: 'daily_manual', fixed_value: 0 });
+  };
+
+  const handleSaveVariable = async (e) => {
     e.preventDefault();
     if (!varForm.code.trim() || !varForm.name.trim()) return;
     setLoading(true);
+    
+    // Auto format code
     const cleanCode = varForm.code.toUpperCase().replace(/\s+/g, '_');
+    const payload = {
+      code: cleanCode,
+      name: varForm.name,
+      source: varForm.source,
+      fixed_value: varForm.fixed_value
+    };
+
     try {
-      await supabase.from('kpi_global_variables').insert([{ ...varForm, code: cleanCode }]);
-      setVarForm({ code: '', name: '', source: 'daily_manual', fixed_value: 0 });
+      if (varForm.id) {
+        // CẬP NHẬT BIẾN TỒN TẠI
+        await supabase.from('kpi_global_variables').update(payload).eq('id', varForm.id);
+        showMsg('✅ Đã cập nhật thông tin Biến!');
+      } else {
+        // TẠO MỚI
+        await supabase.from('kpi_global_variables').insert([payload]);
+        showMsg('✅ Đã khởi tạo Biến số chung mới!');
+      }
+      handleCancelEditVariable();
       fetchData();
-      showMsg('✅ Đã khởi tạo Biến số chung!');
-    } catch(err) { alert("Lỗi: Có thể mã biến này đã tồn tại!"); }
+    } catch(err) { 
+      alert("Lỗi: Mã biến này có thể đã tồn tại hoặc do lỗi mạng!"); 
+    }
     setLoading(false);
   };
+
   const handleDeleteVariable = async (id) => {
     if(!confirm('🚨 Xóa biến này sẽ xóa luôn dữ liệu nhập liệu cũ của nó. Chắc chắn xóa?')) return;
     await supabase.from('kpi_global_variables').delete().eq('id', id);
     fetchData();
   };
 
+  // ==========================================
+  // TAB 4: NHÂN SỰ
+  // ==========================================
   const handleAddStaff = async (e) => {
     e.preventDefault();
     if (!staffForm.full_name.trim()) return;
@@ -195,7 +234,7 @@ export default function KPI_Management() {
         </div>
       )}
 
-      {message && <div className="p-4 bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 rounded-2xl flex items-center gap-2 shadow-sm"><CheckCircle2 size={18}/> {message}</div>}
+      {message && <div className="p-4 bg-emerald-50 text-emerald-700 font-bold border border-emerald-200 rounded-2xl flex items-center gap-2 shadow-sm animate-in slide-in-from-top-2"><CheckCircle2 size={18}/> {message}</div>}
 
       {/* ========================================================================= */}
       {/* TAB 1: CHỈ TIÊU & BUILDER                                                 */}
@@ -449,8 +488,11 @@ export default function KPI_Management() {
       {activeTab === 'variables' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm h-fit">
-            <h3 className="font-black text-slate-800 uppercase text-sm mb-5 pb-3 border-b flex items-center gap-2"><Plus size={18} className="text-blue-600"/> Khai báo Biến dùng chung</h3>
-            <form onSubmit={handleAddVariable} className="space-y-4 text-sm font-bold text-slate-600">
+            <h3 className="font-black text-slate-800 uppercase text-sm mb-5 pb-3 border-b flex items-center gap-2">
+              {varForm.id ? <Edit size={18} className="text-amber-600"/> : <Plus size={18} className="text-blue-600"/>} 
+              {varForm.id ? 'Cập nhật Biến' : 'Khai báo Biến dùng chung'}
+            </h3>
+            <form onSubmit={handleSaveVariable} className="space-y-4 text-sm font-bold text-slate-600">
               <div><label className="block mb-1">Mã biến (Không dấu)</label><input required value={varForm.code} onChange={e=>setVarForm({...varForm, code: e.target.value})} placeholder="VD: V_TONG_DON" className="w-full px-4 py-2.5 border rounded-xl uppercase" /></div>
               <div><label className="block mb-1">Tên mô tả</label><input required value={varForm.name} onChange={e=>setVarForm({...varForm, name: e.target.value})} className="w-full px-4 py-2.5 border rounded-xl" /></div>
               <div>
@@ -460,7 +502,13 @@ export default function KPI_Management() {
                 </select>
               </div>
               {varForm.source === 'fixed' && <div><label className="block mb-1">Giá trị cố định</label><input type="number" value={varForm.fixed_value} onChange={e=>setVarForm({...varForm, fixed_value: e.target.value})} className="w-full px-4 py-2.5 border rounded-xl bg-amber-50 text-amber-700" /></div>}
-              <button disabled={loading} className="w-full py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 mt-2">Tạo Biến</button>
+              
+              <div className="flex gap-2 mt-4 pt-2">
+                 {varForm.id && <button type="button" onClick={handleCancelEditVariable} className="w-1/3 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition">Hủy</button>}
+                 <button disabled={loading} className={`${varForm.id ? 'w-2/3' : 'w-full'} py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition`}>
+                   {varForm.id ? 'Lưu thay đổi' : 'Tạo Biến'}
+                 </button>
+              </div>
             </form>
           </div>
 
@@ -468,13 +516,16 @@ export default function KPI_Management() {
             <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b">Kho Biến Số Hệ Thống</h4>
             <div className="space-y-3">
               {globalVars.map(v => (
-                <div key={v.id} className="flex justify-between items-center p-4 bg-white border border-slate-200 shadow-sm rounded-xl">
+                <div key={v.id} className="flex justify-between items-center p-4 bg-white border border-slate-200 shadow-sm rounded-xl hover:border-blue-300 transition">
                   <div>
                     <span className="font-mono text-xs bg-slate-800 text-white px-2 py-1 rounded font-black mr-3">[{v.code}]</span>
                     <span className="font-bold text-sm text-slate-800">{v.name}</span>
                     <p className="text-xs text-slate-500 mt-1">Nguồn: {VAR_SOURCES.find(s => s.id === v.source)?.name} {v.source === 'fixed' && <strong className="text-amber-600">(= {v.fixed_value})</strong>}</p>
                   </div>
-                  <button onClick={() => handleDeleteVariable(v.id)} className="text-red-400 hover:text-red-600 bg-red-50 p-2 rounded-lg"><Trash2 size={16}/></button>
+                  <div className="flex gap-2">
+                    <button onClick={() => handleEditVariable(v)} className="text-blue-500 hover:text-blue-700 bg-blue-50 p-2 rounded-lg transition"><Edit size={16}/></button>
+                    <button onClick={() => handleDeleteVariable(v.id)} className="text-red-400 hover:text-red-600 bg-red-50 p-2 rounded-lg transition"><Trash2 size={16}/></button>
+                  </div>
                 </div>
               ))}
             </div>
