@@ -6,7 +6,7 @@ import {
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
   BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2, 
   LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2, Menu,
-  Filter, FileEdit, LayoutGrid, Webhook, History, ShieldAlert
+  Filter, FileEdit, LayoutGrid, Webhook, History, ShieldAlert, Settings2
 } from 'lucide-react';
 import TestingNoticeBanner from './TestingNoticeBanner';
 
@@ -28,6 +28,9 @@ export default function Layout() {
   const [isReturnOrdersOpen, setIsReturnOrdersOpen] = useState(false);
   const [isInventoryCheckOpen, setIsInventoryCheckOpen] = useState(false);
   const [isInventoryReportOpen, setIsInventoryReportOpen] = useState(false);
+  
+  // State đóng mở menu Hệ thống
+  const [isKpiMenuOpen, setIsKpiMenuOpen] = useState(false);
   const [isAdjustMenuOpen, setIsAdjustMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -37,6 +40,8 @@ export default function Layout() {
     if (location.pathname.includes('/bao-cao-hoan-') || location.pathname.includes('/kiem-tra-don-hoan') || location.pathname.includes('/xu-ly-don-hoan')) setIsReturnOrdersOpen(true);
     if (location.pathname.includes('/thong-ke-kiem-ke') || location.pathname.includes('/danh-sach-kiem-ke')) setIsInventoryCheckOpen(true);
     if (location.pathname.includes('/bao-cao-ton-kho') || location.pathname.includes('/vi-tri-san-pham')) setIsInventoryReportOpen(true);
+    
+    if (location.pathname.includes('/quan-ly-kpi') || location.pathname.includes('/nhap-lieu-kpi')) setIsKpiMenuOpen(true);
     if (location.pathname.includes('/cap-nhat-')) setIsAdjustMenuOpen(true); 
   }, [location.pathname]);
 
@@ -66,6 +71,7 @@ export default function Layout() {
   const isAdmin = user?.user_metadata?.role === 'admin';
   const isOwner = user?.user_metadata?.is_owner === true;
 
+  // Đã xóa phần KPI nhầm chỗ ở mảng này
   const reportMenus = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { id: 'print_orders', icon: Printer, label: 'Đơn in' },
@@ -74,7 +80,7 @@ export default function Layout() {
     { id: 'inventory_check', icon: ClipboardCheck, label: 'Báo cáo kiểm kê' },
     { path: '/doi-soat-kho', icon: ScanLine, label: 'Đối soát đơn cuối ngày' },
     { id: 'inventory_report', icon: Boxes, label: 'Báo cáo tồn kho' },
-    { path: '/don-khong-khai-gia', icon: AlertTriangle, label: 'Đơn không khai giá' },
+    { path: '/don-khong-khai-gia', icon: AlertTriangle, label: 'Đơn không khai giá' }
   ];
 
   return (
@@ -352,14 +358,31 @@ export default function Layout() {
                   </div>
                   <span className={`text-sm ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>Quản trị Hệ thống</span>
                 </Link>
-                
-                <Link to="/quan-ly-kpi" className={`flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group overflow-hidden whitespace-nowrap ${location.pathname === '/quan-ly-kpi' ? 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
-                  <div className="flex items-center shrink-0">
-                    <Target size={20} strokeWidth={location.pathname === '/quan-ly-kpi' ? 2.5 : 2} className={`transition-colors duration-200 ${location.pathname === '/quan-ly-kpi' ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`} />
-                  </div>
-                  <span className={`text-sm ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>Quản lý KPI & Lỗi</span>
-                </Link>
 
+                <div className="pt-1">
+                  <button onClick={() => setIsKpiMenuOpen(!isKpiMenuOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group cursor-pointer overflow-hidden whitespace-nowrap ${(location.pathname.includes('/quan-ly-kpi') || location.pathname.includes('/nhap-lieu-kpi')) && !isKpiMenuOpen ? 'bg-blue-50 text-blue-600' : 'hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600'}`}>
+                    <div className="flex items-center shrink-0">
+                      <Target size={20} strokeWidth={2} className={`transition-colors ${(location.pathname.includes('/quan-ly-kpi') || location.pathname.includes('/nhap-lieu-kpi')) ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-500'}`} />
+                    </div>
+                    <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
+                      <span className="text-sm">Quản lý KPI & Lỗi</span>
+                      {isKpiMenuOpen ? <ChevronDown size={16} className="text-gray-400 shrink-0"/> : <ChevronRight size={16} className="text-gray-400 shrink-0"/>}
+                    </div>
+                  </button>
+                  {sidebarExpanded && isKpiMenuOpen && (
+                    <div className="mt-1 mb-2 ml-6 pl-3 border-l-2 border-slate-200/60 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap">
+                      <Link to="/quan-ly-kpi" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/quan-ly-kpi' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                        <Settings2 size={16} className={location.pathname === '/quan-ly-kpi' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
+                        <span className="text-sm">Cấu hình KPI</span>
+                      </Link>
+                      <Link to="/nhap-lieu-kpi" className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-all duration-200 ${location.pathname === '/nhap-lieu-kpi' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm'}`}>
+                        <FileEdit size={16} className={location.pathname === '/nhap-lieu-kpi' ? 'text-blue-600' : 'text-gray-400 shrink-0'} />
+                        <span className="text-sm">Nhập liệu hàng ngày</span>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+                
                 <div className="pt-1">
                   <button onClick={() => setIsAdjustMenuOpen(!isAdjustMenuOpen)} className="w-full flex items-center px-4 py-3 rounded-2xl transition-all duration-200 group hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600 cursor-pointer overflow-hidden whitespace-nowrap">
                     <div className="flex items-center shrink-0">

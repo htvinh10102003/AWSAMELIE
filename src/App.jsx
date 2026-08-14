@@ -19,6 +19,7 @@ import PrintedOrdersToday from './pages/PrintedOrdersToday';
 import UpdateWarehouseMap from './pages/UpdateWarehouseMap';
 import ProductLocation from './pages/ProductLocation';
 import KPI_Management from './pages/KPI_Management';
+import KPI_DataEntry from './pages/KPI_DataEntry'; // 🚀 IMPORT TRANG MỚI VÀO ĐÂY
 import KPI_Report from './pages/KPI_Report';
 import SetupZone from './pages/SetupZone';
 import FilterByZone from './pages/FilterByZone';
@@ -161,7 +162,10 @@ export default function App() {
           <Route path="cap-nhat-lich-lam-viec" element={<ProtectedRoute><UpdateSchedule /></ProtectedRoute>} /> 
           <Route path="cap-nhat-san-pham" element={<ProtectedRoute><UpdateProduct /></ProtectedRoute>} />
           <Route path="cap-nhat-so-do-kho" element={<ProtectedRoute><UpdateWarehouseMap /></ProtectedRoute>} />
+          
           <Route path="quan-ly-kpi" element={<ProtectedRoute><KPI_Management /></ProtectedRoute>} />
+          <Route path="nhap-lieu-kpi" element={<ProtectedRoute><KPI_DataEntry /></ProtectedRoute>} /> {/* 🚀 KHAI BÁO ROUTE TRANG MỚI */}
+          
           <Route path="cap-nhat-day-ke" element={<ProtectedRoute><SetupZone /></ProtectedRoute>} />
           <Route path="cap-nhat-webhook" element={<ProtectedRoute><WebhookRetrier /></ProtectedRoute>} />
 
