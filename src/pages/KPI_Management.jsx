@@ -92,7 +92,6 @@ export default function KPI_Management() {
   const handleSaveCriteria = async () => {
     if (!editingCriteria.name) return alert('Tên chỉ tiêu không được để trống!');
     
-    // Validate: Tính % bắt buộc phải có luật trừ điểm
     if (editingCriteria.calc_type === 'ratio' && (!editingCriteria.scoring_rules || editingCriteria.scoring_rules.length === 0)) {
       return alert('Chỉ tiêu tính theo Tỉ lệ (%) bắt buộc phải cấu hình Luật trừ điểm!');
     }
@@ -120,7 +119,7 @@ export default function KPI_Management() {
   const removeRule = (id) => setEditingCriteria(prev => ({ ...prev, scoring_rules: prev.scoring_rules.filter(r => r.id !== id) }));
   const insertToFormula = (str) => setEditingCriteria(prev => ({ ...prev, formula: (prev.formula || '') + str }));
 
-  // TRÌNH TÍNH THỬ NGHIỆM TẠM TÍNH (TEST RUNNER)
+  // TRÌNH TÍNH THỬ NGHIỆM TẠM TÍNH (TEST RUNNER) MỚI
   const runTestFormula = () => {
     setTestError('');
     setTestResult(null);
@@ -131,16 +130,12 @@ export default function KPI_Management() {
       return;
     }
 
-    // Tự động sửa lỗi 1 dấu bằng
     mathStr = mathStr.replace(/([^<>=!])=([^=])/g, '$1==$2');
 
-    // Thay thế biến theo giá trị giả lập
     Object.keys(testInputs).forEach(token => {
       const val = Number(testInputs[token]) || 0;
       mathStr = mathStr.split(token).join(val);
     });
-
-    // Thay thế bất kỳ biến nào chưa được nhập giả lập bằng 0
     mathStr = mathStr.replace(/\[[A-Za-z0-9_]+\]/g, '0');
 
     try {
@@ -159,19 +154,13 @@ export default function KPI_Management() {
       }
 
       const finalRaw = Math.round(rawRes * 100) / 100;
-      
-      // Tính thử điểm đạt
-      let finalScore = 0;
-      let finalPenalty = 0;
       const weight = Number(editingCriteria.weight) || 0;
+      
+      let finalPenalty = 0;
+      let baseKpiScore = (editingCriteria.formula && editingCriteria.formula.trim() !== '') ? finalRaw : 100;
+      const hasRules = editingCriteria.scoring_rules && editingCriteria.scoring_rules.length > 0;
 
-      if (!editingCriteria.scoring_rules || editingCriteria.scoring_rules.length === 0) {
-        if (editingCriteria.calc_type === 'count') {
-          finalScore = finalRaw; // Lấy trực tiếp kết quả
-        } else {
-          finalScore = weight;
-        }
-      } else {
+      if (hasRules) {
         editingCriteria.scoring_rules.forEach(rule => {
           const min = Number(rule.min) || 0;
           const max = Number(rule.max) || 0;
@@ -185,15 +174,24 @@ export default function KPI_Management() {
           }
           else if (rule.type === 'per_error') finalPenalty += (finalRaw * penalty);
         });
-
-        finalScore = Math.max(0, weight - finalPenalty);
       }
+
+      let finalKpiScore = 0;
+      if (!hasRules && editingCriteria.calc_type === 'count') {
+          finalKpiScore = finalRaw;
+      } else {
+          finalKpiScore = Math.max(0, baseKpiScore - finalPenalty);
+      }
+
+      // ⚡️ TÍNH RA ĐIỂM QUY ĐỔI % TỈ TRỌNG CHUẨN XÁC
+      const weightedScore = Math.round((finalKpiScore * (weight / 100)) * 100) / 100;
 
       setTestResult({
         raw: finalRaw,
         penalty: finalPenalty,
-        score: finalScore,
-        mode: (!editingCriteria.scoring_rules || editingCriteria.scoring_rules.length === 0) && editingCriteria.calc_type === 'count' ? 'direct' : 'deduction'
+        finalKpiScore: finalKpiScore,
+        weightedScore: weightedScore,
+        mode: !hasRules && editingCriteria.calc_type === 'count' ? 'direct' : 'deduction'
       });
     } catch (err) {
       setTestError('Cú pháp công thức bị lỗi: ' + err.message);
@@ -206,30 +204,20 @@ export default function KPI_Management() {
     return matches ? [...new Set(matches)] : [];
   };
 
-  // ⚡️ HÀM DỊCH CÔNG THỨC SANG CHỮ
   const getReadableFormula = (rawFormula) => {
     if (!rawFormula) return '';
     let text = rawFormula;
-
-    // Thay thế biến hệ thống
     text = text.replace(/\[TONG_LOI\]/g, '[Tổng lỗi bộ phận]');
-    
-    // Thay thế lỗi vi phạm
     errorList.forEach(e => {
       text = text.replace(new RegExp(`\\[LOI_${e.id}\\]`, 'g'), `[Lỗi: ${e.name}]`);
     });
-
-    // Thay thế biến số chung
     globalVars.forEach(v => {
       text = text.replace(new RegExp(`\\[${v.code}\\]`, 'g'), `[${v.name}]`);
     });
-
-    // Làm gọn các hàm logic (giúp dễ đọc hơn)
     text = text.replace(/IF\(/g, 'NẾU ( ');
     text = text.replace(/MAX\(/g, 'LỚN NHẤT ( ');
     text = text.replace(/MIN\(/g, 'NHỎ NHẤT ( ');
     text = text.replace(/ABS\(/g, 'TUYỆT ĐỐI ( ');
-
     return text;
   };
 
@@ -264,12 +252,8 @@ export default function KPI_Management() {
   // ==========================================
   const handleEditVariable = (variable) => {
     setVarForm({ 
-      id: variable.id, 
-      code: variable.code, 
-      name: variable.name, 
-      source: variable.source, 
-      fixed_value: variable.fixed_value || 0,
-      target_code: variable.target_code || ''
+      id: variable.id, code: variable.code, name: variable.name, 
+      source: variable.source, fixed_value: variable.fixed_value || 0, target_code: variable.target_code || ''
     });
   };
   const handleCancelEditVariable = () => setVarForm({ id: null, code: '', name: '', source: 'daily_manual', fixed_value: 0, target_code: '' });
@@ -282,11 +266,8 @@ export default function KPI_Management() {
     setLoading(true);
     const cleanCode = varForm.code.toUpperCase().replace(/\s+/g, '_');
     const payload = { 
-      code: cleanCode, 
-      name: varForm.name, 
-      source: varForm.source, 
-      fixed_value: varForm.fixed_value,
-      target_code: varForm.source === 'sum_monthly' ? varForm.target_code : null
+      code: cleanCode, name: varForm.name, source: varForm.source, 
+      fixed_value: varForm.fixed_value, target_code: varForm.source === 'sum_monthly' ? varForm.target_code : null
     };
 
     try {
@@ -459,10 +440,10 @@ export default function KPI_Management() {
                       <input type="number" value={editingCriteria.weight} onChange={e=>setEditingCriteria({...editingCriteria, weight: e.target.value})} className="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-blue-600 text-center" />
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Đơn vị</label>
+                      <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Đơn vị đo</label>
                       <select value={editingCriteria.calc_type} onChange={e=>setEditingCriteria({...editingCriteria, calc_type: e.target.value})} className="w-full px-2 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none cursor-pointer">
-                        <option value="count">Số/Đơn</option>
-                        <option value="ratio">%</option>
+                        <option value="count">Điểm / Số lượng</option>
+                        <option value="ratio">Tỉ lệ (%)</option>
                       </select>
                     </div>
                   </div>
@@ -561,13 +542,16 @@ export default function KPI_Management() {
                     {testResult && (
                       <div className="p-3 bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 animate-in fade-in">
                         <div>
-                          <strong>Kết quả đo lường:</strong> <span className="font-black text-sm text-emerald-700">{testResult.raw} {editingCriteria.calc_type === 'ratio' ? '%' : 'điểm/lượt'}</span>
+                          <strong>Kết quả đo lường:</strong> <span className="font-black text-sm text-emerald-700">{testResult.raw} {editingCriteria.calc_type === 'ratio' ? '%' : 'lượt'}</span>
                         </div>
                         <div>
                           <strong>Trừ điểm:</strong> <span className="font-black text-red-600">-{testResult.penalty}</span>
                         </div>
+                        <div>
+                          <strong>Điểm (Thang 100):</strong> <span className="font-black text-emerald-700">{testResult.finalKpiScore}</span>
+                        </div>
                         <div className="bg-white px-3 py-1 rounded-lg border border-emerald-200 font-black text-sm text-emerald-800">
-                          Điểm KPI chốt: {testResult.score} {testResult.mode === 'direct' && <span className="text-[10px] text-slate-400 font-normal">(Lấy trực tiếp)</span>}
+                          Điểm Tỉ trọng ({editingCriteria.weight}%): {testResult.weightedScore} {testResult.mode === 'direct' && <span className="text-[10px] text-slate-400 font-normal">(Lấy trực tiếp)</span>}
                         </div>
                       </div>
                     )}

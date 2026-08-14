@@ -17,9 +17,11 @@ export default function KPI_Report() {
   
   const [activeDepartments, setActiveDepartments] = useState([]);
   const [staffReports, setStaffReports] = useState([]);
+  
   const [expandedStaff, setExpandedStaff] = useState(null);
+  // State quản lý việc mở rộng bảng xem chi tiết ngày của từng chỉ tiêu
+  const [expandedCrit, setExpandedCrit] = useState(null); 
 
-  // States quản lý Ngày thiếu dữ liệu
   const [missingDataDays, setMissingDataDays] = useState([]);
   const [activeDataDays, setActiveDataDays] = useState(0);
 
@@ -33,6 +35,8 @@ export default function KPI_Report() {
 
   const safeEvalFormula = (formulaStr) => {
     if (!formulaStr || !formulaStr.trim()) return 0;
+    let cleanFormula = formulaStr.replace(/([^<>=!])=([^=])/g, '$1==$2');
+
     try {
       const IF = (condition, valueIfTrue, valueIfFalse) => condition ? valueIfTrue : valueIfFalse;
       const ABS = Math.abs;
@@ -40,13 +44,13 @@ export default function KPI_Report() {
       const MIN = Math.min;
       const ROUND = (val, decimals = 2) => Math.round(val * Math.pow(10, decimals)) / Math.pow(10, decimals);
 
-      const fn = new Function('IF', 'ABS', 'MAX', 'MIN', 'ROUND', 'return ' + formulaStr);
+      const fn = new Function('IF', 'ABS', 'MAX', 'MIN', 'ROUND', 'return ' + cleanFormula);
       const res = fn(IF, ABS, MAX, MIN, ROUND);
       
       if (!isFinite(res) || isNaN(res)) return 0;
       return res;
     } catch (e) {
-      console.error("Lỗi tính toán công thức:", formulaStr, e);
+      console.error("Lỗi tính toán công thức:", cleanFormula, e);
       return 0;
     }
   };
@@ -54,6 +58,8 @@ export default function KPI_Report() {
   const generateReport = async () => {
     setLoading(true);
     setExpandedStaff(null);
+    setExpandedCrit(null);
+    
     try {
       const { data: allCriteria } = await supabase.from('kpi_criteria').select('*');
       if (!allCriteria || allCriteria.length === 0) {
@@ -99,7 +105,6 @@ export default function KPI_Report() {
         setStaffReports([]); setLoading(false); return;
       }
 
-      // XỬ LÝ RAW EXCEL DATA
       const warehouseErrorLogs = (allErrorLogs || []).filter(log => allErrors?.find(e => e.id === log.error_id)?.apply_to === 'warehouse');
       const deptErrorLogs = (allErrorLogs || []).filter(log => allErrors?.find(e => e.id === log.error_id)?.apply_to === 'department' && log.department === currentDept);
 
@@ -123,7 +128,6 @@ export default function KPI_Report() {
         return { date: v.record_date, name: varDef ? varDef.name : v.variable_code, code: v.variable_code, value: v.value };
       }));
 
-      // TÍNH TOÁN BIẾN AUTO TỪ BẢNG ĐƠN HÀNG
       const isDailyAutoRequired = globalVarsData?.some(v => v.source.startsWith('auto_'));
       const dailyCounts = {};
       let tongDongThang = 0, tongDiThang = 0, tongInThang = 0;
@@ -141,7 +145,6 @@ export default function KPI_Report() {
           await Promise.all(promises);
       }
 
-      // ⚡️ XÁC ĐỊNH SỐ NGÀY HỢP LỆ ĐỂ CHIA TRUNG BÌNH (Bỏ qua ngày thiếu dữ liệu)
       const usedManualVars = globalVarsData?.filter(v => v.source === 'daily_manual' && deptCriteria.some(c => c.formula?.includes(`[${v.code}]`)));
       const deptUsesAutoVars = globalVarsData?.some(v => v.source.startsWith('auto_') && deptCriteria.some(c => c.formula?.includes(`[${v.code}]`)));
 
@@ -150,13 +153,10 @@ export default function KPI_Report() {
 
       daysInMonth.forEach(day => {
           let isWorkingDay = true;
-          
           if (usedManualVars?.length > 0) {
-              // Bắt buộc phải điền ít nhất 1 biến thủ công trong nhóm biến cần dùng
               const hasLog = varLogs?.some(l => l.record_date === day && usedManualVars.some(uv => uv.code === l.variable_code));
-              if (!hasLog) isWorkingDay = false; // Thiếu dữ liệu biến!
+              if (!hasLog) isWorkingDay = false;
           } else if (deptUsesAutoVars) {
-              // Không dùng biến thủ công, kiểm tra xem có đơn hoặc lỗi không (tránh ngày nghỉ)
               const hasOrders = dailyCounts[day]?.packed > 0 || dailyCounts[day]?.shipped > 0 || dailyCounts[day]?.printed > 0;
               const hasErrors = allErrorLogs?.some(l => l.error_date === day && l.department === currentDept);
               if (!hasOrders && !hasErrors) isWorkingDay = false;
@@ -169,7 +169,6 @@ export default function KPI_Report() {
       setMissingDataDays(missingDays);
       setActiveDataDays(activeDays.length);
 
-      // TIỀN XỬ LÝ (PRE-CALCULATE) TỔNG THEO THÁNG CỦA MỌI BIẾN SỐ
       const precalculatedMonthlySums = {};
       globalVarsData?.forEach(v => {
           if (v.source === 'fixed') precalculatedMonthlySums[v.code] = Number(v.fixed_value) || 0;
@@ -185,15 +184,17 @@ export default function KPI_Report() {
           if (v.source === 'sum_monthly') precalculatedMonthlySums[v.code] = precalculatedMonthlySums[v.target_code] || 0;
       });
 
-      // LÕI TÍNH TOÁN CÔNG THỨC CHO TỪNG CHỈ TIÊU
+      // ⚡️ NÂNG CẤP LÕI: Trả về cả danh sách chi tiết điểm từng ngày
       const computeCrit = (crit, targetErrLogs, targetTotalErrs) => {
           let mathStr = crit.formula || '';
+          const dailyDetails = [];
 
-          if (crit.eval_mode === 'daily_average') {
-              let sumRaw = 0;
-              // ⚠️ CHỈ CHẠY VÒNG LẶP TRÊN CÁC NGÀY CÓ DỮ LIỆU (activeDays)
-              activeDays.forEach(day => {
-                  let mathStrDay = mathStr;
+          daysInMonth.forEach(day => {
+              let mathStrDay = mathStr;
+              let dayRaw = 0;
+              const isWorkingDay = activeDays.includes(day);
+
+              if (isWorkingDay) {
                   globalVarsData?.forEach(v => {
                       let vVal = 0;
                       if (v.source === 'sum_monthly') vVal = precalculatedMonthlySums[v.target_code] || 0;
@@ -215,16 +216,22 @@ export default function KPI_Report() {
                   const errsToday = targetErrLogs.filter(l => l.error_date === day).length;
                   mathStrDay = mathStrDay.replace(/\[TONG_LOI\]/g, errsToday);
 
-                  let dayRaw = 0;
                   if (mathStrDay.trim() !== '') {
                       dayRaw = safeEvalFormula(mathStrDay);
                   } else { dayRaw = errsToday; }
-                  sumRaw += dayRaw;
-              });
-              // ⚠️ CHIA TRUNG BÌNH CHO SỐ NGÀY THỰC TẾ
-              return sumRaw / (activeDays.length || 1);
+                  
+                  dailyDetails.push({ date: day, value: dayRaw, isWorkingDay: true });
+              } else {
+                  dailyDetails.push({ date: day, value: null, isWorkingDay: false });
+              }
+          });
+
+          let rawValue = 0;
+
+          if (crit.eval_mode === 'daily_average') {
+              const sumRaw = dailyDetails.filter(d => d.isWorkingDay).reduce((acc, curr) => acc + curr.value, 0);
+              rawValue = sumRaw / (activeDays.length || 1);
           } else {
-              // CỘNG DỒN CẢ THÁNG
               globalVarsData?.forEach(v => {
                   let vVal = precalculatedMonthlySums[v.code] || 0;
                   mathStr = mathStr.replace(new RegExp(`\\[${v.code}\\]`, 'g'), vVal);
@@ -236,12 +243,12 @@ export default function KPI_Report() {
               });
               mathStr = mathStr.replace(/\[TONG_LOI\]/g, targetTotalErrs);
 
-              let rawValue = 0;
               if (mathStr.trim() !== '') {
                   rawValue = safeEvalFormula(mathStr);
               } else { rawValue = targetTotalErrs; }
-              return rawValue;
           }
+
+          return { rawValue, dailyDetails };
       };
 
       let totalScoreSum = 0;
@@ -259,32 +266,50 @@ export default function KPI_Report() {
 
         const criteriaDetails = deptCriteria.map(crit => {
           const weight = Number(crit.weight) || 0;
-          let rawValue = computeCrit(crit, staffErrorLogs, staffTotalErrors);
-          rawValue = Math.round(rawValue * 100) / 100;
+          const { rawValue, dailyDetails } = computeCrit(crit, staffErrorLogs, staffTotalErrors);
+          const finalRawValue = Math.round(rawValue * 100) / 100;
 
           let penalty = 0;
-          if (crit.scoring_rules && Array.isArray(crit.scoring_rules)) {
+          let baseKpiScore = (crit.formula && crit.formula.trim() !== '') ? finalRawValue : 100;
+          
+          const hasRules = crit.scoring_rules && Array.isArray(crit.scoring_rules) && crit.scoring_rules.length > 0;
+
+          if (hasRules) {
             crit.scoring_rules.forEach(rule => {
               const min = Number(rule.min) || 0; const max = Number(rule.max) || 0;
               const rulePenalty = Number(rule.penalty) || 0; const step = Number(rule.step) || 0;
 
-              if (rule.type === 'fixed_penalty' && rawValue > min && rawValue <= max) penalty += rulePenalty;
-              else if (rule.type === 'linear_penalty' && rawValue > min && step > 0) {
-                 const stepsOver = Math.floor((rawValue - min) / step);
+              if (rule.type === 'fixed_penalty' && finalRawValue > min && finalRawValue <= max) penalty += rulePenalty;
+              else if (rule.type === 'linear_penalty' && finalRawValue > min && step > 0) {
+                 const stepsOver = Math.floor((finalRawValue - min) / step);
                  if (stepsOver > 0) penalty += (stepsOver * rulePenalty);
               } 
-              else if (rule.type === 'per_error') penalty += (rawValue * rulePenalty);
+              else if (rule.type === 'per_error') penalty += (finalRawValue * rulePenalty);
             });
           }
 
-          let score = weight - penalty;
-          if (score < 0) score = 0;
+          let finalKpiScore = 0;
+          if (!hasRules && crit.calc_type === 'count') {
+            finalKpiScore = finalRawValue;
+          } else {
+            finalKpiScore = Math.max(0, baseKpiScore - penalty);
+          }
+
+          const weightedScore = Math.round((finalKpiScore * (weight / 100)) * 100) / 100;
 
           totalWeightAccum += weight;
-          totalScoreAccum += score;
+          totalScoreAccum += weightedScore;
           totalPenaltyAccum += penalty;
 
-          return { ...crit, rawValue, penalty, score };
+          return { 
+            ...crit, 
+            rawValue: finalRawValue,
+            dailyDetails,
+            penalty, 
+            finalKpiScore,
+            weightedScore, 
+            isDirectScore: !hasRules && crit.calc_type === 'count' 
+          };
         });
 
         const finalTotalScore = Math.round(totalScoreAccum * 100) / 100;
@@ -323,9 +348,8 @@ export default function KPI_Report() {
     if (staffReports.length === 0) return alert('Không có dữ liệu để xuất!');
     
     let csvContent = "";
-    
     csvContent += "--- PHAN 1: TONG HOP DIEM KPI ---\n";
-    csvContent += "Thang,Bo phan,Nhan vien,Chi tieu,Chu ky tinh,Ket qua do luong,Diem phat,Diem chot,Diem toi da\n";
+    csvContent += "Thang,Bo phan,Nhan vien,Chi tieu,Chu ky tinh,Ket qua do luong,Diem phat,Diem Thang 100,Diem Ti trong (%)\n";
     
     staffReports.forEach(staff => {
       staff.criteriaDetails.forEach(crit => {
@@ -336,9 +360,9 @@ export default function KPI_Report() {
           escapeCSV(crit.name),
           escapeCSV(crit.eval_mode === 'daily_average' ? 'Trung binh Ngay' : 'Cong don ca Thang'),
           escapeCSV(crit.rawValue),
-          escapeCSV(crit.penalty),
-          escapeCSV(crit.score),
-          escapeCSV(crit.weight)
+          escapeCSV(crit.isDirectScore ? "Truc tiep" : crit.penalty),
+          escapeCSV(crit.finalKpiScore),
+          escapeCSV(crit.weightedScore)
         ].join(",") + "\n";
       });
       csvContent += [
@@ -347,8 +371,8 @@ export default function KPI_Report() {
         escapeCSV(staff.full_name + " (TONG KET)"),
         '""', '""', '""',
         escapeCSV("-" + staff.totalPenalty),
-        escapeCSV(staff.totalScore),
-        escapeCSV(staff.totalWeight)
+        '""',
+        escapeCSV(staff.totalScore)
       ].join(",") + "\n";
     });
 
@@ -399,9 +423,9 @@ export default function KPI_Report() {
 
   const toggleExpand = (staffId) => {
     setExpandedStaff(expandedStaff === staffId ? null : staffId);
+    setExpandedCrit(null); // Reset lại chi tiết ngày khi thu gọn nhân viên
   };
 
-  // Tạo text hiển thị cho mảng ngày bị thiếu (nếu nhiều quá thì rút gọn)
   const missingDisplay = missingDataDays.length > 10 
     ? missingDataDays.slice(0, 10).map(d => d.split('-').reverse().slice(0,2).join('/')).join(', ') + ` ...và ${missingDataDays.length - 10} ngày khác`
     : missingDataDays.map(d => d.split('-').reverse().slice(0,2).join('/')).join(', ');
@@ -442,7 +466,7 @@ export default function KPI_Report() {
       {loading ? (
         <div className="py-32 flex flex-col items-center justify-center text-slate-400 font-bold bg-white rounded-3xl shadow-sm border border-slate-200">
           <Loader2 className="animate-spin mb-4 text-indigo-500" size={40}/>
-          <p className="text-sm md:text-base text-center px-6">Hệ thống đang nội suy công thức và tính điểm cho từng người...</p>
+          <p className="text-sm md:text-base text-center px-6">Hệ thống đang nội suy công thức và quy đổi điểm cho từng người...</p>
         </div>
       ) : activeDepartments.length === 0 ? (
         <div className="py-32 flex flex-col items-center justify-center text-center bg-white rounded-3xl shadow-sm border border-slate-200">
@@ -452,7 +476,6 @@ export default function KPI_Report() {
         </div>
       ) : (
         <>
-          {/* BANNER CẢNH BÁO THIẾU DỮ LIỆU */}
           {missingDataDays.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 p-4 md:p-5 rounded-3xl flex items-start gap-3 shadow-sm animate-in slide-in-from-top-2">
               <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={24} />
@@ -511,6 +534,7 @@ export default function KPI_Report() {
             </div>
           </div>
 
+          {/* DESKTOP TABLE */}
           <div className="hidden md:block bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <div>
@@ -561,7 +585,7 @@ export default function KPI_Report() {
                               </div>
                             </td>
                             <td className="py-5 px-6 text-center">
-                              <span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-sm font-black">{staff.totalWeight}</span>
+                              <span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-sm font-black">{staff.totalWeight}%</span>
                             </td>
                             <td className="py-5 px-6 text-center">
                               {staff.totalPenalty > 0 
@@ -590,37 +614,88 @@ export default function KPI_Report() {
                                       <thead className="bg-slate-100 border-b border-slate-200">
                                         <tr>
                                           <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase">Tên Chỉ Tiêu</th>
-                                          <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase text-center">Kết Quả Báo Cáo</th>
-                                          <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase text-center">Phạt</th>
-                                          <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase text-center">Điểm Đạt</th>
+                                          <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase text-center">KQ Đo lường</th>
+                                          <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase text-center">Điểm phạt</th>
+                                          <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase text-center">Thang Điểm 100</th>
+                                          <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase text-center">Quy đổi Tỉ trọng</th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-slate-100">
-                                        {staff.criteriaDetails.map(crit => (
-                                          <tr key={crit.id} className="hover:bg-slate-50 transition-colors">
-                                            <td className="py-4 px-5">
-                                              <div className="font-bold text-slate-700">{crit.name}</div>
-                                              {crit.formula ? (
-                                                <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center gap-1">
-                                                  <HelpCircle size={10}/> {crit.formula}
-                                                </div>
-                                              ) : (
-                                                <div className="text-[10px] text-slate-400 mt-1">Đếm lỗi vi phạm trực tiếp</div>
+                                        {staff.criteriaDetails.map(crit => {
+                                          const isCritExp = expandedCrit === `${staff.id}_${crit.id}`;
+                                          return (
+                                            <React.Fragment key={crit.id}>
+                                              <tr className="hover:bg-slate-50 transition-colors">
+                                                <td className="py-4 px-5">
+                                                  <div className="flex items-center justify-between">
+                                                    <div>
+                                                      <div className="font-bold text-slate-700">{crit.name}</div>
+                                                      {crit.formula ? (
+                                                        <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center gap-1">
+                                                          <HelpCircle size={10}/> {crit.formula}
+                                                        </div>
+                                                      ) : (
+                                                        <div className="text-[10px] text-slate-400 mt-1">Đếm lỗi vi phạm trực tiếp</div>
+                                                      )}
+                                                    </div>
+                                                    <button 
+                                                      onClick={(e) => { e.stopPropagation(); setExpandedCrit(isCritExp ? null : `${staff.id}_${crit.id}`); }} 
+                                                      className={`ml-2 p-1.5 rounded-md transition-colors ${isCritExp ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`} 
+                                                      title="Xem chi tiết điểm theo ngày"
+                                                    >
+                                                      <CalendarDays size={14}/>
+                                                    </button>
+                                                  </div>
+                                                </td>
+                                                <td className="py-4 px-5 text-center font-bold text-slate-600">
+                                                  {crit.rawValue} <span className="text-[10px] font-normal">{crit.calc_type === 'ratio' ? '%' : 'lượt'}</span>
+                                                </td>
+                                                <td className="py-4 px-5 text-center">
+                                                  {crit.isDirectScore ? (
+                                                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Trực tiếp</span>
+                                                  ) : crit.penalty > 0 ? (
+                                                    <span className="text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded">-{crit.penalty}</span> 
+                                                  ) : (
+                                                    <span className="text-slate-300">-</span>
+                                                  )}
+                                                </td>
+                                                <td className="py-4 px-5 text-center">
+                                                  <span className="font-bold text-slate-700">{crit.finalKpiScore}</span>
+                                                </td>
+                                                <td className="py-4 px-5 text-center">
+                                                  <span className={`font-black ${getScoreColor(crit.weightedScore, crit.weight)}`}>{crit.weightedScore}</span>
+                                                  <span className="text-[10px] text-slate-400 ml-1">/ {crit.weight}</span>
+                                                </td>
+                                              </tr>
+                                              
+                                              {/* ⚡️ BẢNG CHI TIẾT THEO NGÀY */}
+                                              {isCritExp && (
+                                                <tr>
+                                                  <td colSpan="5" className="p-0 bg-indigo-50/40 border-b-2 border-indigo-100">
+                                                    <div className="p-4 pl-6 animate-in slide-in-from-top-2 duration-200">
+                                                      <h5 className="text-[11px] font-black text-indigo-800 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                                                        <CalendarDays size={12}/> Chi tiết điểm đo lường theo từng ngày (Tháng {selectedMonth.split('-')[1]})
+                                                      </h5>
+                                                      <div className="flex flex-wrap gap-1.5">
+                                                        {crit.dailyDetails.map(d => (
+                                                          <div key={d.date} className={`flex flex-col items-center justify-center w-11 h-11 rounded-lg border ${d.isWorkingDay ? 'bg-white border-indigo-200 shadow-sm' : 'bg-slate-50 border-slate-200 opacity-60'}`} title={d.isWorkingDay ? `Kết quả: ${Math.round(d.value*100)/100}` : 'Ngày nghỉ / Không có dữ liệu'}>
+                                                            <span className="text-[9px] font-bold text-slate-400">{d.date.split('-')[2]}/{d.date.split('-')[1]}</span>
+                                                            <span className={`text-[11px] font-black ${d.isWorkingDay ? 'text-indigo-600' : 'text-slate-300'}`}>
+                                                              {d.isWorkingDay ? Math.round(d.value * 100) / 100 : '-'}
+                                                            </span>
+                                                          </div>
+                                                        ))}
+                                                      </div>
+                                                      <div className="mt-3 text-[10px] text-slate-500 font-medium">
+                                                        <strong>* Cách tính số cuối:</strong> {crit.eval_mode === 'daily_average' ? 'Trung bình cộng tất cả các ngày làm việc ở trên.' : 'Chỉ tiêu loại "Cộng dồn" được tính gộp cả tháng (số liệu ngày ở trên chỉ mang tính chất tham khảo sự biến động).'}
+                                                      </div>
+                                                    </div>
+                                                  </td>
+                                                </tr>
                                               )}
-                                            </td>
-                                            <td className="py-4 px-5 text-center font-bold text-slate-600">
-                                              {crit.rawValue} <span className="text-[10px] font-normal">{crit.calc_type === 'ratio' ? '%' : 'lượt'}</span>
-                                            </td>
-                                            <td className="py-4 px-5 text-center">
-                                              {crit.penalty > 0 
-                                                ? <span className="text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded">-{crit.penalty}</span> 
-                                                : <span className="text-slate-300">-</span>}
-                                            </td>
-                                            <td className="py-4 px-5 text-center">
-                                              <span className={`font-black ${getScoreColor(crit.score, crit.weight)}`}>{crit.score} / {crit.weight}</span>
-                                            </td>
-                                          </tr>
-                                        ))}
+                                            </React.Fragment>
+                                          );
+                                        })}
                                       </tbody>
                                     </table>
                                   </div>
@@ -637,6 +712,7 @@ export default function KPI_Report() {
             )}
           </div>
 
+          {/* MOBILE CARDS */}
           <div className="md:hidden space-y-4">
             {staffReports.length === 0 ? (
               <div className="py-16 text-center text-slate-500 font-bold bg-white rounded-2xl border border-slate-200">
@@ -675,7 +751,7 @@ export default function KPI_Report() {
                       <div className="flex items-center gap-3">
                         <div className="text-right">
                           <div className={`text-lg font-black ${scoreColor}`}>{staff.totalScore}</div>
-                          <div className="text-[10px] text-slate-400 font-medium">/ {staff.totalWeight}</div>
+                          <div className="text-[10px] text-slate-400 font-medium">/ {staff.totalWeight}%</div>
                         </div>
                         {isExpanded ? <ChevronUp size={18} className="text-slate-400"/> : <ChevronDown size={18} className="text-slate-400"/>}
                       </div>
@@ -686,34 +762,69 @@ export default function KPI_Report() {
                         <h4 className="text-xs font-black text-indigo-800 uppercase tracking-widest mb-3 flex items-center gap-2">
                           <FileWarning size={14}/> Bóc tách chỉ tiêu
                         </h4>
-                        <div className="space-y-2">
-                          {staff.criteriaDetails.map(crit => (
-                            <div key={crit.id} className="bg-white rounded-xl border border-slate-200 p-3">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="font-bold text-sm text-slate-700">{crit.name}</div>
-                                <div className={`font-black text-sm shrink-0 ${getScoreColor(crit.score, crit.weight)}`}>
-                                  {crit.score}/{crit.weight}
+                        <div className="space-y-3">
+                          {staff.criteriaDetails.map(crit => {
+                            const isCritExp = expandedCrit === `${staff.id}_${crit.id}`;
+                            return (
+                              <div key={crit.id} className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="font-bold text-sm text-slate-700 leading-snug">{crit.name}</div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {crit.penalty > 0 && !crit.isDirectScore && (
+                                      <span className="text-red-500 font-bold text-[10px] bg-red-50 px-1.5 py-0.5 rounded">-{crit.penalty} phạt</span> 
+                                    )}
+                                    <button 
+                                      onClick={(e) => { e.stopPropagation(); setExpandedCrit(isCritExp ? null : `${staff.id}_${crit.id}`); }} 
+                                      className={`p-1.5 rounded-md transition-colors ${isCritExp ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}
+                                    >
+                                      <CalendarDays size={14}/>
+                                    </button>
+                                  </div>
+                                </div>
+                                {crit.formula ? (
+                                  <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center gap-1 truncate">
+                                    <HelpCircle size={10}/> {crit.formula}
+                                  </div>
+                                ) : (
+                                  <div className="text-[10px] text-slate-400 mt-1">Đếm lỗi vi phạm trực tiếp</div>
+                                )}
+                                
+                                {/* ⚡️ BẢNG CHI TIẾT THEO NGÀY (MOBILE) */}
+                                {isCritExp && (
+                                  <div className="mt-3 pt-3 border-t border-indigo-100 animate-in slide-in-from-top-2 duration-200">
+                                    <h5 className="text-[10px] font-black text-indigo-800 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                      <CalendarDays size={12}/> Đo lường theo ngày
+                                    </h5>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {crit.dailyDetails.map(d => (
+                                        <div key={d.date} className={`flex flex-col items-center justify-center w-10 h-10 rounded-md border ${d.isWorkingDay ? 'bg-white border-indigo-200 shadow-sm' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
+                                          <span className="text-[8px] font-bold text-slate-400">{d.date.split('-')[2]}/{d.date.split('-')[1]}</span>
+                                          <span className={`text-[10px] font-black ${d.isWorkingDay ? 'text-indigo-600' : 'text-slate-300'}`}>
+                                            {d.isWorkingDay ? Math.round(d.value * 100) / 100 : '-'}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center justify-between mt-3 text-xs border-t border-slate-100 pt-2">
+                                  <span className="text-slate-500 flex flex-col">
+                                    <span>Đo lường</span>
+                                    <span className="font-bold text-slate-700 text-sm">{crit.rawValue} {crit.calc_type === 'ratio' ? '%' : ''}</span>
+                                  </span>
+                                  <span className="text-slate-500 flex flex-col text-center">
+                                    <span>Điểm 100</span>
+                                    <span className="font-bold text-slate-700 text-sm">{crit.finalKpiScore}</span>
+                                  </span>
+                                  <span className="text-slate-500 flex flex-col text-right">
+                                    <span>Quy đổi ({crit.weight}%)</span>
+                                    <span className={`font-black text-sm ${getScoreColor(crit.weightedScore, crit.weight)}`}>{crit.weightedScore}</span>
+                                  </span>
                                 </div>
                               </div>
-                              {crit.formula ? (
-                                <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center gap-1">
-                                  <HelpCircle size={10}/> {crit.formula}
-                                </div>
-                              ) : (
-                                <div className="text-[10px] text-slate-400 mt-1">Đếm lỗi vi phạm trực tiếp</div>
-                              )}
-                              <div className="flex items-center justify-between mt-2 text-xs">
-                                <span className="text-slate-500">
-                                  Kết quả: <span className="font-bold text-slate-700">{crit.rawValue} {crit.calc_type === 'ratio' ? '%' : 'lượt'}</span>
-                                </span>
-                                <span className="text-slate-500">
-                                  Phạt: {crit.penalty > 0 
-                                    ? <span className="text-red-500 font-bold">-{crit.penalty}</span> 
-                                    : <span className="text-slate-300">-</span>}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
