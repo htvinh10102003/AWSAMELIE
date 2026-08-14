@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Loader2, Lock, ShieldAlert } from 'lucide-react';
+import { Loader2, Lock, ShieldAlert, Bug } from 'lucide-react';
 
 export default function FeatureGuard({ featureId, subFeatureId, children }) {
   const [loading, setLoading] = useState(true);
   const [isLocked, setIsLocked] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
+  const [debugInfo, setDebugInfo] = useState('');
 
   useEffect(() => {
     checkLockStatus();
@@ -16,32 +17,53 @@ export default function FeatureGuard({ featureId, subFeatureId, children }) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // 1. Kiểm tra Owner chặt chẽ hơn (Đề phòng chuỗi 'true' hoặc role 'owner')
-      const ownerCheck = 
-        user?.user_metadata?.is_owner === true || 
-        user?.user_metadata?.is_owner === 'true' || 
-        user?.user_metadata?.role === 'owner';
-        
+      // 1. Kiểm tra Owner
+      const ownerCheck = user?.user_metadata?.is_owner === true || user?.user_metadata?.is_owner === 'true';
       setIsOwner(ownerCheck);
 
-      // 2. Truy vấn DB (ÔNG NHỚ SỬA TÊN BẢNG 'feature_locks' NẾU TRƯỚC ĐÓ ÔNG DÙNG TÊN KHÁC NHÉ)
+      // 2. Lấy dữ liệu từ bảng system_configs chuẩn theo cấu trúc JSON
+      const configKey = `feature_lock_${featureId}`;
       const { data, error } = await supabase
-        .from('feature_locks')
-        .select('*')
-        .eq('feature_id', featureId)
-        .eq('sub_feature_id', subFeatureId)
-        .maybeSingle(); // Dùng maybeSingle thay vì single để tránh văng lỗi nếu chưa có record
+        .from('system_configs')
+        .select('value')
+        .eq('key', configKey)
+        .maybeSingle();
 
-      if (error) {
-        console.error(`[FeatureGuard] Lỗi đọc bảng khóa (${featureId}):`, error.message);
+      let debugText = `Đang check Key: ${configKey} | Sub: ${subFeatureId}\n`;
+      if (error) debugText += `Lỗi SQL: ${error.message}\n`;
+      debugText += `Value DB: ${data ? data.value : 'null'}`;
+      
+      if (data && data.value) {
+        try {
+          const config = JSON.parse(data.value);
+          let locked = false;
+
+          // Kiểm tra khóa Mẹ (Ví dụ khóa nguyên menu Dashboard)
+          if (config.isLocked === true || config.isLocked === 'true') {
+            locked = true;
+          } 
+          // Nếu Mẹ không khóa, thì kiểm tra khóa Con (subs)
+          else if (subFeatureId && config.subs && config.subs[subFeatureId]) {
+            const subConfig = config.subs[subFeatureId];
+            if (subConfig.isLocked === true || subConfig.isLocked === 'true') {
+              locked = true;
+            }
+          }
+          
+          setIsLocked(locked);
+        } catch (parseError) {
+          debugText += `\nLỗi Parse JSON: ${parseError.message}`;
+          setIsLocked(false);
+        }
+      } else {
+        setIsLocked(false);
       }
 
-      // 3. Chốt trạng thái khóa
-      const lockedStatus = data?.is_locked === true || data?.is_locked === 'true';
-      setIsLocked(lockedStatus);
+      setDebugInfo(debugText);
 
     } catch (err) {
       console.error("[FeatureGuard] Lỗi hệ thống:", err);
+      setDebugInfo(`Lỗi Try/Catch: ${err.message}`);
     }
     setLoading(false);
   };
@@ -67,6 +89,12 @@ export default function FeatureGuard({ featureId, subFeatureId, children }) {
           <p className="text-slate-500 font-medium leading-relaxed mb-6">
             Tính năng này tạm thời bị khóa để nâng cấp hoặc xử lý sự cố. Vui lòng quay lại sau hoặc liên hệ Quản trị viên.
           </p>
+          
+          {/* NẾU LÀ ADMIN MÀ VẪN BỊ KHÓA, HIỆN LỖI ĐỂ CHECK */}
+          <div className="mt-6 text-left bg-slate-800 p-4 rounded-xl overflow-auto text-[10px] text-emerald-400 font-mono">
+            <div className="flex items-center gap-1 mb-2 text-white"><Bug size={12}/> DEBUG INFO (Dành cho Admin):</div>
+            <pre className="whitespace-pre-wrap">{debugInfo}</pre>
+          </div>
         </div>
       </div>
     );
@@ -81,6 +109,7 @@ export default function FeatureGuard({ featureId, subFeatureId, children }) {
           <ShieldAlert size={14} /> CHẾ ĐỘ TEST (OWNER BYPASS): Tính năng này hiện đang bị khóa đối với Admin và User.
         </div>
       )}
+      
       {children}
     </>
   );
