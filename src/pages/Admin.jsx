@@ -2,18 +2,17 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
-  Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert
+  Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert,
+  Palette, TreePine, PartyPopper, MessageSquareQuote
 } from 'lucide-react';
 import * as Papa from 'papaparse'; 
 
 export default function Admin() {
-  // Authentication & Global State
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('configs'); 
   const [currentUserMeta, setCurrentUserMeta] = useState({});
   const [currentUserEmail, setCurrentUserEmail] = useState('');
   
-  // Profile State
   const [profileName, setProfileName] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [profilePassword, setProfilePassword] = useState('');
@@ -22,7 +21,6 @@ export default function Admin() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
 
-  // User Management State
   const [users, setUsers] = useState([]);
   const [userForm, setUserForm] = useState({ email: '', password: '', fullName: '', role: 'user' });
   const [actionLoadingId, setActionLoadingId] = useState(null);
@@ -33,12 +31,10 @@ export default function Admin() {
   const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false);
   const [upgradePassword, setUpgradePassword] = useState('');
 
-  // API Configs State
   const [apiConfigs, setApiConfigs] = useState({ nhanh_app_id: '', nhanh_business_id: '', nhanh_secret_key: '', nhanh_access_code: '' });
   const [apiLoading, setApiLoading] = useState(false);
   const [apiMessage, setApiMessage] = useState('');
 
-  // Filter Configs State
   const [filterConfigs, setFilterConfigs] = useState({ allowed_statuses: [] });
   const [statusList, setStatusList] = useState([]);
   const [priorities, setPriorities] = useState([]);
@@ -46,7 +42,6 @@ export default function Admin() {
   const [filterLoading, setFilterLoading] = useState(false);
   const [filterMessage, setFilterMessage] = useState('');
 
-  // Sheets Configs State
   const [sheetDailyUrl, setSheetDailyUrl] = useState('');
   const [sheetDailyGid, setSheetDailyGid] = useState('0');
   const [sheetPrintUrl, setSheetPrintUrl] = useState('');
@@ -54,7 +49,6 @@ export default function Admin() {
   const [syncLoading, setSyncLoading] = useState(false);
   const [sheetMessage, setSheetMessage] = useState('');
 
-  // Sync Data State
   const [syncDays, setSyncDays] = useState(1); 
   const [isSyncingOrder, setIsSyncingOrder] = useState(false);
   const [syncOrderMessage, setSyncOrderMessage] = useState('');
@@ -67,16 +61,16 @@ export default function Admin() {
   const [isSyncingReturns, setIsSyncingReturns] = useState(false);
   const [syncReturnsMessage, setSyncReturnsMessage] = useState({ text: '', type: '' });
 
-  // Cleanup & Location State
   const [cleanDays, setCleanDays] = useState('180');
   const [isCleaning, setIsCleaning] = useState(false);
   const [cleanMessage, setCleanMessage] = useState({ text: '', type: '' });
-  const [csvFile, setCsvFile] = useState(null);
-  const [isUploadingCsv, setIsUploadingCsv] = useState(false);
-  const [locationMessage, setLocationMessage] = useState({ text: '', type: '' });
-  const fileInputRef = useRef(null);
 
-  // Constants
+  // 🎄 Themes State
+  const [xmasTheme, setXmasTheme] = useState({ isXmasEnabled: false, isSantaFlying: false, customMessages: '' });
+  const [tetTheme, setTetTheme] = useState({ isTetEnabled: false, isPetalFalling: false, customMessages: '' });
+  const [themeLoading, setThemeLoading] = useState(false);
+  const [themeMessage, setThemeMessage] = useState('');
+
   const projectUrl = "https://infljrayvhidhfimksfp.supabase.co";
   const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluZmxqcmF5dmhpZGhmaW1rc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzAyNjksImV4cCI6MjA5NjkwNjI2OX0.ap1UnciJ5OccAvC-l5sm-JGqObTkEC038Kjf2L_IFr0";
   const SUPER_OWNER_EMAIL = "contact.hotavinh@gmail.com";
@@ -90,7 +84,6 @@ export default function Admin() {
     if (activeTab === 'users_management') fetchSystemUsers();
   }, [activeTab]);
 
-  // Giải quyết lỗi Flickering bằng cách chờ fetch xong phân quyền mới bỏ loading
   const loadCurrentUserData = async () => {
     setIsAuthLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
@@ -149,6 +142,13 @@ export default function Admin() {
         const restored = savedOrder.map(id => dynamicOptions.find(p => p.id === id)).filter(Boolean);
         setPriorities(restored);
       }
+
+      if (configMap['theme_christmas']) {
+        try { setXmasTheme(JSON.parse(configMap['theme_christmas'])); } catch(e) {}
+      }
+      if (configMap['theme_tet']) {
+        try { setTetTheme(JSON.parse(configMap['theme_tet'])); } catch(e) {}
+      }
     }
   };
 
@@ -178,144 +178,78 @@ export default function Admin() {
     } finally { setLoading(false); }
   };
 
-  // ⚡️ PROFILE UPDATE: Thêm bước kiểm tra mật khẩu cũ
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
-    if (!profileName.trim()) {
-      setProfileMessage('❌ Tên hiển thị không được để trống.');
-      return;
-    }
-
+    if (!profileName.trim()) { setProfileMessage('❌ Tên hiển thị không được để trống.'); return; }
     setProfileLoading(true);
     try {
       const updates = { data: { full_name: profileName } };
-      
-      // Nếu có yêu cầu đổi mật khẩu mới
       if (profilePassword) {
-        if (!currentPassword) {
-            throw new Error('Vui lòng nhập mật khẩu hiện tại để được phép đổi mật khẩu mới.');
-        }
-        if (profilePassword.length < 6) {
-            throw new Error('Mật khẩu mới phải có ít nhất 6 ký tự.');
-        }
-        
-        // Gọi xác thực mật khẩu cũ
-        const { error: verifyError } = await supabase.auth.signInWithPassword({
-            email: currentUserEmail,
-            password: currentPassword
-        });
-
-        if (verifyError) {
-            throw new Error('Mật khẩu hiện tại không chính xác!');
-        }
-        
+        if (!currentPassword) throw new Error('Vui lòng nhập mật khẩu hiện tại để được phép đổi mật khẩu mới.');
+        if (profilePassword.length < 6) throw new Error('Mật khẩu mới phải có ít nhất 6 ký tự.');
+        const { error: verifyError } = await supabase.auth.signInWithPassword({ email: currentUserEmail, password: currentPassword });
+        if (verifyError) throw new Error('Mật khẩu hiện tại không chính xác!');
         updates.password = profilePassword;
       }
-      
-      // Tiến hành cập nhật
       const { error } = await supabase.auth.updateUser(updates);
       if (error) throw error;
-      
       setProfileMessage('✅ Đã cập nhật hồ sơ cá nhân thành công!');
-      setProfilePassword('');
-      setCurrentPassword('');
+      setProfilePassword(''); setCurrentPassword('');
       await loadCurrentUserData();
-    } catch (err) {
-      setProfileMessage(`❌ Lỗi: ${err.message}`);
-    } finally {
-      setProfileLoading(false);
-    }
+    } catch (err) { setProfileMessage(`❌ Lỗi: ${err.message}`); } finally { setProfileLoading(false); }
   };
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
-    if (!userForm.email || !userForm.password || !userForm.fullName) {
-      alert('Vui lòng điền đầy đủ thông tin tài khoản!'); return;
-    }
+    if (!userForm.email || !userForm.password || !userForm.fullName) { alert('Vui lòng điền đầy đủ thông tin tài khoản!'); return; }
     setLoading(true); setUserMessage('');
     try {
       await callUserManagementApi({ action: 'create', ...userForm });
       setUserMessage(`✅ Đã khởi tạo thành công tài khoản cho [${userForm.fullName}]`);
       setUserForm({ email: '', password: '', fullName: '', role: 'user' });
       await fetchSystemUsers();
-    } catch (err) {
-      setUserMessage(`❌ Lỗi tạo tài khoản: ${err.message}`);
-    } finally { setLoading(false); }
+    } catch (err) { setUserMessage(`❌ Lỗi tạo tài khoản: ${err.message}`); } finally { setLoading(false); }
   };
 
   const handleOpenEditModal = (targetUser) => {
     setEditingUser(targetUser);
-    setEditForm({
-      fullName: targetUser.user_metadata?.full_name || '',
-      role: targetUser.user_metadata?.role || 'user'
-    });
-    setShowUpgradeConfirm(false);
-    setUpgradePassword('');
+    setEditForm({ fullName: targetUser.user_metadata?.full_name || '', role: targetUser.user_metadata?.role || 'user' });
+    setShowUpgradeConfirm(false); setUpgradePassword('');
   };
 
   const handleSaveEditedInfo = async (e) => {
     e.preventDefault();
-    if (!editForm.fullName.trim()) {
-      alert('Họ và tên không được để trống!'); return;
-    }
+    if (!editForm.fullName.trim()) { alert('Họ và tên không được để trống!'); return; }
     setLoading(true);
     try {
-      await callUserManagementApi({
-        action: 'update_info',
-        userId: editingUser.id,
-        fullName: editForm.fullName,
-        role: isOwner ? editForm.role : undefined
-      });
+      await callUserManagementApi({ action: 'update_info', userId: editingUser.id, fullName: editForm.fullName, role: isOwner ? editForm.role : undefined });
       setUserMessage(`✅ Đã cập nhật thông tin thành công cho tài khoản.`);
-      setEditingUser(null);
-      await fetchSystemUsers();
-    } catch (err) {
-      alert(`❌ Lỗi lưu thông tin: ${err.message}`);
-    } finally { setLoading(false); }
+      setEditingUser(null); await fetchSystemUsers();
+    } catch (err) { alert(`❌ Lỗi lưu thông tin: ${err.message}`); } finally { setLoading(false); }
   };
 
   const handleUpgradeToOwner = async (e) => {
     e.preventDefault();
-    if (!upgradePassword) {
-      alert('Vui lòng nhập mật khẩu của bạn để xác nhận!'); return;
-    }
+    if (!upgradePassword) { alert('Vui lòng nhập mật khẩu của bạn để xác nhận!'); return; }
     setLoading(true);
     try {
-      const { error: verifyError } = await supabase.auth.signInWithPassword({
-        email: currentUserEmail,
-        password: upgradePassword
-      });
+      const { error: verifyError } = await supabase.auth.signInWithPassword({ email: currentUserEmail, password: upgradePassword });
       if (verifyError) throw new Error('Mật khẩu xác nhận không chính xác!');
-
-      await callUserManagementApi({
-        action: 'update_info',
-        userId: editingUser.id,
-        isOwner: true 
-      });
-
+      await callUserManagementApi({ action: 'update_info', userId: editingUser.id, isOwner: true });
       setUserMessage(`🎉 Đã cấp quyền Owner thành công cho [${editingUser.email}]`);
-      setEditingUser(null);
-      await fetchSystemUsers();
-    } catch (err) {
-      alert(`❌ Lỗi nâng cấp: ${err.message}`);
-    } finally {
-      setLoading(false);
-    }
+      setEditingUser(null); await fetchSystemUsers();
+    } catch (err) { alert(`❌ Lỗi nâng cấp: ${err.message}`); } finally { setLoading(false); }
   };
 
   const handleDeleteUser = async (targetUser) => {
-    if (targetUser.email === SUPER_OWNER_EMAIL) {
-      alert('Không thể xóa tài khoản Super Owner!'); return;
-    }
+    if (targetUser.email === SUPER_OWNER_EMAIL) { alert('Không thể xóa tài khoản Super Owner!'); return; }
     if (!confirm(`🚨 BẠN CÓ CHẮC MUỐN XÓA VĨNH VIỄN tài khoản [${targetUser.user_metadata?.full_name || targetUser.email}] không?`)) return;
     setActionLoadingId(targetUser.id);
     try {
       await callUserManagementApi({ action: 'delete', userId: targetUser.id });
       setUserMessage(`✅ Đã xóa sổ tài khoản khỏi hệ thống.`);
       await fetchSystemUsers();
-    } catch (err) {
-      setUserMessage(`❌ Không thể xóa: ${err.message}`);
-    } finally { setActionLoadingId(null); }
+    } catch (err) { setUserMessage(`❌ Không thể xóa: ${err.message}`); } finally { setActionLoadingId(null); }
   };
 
   const handleApiChange = (e) => setApiConfigs({ ...apiConfigs, [e.target.name]: e.target.value });
@@ -326,10 +260,8 @@ export default function Admin() {
     try {
       const { data, error } = await supabase.functions.invoke('nhanh-auth', { body: { ...apiConfigs, access_code: apiConfigs.nhanh_access_code } });
       if (error || data?.error) throw new Error(error?.message || data?.error);
-      setApiMessage('✅ Đã đổi Token thành công!');
-      setApiConfigs(prev => ({ ...prev, nhanh_access_code: '' }));
-    } catch (error) { setApiMessage('❌ Lỗi: ' + error.message); } 
-    finally { setApiLoading(false); }
+      setApiMessage('✅ Đã đổi Token thành công!'); setApiConfigs(prev => ({ ...prev, nhanh_access_code: '' }));
+    } catch (error) { setApiMessage('❌ Lỗi: ' + error.message); } finally { setApiLoading(false); }
   };
 
   const handleStatusToggle = (statusId) => {
@@ -360,9 +292,7 @@ export default function Admin() {
     if (!selectedNewPriority) return;
     const dynamicOptions = getDynamicPriorityOptions();
     const ruleToAdd = dynamicOptions.find(p => p.id === selectedNewPriority);
-    if (ruleToAdd && !priorities.some(p => p.id === ruleToAdd.id)) {
-        setPriorities([...priorities, ruleToAdd]);
-    }
+    if (ruleToAdd && !priorities.some(p => p.id === ruleToAdd.id)) setPriorities([...priorities, ruleToAdd]);
     setSelectedNewPriority('');
   };
 
@@ -376,8 +306,7 @@ export default function Admin() {
       ];
       await supabase.from('system_configs').upsert(updates, { onConflict: 'key' });
       setFilterMessage('✅ Đã lưu cấu hình Lọc & Ưu tiên!');
-    } catch (error) { setFilterMessage('❌ Lỗi: ' + error.message); } 
-    finally { setFilterLoading(false); }
+    } catch (error) { setFilterMessage('❌ Lỗi: ' + error.message); } finally { setFilterLoading(false); }
   };
 
   const handleSyncOrdersData = async () => {
@@ -393,12 +322,9 @@ export default function Admin() {
       try { data = JSON.parse(textData); } catch(e) { throw new Error(`Máy chủ sập: ${textData}`); }
       if (!res.ok) throw new Error(`[Lỗi Server] ${data.error || data.message || textData}`);
       if (data && data.success) {
-        setSyncOrderStatus('success');
-        setSyncOrderMessage(`🎉 Đã đồng bộ thành công ${data.totalSynced} đơn hàng.`);
+        setSyncOrderStatus('success'); setSyncOrderMessage(`🎉 Đã đồng bộ thành công ${data.totalSynced} đơn hàng.`);
       } else { throw new Error(data?.error || 'Lỗi logic Edge Function'); }
-    } catch (err) {
-      setSyncOrderStatus('error'); setSyncOrderMessage(`❌ ${err.message}`);
-    } finally { setIsSyncingOrder(false); }
+    } catch (err) { setSyncOrderStatus('error'); setSyncOrderMessage(`❌ ${err.message}`); } finally { setIsSyncingOrder(false); }
   };
 
   const handleSyncInventoryOnly = async () => {
@@ -411,12 +337,8 @@ export default function Admin() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Lỗi server');
-      
-      setSyncInventoryStatus('success');
-      setSyncProductMessage(`⚡️ Đã cập nhật Tồn Kho (On Hand) cho ${data.totalSynced} sản phẩm.`);
-    } catch (err) {
-      setSyncInventoryStatus('error'); setSyncProductMessage(`❌ ${err.message}`);
-    } finally { setIsSyncingInventory(false); }
+      setSyncInventoryStatus('success'); setSyncProductMessage(`⚡️ Đã cập nhật Tồn Kho (On Hand) cho ${data.totalSynced} sản phẩm.`);
+    } catch (err) { setSyncInventoryStatus('error'); setSyncProductMessage(`❌ ${err.message}`); } finally { setIsSyncingInventory(false); }
   };
 
   const handleSyncMasterData = async () => {
@@ -430,12 +352,8 @@ export default function Admin() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Lỗi server');
-      
-      setSyncMasterStatus('success');
-      setSyncProductMessage(`🎉 Đã làm mới toàn bộ ${data.totalSynced} sản phẩm.`);
-    } catch (err) {
-      setSyncMasterStatus('error'); setSyncProductMessage(`❌ ${err.message}`);
-    } finally { setIsSyncingMaster(false); }
+      setSyncMasterStatus('success'); setSyncProductMessage(`🎉 Đã làm mới toàn bộ ${data.totalSynced} sản phẩm.`);
+    } catch (err) { setSyncMasterStatus('error'); setSyncProductMessage(`❌ ${err.message}`); } finally { setIsSyncingMaster(false); }
   };
 
   const handleSaveConfig = async () => {
@@ -448,8 +366,7 @@ export default function Admin() {
       const { error } = await supabase.from('system_configs').upsert(updates, { onConflict: 'key' });
       if (error) throw error;
       setSheetMessage('✅ Đã ghi đè link cấu hình mới thành công!');
-    } catch (err) { setSheetMessage('❌ Lỗi lưu cấu hình: ' + err.message); } 
-    finally { setSyncLoading(false); }
+    } catch (err) { setSheetMessage('❌ Lỗi lưu cấu hình: ' + err.message); } finally { setSyncLoading(false); }
   };
 
   const handleTriggerSyncSheets = async () => {
@@ -457,101 +374,67 @@ export default function Admin() {
     try {
         const res = await fetch(`${projectUrl}/functions/v1/sync-sheets`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const data = await res.json();
-        if (data.success) setSheetMessage("🎉 " + data.message);
-        else setSheetMessage("❌ Thất bại: " + data.error);
+        if (data.success) setSheetMessage("🎉 " + data.message); else setSheetMessage("❌ Thất bại: " + data.error);
     } catch (err) { setSheetMessage("❌ Lỗi kết nối: " + err.message); }
     setSyncLoading(false);
   };
 
   const handleSyncReturns = async () => {
     setIsSyncingReturns(true);
-    const platforms = [
-      { id: 8195, name: 'Shopee' },
-      { id: 8855, name: 'TikTok' },
-      { id: 8142, name: 'Lazada' }
-    ];
-    let total = 0;
-    let hasError = false;
+    const platforms = [{ id: 8195, name: 'Shopee' }, { id: 8855, name: 'TikTok' }, { id: 8142, name: 'Lazada' }];
+    let total = 0; let hasError = false;
 
     try {
       for (const platform of platforms) {
-        let currentPage = 1;
-        let hasMoreData = true;
-
+        let currentPage = 1; let hasMoreData = true;
         while (hasMoreData) {
-            setSyncReturnsMessage({ 
-                text: `Đang cào dữ liệu ${platform.name} (Trang ${currentPage})... Đã kéo: ${total} đơn`, 
-                type: 'processing' 
-            });
-            
+            setSyncReturnsMessage({ text: `Đang cào dữ liệu ${platform.name} (Trang ${currentPage})... Đã kéo: ${total} đơn`, type: 'processing' });
             const res = await fetch(`${projectUrl}/functions/v1/sync-ecom-returns`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${anonKey}`,
-                    'apikey': anonKey
-                },
-                body: JSON.stringify({ 
-                    platformId: platform.id,
-                    page: currentPage
-                }) 
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey },
+                body: JSON.stringify({ platformId: platform.id, page: currentPage }) 
             });
-            
             const textData = await res.text();
             let data;
-            
-            try { 
-                data = JSON.parse(textData); 
-            } catch(e) { 
-                throw new Error(`Máy chủ bị sập ở sàn ${platform.name} trang ${currentPage}`); 
-            }
-
-            if (!res.ok) {
-                console.error(`❌ Lỗi sàn ${platform.name} trang ${currentPage}:`, data);
-                hasError = true;
-                break; 
-            }
+            try { data = JSON.parse(textData); } catch(e) { throw new Error(`Máy chủ bị sập ở sàn ${platform.name} trang ${currentPage}`); }
+            if (!res.ok) { hasError = true; break; }
             
             total += (data.syncedCount || 0);
-            if (data.hasMoreData) {
-                currentPage = data.nextPage;
-            } else {
-                hasMoreData = false;
-            }
+            if (data.hasMoreData) currentPage = data.nextPage; else hasMoreData = false;
         }
       }
-      
-      if (hasError) {
-          setSyncReturnsMessage({ text: `⚠️ Đã cào được ${total} đơn, nhưng bị gián đoạn ở một vài trang.`, type: 'error' });
-      } else {
-          setSyncReturnsMessage({ text: `🎉 Hoàn tất! Đã đồng bộ an toàn ${total} đơn trả hàng từ 3 sàn.`, type: 'success' });
-      }
-    } catch (err) {
-      setSyncReturnsMessage({ text: `❌ Lỗi hệ thống: ${err.message}`, type: 'error' });
-    } finally {
-      setIsSyncingReturns(false);
-    }
+      if (hasError) setSyncReturnsMessage({ text: `⚠️ Đã cào được ${total} đơn, nhưng bị gián đoạn ở một vài trang.`, type: 'error' });
+      else setSyncReturnsMessage({ text: `🎉 Hoàn tất! Đã đồng bộ an toàn ${total} đơn trả hàng từ 3 sàn.`, type: 'success' });
+    } catch (err) { setSyncReturnsMessage({ text: `❌ Lỗi hệ thống: ${err.message}`, type: 'error' }); } finally { setIsSyncingReturns(false); }
   };
 
   const handleCleanData = async () => {
-    if (!confirm(`🚨 CẢNH BÁO ĐỎ: Bạn có chắc chắn muốn XÓA VĨNH VIỄN toàn bộ đơn hàng và lịch sử cũ hơn ${cleanDays} ngày không? \n\nHành động này KHÔNG THỂ KHÔI PHỤC!`)) return;
-    
-    setIsCleaning(true);
-    setCleanMessage({ text: 'Đang quét và xóa dữ liệu... Vui lòng không đóng trang.', type: 'processing' });
-    
+    if (!confirm(`🚨 CẢNH BÁO ĐỎ: Bạn có chắc chắn muốn XÓA VĨNH VIỄN toàn bộ đơn hàng cũ hơn ${cleanDays} ngày không?`)) return;
+    setIsCleaning(true); setCleanMessage({ text: 'Đang quét và xóa dữ liệu...', type: 'processing' });
     try {
       const { error } = await supabase.rpc('cleanup_old_data', { days_old: parseInt(cleanDays) });
-      
       if (error) throw error;
       setCleanMessage({ text: `🎉 Đã dọn dẹp sạch sẽ toàn bộ dữ liệu cũ hơn ${cleanDays} ngày!`, type: 'success' });
-    } catch (err) {
-      setCleanMessage({ text: `❌ Lỗi xóa dữ liệu: ${err.message}`, type: 'error' });
+    } catch (err) { setCleanMessage({ text: `❌ Lỗi xóa dữ liệu: ${err.message}`, type: 'error' }); } finally { setIsCleaning(false); }
+  };
+
+  // 🎄 THEME SAVE HANDLER
+  const handleSaveThemes = async () => {
+    setThemeLoading(true); setThemeMessage('');
+    try {
+      const updates = [
+        { key: 'theme_christmas', value: JSON.stringify(xmasTheme) },
+        { key: 'theme_tet', value: JSON.stringify(tetTheme) }
+      ];
+      const { error } = await supabase.from('system_configs').upsert(updates, { onConflict: 'key' });
+      if (error) throw error;
+      setThemeMessage('✅ Đã lưu cấu hình giao diện thành công! Hệ thống sẽ tự động cập nhật ngay.');
+    } catch(err) {
+      setThemeMessage('❌ Lỗi lưu giao diện: ' + err.message);
     } finally {
-      setIsCleaning(false);
+      setThemeLoading(false);
     }
   };
 
-  // Nếu hệ thống đang fetch phân quyền, hiển thị loading spinner thay vì nháy bảng khóa
   if (isAuthLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
@@ -580,10 +463,13 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Cấu trúc Menu Tab mới dạng Segmented Control */}
+        {/* Cấu trúc Menu Tab */}
         <div className="flex bg-slate-100/80 p-1.5 rounded-xl border border-slate-200/60 w-full sm:w-auto overflow-x-auto shadow-inner">
           <button onClick={() => { setActiveTab('configs'); setUserMessage(''); }} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap ${activeTab === 'configs' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}>
             Cấu hình API
+          </button>
+          <button onClick={() => { setActiveTab('themes'); setUserMessage(''); }} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap ${activeTab === 'themes' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50 flex items-center gap-1.5' : 'text-slate-500 hover:text-slate-800 flex items-center gap-1.5'}`}>
+            <Palette size={16}/> Giao diện
           </button>
           <button onClick={() => { setActiveTab('users_management'); setUserMessage(''); }} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap ${activeTab === 'users_management' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}>
             Quản lý Users
@@ -594,9 +480,136 @@ export default function Admin() {
         </div>
       </div>
 
-      {userMessage && activeTab !== 'profile' && (
+      {userMessage && !['profile', 'themes'].includes(activeTab) && (
         <div className={`p-4 rounded-xl border text-sm font-bold flex items-center gap-2 shadow-sm ${userMessage.includes('✅') || userMessage.includes('🎉') ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
           <CheckCircle2 size={18} /> {userMessage}
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* RENDER TAB: GIAO DIỆN (THEMES)             */}
+      {/* ========================================== */}
+      {activeTab === 'themes' && (
+        <div className="space-y-8 animate-in fade-in duration-300">
+          <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+            <h2 className="text-xl font-bold mb-2 text-slate-800 flex items-center gap-2">
+              <Palette size={20} className="text-indigo-600"/> Quản lý Giao diện Lễ hội (Festive Themes)
+            </h2>
+            <p className="text-sm text-slate-500 mb-6">Thay đổi không khí vận hành hệ thống. Bật theme sẽ áp dụng ngay lập tức (Realtime) cho tất cả nhân viên đang đăng nhập.</p>
+
+            {themeMessage && (
+              <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm ${themeMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                {themeMessage}
+              </div>
+            )}
+
+            {isAdminOrOwner ? (
+              <div className="space-y-6">
+                
+                {/* 🧧 GIAO DIỆN TẾT NGUYÊN ĐÁN */}
+                <div className="border border-red-200 bg-gradient-to-r from-red-50/50 to-orange-50/30 rounded-2xl p-6 relative overflow-hidden shadow-sm">
+                  <div className="absolute top-0 right-0 p-4 opacity-10"><PartyPopper size={100} className="text-red-500"/></div>
+                  <div className="relative z-10 flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-black text-red-700 flex items-center gap-2">
+                        <PartyPopper size={20}/> Chủ đề Tết Nguyên Đán
+                      </h3>
+                      <p className="text-sm text-red-700/80 mt-1 font-medium">Bao gồm tông Đỏ/Vàng ánh kim, Đèn lồng, Hoa Mai/Đào rơi và Banner Chúc Tết.</p>
+                      
+                      {/* Form Nhập câu chúc Tết */}
+                      <div className={`mt-4 transition-all duration-300 ${tetTheme.isTetEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                        <label className="text-xs font-bold text-red-800 uppercase flex items-center gap-1.5 mb-1.5">
+                          <MessageSquareQuote size={14}/> Các câu chúc hiển thị trên Banner thả xuống (Mỗi câu 1 dòng)
+                        </label>
+                        <textarea 
+                          rows={3}
+                          value={tetTheme.customMessages || ''}
+                          onChange={(e) => setTetTheme({...tetTheme, customMessages: e.target.value})}
+                          placeholder={`🧧 Chúc Mừng Năm Mới 2027\nVạn sự hanh thông — Đơn hàng thuận lợi\n🌸 Xuân sang – Đơn tới – Đóng hàng hết công suất!`}
+                          className="w-full text-sm p-3 rounded-xl border border-red-200 bg-white/80 outline-none focus:ring-2 focus:ring-red-200 text-red-900 font-medium placeholder-red-300 shadow-inner"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-3 min-w-[220px]">
+                      <label className="flex items-center justify-between cursor-pointer bg-white p-3 rounded-xl border border-red-200 shadow-sm">
+                        <span className="text-sm font-bold text-slate-700">Kích hoạt Giao diện</span>
+                        <div className="relative inline-flex items-center">
+                          <input type="checkbox" className="sr-only peer" checked={tetTheme.isTetEnabled} onChange={(e) => setTetTheme({...tetTheme, isTetEnabled: e.target.checked})} />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                        </div>
+                      </label>
+                      <label className={`flex items-center justify-between cursor-pointer p-3 rounded-xl border shadow-sm transition-all ${tetTheme.isTetEnabled ? 'bg-white border-amber-200' : 'bg-slate-50 border-slate-200 opacity-50'}`}>
+                        <span className="text-sm font-bold text-slate-700 flex items-center gap-2">🌸 Hiệu ứng Hoa rơi</span>
+                        <div className="relative inline-flex items-center">
+                          <input type="checkbox" disabled={!tetTheme.isTetEnabled} className="sr-only peer" checked={tetTheme.isPetalFalling} onChange={(e) => setTetTheme({...tetTheme, isPetalFalling: e.target.checked})} />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 🎄 GIAO DIỆN NOEL */}
+                <div className="border border-green-200 bg-gradient-to-r from-green-50/50 to-emerald-50/30 rounded-2xl p-6 relative overflow-hidden shadow-sm mt-6">
+                  <div className="absolute top-0 right-0 p-4 opacity-10"><TreePine size={100} className="text-green-600"/></div>
+                  <div className="relative z-10 flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-black text-green-800 flex items-center gap-2">
+                        <TreePine size={20}/> Chủ đề Giáng Sinh (Christmas)
+                      </h3>
+                      <p className="text-sm text-green-700/80 mt-1 font-medium">Bao gồm viền Neon, Tuyết rơi siêu nhẹ, Avatar gắn mũ Noel và Xe Tuần Lộc.</p>
+                      
+                      {/* Form Nhập câu chúc Noel */}
+                      <div className={`mt-4 transition-all duration-300 ${xmasTheme.isXmasEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                        <label className="text-xs font-bold text-green-800 uppercase flex items-center gap-1.5 mb-1.5">
+                          <MessageSquareQuote size={14}/> Các câu chúc của Ông già Noel (Mỗi câu 1 dòng)
+                        </label>
+                        <textarea 
+                          rows={3}
+                          value={xmasTheme.customMessages || ''}
+                          onChange={(e) => setXmasTheme({...xmasTheme, customMessages: e.target.value})}
+                          placeholder={`Ho Ho Ho! Chốt đơn mỏi tay nhé các sếp! 🎁\nGiáng sinh an lành! Gói hàng cẩn thận nha! 🎄`}
+                          className="w-full text-sm p-3 rounded-xl border border-green-200 bg-white/80 outline-none focus:ring-2 focus:ring-green-200 text-green-900 font-medium placeholder-green-300 shadow-inner"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-3 min-w-[220px]">
+                      <label className="flex items-center justify-between cursor-pointer bg-white p-3 rounded-xl border border-green-200 shadow-sm">
+                        <span className="text-sm font-bold text-slate-700">Kích hoạt Giao diện</span>
+                        <div className="relative inline-flex items-center">
+                          <input type="checkbox" className="sr-only peer" checked={xmasTheme.isXmasEnabled} onChange={(e) => setXmasTheme({...xmasTheme, isXmasEnabled: e.target.checked})} />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                        </div>
+                      </label>
+                      <label className={`flex items-center justify-between cursor-pointer p-3 rounded-xl border shadow-sm transition-all ${xmasTheme.isXmasEnabled ? 'bg-white border-red-200' : 'bg-slate-50 border-slate-200 opacity-50'}`}>
+                        <span className="text-sm font-bold text-slate-700 flex items-center gap-2">🎅 Xe tuần lộc bay</span>
+                        <div className="relative inline-flex items-center">
+                          <input type="checkbox" disabled={!xmasTheme.isXmasEnabled} className="sr-only peer" checked={xmasTheme.isSantaFlying} onChange={(e) => setXmasTheme({...xmasTheme, isSantaFlying: e.target.checked})} />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 flex justify-end">
+                  <button onClick={handleSaveThemes} disabled={themeLoading} className="px-8 py-3 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-md hover:bg-indigo-700 transition cursor-pointer disabled:opacity-50 flex items-center gap-2">
+                    {themeLoading && <Loader2 size={16} className="animate-spin"/>} Lưu Tùy Chỉnh Giao Diện
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl flex items-center gap-3 text-slate-500">
+                <Lock size={20} className="text-slate-400" />
+                <div>
+                  <p className="text-sm font-bold text-slate-700">Tính năng giới hạn</p>
+                  <p className="text-xs mt-0.5">Chỉ Quản trị viên (Admin) hoặc Owner mới có quyền thay đổi giao diện toàn hệ thống.</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -604,6 +617,7 @@ export default function Admin() {
       {activeTab === 'profile' && (
         <div className="animate-in fade-in duration-300 max-w-2xl mx-auto">
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+            {/* Giữ nguyên Code Tab Profile... */}
             <div className="flex items-center gap-5 border-b border-slate-100 pb-6 mb-6">
               <div className="w-16 h-16 bg-blue-50 border border-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-2xl shadow-sm">
                 <User size={32} />
@@ -639,8 +653,6 @@ export default function Admin() {
               
               <div className="pt-4 border-t border-slate-100 space-y-5">
                   <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2"><KeyRound size={16}/> Cập nhật mật khẩu</h3>
-                  
-                  {/* Trường nhập mật khẩu cũ */}
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1.5">Mật khẩu hiện tại <span className="text-red-500">*</span></label>
                     <div className="relative">
@@ -650,7 +662,6 @@ export default function Admin() {
                       </button>
                     </div>
                   </div>
-
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1.5">Mật khẩu mới <span className="text-slate-400 font-medium">(Bỏ trống nếu không muốn đổi)</span></label>
                     <div className="relative">
@@ -675,8 +686,8 @@ export default function Admin() {
       {/* RENDER TAB: CẤU HÌNH HỆ THỐNG */}
       {activeTab === 'configs' && (
         <div className="space-y-8 animate-in fade-in duration-300">
-
-          {/* KHỐI ĐỒNG BỘ DỮ LIỆU ĐỘC LẬP */}
+           {/* Giữ nguyên toàn bộ Code Cấu hình Hệ thống (Lọc, Quét Đơn, Cài API...) của phiên bản trước */}
+           {/* KHỐI ĐỒNG BỘ DỮ LIỆU ĐỘC LẬP */}
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-4">
               <DownloadCloud size={20} className="text-blue-600"/> Đồng bộ Dữ liệu Cục bộ (Tránh Miss Webhook)
@@ -776,7 +787,7 @@ export default function Admin() {
               </div>
             )}
 
-            {/* Không render phần tương tác nếu không phải Admin, giải quyết triệt để lỗi "nháy overlay" */}
+            {/* Không render phần tương tác nếu không phải Admin */}
             {isAdminOrOwner ? (
               <div className="flex flex-col md:flex-row gap-5 items-center justify-between bg-indigo-50/40 p-6 rounded-2xl border border-indigo-100">
                 <div className="flex-1">
@@ -835,7 +846,6 @@ export default function Admin() {
             {sheetMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm ${sheetMessage.includes('✅') || sheetMessage.includes('🎉') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>{sheetMessage}</div>}
             
             <div className="space-y-6">
-              {/* KHU VỰC 1: Cấu hình Link */}
               {isOwner ? (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
@@ -876,7 +886,6 @@ export default function Admin() {
                 </div>
               )}
 
-              {/* KHU VỰC 2: Action Quét Sheet */}
               <div className="flex flex-col sm:flex-row gap-5 items-start sm:items-center justify-between border-t border-slate-100 pt-8 mt-2">
                   <div>
                     <p className="text-base font-bold text-slate-800">Cập nhật dữ liệu từ Sheets lên Data</p>
@@ -1183,7 +1192,6 @@ export default function Admin() {
                 </select>
               </div>
               
-              {/* VÙNG NÂNG CẤP LÊN OWNER */}
               {isOwner && editForm.role === 'admin' && !(editingUser.user_metadata?.is_owner === true) && (
                 <div className="mt-6 p-5 border border-amber-200 bg-amber-50/80 rounded-2xl space-y-4">
                   <div className="flex items-start justify-between">
