@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
   Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert,
-  Palette, TreePine, PartyPopper, MessageSquareQuote
+  Palette, TreePine, PartyPopper, MessageSquareQuote, MoonStar, Flag
 } from 'lucide-react';
 import * as Papa from 'papaparse'; 
 
@@ -68,6 +68,17 @@ export default function Admin() {
   // 🎄 Themes State
   const [xmasTheme, setXmasTheme] = useState({ isXmasEnabled: false, isSantaFlying: false, customMessages: '' });
   const [tetTheme, setTetTheme] = useState({ isTetEnabled: false, isPetalFalling: false, customMessages: '' });
+  const [midAutumnTheme, setMidAutumnTheme] = useState({ 
+    isMidAutumnEnabled: false, 
+    isJadeRabbitEnabled: true, 
+    isLanternEnabled: true, 
+    customMessages: '' 
+  });
+  const [nationalDayTheme, setNationalDayTheme] = useState({ 
+    isNationalDayEnabled: false, 
+    isFireworksEnabled: true, 
+    customMessages: '' 
+  });
   const [themeLoading, setThemeLoading] = useState(false);
   const [themeMessage, setThemeMessage] = useState('');
 
@@ -148,6 +159,12 @@ export default function Admin() {
       }
       if (configMap['theme_tet']) {
         try { setTetTheme(JSON.parse(configMap['theme_tet'])); } catch(e) {}
+      }
+      if (configMap['theme_mid_autumn']) {
+        try { setMidAutumnTheme(JSON.parse(configMap['theme_mid_autumn'])); } catch(e) {}
+      }
+      if (configMap['theme_national_day']) {
+        try { setNationalDayTheme(JSON.parse(configMap['theme_national_day'])); } catch(e) {}
       }
     }
   };
@@ -423,7 +440,9 @@ export default function Admin() {
     try {
       const updates = [
         { key: 'theme_christmas', value: JSON.stringify(xmasTheme) },
-        { key: 'theme_tet', value: JSON.stringify(tetTheme) }
+        { key: 'theme_tet', value: JSON.stringify(tetTheme) },
+        { key: 'theme_mid_autumn', value: JSON.stringify(midAutumnTheme) },
+        { key: 'theme_national_day', value: JSON.stringify(nationalDayTheme) }
       ];
       const { error } = await supabase.from('system_configs').upsert(updates, { onConflict: 'key' });
       if (error) throw error;
@@ -594,6 +613,104 @@ export default function Admin() {
                   </div>
                 </div>
 
+                {/* 🥮 GIAO DIỆN TRUNG THU */}
+                <div className="border border-yellow-200 bg-gradient-to-r from-indigo-50/50 to-blue-50/30 rounded-2xl p-6 relative overflow-hidden shadow-sm mt-6">
+                  <div className="absolute top-0 right-0 p-4 opacity-10"><MoonStar size={100} className="text-yellow-600"/></div>
+                  <div className="relative z-10 flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-black text-indigo-800 flex items-center gap-2">
+                        <MoonStar size={20}/> Chủ đề Trung Thu
+                      </h3>
+                      <p className="text-sm text-indigo-700/80 mt-1 font-medium">Nền xanh đêm, trăng rằm, đèn lồng, thỏ ngọc và bánh trung thu.</p>
+                      
+                      {/* Form nhập câu chúc */}
+                      <div className={`mt-4 transition-all duration-300 ${midAutumnTheme.isMidAutumnEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                        <label className="text-xs font-bold text-indigo-800 uppercase flex items-center gap-1.5 mb-1.5">
+                          <MessageSquareQuote size={14}/> Câu chúc hiển thị (nếu có)
+                        </label>
+                        <textarea 
+                          rows={3}
+                          value={midAutumnTheme.customMessages || ''}
+                          onChange={(e) => setMidAutumnTheme({...midAutumnTheme, customMessages: e.target.value})}
+                          placeholder={`Trung thu đoàn viên, đơn hàng tấp nập!\nThỏ ngọc mang may mắn đến mọi nhà 🌕`}
+                          className="w-full text-sm p-3 rounded-xl border border-indigo-200 bg-white/80 outline-none focus:ring-2 focus:ring-indigo-200 text-indigo-900 font-medium placeholder-indigo-300 shadow-inner"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-3 min-w-[220px]">
+                      <label className="flex items-center justify-between cursor-pointer bg-white p-3 rounded-xl border border-indigo-200 shadow-sm">
+                        <span className="text-sm font-bold text-slate-700">Kích hoạt Giao diện</span>
+                        <div className="relative inline-flex items-center">
+                          <input type="checkbox" className="sr-only peer" checked={midAutumnTheme.isMidAutumnEnabled} onChange={(e) => setMidAutumnTheme({...midAutumnTheme, isMidAutumnEnabled: e.target.checked})} />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </div>
+                      </label>
+                      
+                      <label className={`flex items-center justify-between cursor-pointer p-3 rounded-xl border shadow-sm transition-all ${midAutumnTheme.isMidAutumnEnabled ? 'bg-white border-yellow-200' : 'bg-slate-50 border-slate-200 opacity-50'}`}>
+                        <span className="text-sm font-bold text-slate-700 flex items-center gap-2">🐇 Thỏ ngọc chạy nhảy</span>
+                        <div className="relative inline-flex items-center">
+                          <input type="checkbox" disabled={!midAutumnTheme.isMidAutumnEnabled} className="sr-only peer" checked={midAutumnTheme.isJadeRabbitEnabled} onChange={(e) => setMidAutumnTheme({...midAutumnTheme, isJadeRabbitEnabled: e.target.checked})} />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                        </div>
+                      </label>
+                      
+                      <label className={`flex items-center justify-between cursor-pointer p-3 rounded-xl border shadow-sm transition-all ${midAutumnTheme.isMidAutumnEnabled ? 'bg-white border-indigo-200' : 'bg-slate-50 border-slate-200 opacity-50'}`}>
+                        <span className="text-sm font-bold text-slate-700 flex items-center gap-2">🏮 Đèn lồng</span>
+                        <div className="relative inline-flex items-center">
+                          <input type="checkbox" disabled={!midAutumnTheme.isMidAutumnEnabled} className="sr-only peer" checked={midAutumnTheme.isLanternEnabled} onChange={(e) => setMidAutumnTheme({...midAutumnTheme, isLanternEnabled: e.target.checked})} />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 🇻🇳 GIAO DIỆN QUỐC KHÁNH 2/9 */}
+                <div className="border border-red-200 bg-gradient-to-r from-red-50/50 to-blue-50/30 rounded-2xl p-6 relative overflow-hidden shadow-sm mt-6">
+                  <div className="absolute top-0 right-0 p-4 opacity-10"><Flag size={100} className="text-red-600"/></div>
+                  <div className="relative z-10 flex flex-col md:flex-row gap-6 justify-between items-start md:items-center">
+                    <div className="flex-1">
+                      <h3 className="text-lg font-black text-red-800 flex items-center gap-2">
+                        <Flag size={20}/> Chủ đề Quốc Khánh 2/9
+                      </h3>
+                      <p className="text-sm text-red-700/80 mt-1 font-medium">Cờ đỏ sao vàng, pháo hoa, banner chào mừng Quốc khánh.</p>
+                      
+                      {/* Form nhập câu chúc */}
+                      <div className={`mt-4 transition-all duration-300 ${nationalDayTheme.isNationalDayEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                        <label className="text-xs font-bold text-red-800 uppercase flex items-center gap-1.5 mb-1.5">
+                          <MessageSquareQuote size={14}/> Câu chúc hiển thị (nếu có)
+                        </label>
+                        <textarea 
+                          rows={3}
+                          value={nationalDayTheme.customMessages || ''}
+                          onChange={(e) => setNationalDayTheme({...nationalDayTheme, customMessages: e.target.value})}
+                          placeholder={`Chào mừng Quốc khánh 2/9\nTự hào Việt Nam • 1945 — 2026 🇻🇳`}
+                          className="w-full text-sm p-3 rounded-xl border border-red-200 bg-white/80 outline-none focus:ring-2 focus:ring-red-200 text-red-900 font-medium placeholder-red-300 shadow-inner"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col gap-3 min-w-[220px]">
+                      <label className="flex items-center justify-between cursor-pointer bg-white p-3 rounded-xl border border-red-200 shadow-sm">
+                        <span className="text-sm font-bold text-slate-700">Kích hoạt Giao diện</span>
+                        <div className="relative inline-flex items-center">
+                          <input type="checkbox" className="sr-only peer" checked={nationalDayTheme.isNationalDayEnabled} onChange={(e) => setNationalDayTheme({...nationalDayTheme, isNationalDayEnabled: e.target.checked})} />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                        </div>
+                      </label>
+                      
+                      <label className={`flex items-center justify-between cursor-pointer p-3 rounded-xl border shadow-sm transition-all ${nationalDayTheme.isNationalDayEnabled ? 'bg-white border-yellow-200' : 'bg-slate-50 border-slate-200 opacity-50'}`}>
+                        <span className="text-sm font-bold text-slate-700 flex items-center gap-2">🎆 Pháo hoa</span>
+                        <div className="relative inline-flex items-center">
+                          <input type="checkbox" disabled={!nationalDayTheme.isNationalDayEnabled} className="sr-only peer" checked={nationalDayTheme.isFireworksEnabled} onChange={(e) => setNationalDayTheme({...nationalDayTheme, isFireworksEnabled: e.target.checked})} />
+                          <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-500"></div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="pt-4 border-t border-slate-100 flex justify-end">
                   <button onClick={handleSaveThemes} disabled={themeLoading} className="px-8 py-3 bg-indigo-600 text-white text-sm font-bold rounded-xl shadow-md hover:bg-indigo-700 transition cursor-pointer disabled:opacity-50 flex items-center gap-2">
                     {themeLoading && <Loader2 size={16} className="animate-spin"/>} Lưu Tùy Chỉnh Giao Diện
@@ -690,7 +807,7 @@ export default function Admin() {
            {/* KHỐI ĐỒNG BỘ DỮ LIỆU ĐỘC LẬP */}
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-4">
-              <DownloadCloud size={20} className="text-blue-600"/> Đồng bộ Dữ liệu Cục bộ (Tránh Miss Webhook)
+              <DownloadCloud size={20} className="text-blue-600"/> Đồng bộ dữ liệu Cục bộ (Tránh Miss Webhook)
             </h2>
 
             {/* Tầng cào Đơn hàng */}
