@@ -234,14 +234,14 @@ const MidAutumnOverlay = ({ theme }) => {
 
   return (
     <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
-      {/* Trăng tròn */}
-      <div className="absolute top-10 right-10 w-44 h-44 rounded-full bg-yellow-100 shadow-[0_0_120px_40px_rgba(255,255,200,0.7)]" />
+      {/* Trăng tròn (Tone hoàng hôn) */}
+      <div className="absolute top-10 right-10 w-44 h-44 rounded-full bg-orange-200 shadow-[0_0_120px_40px_rgba(251,146,60,0.4)]" />
       
-      {/* Sao nhấp nháy */}
-      {[...Array(50)].map((_, i) => (
+      {/* Đom đóm nhấp nháy thay vì sao trắng */}
+      {[...Array(30)].map((_, i) => (
         <div
           key={i}
-          className="absolute animate-twinkle text-white"
+          className="absolute animate-twinkle text-orange-400"
           style={{
             left: `${Math.random() * 100}%`,
             top: `${Math.random() * 100}%`,
@@ -253,9 +253,9 @@ const MidAutumnOverlay = ({ theme }) => {
         </div>
       ))}
 
-      {/* Mây trôi */}
-      <div className="absolute top-1/4 left-0 w-64 h-20 bg-white/10 rounded-full blur-2xl animate-drift" style={{ animationDelay: '0s' }} />
-      <div className="absolute top-1/3 left-1/3 w-80 h-24 bg-white/10 rounded-full blur-2xl animate-drift" style={{ animationDelay: '2s' }} />
+      {/* Mây trôi (Màu mây ban ngày/chiều tà) */}
+      <div className="absolute top-1/4 left-0 w-64 h-20 bg-white/60 rounded-full blur-2xl animate-drift" style={{ animationDelay: '0s' }} />
+      <div className="absolute top-1/3 left-1/3 w-80 h-24 bg-white/60 rounded-full blur-2xl animate-drift" style={{ animationDelay: '2s' }} />
 
       {/* Đèn lồng (nếu bật) */}
       {theme.isLanternEnabled && lanterns.map((l) => (
@@ -276,13 +276,13 @@ const MidAutumnOverlay = ({ theme }) => {
         </div>
       ))}
 
-      {/* Silhouette mái nhà / cây tre dưới cùng */}
-      <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-black/50 to-transparent" />
+      {/* Silhouette mái nhà nhạt màu hoàng hôn */}
+      <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-orange-900/20 to-transparent" />
 
       {/* Bánh trung thu, trà, mâm cỗ */}
-      <div className="absolute bottom-10 left-10 text-4xl pointer-events-none">🥮</div>
-      <div className="absolute bottom-20 right-20 text-4xl pointer-events-none">🍵</div>
-      <div className="absolute bottom-5 left-1/3 text-4xl pointer-events-none">🏮</div>
+      <div className="absolute bottom-10 left-10 text-4xl pointer-events-none drop-shadow-md">🥮</div>
+      <div className="absolute bottom-20 right-20 text-4xl pointer-events-none drop-shadow-md">🍵</div>
+      <div className="absolute bottom-5 left-1/3 text-4xl pointer-events-none drop-shadow-md">🏮</div>
 
       {/* Thỏ ngọc (nếu bật) */}
       {theme.isJadeRabbitEnabled && (
@@ -290,7 +290,7 @@ const MidAutumnOverlay = ({ theme }) => {
           className={`absolute bottom-10 left-1/2 transform -translate-x-1/2 cursor-pointer pointer-events-auto ${rabbitJump ? 'animate-rabbit-jump' : 'animate-rabbit-run'}`}
           onClick={handleRabbitClick}
         >
-          <span className="text-4xl">🐇</span>
+          <span className="text-4xl drop-shadow-md">🐇</span>
         </div>
       )}
     </div>
@@ -403,9 +403,28 @@ const NationalDayOverlay = ({ theme }) => {
       <div className="absolute bottom-4 right-10 text-2xl opacity-40">🏠</div>
       <div className="absolute bottom-2 left-1/2 text-2xl opacity-40">🇻🇳</div>
 
-      {/* Bản đồ Việt Nam outline (mờ) */}
-      <svg className="absolute bottom-10 left-1/2 transform -translate-x-1/2 opacity-10 w-64 h-64" viewBox="0 0 100 100">
-        <path d="M50 10 L70 20 L80 50 L70 80 L50 90 L30 80 L20 50 Z" fill="none" stroke="red" strokeWidth="2" />
+      {/* Bản đồ Việt Nam outline (Chi tiết có Quần đảo) */}
+      <svg className="absolute bottom-10 left-1/2 transform -translate-x-1/2 opacity-20 w-80 h-80" viewBox="0 0 200 200">
+        {/* Đất liền */}
+        <path d="M85,25 Q100,15 105,35 Q110,50 95,70 Q85,85 110,110 Q120,125 110,145 Q100,160 85,165 Q70,170 65,155 Q60,140 80,135 Q95,125 90,105 Q85,85 70,70 Q55,55 70,35 Q75,20 85,25 Z" fill="none" stroke="#ef4444" strokeWidth="2.5" />
+        
+        {/* Quần đảo Hoàng Sa */}
+        <g transform="translate(125, 70)">
+          <circle cx="0" cy="0" r="1.5" fill="#ef4444"/>
+          <circle cx="5" cy="-3" r="1" fill="#ef4444"/>
+          <circle cx="3" cy="4" r="1" fill="#ef4444"/>
+          <text x="8" y="2" fontSize="6" fill="#ef4444" className="font-semibold">Hoàng Sa</text>
+        </g>
+        
+        {/* Quần đảo Trường Sa */}
+        <g transform="translate(135, 130)">
+          <circle cx="0" cy="0" r="1.5" fill="#ef4444"/>
+          <circle cx="6" cy="4" r="1.5" fill="#ef4444"/>
+          <circle cx="-4" cy="5" r="1" fill="#ef4444"/>
+          <circle cx="3" cy="8" r="1" fill="#ef4444"/>
+          <circle cx="8" cy="-3" r="1" fill="#ef4444"/>
+          <text x="12" y="5" fontSize="6" fill="#ef4444" className="font-semibold">Trường Sa</text>
+        </g>
       </svg>
     </div>
   );
@@ -521,7 +540,6 @@ export default function Layout() {
   const avatarLetter = displayName.charAt(0).toUpperCase();
   const isAdmin = user?.user_metadata?.role === 'admin';
   
-  // ⚡️ ĐÃ SỬA LỖI: THÊM LẠI KHAI BÁO isOwner ⚡️
   const isOwner = user?.user_metadata?.is_owner === true;
   
   const isTet = tetTheme?.isTetEnabled || false;
@@ -682,8 +700,8 @@ export default function Layout() {
         .animate-glow-pulse { animation: glow-pulse 3s ease-in-out infinite; }
 
         .mid-autumn-neon-border {
-          box-shadow: inset -3px 0px 15px rgba(255, 255, 255, 0.1), inset 0px 3px 15px rgba(255, 255, 255, 0.05);
-          border-right: 1px solid rgba(255, 255, 255, 0.2);
+          box-shadow: inset -3px 0px 15px rgba(245, 158, 11, 0.2), inset 0px 3px 15px rgba(245, 158, 11, 0.1);
+          border-right: 1px solid rgba(245, 158, 11, 0.3);
         }
         .national-day-neon-border {
           box-shadow: inset -3px 0px 15px rgba(215, 25, 32, 0.3), inset 0px 3px 15px rgba(255, 215, 0, 0.3);
@@ -702,7 +720,7 @@ export default function Layout() {
 
       <div className={`flex h-screen font-sans antialiased text-gray-800 tracking-normal selection:bg-blue-500/20 selection:text-blue-700 transition-colors duration-1000 ${
         isTet ? 'bg-gradient-to-br from-red-50 via-orange-50/40 to-yellow-50/40' : 
-        isMidAutumn ? 'bg-gradient-to-br from-indigo-950 via-purple-900 to-blue-900' : 
+        isMidAutumn ? 'bg-gradient-to-br from-orange-50 via-amber-50 to-yellow-100/50' : 
         isNationalDay ? 'bg-gradient-to-br from-slate-100 via-white to-blue-50/30' : 
         isXmas ? 'bg-gradient-to-br from-red-50 via-white to-green-50/40' : 
         'bg-gradient-to-br from-slate-50 via-white to-blue-50/30'
@@ -718,7 +736,7 @@ export default function Layout() {
             mobileMenuOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'
           } ${
             isTet ? 'bg-white/90 tet-neon-border' : 
-            isMidAutumn ? 'bg-indigo-950/60 mid-autumn-neon-border' : 
+            isMidAutumn ? 'bg-white/80 mid-autumn-neon-border' : 
             isNationalDay ? 'bg-white/80 national-day-neon-border' : 
             isXmas ? 'bg-white/80 xmas-neon-border' : 
             'bg-white/70 border-r border-white/30'
@@ -727,7 +745,7 @@ export default function Layout() {
           
           <div className={`h-16 flex items-center justify-between px-4 relative backdrop-blur-md rounded-br-2xl whitespace-nowrap transition-colors ${
             isTet ? 'bg-red-50/80 border-b border-yellow-300/50' : 
-            isMidAutumn ? 'bg-indigo-900/80 border-b border-white/10' : 
+            isMidAutumn ? 'bg-orange-50/80 border-b border-orange-200/50' : 
             isNationalDay ? 'bg-white/50 border-b border-yellow-300/50' : 
             isXmas ? 'bg-red-50/50 border-b border-red-200/50' : 
             'bg-white/50 border-b border-white/20'
@@ -735,7 +753,7 @@ export default function Layout() {
             <div className="flex items-center">
               <div className={`p-1.5 rounded-xl shrink-0 transition-colors ${
                 isTet ? 'bg-red-600 shadow-yellow-500/40 shadow-lg' : 
-                isMidAutumn ? 'bg-yellow-500 shadow-yellow-300/40 shadow-lg' : 
+                isMidAutumn ? 'bg-orange-500 shadow-orange-300/40 shadow-lg' : 
                 isNationalDay ? 'bg-red-600 shadow-yellow-500/40 shadow-lg' : 
                 isXmas ? 'bg-red-600 shadow-red-500/30 shadow-lg' : 
                 'bg-blue-600 shadow-blue-500/20 shadow-lg'
@@ -744,12 +762,12 @@ export default function Layout() {
               </div>
               <h1 className={`text-xl font-black tracking-tight ml-3 transition-all duration-300 flex items-center gap-1 ${
                 isTet || isXmas || isNationalDay ? 'text-red-700' : 
-                isMidAutumn ? 'text-yellow-300' : 
+                isMidAutumn ? 'text-orange-600' : 
                 'text-gray-900'
               } ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
                 Amelie<span className={`${
                   isTet ? 'text-yellow-600' : 
-                  isMidAutumn ? 'text-orange-400' : 
+                  isMidAutumn ? 'text-amber-500' : 
                   isNationalDay ? 'text-yellow-600' : 
                   isXmas ? 'text-green-600' : 
                   'text-blue-600'
@@ -770,14 +788,14 @@ export default function Layout() {
               className={`p-1 rounded-lg hover:bg-white/60 transition-colors shrink-0 z-10 ${!sidebarExpanded ? 'absolute right-[18px]' : ''}`}
               title={isSidebarPinned ? 'Bỏ ghim sidebar' : 'Ghim sidebar'}
             >
-              {isSidebarPinned ? <PinOff size={14} className={isTet || isXmas || isNationalDay ? 'text-red-400' : isMidAutumn ? 'text-yellow-300' : 'text-gray-500'} /> : <Pin size={14} className={isTet || isXmas || isNationalDay ? 'text-red-400' : isMidAutumn ? 'text-yellow-300' : 'text-gray-500'} />}
+              {isSidebarPinned ? <PinOff size={14} className={isTet || isXmas || isNationalDay ? 'text-red-400' : isMidAutumn ? 'text-orange-400' : 'text-gray-500'} /> : <Pin size={14} className={isTet || isXmas || isNationalDay ? 'text-red-400' : isMidAutumn ? 'text-orange-400' : 'text-gray-500'} />}
             </button>
           </div>
 
           <div className="flex-1 overflow-y-auto overflow-x-hidden py-6 scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
             <div className={`px-5 mb-3 text-[11px] font-bold uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${
               isTet || isXmas || isNationalDay ? 'text-red-400/80' : 
-              isMidAutumn ? 'text-yellow-200/80' : 
+              isMidAutumn ? 'text-orange-400/80' : 
               'text-gray-400'
             } ${sidebarExpanded ? 'opacity-100 h-auto' : 'opacity-0 h-0 overflow-hidden'}`}>
               Báo cáo & Vận hành
@@ -789,23 +807,23 @@ export default function Layout() {
 
                 const wiggleClass = isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : 
                   isXmas ? 'hover-xmas-wiggle hover:bg-red-50' : 
-                  isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : 
+                  isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : 
                   isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : 
                   'hover:bg-white/60 hover:text-gray-900';
                 const activeParentClass = isTet ? 'bg-red-50 text-red-600 border-red-200/50 shadow-sm' : 
                   isXmas ? 'bg-red-50 text-red-600' : 
-                  isMidAutumn ? 'bg-indigo-900/60 text-yellow-300 border-white/10 shadow-sm' : 
+                  isMidAutumn ? 'bg-orange-50 text-orange-600 border-orange-200/50 shadow-sm' : 
                   isNationalDay ? 'bg-red-50 text-red-600 border-yellow-200/50 shadow-sm' : 
                   'bg-blue-50 text-blue-600';
                 const activeChildClass = isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 
                   isXmas ? 'bg-red-50 text-red-700 font-bold' : 
-                  isMidAutumn ? 'bg-indigo-900/70 text-yellow-300 font-bold border-white/10 shadow-sm' : 
+                  isMidAutumn ? 'bg-orange-50 text-orange-700 font-bold border-orange-200/50 shadow-sm' : 
                   isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 
                   'bg-blue-50 text-blue-700 font-bold';
-                const iconActiveColor = isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-yellow-300' : 'text-blue-600';
+                const iconActiveColor = isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-orange-600' : 'text-blue-600';
                 const iconHoverColor = isTet ? 'text-yellow-500' : 
                   isXmas ? 'text-green-500' : 
-                  isMidAutumn ? 'text-yellow-300' : 
+                  isMidAutumn ? 'text-orange-500' : 
                   isNationalDay ? 'text-yellow-500' : 
                   'text-blue-500';
 
@@ -813,9 +831,9 @@ export default function Layout() {
                   const isChildActive = location.pathname === '/' || location.pathname === '/dashboard-don-hoan' || location.pathname === '/dashboard-kpi' || location.pathname === '/tra-cuu-luan-chuyen';
                   return (
                     <div key={item.id} className="space-y-1.5">
-                      <button onClick={() => setIsDashboardOpen(!isDashboardOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isDashboardOpen ? activeParentClass : `${wiggleClass} font-medium ${isMidAutumn ? 'text-gray-300' : 'text-gray-600'}`}`}>
+                      <button onClick={() => setIsDashboardOpen(!isDashboardOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isDashboardOpen ? activeParentClass : `${wiggleClass} font-medium ${isMidAutumn ? 'text-gray-600' : 'text-gray-600'}`}`}>
                         <div className="flex items-center shrink-0">
-                          <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? iconActiveColor : `${isMidAutumn ? 'text-gray-400 group-hover:text-yellow-300' : 'text-gray-400 group-hover:' + iconHoverColor}`}`} />
+                          <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? iconActiveColor : `text-gray-400 group-hover:${iconHoverColor}`}`} />
                         </div>
                         <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
                           <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>
@@ -823,20 +841,20 @@ export default function Layout() {
                         </div>
                       </button>
                       {sidebarExpanded && isDashboardOpen && (
-                        <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-white/20' : 'border-slate-200/60'}`}>
-                          <Link to="/" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                        <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-orange-200/50' : 'border-slate-200/60'}`}>
+                          <Link to="/" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <TrendingUp size={16} className={location.pathname === '/' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Đơn đi hàng ngày</span>
                           </Link>
-                          <Link to="/dashboard-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/dashboard-don-hoan' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                          <Link to="/dashboard-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/dashboard-don-hoan' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <BarChart2 size={16} className={location.pathname === '/dashboard-don-hoan' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">SL Đơn hoàn theo ngày</span>
                           </Link>
-                          <Link to="/dashboard-kpi" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/dashboard-kpi' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                          <Link to="/dashboard-kpi" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/dashboard-kpi' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <Target size={16} className={location.pathname === '/dashboard-kpi' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Tổng quan KPI tháng</span>
                           </Link>
-                          <Link to="/tra-cuu-luan-chuyen" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/tra-cuu-luan-chuyen' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                          <Link to="/tra-cuu-luan-chuyen" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/tra-cuu-luan-chuyen' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <History size={16} className={location.pathname === '/tra-cuu-luan-chuyen' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Tra cứu luân chuyển</span>
                           </Link>
@@ -850,9 +868,9 @@ export default function Layout() {
                   const isChildActive = location.pathname === '/bao-cao-don' || location.pathname === '/don-da-in-hom-nay' || location.pathname === '/loc-don-theo-day-ke' || location.pathname === '/chen-vi-tri-awb' || location.pathname === '/in-don-spx';
                   return (
                     <div key={item.id} className="space-y-1.5">
-                      <button onClick={() => setIsPrintOrdersOpen(!isPrintOrdersOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isPrintOrdersOpen ? activeParentClass : `${wiggleClass} font-medium ${isMidAutumn ? 'text-gray-300' : 'text-gray-600'}`}`}>
+                      <button onClick={() => setIsPrintOrdersOpen(!isPrintOrdersOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isPrintOrdersOpen ? activeParentClass : `${wiggleClass} font-medium ${isMidAutumn ? 'text-gray-600' : 'text-gray-600'}`}`}>
                         <div className="flex items-center shrink-0">
-                          <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? iconActiveColor : `${isMidAutumn ? 'text-gray-400 group-hover:text-yellow-300' : 'text-gray-400 group-hover:' + iconHoverColor}`}`} />
+                          <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? iconActiveColor : `text-gray-400 group-hover:${iconHoverColor}`}`} />
                         </div>
                         <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
                           <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>
@@ -860,25 +878,25 @@ export default function Layout() {
                         </div>
                       </button>
                       {sidebarExpanded && isPrintOrdersOpen && (
-                        <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-white/20' : 'border-slate-200/60'}`}>
-                          <Link to="/bao-cao-don" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/bao-cao-don' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                        <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-orange-200/50' : 'border-slate-200/60'}`}>
+                          <Link to="/bao-cao-don" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/bao-cao-don' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <Printer size={16} className={location.pathname === '/bao-cao-don' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Đơn có thể in</span>
                           </Link>
-                          <Link to="/don-da-in-hom-nay" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/don-da-in-hom-nay' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                          <Link to="/don-da-in-hom-nay" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/don-da-in-hom-nay' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <CheckCircle2 size={16} className={location.pathname === '/don-da-in-hom-nay' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Đơn đã in hôm nay</span>
                           </Link>
-                          <Link to="/loc-don-theo-day-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/loc-don-theo-day-ke' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                          <Link to="/loc-don-theo-day-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/loc-don-theo-day-ke' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <Filter size={16} className={location.pathname === '/loc-don-theo-day-ke' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Lọc đơn chia theo dãy kệ</span>
                           </Link>
-                          <Link to="/chen-vi-tri-awb" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/chen-vi-tri-awb' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                          <Link to="/chen-vi-tri-awb" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/chen-vi-tri-awb' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <FileEdit size={16} className={location.pathname === '/chen-vi-tri-awb' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Chèn vị trí SP vào AWB</span>
                           </Link>
-                          <Link to="/in-don-spx" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/in-don-spx' ? (isTet || isNationalDay ? 'bg-orange-50 text-orange-600 font-bold border-yellow-200/50' : isMidAutumn ? 'bg-indigo-900/70 text-yellow-300 font-bold border-white/10' : 'bg-orange-50 text-orange-600 font-bold') : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
-                            <Printer size={16} className={location.pathname === '/in-don-spx' ? (isMidAutumn ? 'text-yellow-300' : 'text-orange-500') : 'text-gray-400 shrink-0'} />
+                          <Link to="/in-don-spx" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/in-don-spx' ? (isTet || isNationalDay ? 'bg-orange-50 text-orange-600 font-bold border-yellow-200/50' : isMidAutumn ? 'bg-orange-100 text-orange-700 font-bold border-orange-200' : 'bg-orange-50 text-orange-600 font-bold') : `text-gray-500 font-medium text-sm`}`}>
+                            <Printer size={16} className={location.pathname === '/in-don-spx' ? 'text-orange-500' : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">In Đơn SPX Tự Động</span>
                           </Link>
                         </div>
@@ -891,9 +909,9 @@ export default function Layout() {
                   const isChildActive = location.pathname.includes('/dong-goi-') || location.pathname.includes('/toc-do-dong-goi-');
                   return (
                     <div key={item.id} className="space-y-1.5">
-                      <button onClick={() => setIsPackingOpen(!isPackingOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isPackingOpen ? activeParentClass : `${wiggleClass} font-medium ${isMidAutumn ? 'text-gray-300' : 'text-gray-600'}`}`}>
+                      <button onClick={() => setIsPackingOpen(!isPackingOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isPackingOpen ? activeParentClass : `${wiggleClass} font-medium ${isMidAutumn ? 'text-gray-600' : 'text-gray-600'}`}`}>
                         <div className="flex items-center shrink-0">
-                          <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? iconActiveColor : `${isMidAutumn ? 'text-gray-400 group-hover:text-yellow-300' : 'text-gray-400 group-hover:' + iconHoverColor}`}`} />
+                          <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? iconActiveColor : `text-gray-400 group-hover:${iconHoverColor}`}`} />
                         </div>
                         <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
                           <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>
@@ -901,19 +919,19 @@ export default function Layout() {
                         </div>
                       </button>
                       {sidebarExpanded && isPackingOpen && (
-                        <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-white/20' : 'border-slate-200/60'}`}>
-                          <Link to="/dong-goi-don-hang" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/dong-goi-don-hang' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                        <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-orange-200/50' : 'border-slate-200/60'}`}>
+                          <Link to="/dong-goi-don-hang" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/dong-goi-don-hang' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                               <Box size={16} className={location.pathname === '/dong-goi-don-hang' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                               <div className="flex flex-col">
                                 <span className="text-sm">Đóng gói đơn hàng</span>
                                 <span className="text-[10px] text-red-500 font-normal leading-tight mt-0.5">Tab dành cho NVĐG</span>
                               </div>
                           </Link>
-                          <Link to="/toc-do-dong-goi-chung" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/toc-do-dong-goi-chung' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                          <Link to="/toc-do-dong-goi-chung" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/toc-do-dong-goi-chung' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <BarChart3 size={16} className={location.pathname === '/toc-do-dong-goi-chung' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Đóng gói chung</span>
                           </Link>
-                          <Link to="/toc-do-dong-goi-nhan-su" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/toc-do-dong-goi-nhan-su' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                          <Link to="/toc-do-dong-goi-nhan-su" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/toc-do-dong-goi-nhan-su' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <User size={16} className={location.pathname === '/toc-do-dong-goi-nhan-su' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Theo nhân sự</span>
                           </Link>
@@ -927,9 +945,9 @@ export default function Layout() {
                   const isChildActive = location.pathname === '/bao-cao-hoan-tong-hop' || location.pathname === '/kiem-tra-don-hoan' || location.pathname === '/xu-ly-don-hoan';
                   return (
                     <div key={item.id} className="space-y-1.5">
-                      <button onClick={() => setIsReturnOrdersOpen(!isReturnOrdersOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isReturnOrdersOpen ? activeParentClass : `${wiggleClass} font-medium ${isMidAutumn ? 'text-gray-300' : 'text-gray-600'}`}`}>
+                      <button onClick={() => setIsReturnOrdersOpen(!isReturnOrdersOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isReturnOrdersOpen ? activeParentClass : `${wiggleClass} font-medium ${isMidAutumn ? 'text-gray-600' : 'text-gray-600'}`}`}>
                         <div className="flex items-center shrink-0">
-                          <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? iconActiveColor : `${isMidAutumn ? 'text-gray-400 group-hover:text-yellow-300' : 'text-gray-400 group-hover:' + iconHoverColor}`}`} />
+                          <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? iconActiveColor : `text-gray-400 group-hover:${iconHoverColor}`}`} />
                         </div>
                         <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
                           <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>
@@ -937,16 +955,16 @@ export default function Layout() {
                         </div>
                       </button>
                       {sidebarExpanded && isReturnOrdersOpen && (
-                        <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-white/20' : 'border-slate-200/60'}`}>
-                          <Link to="/bao-cao-hoan-tong-hop" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/bao-cao-hoan-tong-hop' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                        <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-orange-200/50' : 'border-slate-200/60'}`}>
+                          <Link to="/bao-cao-hoan-tong-hop" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/bao-cao-hoan-tong-hop' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <BarChart3 size={16} className={location.pathname === '/bao-cao-hoan-tong-hop' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Tổng hợp đơn hoàn</span>
                           </Link>
-                          <Link to="/xu-ly-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/xu-ly-don-hoan' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                          <Link to="/xu-ly-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/xu-ly-don-hoan' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                           <PackageMinus size={16} className={location.pathname === '/xu-ly-don-hoan' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Xử lý Đơn hoàn</span>
                           </Link>
-                          <Link to="/kiem-tra-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/kiem-tra-don-hoan' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                          <Link to="/kiem-tra-don-hoan" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/kiem-tra-don-hoan' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <ScanLine size={16} className={location.pathname === '/kiem-tra-don-hoan' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Kiểm tra & Chốt SL</span>
                           </Link>
@@ -960,9 +978,9 @@ export default function Layout() {
                   const isChildActive = location.pathname === '/thong-ke-kiem-ke' || location.pathname === '/danh-sach-kiem-ke';
                   return (
                     <div key={item.id} className="space-y-1.5">
-                      <button onClick={() => setIsInventoryCheckOpen(!isInventoryCheckOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isInventoryCheckOpen ? activeParentClass : `${wiggleClass} font-medium ${isMidAutumn ? 'text-gray-300' : 'text-gray-600'}`}`}>
+                      <button onClick={() => setIsInventoryCheckOpen(!isInventoryCheckOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isInventoryCheckOpen ? activeParentClass : `${wiggleClass} font-medium ${isMidAutumn ? 'text-gray-600' : 'text-gray-600'}`}`}>
                         <div className="flex items-center shrink-0">
-                          <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? iconActiveColor : `${isMidAutumn ? 'text-gray-400 group-hover:text-yellow-300' : 'text-gray-400 group-hover:' + iconHoverColor}`}`} />
+                          <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? iconActiveColor : `text-gray-400 group-hover:${iconHoverColor}`}`} />
                         </div>
                         <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
                           <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>
@@ -970,12 +988,12 @@ export default function Layout() {
                         </div>
                       </button>
                       {sidebarExpanded && isInventoryCheckOpen && (
-                        <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-white/20' : 'border-slate-200/60'}`}>
-                          <Link to="/thong-ke-kiem-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/thong-ke-kiem-ke' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                        <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-orange-200/50' : 'border-slate-200/60'}`}>
+                          <Link to="/thong-ke-kiem-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/thong-ke-kiem-ke' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <BarChart3 size={16} className={location.pathname === '/thong-ke-kiem-ke' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Báo cáo chung</span>
                           </Link>
-                          <Link to="/danh-sach-kiem-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/danh-sach-kiem-ke' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                          <Link to="/danh-sach-kiem-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/danh-sach-kiem-ke' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <ListChecks size={16} className={location.pathname === '/danh-sach-kiem-ke' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Danh sách cần kiểm kê</span>
                           </Link>
@@ -989,9 +1007,9 @@ export default function Layout() {
                   const isChildActive = location.pathname === '/bao-cao-ton-kho' || location.pathname === '/vi-tri-san-pham';
                   return (
                     <div key={item.id} className="space-y-1.5">
-                      <button onClick={() => setIsInventoryReportOpen(!isInventoryReportOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isInventoryReportOpen ? activeParentClass : `${wiggleClass} font-medium ${isMidAutumn ? 'text-gray-300' : 'text-gray-600'}`}`}>
+                      <button onClick={() => setIsInventoryReportOpen(!isInventoryReportOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isChildActive && !isInventoryReportOpen ? activeParentClass : `${wiggleClass} font-medium ${isMidAutumn ? 'text-gray-600' : 'text-gray-600'}`}`}>
                         <div className="flex items-center shrink-0">
-                          <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? iconActiveColor : `${isMidAutumn ? 'text-gray-400 group-hover:text-yellow-300' : 'text-gray-400 group-hover:' + iconHoverColor}`}`} />
+                          <Icon size={20} strokeWidth={2} className={`transition-colors ${isChildActive ? iconActiveColor : `text-gray-400 group-hover:${iconHoverColor}`}`} />
                         </div>
                         <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
                           <span className={`text-sm ${isChildActive ? 'font-bold' : ''}`}>{item.label}</span>
@@ -999,12 +1017,12 @@ export default function Layout() {
                         </div>
                       </button>
                       {sidebarExpanded && isInventoryReportOpen && (
-                        <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-white/20' : 'border-slate-200/60'}`}>
-                          <Link to="/bao-cao-ton-kho" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/bao-cao-ton-kho' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                        <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-orange-200/50' : 'border-slate-200/60'}`}>
+                          <Link to="/bao-cao-ton-kho" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/bao-cao-ton-kho' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <Boxes size={16} className={location.pathname === '/bao-cao-ton-kho' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Tồn kho thực tế</span>
                           </Link>
-                          <Link to="/vi-tri-san-pham" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/vi-tri-san-pham' ? activeChildClass : `${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
+                          <Link to="/vi-tri-san-pham" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${wiggleClass} ${location.pathname === '/vi-tri-san-pham' ? activeChildClass : `text-gray-500 font-medium text-sm`}`}>
                             <MapPin size={16} className={location.pathname === '/vi-tri-san-pham' ? iconActiveColor : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Vị trí sản phẩm</span>
                           </Link>
@@ -1017,9 +1035,9 @@ export default function Layout() {
                 const isActive = location.pathname === item.path;
                 return (
                   <div key={item.path} className="space-y-1.5">
-                    <Link to={item.path} className={`flex items-center px-4 py-3 rounded-2xl group overflow-hidden whitespace-nowrap ${wiggleClass} ${isActive ? (isTet ? 'bg-red-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-yellow-500/20' : isXmas ? 'bg-red-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-red-500/20' : isMidAutumn ? 'bg-yellow-500/90 backdrop-blur-md text-indigo-950 font-semibold shadow-lg shadow-yellow-500/30' : isNationalDay ? 'bg-red-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-yellow-500/20' : 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20') : `${isMidAutumn ? 'text-gray-300' : 'text-gray-600'}`}`}>
+                    <Link to={item.path} className={`flex items-center px-4 py-3 rounded-2xl group overflow-hidden whitespace-nowrap ${wiggleClass} ${isActive ? (isTet ? 'bg-red-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-yellow-500/20' : isXmas ? 'bg-red-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-red-500/20' : isMidAutumn ? 'bg-orange-500/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-orange-500/30' : isNationalDay ? 'bg-red-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-yellow-500/20' : 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20') : `text-gray-600`}`}>
                       <div className="flex items-center shrink-0">
-                        <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors duration-200 ${isActive ? (isMidAutumn ? 'text-indigo-950' : 'text-white') : `${isMidAutumn ? 'text-gray-400 group-hover:text-yellow-300' : 'text-gray-400 group-hover:' + iconHoverColor}`}`} />
+                        <Icon size={20} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors duration-200 ${isActive ? 'text-white' : `text-gray-400 group-hover:${iconHoverColor}`}`} />
                       </div>
                       <span className={`text-sm ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>{item.label}</span>
                     </Link>
@@ -1032,23 +1050,23 @@ export default function Layout() {
               <>
                 <div className={`px-5 mb-3 text-[11px] font-bold uppercase tracking-widest transition-all duration-300 whitespace-nowrap ${
                   isTet || isXmas || isNationalDay ? 'text-red-400/80' : 
-                  isMidAutumn ? 'text-yellow-200/80' : 
+                  isMidAutumn ? 'text-orange-400/80' : 
                   'text-gray-400'
                 } ${sidebarExpanded ? 'opacity-100 h-auto' : 'opacity-0 h-0 overflow-hidden'}`}>
                   Hệ thống
                 </div>
                 <nav className="space-y-1.5 px-3">
-                  <Link to="/admin" className={`flex items-center px-4 py-3 rounded-2xl group overflow-hidden whitespace-nowrap ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/admin' ? (isTet ? 'bg-red-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-yellow-500/20' : isXmas ? 'bg-red-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-red-500/20' : isMidAutumn ? 'bg-yellow-500/90 backdrop-blur-md text-indigo-950 font-semibold shadow-lg shadow-yellow-500/30' : isNationalDay ? 'bg-red-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-yellow-500/20' : 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20') : `hover:bg-white/60 hover:text-gray-900 font-medium ${isMidAutumn ? 'text-gray-300' : 'text-gray-600'}`}`}>
+                  <Link to="/admin" className={`flex items-center px-4 py-3 rounded-2xl group overflow-hidden whitespace-nowrap ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/admin' ? (isTet ? 'bg-red-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-yellow-500/20' : isXmas ? 'bg-red-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-red-500/20' : isMidAutumn ? 'bg-orange-500/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-orange-500/30' : isNationalDay ? 'bg-red-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-yellow-500/20' : 'bg-blue-600/90 backdrop-blur-md text-white font-semibold shadow-lg shadow-blue-500/20') : `hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600`}`}>
                     <div className="flex items-center shrink-0">
-                      <Settings size={20} strokeWidth={location.pathname === '/admin' ? 2.5 : 2} className={`transition-colors duration-200 ${location.pathname === '/admin' ? (isMidAutumn ? 'text-indigo-950' : 'text-white') : `${isMidAutumn ? 'text-gray-400 group-hover:text-yellow-300' : 'text-gray-400 group-hover:' + (isTet ? 'text-yellow-500' : isXmas ? 'text-green-500' : isNationalDay ? 'text-yellow-500' : 'text-blue-500')}`}`} />
+                      <Settings size={20} strokeWidth={location.pathname === '/admin' ? 2.5 : 2} className={`transition-colors duration-200 ${location.pathname === '/admin' ? 'text-white' : `text-gray-400 group-hover:${(isTet ? 'text-yellow-500' : isXmas ? 'text-green-500' : isMidAutumn ? 'text-orange-500' : isNationalDay ? 'text-yellow-500' : 'text-blue-500')}`}`} />
                     </div>
                     <span className={`text-sm ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>Quản trị Hệ thống</span>
                   </Link>
 
                   <div className="pt-1">
-                    <button onClick={() => setIsKpiMenuOpen(!isKpiMenuOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle hover:bg-red-50' : isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${(location.pathname.includes('/quan-ly-kpi') || location.pathname.includes('/nhap-lieu-kpi')) && !isKpiMenuOpen ? (isTet || isXmas || isNationalDay ? 'bg-red-50 text-red-600 border-red-200/50 shadow-sm' : isMidAutumn ? 'bg-indigo-900/60 text-yellow-300 border-white/10 shadow-sm' : 'bg-blue-50 text-blue-600') : `hover:bg-white/60 hover:text-gray-900 font-medium ${isMidAutumn ? 'text-gray-300' : 'text-gray-600'}`}`}>
+                    <button onClick={() => setIsKpiMenuOpen(!isKpiMenuOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle hover:bg-red-50' : isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${(location.pathname.includes('/quan-ly-kpi') || location.pathname.includes('/nhap-lieu-kpi')) && !isKpiMenuOpen ? (isTet || isXmas || isNationalDay ? 'bg-red-50 text-red-600 border-red-200/50 shadow-sm' : isMidAutumn ? 'bg-orange-50 text-orange-600 border-orange-200/50 shadow-sm' : 'bg-blue-50 text-blue-600') : `hover:bg-white/60 hover:text-gray-900 font-medium text-gray-600`}`}>
                       <div className="flex items-center shrink-0">
-                        <Target size={20} strokeWidth={2} className={`transition-colors ${(location.pathname.includes('/quan-ly-kpi') || location.pathname.includes('/nhap-lieu-kpi')) ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-yellow-300' : 'text-blue-600') : `${isMidAutumn ? 'text-gray-400 group-hover:text-yellow-300' : 'text-gray-400 group-hover:' + (isTet ? 'text-yellow-500' : isXmas ? 'text-green-500' : isNationalDay ? 'text-yellow-500' : 'text-blue-500')}`}`} />
+                        <Target size={20} strokeWidth={2} className={`transition-colors ${(location.pathname.includes('/quan-ly-kpi') || location.pathname.includes('/nhap-lieu-kpi')) ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-orange-600' : 'text-blue-600') : `text-gray-400 group-hover:${(isTet ? 'text-yellow-500' : isXmas ? 'text-green-500' : isMidAutumn ? 'text-orange-500' : isNationalDay ? 'text-yellow-500' : 'text-blue-500')}`}`} />
                       </div>
                       <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
                         <span className="text-sm">Quản lý KPI & Lỗi</span>
@@ -1056,13 +1074,13 @@ export default function Layout() {
                       </div>
                     </button>
                     {sidebarExpanded && isKpiMenuOpen && (
-                      <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-white/20' : 'border-slate-200/60'}`}>
-                        <Link to="/quan-ly-kpi" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/quan-ly-kpi' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-indigo-900/70 text-yellow-300 font-bold border-white/10 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 ${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
-                          <Settings2 size={16} className={location.pathname === '/quan-ly-kpi' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-yellow-300' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
+                      <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-orange-200/50' : 'border-slate-200/60'}`}>
+                        <Link to="/quan-ly-kpi" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/quan-ly-kpi' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-orange-50 text-orange-700 font-bold border-orange-200/50 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm`}`}>
+                          <Settings2 size={16} className={location.pathname === '/quan-ly-kpi' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-orange-600' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Cấu hình KPI</span>
                         </Link>
-                        <Link to="/nhap-lieu-kpi" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/nhap-lieu-kpi' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-indigo-900/70 text-yellow-300 font-bold border-white/10 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 ${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
-                          <FileEdit size={16} className={location.pathname === '/nhap-lieu-kpi' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-yellow-300' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
+                        <Link to="/nhap-lieu-kpi" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/nhap-lieu-kpi' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-orange-50 text-orange-700 font-bold border-orange-200/50 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm`}`}>
+                          <FileEdit size={16} className={location.pathname === '/nhap-lieu-kpi' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-orange-600' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Nhập liệu hàng ngày</span>
                         </Link>
                       </div>
@@ -1070,9 +1088,9 @@ export default function Layout() {
                   </div>
                   
                   <div className="pt-1">
-                    <button onClick={() => setIsAdjustMenuOpen(!isAdjustMenuOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle hover:bg-red-50' : isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : 'hover:bg-white/60'} hover:text-gray-900 font-medium ${isMidAutumn ? 'text-gray-300' : 'text-gray-600'}`}>
+                    <button onClick={() => setIsAdjustMenuOpen(!isAdjustMenuOpen)} className={`w-full flex items-center px-4 py-3 rounded-2xl group cursor-pointer overflow-hidden whitespace-nowrap ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle hover:bg-red-50' : isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : 'hover:bg-white/60'} hover:text-gray-900 font-medium text-gray-600`}>
                       <div className="flex items-center shrink-0">
-                        <Wrench size={20} strokeWidth={2} className={`text-gray-400 transition-colors group-hover:${isTet ? 'text-yellow-500' : isXmas ? 'text-green-500' : isMidAutumn ? 'text-yellow-300' : isNationalDay ? 'text-yellow-500' : 'text-blue-500'}`} />
+                        <Wrench size={20} strokeWidth={2} className={`text-gray-400 transition-colors group-hover:${isTet ? 'text-yellow-500' : isXmas ? 'text-green-500' : isMidAutumn ? 'text-orange-500' : isNationalDay ? 'text-yellow-500' : 'text-blue-500'}`} />
                       </div>
                       <div className={`flex items-center justify-between w-full ml-3 transition-all duration-300 ${sidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
                         <span className="text-sm">Cập nhật & Hiệu chỉnh</span>
@@ -1080,35 +1098,35 @@ export default function Layout() {
                       </div>
                     </button>
                     {sidebarExpanded && isAdjustMenuOpen && (
-                      <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-white/20' : 'border-slate-200/60'}`}>
+                      <div className={`mt-1 mb-2 ml-6 pl-3 border-l-2 flex flex-col gap-1 overflow-hidden animate-in slide-in-from-top-2 duration-200 whitespace-nowrap ${isTet || isXmas || isNationalDay ? 'border-red-200/50' : isMidAutumn ? 'border-orange-200/50' : 'border-slate-200/60'}`}>
                         {isOwner && (
-                          <Link to="/cap-nhat-tinh-nang" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-tinh-nang' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-indigo-900/70 text-yellow-300 font-bold border-white/10 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 ${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
-                            <ShieldAlert size={16} className={location.pathname === '/cap-nhat-tinh-nang' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-yellow-300' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
+                          <Link to="/cap-nhat-tinh-nang" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-tinh-nang' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-orange-50 text-orange-700 font-bold border-orange-200/50 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm`}`}>
+                            <ShieldAlert size={16} className={location.pathname === '/cap-nhat-tinh-nang' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-orange-600' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
                             <span className="text-sm">Khóa tính năng</span>
                           </Link>
                         )}
-                        <Link to="/cap-nhat-nguoi-dong-goi" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-nguoi-dong-goi' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-indigo-900/70 text-yellow-300 font-bold border-white/10 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 ${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
-                          <UserCog size={16} className={location.pathname === '/cap-nhat-nguoi-dong-goi' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-yellow-300' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
+                        <Link to="/cap-nhat-nguoi-dong-goi" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-nguoi-dong-goi' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-orange-50 text-orange-700 font-bold border-orange-200/50 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm`}`}>
+                          <UserCog size={16} className={location.pathname === '/cap-nhat-nguoi-dong-goi' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-orange-600' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Người đóng gói</span>
                         </Link>
-                        <Link to="/cap-nhat-lich-lam-viec" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-lich-lam-viec' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-indigo-900/70 text-yellow-300 font-bold border-white/10 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 ${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
-                          <CalendarDays size={16} className={location.pathname === '/cap-nhat-lich-lam-viec' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-yellow-300' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
+                        <Link to="/cap-nhat-lich-lam-viec" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-lich-lam-viec' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-orange-50 text-orange-700 font-bold border-orange-200/50 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm`}`}>
+                          <CalendarDays size={16} className={location.pathname === '/cap-nhat-lich-lam-viec' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-orange-600' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Lịch làm việc</span>
                         </Link>
-                        <Link to="/cap-nhat-san-pham" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-san-pham' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-indigo-900/70 text-yellow-300 font-bold border-white/10 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 ${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
-                          <PackageSearch size={16} className={location.pathname === '/cap-nhat-san-pham' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-yellow-300' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
+                        <Link to="/cap-nhat-san-pham" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-san-pham' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-orange-50 text-orange-700 font-bold border-orange-200/50 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm`}`}>
+                          <PackageSearch size={16} className={location.pathname === '/cap-nhat-san-pham' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-orange-600' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Hiệu chỉnh sản phẩm</span>
                         </Link>
-                        <Link to="/cap-nhat-so-do-kho" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-so-do-kho' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-indigo-900/70 text-yellow-300 font-bold border-white/10 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 ${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
-                          <MapPin size={16} className={location.pathname === '/cap-nhat-so-do-kho' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-yellow-300' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
+                        <Link to="/cap-nhat-so-do-kho" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-so-do-kho' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-orange-50 text-orange-700 font-bold border-orange-200/50 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm`}`}>
+                          <MapPin size={16} className={location.pathname === '/cap-nhat-so-do-kho' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-orange-600' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Sơ đồ Kho hàng</span>
                         </Link>
-                        <Link to="/cap-nhat-day-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-day-ke' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-indigo-900/70 text-yellow-300 font-bold border-white/10 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 ${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
-                          <LayoutGrid size={16} className={location.pathname === '/cap-nhat-day-ke' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-yellow-300' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
+                        <Link to="/cap-nhat-day-ke" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-day-ke' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-orange-50 text-orange-700 font-bold border-orange-200/50 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm`}`}>
+                          <LayoutGrid size={16} className={location.pathname === '/cap-nhat-day-ke' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-orange-600' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Quy ước dãy kệ</span>
                         </Link>
-                        <Link to="/cap-nhat-webhook" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-white/10 hover:text-white transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-webhook' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-indigo-900/70 text-yellow-300 font-bold border-white/10 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 ${isMidAutumn ? 'text-gray-300' : 'text-gray-500'} font-medium text-sm`}`}>
-                          <Webhook size={16} className={location.pathname === '/cap-nhat-webhook' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-yellow-300' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
+                        <Link to="/cap-nhat-webhook" className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle' : isMidAutumn ? 'hover:bg-orange-50 hover:text-orange-700 transition-all duration-300' : isNationalDay ? 'hover:bg-yellow-50 hover:text-red-700 transition-all duration-300' : ''} ${location.pathname === '/cap-nhat-webhook' ? (isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : isMidAutumn ? 'bg-orange-50 text-orange-700 font-bold border-orange-200/50 shadow-sm' : isNationalDay ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : 'bg-blue-50 text-blue-700 font-bold') : `hover:bg-white/60 hover:text-gray-900 text-gray-500 font-medium text-sm`}`}>
+                          <Webhook size={16} className={location.pathname === '/cap-nhat-webhook' ? (isTet || isXmas || isNationalDay ? 'text-red-600' : isMidAutumn ? 'text-orange-600' : 'text-blue-600') : 'text-gray-400 shrink-0'} />
                           <span className="text-sm">Chạy lại Webhook</span>
                         </Link>
                       </div>
@@ -1121,7 +1139,7 @@ export default function Layout() {
           
           <div className={`p-4 backdrop-blur-lg border-t rounded-tr-2xl overflow-hidden whitespace-nowrap transition-colors ${
             isTet ? 'bg-red-50/80 border-yellow-300/50' : 
-            isMidAutumn ? 'bg-indigo-900/80 border-white/10' : 
+            isMidAutumn ? 'bg-orange-50/80 border-orange-200/50' : 
             isNationalDay ? 'bg-white/40 border-yellow-300/50' : 
             isXmas ? 'bg-red-50/50 border-red-200/50' : 
             'bg-white/40 border-white/20'
@@ -1132,7 +1150,7 @@ export default function Layout() {
                 <div className="relative">
                   <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-white font-black text-sm shadow-md ring-2 ring-white/50 uppercase transition-colors ${
                     isTet ? 'bg-gradient-to-tr from-yellow-500 to-red-600' : 
-                    isMidAutumn ? 'bg-gradient-to-tr from-yellow-500 to-indigo-700' : 
+                    isMidAutumn ? 'bg-gradient-to-tr from-orange-400 to-amber-600' : 
                     isNationalDay ? 'bg-gradient-to-tr from-red-600 to-yellow-600' : 
                     isXmas ? 'bg-gradient-to-tr from-red-600 to-green-500' : 
                     'bg-gradient-to-tr from-blue-600 to-indigo-500'
@@ -1155,14 +1173,14 @@ export default function Layout() {
                 <div className={`flex flex-col transition-all duration-300 overflow-hidden ${sidebarExpanded ? 'opacity-100 max-w-[150px]' : 'opacity-0 max-w-0 hidden'}`}>
                   <span className={`text-sm font-bold leading-tight truncate capitalize ${
                     isTet ? 'text-red-900' : 
-                    isMidAutumn ? 'text-white' : 
+                    isMidAutumn ? 'text-orange-900' : 
                     isNationalDay ? 'text-gray-900' : 
                     isXmas ? 'text-gray-900' : 
                     'text-gray-900'
                   }`}>{displayName}</span>
                   <span className={`text-[10px] font-medium mt-0.5 truncate ${
                     isTet ? 'text-yellow-700' : 
-                    isMidAutumn ? 'text-yellow-300' : 
+                    isMidAutumn ? 'text-orange-500' : 
                     isNationalDay ? 'text-yellow-600' : 
                     isXmas ? 'text-red-500' : 
                     'text-gray-500'
@@ -1172,7 +1190,7 @@ export default function Layout() {
               
               <button onClick={() => setShowLogoutModal(true)} title="Đăng xuất" className={`p-2 transition-colors rounded-xl cursor-pointer shrink-0 ${
                 isTet ? 'text-red-500 hover:text-red-700 hover:bg-yellow-100/50' : 
-                isMidAutumn ? 'text-gray-300 hover:text-white hover:bg-white/10' : 
+                isMidAutumn ? 'text-orange-400 hover:text-orange-600 hover:bg-orange-100/50' : 
                 isNationalDay ? 'text-red-400 hover:text-red-600 hover:bg-yellow-50' : 
                 isXmas ? 'text-red-400 hover:text-red-600 hover:bg-red-50' : 
                 'text-gray-400 hover:text-red-500 hover:bg-white/60'
@@ -1188,19 +1206,19 @@ export default function Layout() {
             onClick={() => setMobileMenuOpen(true)}
             className="md:hidden absolute top-4 left-4 z-30 p-2 bg-white/80 backdrop-blur-md rounded-xl shadow-lg hover:bg-white/90 transition-colors"
           >
-            <Menu size={20} className={isTet || isXmas || isNationalDay ? 'text-red-700' : isMidAutumn ? 'text-yellow-300' : 'text-gray-700'} />
+            <Menu size={20} className={isTet || isXmas || isNationalDay ? 'text-red-700' : isMidAutumn ? 'text-orange-600' : 'text-gray-700'} />
           </button>
 
           <div className={`absolute inset-0 pointer-events-none transition-colors duration-1000 ${
             isTet ? 'bg-gradient-to-b from-yellow-50/20 via-transparent to-red-50/10' : 
-            isMidAutumn ? 'bg-gradient-to-b from-indigo-950/30 via-transparent to-black/20' : 
+            isMidAutumn ? 'bg-gradient-to-b from-orange-100/30 via-transparent to-amber-50/20' : 
             isNationalDay ? 'bg-gradient-to-b from-yellow-50/20 via-transparent to-blue-50/10' : 
             isXmas ? 'bg-gradient-to-b from-red-50/20 via-transparent to-green-50/10' : 
             'bg-gradient-to-b from-blue-50/20 via-white to-transparent'
           }`} />
           <div className={`absolute top-0 left-0 right-0 h-40 pointer-events-none transition-colors duration-1000 ${
             isTet ? 'bg-gradient-to-b from-red-100/40 to-transparent' : 
-            isMidAutumn ? 'bg-gradient-to-b from-indigo-900/40 to-transparent' : 
+            isMidAutumn ? 'bg-gradient-to-b from-orange-200/40 to-transparent' : 
             isNationalDay ? 'bg-gradient-to-b from-yellow-50/40 to-transparent' : 
             isXmas ? 'bg-gradient-to-b from-red-100/30 to-transparent' : 
             'bg-gradient-to-b from-blue-50/40 to-transparent'
