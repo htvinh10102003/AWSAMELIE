@@ -201,6 +201,19 @@ const TetBanner = ({ customText }) => {
   );
 };
 
+// ==========================================
+// 🎄 MŨ GIÁNG SINH DÙNG CHO AVATAR
+// ==========================================
+const SantaHatIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
+    {/* Phần thân mũ */}
+    <path d="M12 2C13.5 2 15 3.5 15 5L21 16H3L9 5C9 3.5 10.5 2 12 2Z" fill="#ef4444" />
+    {/* Quả bông trắng */}
+    <circle cx="12" cy="2" r="2.5" fill="white" />
+    {/* Viền trắng dưới */}
+    <path d="M3 16C6 12 9 11 12 11C15 11 18 12 21 16" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" />
+  </svg>
+);
 
 export default function Layout() {
   const location = useLocation();
@@ -771,8 +784,8 @@ export default function Layout() {
                       🌸
                     </div>
                   ) : isXmas ? (
-                    <div className="absolute -top-3.5 -right-2 text-2xl transform rotate-12 drop-shadow-md z-10 pointer-events-none animate-bounce" style={{animationDuration: '2s'}}>
-                      🎅
+                    <div className="absolute -top-4 -right-3 w-6 h-6 transform rotate-12 drop-shadow-md z-10 pointer-events-none animate-bounce" style={{animationDuration: '2s'}}>
+                      <SantaHatIcon />
                     </div>
                   ) : null}
                 </div>
