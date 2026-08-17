@@ -375,7 +375,7 @@ const NationalDayOverlay = ({ theme }) => {
     <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
       {/* Ngôi sao vàng lớn mờ */}
       <div className="absolute inset-0 flex items-center justify-center">
-        <div className="text-yellow-500 text-[250px] animate-star-pulse opacity-5">★</div>
+        <div className="text-yellow-500 text-[250px] animate-star-pulse opacity-3">★</div>
       </div>
 
       {/* Pháo hoa canvas */}
