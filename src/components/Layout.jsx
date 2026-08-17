@@ -36,7 +36,7 @@ const Snowfall = () => {
 };
 
 // ==========================================
-// 🛷 COMPONENT: ÔNG GIÀ NOEL (SVG XỊN XÒ)
+// 🛷 COMPONENT: ÔNG GIÀ NOEL
 // ==========================================
 const FlyingSanta = ({ customText }) => {
   const [fly, setFly] = useState(false);
@@ -66,51 +66,36 @@ const FlyingSanta = ({ customText }) => {
   return (
     <div className="fixed z-[100] pointer-events-none top-1/4 animate-fly-across">
       <div className="relative flex flex-col items-center">
-        
-        {/* Lời thoại của Santa */}
         <div className="absolute -top-12 left-1/2 transform -translate-x-1/3 whitespace-nowrap bg-red-600 text-white px-5 py-2 rounded-full font-black text-sm border-[3px] border-white shadow-xl animate-bounce z-10">
           {bannerMsg}
           <div className="absolute -bottom-2 left-8 w-4 h-4 bg-red-600 transform rotate-45 border-r-[3px] border-b-[3px] border-white"></div>
         </div>
 
-        {/* Tác phẩm nghệ thuật SVG: Xe tuần lộc vẽ bằng code */}
         <svg viewBox="0 0 400 150" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-[450px] h-auto drop-shadow-2xl">
-          {/* Mây tuyết mờ lướt dưới gầm xe */}
           <path d="M 20 110 Q 70 120 120 110" stroke="#ffffff" strokeWidth="4" strokeLinecap="round" fill="none" className="animate-pulse" opacity="0.6"/>
-          
-          {/* Dây cương nối Santa và Tuần Lộc */}
           <path d="M 115 65 Q 180 90 260 40" stroke="#fbbf24" strokeWidth="2" fill="none" strokeDasharray="4 4" />
           
-          {/* ============ BÉ TUẦN LỘC ============ */}
           <g transform="translate(230, 20)">
-            {/* Sừng */}
             <path d="M 65 5 L 60 -10 M 60 -5 L 50 -10 M 65 -5 L 75 -10" stroke="#78350f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            
-            {/* 4 Chân (Có animation chạy bộ) */}
             <rect x="25" y="45" width="5" height="25" rx="2.5" fill="#78350f" className="animate-run-1" style={{ transformOrigin: '27.5px 45px' }} />
             <rect x="35" y="45" width="5" height="25" rx="2.5" fill="#92400e" className="animate-run-2" style={{ transformOrigin: '37.5px 45px' }} />
             <rect x="55" y="45" width="5" height="25" rx="2.5" fill="#78350f" className="animate-run-1" style={{ transformOrigin: '57.5px 45px' }} />
             <rect x="65" y="45" width="5" height="25" rx="2.5" fill="#92400e" className="animate-run-2" style={{ transformOrigin: '67.5px 45px' }} />
             
-            {/* Thân & Đuôi */}
             <rect x="20" y="25" width="50" height="25" rx="12" fill="#92400e" />
             <path d="M 22 30 L 10 25" stroke="#92400e" strokeWidth="5" strokeLinecap="round" />
             
-            {/* Đầu & Mũi đỏ Rudolph */}
             <rect x="55" y="5" width="18" height="30" rx="8" fill="#92400e" />
             <rect x="65" y="0" width="22" height="14" rx="6" fill="#92400e" />
             <circle cx="75" cy="5" r="1.5" fill="#171717" />
-            <circle cx="87" cy="7" r="4" fill="#ef4444" className="animate-pulse" /> {/* Mũi phát sáng */}
+            <circle cx="87" cy="7" r="4" fill="#ef4444" className="animate-pulse" /> 
           </g>
 
-          {/* ============ XE TRƯỢT TUYẾT & SANTA ============ */}
           <g transform="translate(10, 40)">
-            {/* Thanh trượt vàng */}
             <path d="M 5 70 L 100 70 Q 120 70 120 50" stroke="#fbbf24" strokeWidth="4" fill="none" strokeLinecap="round" />
             <line x1="25" y1="55" x2="25" y2="70" stroke="#fbbf24" strokeWidth="3" />
             <line x1="80" y1="55" x2="80" y2="70" stroke="#fbbf24" strokeWidth="3" />
             
-            {/* Đống Quà (Nằm phía sau thân xe) */}
             <rect x="15" y="10" width="25" height="25" fill="#3b82f6" rx="2" />
             <line x1="27.5" y1="10" x2="27.5" y2="35" stroke="#fbbf24" strokeWidth="2" />
             <line x1="15" y1="22.5" x2="40" y2="22.5" stroke="#fbbf24" strokeWidth="2" />
@@ -119,36 +104,30 @@ const FlyingSanta = ({ customText }) => {
             <line x1="60" y1="0" x2="60" y2="35" stroke="#ef4444" strokeWidth="2" />
             <line x1="45" y1="17.5" x2="75" y2="17.5" stroke="#ef4444" strokeWidth="2" />
 
-            {/* Ông già Noel */}
             <g transform="translate(75, -15)">
-              <rect x="-10" y="20" width="35" height="35" rx="12" fill="#ef4444" /> {/* Thân */}
-              <path d="M 0 35 L -15 25 L -5 15" stroke="#ef4444" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" fill="none" /> {/* Tay trái */}
-              <circle cx="-5" cy="15" r="4" fill="#171717" /> {/* Găng tay trái */}
+              <rect x="-10" y="20" width="35" height="35" rx="12" fill="#ef4444" /> 
+              <path d="M 0 35 L -15 25 L -5 15" stroke="#ef4444" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" fill="none" /> 
+              <circle cx="-5" cy="15" r="4" fill="#171717" /> 
               
-              {/* Thắt lưng */}
               <rect x="-10" y="38" width="35" height="6" fill="#171717" />
               <rect x="5" y="36" width="10" height="10" fill="none" stroke="#fbbf24" strokeWidth="2" rx="1" />
               
-              {/* Râu & Mặt */}
               <circle cx="15" cy="15" r="9" fill="#fca5a5" />
               <circle cx="20" cy="20" r="12" fill="#f3f4f6" />
               <circle cx="22" cy="12" r="2" fill="#171717" />
               
-              {/* Mũ */}
               <path d="M 5 12 L 15 -5 L 28 12 Z" fill="#ef4444" />
               <circle cx="15" cy="-5" r="5" fill="#f3f4f6" />
               <rect x="5" y="10" width="22" height="6" rx="3" fill="#f3f4f6" />
               
-              {/* Tay phải cầm cương */}
               <path d="M 10 35 L 25 30 L 40 40" stroke="#ef4444" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" fill="none" />
               <circle cx="40" cy="40" r="4" fill="#171717" />
             </g>
 
-            {/* Thân xe (Che lấp nửa thân Santa và Quà) */}
             <path d="M 0 55 L 115 55 L 105 30 L 15 30 Z" fill="#dc2626" />
             <path d="M 0 55 L 15 30 Q 10 20 0 20 L -5 55 Z" fill="#b91c1c" />
             <path d="M 115 55 L 105 30 Q 110 20 120 20 L 125 55 Z" fill="#b91c1c" />
-            <path d="M 15 45 L 105 45" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" /> {/* Sọc trang trí xe */}
+            <path d="M 15 45 L 105 45" stroke="#fbbf24" strokeWidth="2" strokeLinecap="round" /> 
           </g>
         </svg>
       </div>
@@ -157,7 +136,7 @@ const FlyingSanta = ({ customText }) => {
 };
 
 // ==========================================
-// 🧧 COMPONENT: TẾT NGUYÊN ĐÁN (Hoa rơi, Banner Rồng)
+// 🧧 COMPONENT: TẾT NGUYÊN ĐÁN
 // ==========================================
 const PetalFall = () => {
   const items = ['🌸', '🌼', '✨']; 
@@ -316,7 +295,9 @@ export default function Layout() {
   const avatarLetter = displayName.charAt(0).toUpperCase();
   const isAdmin = user?.user_metadata?.role === 'admin';
   
-  // KIỂM TRA TRẠNG THÁI THEME
+  // ⚡️ ĐÃ SỬA LỖI: THÊM LẠI KHAI BÁO isOwner ⚡️
+  const isOwner = user?.user_metadata?.is_owner === true;
+  
   const isTet = tetTheme?.isTetEnabled || false;
   const isXmas = (xmasTheme?.isXmasEnabled || false) && !isTet; 
 
@@ -333,7 +314,6 @@ export default function Layout() {
 
   return (
     <>
-      {/* 🌟 CSS ANIMATIONS CHUNG */}
       <style>{`
         @keyframes snowfall {
           0% { transform: translateY(-10px) translateX(0) rotate(0deg); }
@@ -372,7 +352,6 @@ export default function Layout() {
         }
         .hover-xmas-wiggle:hover { animation: wiggle 0.3s ease-in-out infinite; }
         
-        /* Hiệu ứng chân chạy của Tuần Lộc */
         @keyframes run-1 {
           0%, 100% { transform: rotate(15deg); }
           50% { transform: rotate(-15deg); }
@@ -407,11 +386,10 @@ export default function Layout() {
         .hover-tet-gold:hover {
           box-shadow: inset 0 0 15px rgba(234, 179, 8, 0.15);
           border-color: rgba(234, 179, 8, 0.4);
-          background-color: rgba(254, 226, 226, 0.3); /* bg-red-50 nhẹ */
+          background-color: rgba(254, 226, 226, 0.3);
         }
       `}</style>
 
-      {/* RENDER THEME ELEMENTS MÀN HÌNH NỀN */}
       {isXmas && <Snowfall />}
       {isXmas && xmasTheme.isSantaFlying && <FlyingSanta customText={xmasTheme.customMessages} />}
       
@@ -446,7 +424,6 @@ export default function Layout() {
               </h1>
             </div>
             
-            {/* LỒNG ĐÈN TREO GÓC TRÁI (TẾT THEME) */}
             {isTet && sidebarExpanded && (
               <div className="absolute right-8 -bottom-4 text-2xl animate-sway pointer-events-none drop-shadow-md z-50">🏮</div>
             )}
@@ -469,7 +446,6 @@ export default function Layout() {
               {reportMenus.map((item) => {
                 const Icon = item.icon;
 
-                // CHỌN CLASS HIỆU ỨNG THEO THEME
                 const wiggleClass = isTet ? 'hover-tet-gold transition-all duration-300 border border-transparent' : isXmas ? 'hover-xmas-wiggle hover:bg-red-50' : 'hover:bg-white/60 hover:text-gray-900';
                 const activeParentClass = isTet ? 'bg-red-50 text-red-600 border-red-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600';
                 const activeChildClass = isTet ? 'bg-red-50 text-red-700 font-bold border-yellow-200/50 shadow-sm' : isXmas ? 'bg-red-50 text-red-700 font-bold' : 'bg-blue-50 text-blue-700 font-bold';
@@ -786,7 +762,6 @@ export default function Layout() {
             <div className={`flex items-center justify-between transition-all duration-300 ${!sidebarExpanded ? 'flex-col gap-2' : ''}`}>
               <div className={`flex items-center gap-3 ${sidebarExpanded ? 'max-w-[75%]' : ''}`}>
                 
-                {/* 🧧 & 🎅 AVATAR */}
                 <div className="relative">
                   <div className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center text-white font-black text-sm shadow-md ring-2 ring-white/50 uppercase transition-colors ${isTet ? 'bg-gradient-to-tr from-yellow-500 to-red-600' : isXmas ? 'bg-gradient-to-tr from-red-600 to-green-500' : 'bg-gradient-to-tr from-blue-600 to-indigo-500'}`}>
                     {avatarLetter}
