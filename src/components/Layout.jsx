@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { VietnamMapSVG } from './VietnamMapSVG';
 import { 
   TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
@@ -298,7 +299,7 @@ const MidAutumnOverlay = ({ theme }) => {
 };
 
 // ==========================================
-// 🇻🇳 COMPONENT: QUỐC KHÁNH 2/9
+// 🇻🇳 COMPONENT: QUỐC KHÁNH 2/9 (Bản đồ chi tiết)
 // ==========================================
 const NationalDayOverlay = ({ theme }) => {
   const canvasRef = useRef(null);
@@ -401,31 +402,8 @@ const NationalDayOverlay = ({ theme }) => {
       <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/30 to-transparent" />
       <div className="absolute bottom-4 left-5 text-2xl opacity-40">🏢</div>
       <div className="absolute bottom-4 right-10 text-2xl opacity-40">🏠</div>
-      <div className="absolute bottom-2 left-1/2 text-2xl opacity-40">🇻🇳</div>
 
-      {/* Bản đồ Việt Nam outline (Chi tiết có Quần đảo) */}
-      <svg className="absolute bottom-10 left-1/2 transform -translate-x-1/2 opacity-20 w-80 h-80" viewBox="0 0 200 200">
-        {/* Đất liền */}
-        <path d="M85,25 Q100,15 105,35 Q110,50 95,70 Q85,85 110,110 Q120,125 110,145 Q100,160 85,165 Q70,170 65,155 Q60,140 80,135 Q95,125 90,105 Q85,85 70,70 Q55,55 70,35 Q75,20 85,25 Z" fill="none" stroke="#ef4444" strokeWidth="2.5" />
-        
-        {/* Quần đảo Hoàng Sa */}
-        <g transform="translate(125, 70)">
-          <circle cx="0" cy="0" r="1.5" fill="#ef4444"/>
-          <circle cx="5" cy="-3" r="1" fill="#ef4444"/>
-          <circle cx="3" cy="4" r="1" fill="#ef4444"/>
-          <text x="8" y="2" fontSize="6" fill="#ef4444" className="font-semibold">Hoàng Sa</text>
-        </g>
-        
-        {/* Quần đảo Trường Sa */}
-        <g transform="translate(135, 130)">
-          <circle cx="0" cy="0" r="1.5" fill="#ef4444"/>
-          <circle cx="6" cy="4" r="1.5" fill="#ef4444"/>
-          <circle cx="-4" cy="5" r="1" fill="#ef4444"/>
-          <circle cx="3" cy="8" r="1" fill="#ef4444"/>
-          <circle cx="8" cy="-3" r="1" fill="#ef4444"/>
-          <text x="12" y="5" fontSize="6" fill="#ef4444" className="font-semibold">Trường Sa</text>
-        </g>
-      </svg>
+      <VietnamMapSVG />
     </div>
   );
 };
@@ -742,8 +720,7 @@ export default function Layout() {
             'bg-white/70 border-r border-white/30'
           }`}
         >
-          
-          <div className={`h-16 flex items-center justify-between px-4 relative backdrop-blur-md rounded-br-2xl whitespace-nowrap transition-colors ${
+<div className={`h-16 flex items-center justify-between px-4 relative backdrop-blur-md rounded-br-2xl whitespace-nowrap transition-colors ${
             isTet ? 'bg-red-50/80 border-b border-yellow-300/50' : 
             isMidAutumn ? 'bg-orange-50/80 border-b border-orange-200/50' : 
             isNationalDay ? 'bg-white/50 border-b border-yellow-300/50' : 
