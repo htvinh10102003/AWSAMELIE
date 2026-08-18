@@ -203,6 +203,86 @@ const TetBanner = ({ customText }) => {
 };
 
 // ==========================================
+// 🌕 COMPONENT: BANNER TRUNG THU
+// ==========================================
+const MidAutumnBanner = ({ customText }) => {
+  const [show, setShow] = useState(false);
+  const [bannerMsg, setBannerMsg] = useState('');
+  
+  const defaultMsgs = [
+    "🌕 Trung Thu Đoàn Viên - Giao Đơn Hết Xảy!",
+    "🏮 Rước Đèn Mỏi Tay - Chốt Đơn Cháy Máy!"
+  ];
+
+  useEffect(() => {
+    const messages = customText ? customText.split('\n').filter(m => m.trim()) : defaultMsgs;
+    const finalMsgs = messages.length > 0 ? messages : defaultMsgs;
+
+    const interval = setInterval(() => {
+      if(Math.random() > 0.4 && !show) {
+        setBannerMsg(finalMsgs[Math.floor(Math.random() * finalMsgs.length)]);
+        setShow(true);
+        setTimeout(() => setShow(false), 10000); 
+      }
+    }, 48000); 
+    return () => clearInterval(interval);
+  }, [show, customText]);
+
+  if(!show) return null;
+
+  return (
+    <div className="fixed z-[100] pointer-events-none top-0 left-1/2 transform -translate-x-1/2 animate-drop-down">
+      <div className="flex flex-col items-center justify-center bg-gradient-to-b from-orange-600 to-orange-500 border-4 border-yellow-400 px-8 py-4 shadow-2xl rounded-b-3xl">
+        <div className="text-4xl drop-shadow-md mb-2">🏮🐇🥮</div>
+        <div className="text-yellow-200 font-black text-lg tracking-wide uppercase drop-shadow-md whitespace-nowrap">
+          {bannerMsg}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
+// 🇻🇳 COMPONENT: BANNER QUỐC KHÁNH 2/9
+// ==========================================
+const NationalDayBanner = ({ customText }) => {
+  const [show, setShow] = useState(false);
+  const [bannerMsg, setBannerMsg] = useState('');
+  
+  const defaultMsgs = [
+    "🇻🇳 Chào mừng Quốc khánh 2/9!",
+    "🇻🇳 Tự hào Việt Nam - Đóng hàng thần tốc!"
+  ];
+
+  useEffect(() => {
+    const messages = customText ? customText.split('\n').filter(m => m.trim()) : defaultMsgs;
+    const finalMsgs = messages.length > 0 ? messages : defaultMsgs;
+
+    const interval = setInterval(() => {
+      if(Math.random() > 0.4 && !show) {
+        setBannerMsg(finalMsgs[Math.floor(Math.random() * finalMsgs.length)]);
+        setShow(true);
+        setTimeout(() => setShow(false), 10000); 
+      }
+    }, 52000); 
+    return () => clearInterval(interval);
+  }, [show, customText]);
+
+  if(!show) return null;
+
+  return (
+    <div className="fixed z-[100] pointer-events-none top-0 left-1/2 transform -translate-x-1/2 animate-drop-down">
+      <div className="flex flex-col items-center justify-center bg-gradient-to-b from-red-600 to-red-500 border-4 border-yellow-400 px-8 py-4 shadow-2xl rounded-b-3xl">
+        <div className="text-4xl drop-shadow-md mb-2">🇻🇳🎇⭐️</div>
+        <div className="text-yellow-300 font-black text-lg tracking-wide uppercase drop-shadow-md whitespace-nowrap">
+          {bannerMsg}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==========================================
 // 🎄 MŨ GIÁNG SINH DÙNG CHO AVATAR
 // ==========================================
 const SantaHatIcon = () => (
@@ -235,8 +315,42 @@ const MidAutumnOverlay = ({ theme }) => {
 
   return (
     <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
-      {/* Trăng tròn (Tone hoàng hôn) */}
-      <div className="absolute top-10 right-10 w-44 h-44 rounded-full bg-orange-200 shadow-[0_0_120px_40px_rgba(251,146,60,0.4)]" />
+      
+      {/* Đèn Ông Sao lớn ở góc (Thay thế mặt trăng) */}
+      <div className="absolute top-8 right-12 w-48 h-56 animate-sway-lantern origin-top drop-shadow-2xl">
+        <svg viewBox="0 0 100 120" className="w-full h-full" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {/* Cán đèn (Màu hồng/đỏ tía giống trong ảnh) */}
+          <line x1="50" y1="70" x2="50" y2="120" stroke="#d946ef" strokeWidth="2.5" strokeLinecap="round" />
+          
+          {/* Vòng kim tuyến ngoài (Tạo hiệu ứng tua rua vàng lấp lánh) */}
+          <circle cx="50" cy="50" r="45" stroke="#facc15" strokeWidth="6" strokeDasharray="2 4" />
+          <circle cx="50" cy="50" r="45" stroke="#eab308" strokeWidth="3" strokeDasharray="4 6" strokeDashoffset="2" />
+          <circle cx="50" cy="50" r="46" stroke="#ca8a04" strokeWidth="1" opacity="0.8" />
+          
+          {/* Cánh xanh lá: Trên, Dưới Trái, Dưới Phải */}
+          <path d="M 40 36 L 50 5 L 60 36 Z" fill="#16a34a" />
+          <path d="M 66 55 L 76 86 L 50 67 Z" fill="#16a34a" />
+          <path d="M 50 67 L 24 86 L 34 55 Z" fill="#16a34a" />
+          
+          {/* Cánh đỏ: Trái, Phải */}
+          <path d="M 60 36 L 93 36 L 66 55 Z" fill="#dc2626" />
+          <path d="M 34 55 L 7 36 L 40 36 Z" fill="#dc2626" />
+          
+          {/* Lõi ngũ giác trung tâm màu đỏ */}
+          <path d="M 60 36 L 66 55 L 50 67 L 34 55 L 40 36 Z" fill="#dc2626" />
+          
+          {/* Hoạ tiết vòng tròn và sao trắng ở giữa lõi */}
+          <circle cx="50" cy="50" r="11" fill="none" stroke="white" strokeWidth="1" strokeDasharray="1.5 1.5" />
+          <circle cx="50" cy="50" r="9" fill="none" stroke="white" strokeWidth="0.75" />
+          <polygon points="50,44 51.5,47.5 55,47.5 52.5,50 53.5,53.5 50,51.5 46.5,53.5 47.5,50 45,47.5 48.5,47.5" fill="white" />
+          
+          {/* Khung tre (Các đường chéo nối các góc - màu vàng) */}
+          <path d="M 50 5 L 76 86 L 7 36 L 93 36 L 24 86 Z" stroke="#facc15" strokeWidth="1.5" strokeLinejoin="round" />
+          
+          {/* Viền tre bao ngoài của ngôi sao */}
+          <path d="M 50 5 L 60 36 L 93 36 L 66 55 L 76 86 L 50 67 L 24 86 L 34 55 L 7 36 L 40 36 Z" stroke="#facc15" strokeWidth="2" strokeLinejoin="round" />
+        </svg>
+      </div>
       
       {/* Đom đóm nhấp nháy thay vì sao trắng */}
       {[...Array(30)].map((_, i) => (
@@ -258,7 +372,7 @@ const MidAutumnOverlay = ({ theme }) => {
       <div className="absolute top-1/4 left-0 w-64 h-20 bg-white/60 rounded-full blur-2xl animate-drift" style={{ animationDelay: '0s' }} />
       <div className="absolute top-1/3 left-1/3 w-80 h-24 bg-white/60 rounded-full blur-2xl animate-drift" style={{ animationDelay: '2s' }} />
 
-      {/* Đèn lồng (nếu bật) */}
+      {/* Đèn lồng phụ (nếu bật) */}
       {theme.isLanternEnabled && lanterns.map((l) => (
         <div
           key={l.id}
@@ -386,16 +500,6 @@ const NationalDayOverlay = ({ theme }) => {
       {/* Lá cờ bay nhẹ góc phải */}
       <div className="absolute top-24 right-4 pointer-events-auto animate-flag-wave">
         <span className="text-4xl">🇻🇳</span>
-      </div>
-
-      {/* Banner 2/9 */}
-      <div className="absolute top-0 left-0 right-0 flex justify-center pointer-events-none">
-        <div className="bg-gradient-to-b from-red-600 to-red-500 border-4 border-yellow-400 px-8 py-3 shadow-2xl rounded-b-3xl animate-drop-down">
-          <div className="text-yellow-300 font-black text-lg tracking-wide uppercase drop-shadow-md whitespace-nowrap">
-            🇻🇳 Chào mừng Quốc khánh 2/9
-          </div>
-          <div className="text-white text-sm text-center">Tự hào Việt Nam • 1945 — 2026</div>
-        </div>
       </div>
 
       {/* Silhouette thành phố dưới cùng */}
@@ -631,7 +735,7 @@ export default function Layout() {
           0%, 100% { transform: rotate(-5deg); }
           50% { transform: rotate(5deg); }
         }
-        .animate-sway-lantern { animation: sway-lantern 3s ease-in-out infinite; transform-origin: top center; }
+        .animate-sway-lantern { animation: sway-lantern 4s ease-in-out infinite; transform-origin: top center; }
 
         @keyframes rabbit-jump {
           0%, 100% { transform: translateY(0) scale(1); }
@@ -693,7 +797,10 @@ export default function Layout() {
       {isTet && tetTheme.isPetalFalling && <PetalFall />}
       {isTet && <TetBanner customText={tetTheme.customMessages} />}
 
+      {isMidAutumn && <MidAutumnBanner customText={midAutumnTheme.customMessages} />}
       {isMidAutumn && <MidAutumnOverlay theme={midAutumnTheme} />}
+      
+      {isNationalDay && <NationalDayBanner customText={nationalDayTheme.customMessages} />}
       {isNationalDay && <NationalDayOverlay theme={nationalDayTheme} />}
 
       <div className={`flex h-screen font-sans antialiased text-gray-800 tracking-normal selection:bg-blue-500/20 selection:text-blue-700 transition-colors duration-1000 ${
