@@ -245,17 +245,27 @@ export default function Admin() {
     } catch (err) { alert(`❌ Lỗi lưu thông tin: ${err.message}`); } finally { setLoading(false); }
   };
 
-  const handleUpgradeToOwner = async (e) => {
+  // Hàm được gộp chung để xử lý cả Nâng cấp & Hạ cấp Owner
+  const handleToggleOwnerStatus = async (e, makeOwner) => {
     e.preventDefault();
     if (!upgradePassword) { alert('Vui lòng nhập mật khẩu của bạn để xác nhận!'); return; }
     setLoading(true);
     try {
       const { error: verifyError } = await supabase.auth.signInWithPassword({ email: currentUserEmail, password: upgradePassword });
       if (verifyError) throw new Error('Mật khẩu xác nhận không chính xác!');
-      await callUserManagementApi({ action: 'update_info', userId: editingUser.id, isOwner: true });
-      setUserMessage(`🎉 Đã cấp quyền Owner thành công cho [${editingUser.email}]`);
-      setEditingUser(null); await fetchSystemUsers();
-    } catch (err) { alert(`❌ Lỗi nâng cấp: ${err.message}`); } finally { setLoading(false); }
+      
+      // Chú ý: Đảm bảo Edge Function xử lý đúng tham số isOwner để ghi vào raw_user_meta_data
+      await callUserManagementApi({ 
+        action: 'update_info', 
+        userId: editingUser.id, 
+        role: makeOwner ? 'admin' : editForm.role,
+        isOwner: makeOwner 
+      });
+      
+      setUserMessage(makeOwner ? `🎉 Đã cấp quyền Owner thành công cho [${editingUser.email}]` : `✅ Đã gỡ quyền Owner của [${editingUser.email}]`);
+      setEditingUser(null); 
+      await fetchSystemUsers();
+    } catch (err) { alert(`❌ Lỗi thao tác: ${err.message}`); } finally { setLoading(false); }
   };
 
   const handleDeleteUser = async (targetUser) => {
@@ -434,7 +444,6 @@ export default function Admin() {
     } catch (err) { setCleanMessage({ text: `❌ Lỗi xóa dữ liệu: ${err.message}`, type: 'error' }); } finally { setIsCleaning(false); }
   };
 
-  // 🎄 THEME SAVE HANDLER
   const handleSaveThemes = async () => {
     setThemeLoading(true); setThemeMessage('');
     try {
@@ -465,6 +474,24 @@ export default function Admin() {
 
   const isOwner = currentUserMeta.is_owner === true || currentUserEmail === SUPER_OWNER_EMAIL;
   const isAdminOrOwner = isOwner || currentUserMeta.role === 'admin';
+
+  // Khóa chặn hoàn toàn không cho user thường xem trang
+  if (!isAdminOrOwner) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[70vh] p-4">
+        <div className="max-w-md w-full bg-white p-8 border border-red-200 rounded-3xl shadow-xl flex flex-col items-center text-center gap-4 animate-in zoom-in-95 duration-300">
+          <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-2">
+            <ShieldAlert size={40} className="text-red-500" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Truy cập bị từ chối</h2>
+          <p className="text-sm font-medium text-slate-500 leading-relaxed">
+            Bạn không có quyền truy cập trang quản trị này. Vui lòng quay lại trang chủ hoặc liên hệ Owner để được cấp quyền.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const dynamicOptions = getDynamicPriorityOptions();
 
   return (
@@ -488,13 +515,13 @@ export default function Admin() {
             Cấu hình API
           </button>
           {isOwner && (
-  <button 
-    onClick={() => { setActiveTab('themes'); setUserMessage(''); }} 
-    className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap ${activeTab === 'themes' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50 flex items-center gap-1.5' : 'text-slate-500 hover:text-slate-800 flex items-center gap-1.5'}`}
-  >
-    <Palette size={16}/> Giao diện
-  </button>
-)}
+          <button 
+            onClick={() => { setActiveTab('themes'); setUserMessage(''); }} 
+            className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap ${activeTab === 'themes' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50 flex items-center gap-1.5' : 'text-slate-500 hover:text-slate-800 flex items-center gap-1.5'}`}
+          >
+            <Palette size={16}/> Giao diện
+          </button>
+          )}
           <button onClick={() => { setActiveTab('users_management'); setUserMessage(''); }} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap ${activeTab === 'users_management' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}>
             Quản lý Users
           </button>
@@ -510,9 +537,7 @@ export default function Admin() {
         </div>
       )}
 
-      {/* ========================================== */}
-      {/* RENDER TAB: GIAO DIỆN (THEMES)             */}
-      {/* ========================================== */}
+      {/* RENDER TAB: GIAO DIỆN (THEMES) */}
       {activeTab === 'themes' &&  isOwner && (
         <div className="space-y-8 animate-in fade-in duration-300">
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
@@ -739,7 +764,6 @@ export default function Admin() {
       {activeTab === 'profile' && (
         <div className="animate-in fade-in duration-300 max-w-2xl mx-auto">
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-            {/* Giữ nguyên Code Tab Profile... */}
             <div className="flex items-center gap-5 border-b border-slate-100 pb-6 mb-6">
               <div className="w-16 h-16 bg-blue-50 border border-blue-100 text-blue-600 rounded-full flex items-center justify-center font-bold text-2xl shadow-sm">
                 <User size={32} />
@@ -808,8 +832,6 @@ export default function Admin() {
       {/* RENDER TAB: CẤU HÌNH HỆ THỐNG */}
       {activeTab === 'configs' && (
         <div className="space-y-8 animate-in fade-in duration-300">
-           {/* Giữ nguyên toàn bộ Code Cấu hình Hệ thống (Lọc, Quét Đơn, Cài API...) của phiên bản trước */}
-           {/* KHỐI ĐỒNG BỘ DỮ LIỆU ĐỘC LẬP */}
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
             <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-4">
               <DownloadCloud size={20} className="text-blue-600"/> Đồng bộ dữ liệu Cục bộ (Tránh Miss Webhook)
@@ -889,7 +911,7 @@ export default function Admin() {
             </div>
           </div>
 
-          {/* KHỐI ĐỒNG BỘ ĐƠN TRẢ HÀNG (RETURNS) */}
+          {/* KHỐI ĐỒNG BỘ ĐƠN TRẢ HÀNG (RETURNS) - Chỉ Owner thao tác */}
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
             <h2 className="text-xl font-bold mb-2 text-slate-800 flex items-center gap-2">
               <RefreshCcw size={20} className="text-indigo-600"/> Đồng bộ Đơn Trả Hàng & Hoàn Tiền
@@ -909,8 +931,7 @@ export default function Admin() {
               </div>
             )}
 
-            {/* Không render phần tương tác nếu không phải Admin */}
-            {isAdminOrOwner ? (
+            {isOwner ? (
               <div className="flex flex-col md:flex-row gap-5 items-center justify-between bg-indigo-50/40 p-6 rounded-2xl border border-indigo-100">
                 <div className="flex-1">
                   <p className="text-base font-bold text-indigo-900">Cập nhật danh sách hoàn tiền</p>
@@ -929,7 +950,7 @@ export default function Admin() {
                 <Lock size={20} className="text-slate-400" />
                 <div>
                   <p className="text-sm font-bold text-slate-700">Tính năng giới hạn</p>
-                  <p className="text-xs mt-0.5">Bạn cần quyền Admin để sử dụng chức năng này.</p>
+                  <p className="text-xs mt-0.5">Bạn cần quyền Owner để sử dụng chức năng đồng bộ dữ liệu này.</p>
                 </div>
               </div>
             )}
@@ -940,7 +961,6 @@ export default function Admin() {
             <h2 className="text-xl font-bold mb-6 text-slate-800 flex items-center gap-2"><Settings size={20} className="text-slate-600"/> Cài đặt kết nối Nhanh.vn</h2>
             {apiMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm ${apiMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>{apiMessage}</div>}
             
-            {/* Không hiển thị form nếu không phải owner */}
             {isOwner ? (
               <form onSubmit={handleSaveApi} className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1314,35 +1334,46 @@ export default function Admin() {
                 </select>
               </div>
               
-              {isOwner && editForm.role === 'admin' && !(editingUser.user_metadata?.is_owner === true) && (
-                <div className="mt-6 p-5 border border-amber-200 bg-amber-50/80 rounded-2xl space-y-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="text-sm font-black text-amber-800 flex items-center gap-1.5"><ShieldAlert size={16}/> Nâng cấp Owner</h4>
-                      <p className="text-xs text-amber-700/80 font-medium mt-1 pr-2 leading-relaxed">Người này sẽ có toàn quyền can thiệp hệ thống. Hành động này rất nguy hiểm!</p>
-                    </div>
-                    <button type="button" onClick={() => setShowUpgradeConfirm(!showUpgradeConfirm)} className="text-xs bg-white border border-amber-300 text-amber-700 px-3 py-1.5 rounded-lg shadow-sm font-bold hover:bg-amber-100 whitespace-nowrap cursor-pointer transition">
-                      {showUpgradeConfirm ? 'Hủy bỏ' : 'Mở khóa'}
-                    </button>
-                  </div>
-                  
-                  {showUpgradeConfirm && (
-                    <div className="pt-4 border-t border-amber-200/50 mt-2 animate-in slide-in-from-top-2">
-                      <label className="block mb-1.5 text-xs text-amber-900 font-bold">Nhập mật khẩu của BẠN để xác nhận:</label>
-                      <input 
-                        type="password" 
-                        value={upgradePassword}
-                        onChange={(e) => setUpgradePassword(e.target.value)}
-                        className="w-full px-4 py-2.5 border border-amber-300 rounded-xl outline-none focus:ring-2 focus:ring-amber-200 font-medium bg-white transition shadow-sm" 
-                        placeholder="Mật khẩu của bạn..."
-                      />
-                      <button type="button" onClick={handleUpgradeToOwner} disabled={loading} className="mt-3 w-full bg-amber-600 hover:bg-amber-700 text-white py-2.5 rounded-xl shadow-md transition font-bold text-sm flex justify-center gap-2 cursor-pointer disabled:opacity-50">
-                        {loading && <Loader2 size={16} className="animate-spin" />} Cấp quyền Owner Ngay
+              {/* VÙNG NÂNG CẤP HOẶC HẠ CẤP OWNER */}
+              {isOwner && editingUser.email !== SUPER_OWNER_EMAIL && (() => {
+                const isTargetOwner = editingUser.user_metadata?.is_owner === true;
+                // Chỉ hiện vùng này khi muốn nâng quyền thành Admin/Owner HOẶC đang là Owner (để hạ cấp)
+                if (editForm.role !== 'admin' && !isTargetOwner) return null;
+
+                return (
+                  <div className={`mt-6 p-5 border rounded-2xl space-y-4 ${isTargetOwner ? 'border-red-200 bg-red-50/80' : 'border-amber-200 bg-amber-50/80'}`}>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className={`text-sm font-black flex items-center gap-1.5 ${isTargetOwner ? 'text-red-800' : 'text-amber-800'}`}>
+                          <ShieldAlert size={16}/> {isTargetOwner ? 'Hạ cấp Owner' : 'Nâng cấp Owner'}
+                        </h4>
+                        <p className={`text-xs font-medium mt-1 pr-2 leading-relaxed ${isTargetOwner ? 'text-red-700/80' : 'text-amber-700/80'}`}>
+                          {isTargetOwner ? 'Tước quyền Owner của người này. Họ sẽ bị thu hồi toàn bộ quyền quản trị cấp cao.' : 'Người này sẽ có toàn quyền can thiệp hệ thống. Hành động này rất nguy hiểm!'}
+                        </p>
+                      </div>
+                      <button type="button" onClick={() => setShowUpgradeConfirm(!showUpgradeConfirm)} className={`text-xs bg-white border px-3 py-1.5 rounded-lg shadow-sm font-bold whitespace-nowrap cursor-pointer transition ${isTargetOwner ? 'border-red-300 text-red-700 hover:bg-red-100' : 'border-amber-300 text-amber-700 hover:bg-amber-100'}`}>
+                        {showUpgradeConfirm ? 'Hủy bỏ' : (isTargetOwner ? 'Gỡ quyền' : 'Mở khóa')}
                       </button>
                     </div>
-                  )}
-                </div>
-              )}
+                    
+                    {showUpgradeConfirm && (
+                      <div className={`pt-4 border-t mt-2 animate-in slide-in-from-top-2 ${isTargetOwner ? 'border-red-200/50' : 'border-amber-200/50'}`}>
+                        <label className={`block mb-1.5 text-xs font-bold ${isTargetOwner ? 'text-red-900' : 'text-amber-900'}`}>Nhập mật khẩu của BẠN để xác nhận:</label>
+                        <input 
+                          type="password" 
+                          value={upgradePassword}
+                          onChange={(e) => setUpgradePassword(e.target.value)}
+                          className={`w-full px-4 py-2.5 border rounded-xl outline-none focus:ring-2 font-medium bg-white transition shadow-sm ${isTargetOwner ? 'border-red-300 focus:ring-red-200' : 'border-amber-300 focus:ring-amber-200'}`} 
+                          placeholder="Mật khẩu của bạn..."
+                        />
+                        <button type="button" onClick={(e) => handleToggleOwnerStatus(e, !isTargetOwner)} disabled={loading} className={`mt-3 w-full text-white py-2.5 rounded-xl shadow-md transition font-bold text-sm flex justify-center gap-2 cursor-pointer disabled:opacity-50 ${isTargetOwner ? 'bg-red-600 hover:bg-red-700' : 'bg-amber-600 hover:bg-amber-700'}`}>
+                          {loading && <Loader2 size={16} className="animate-spin" />} {isTargetOwner ? 'Xác nhận Hạ cấp' : 'Cấp quyền Owner Ngay'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div className="flex justify-end gap-3 border-t border-slate-100 pt-6 mt-4">
                 <button type="button" onClick={() => setEditingUser(null)} className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition cursor-pointer">Đóng</button>

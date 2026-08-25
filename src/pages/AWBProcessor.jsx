@@ -2,24 +2,30 @@ import React, { useState, useRef, useEffect } from 'react';
 import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import * as pdfjsLib from 'pdfjs-dist';
-import Papa from 'papaparse'; // Thư viện parse file CSV
+import Papa from 'papaparse'; 
 
-// BẢN SỬA LỖI WORKER: Dùng unpkg đảm bảo luôn chạy trên Vite/Next.js/React CRA
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 import { BrowserMultiFormatReader } from '@zxing/library';
-import { supabase } from '../lib/supabase'; // Đường dẫn tới file supabase của bạn
+import { supabase } from '../lib/supabase';
 import { 
   FileText, UploadCloud, Settings, Download, Loader2, 
-  LayoutTemplate, X, MousePointerClick, Maximize, FileSpreadsheet, Printer
+  LayoutTemplate, X, MousePointerClick, Maximize, FileSpreadsheet, Printer, Database
 } from 'lucide-react';
 
 const codeReader = new BrowserMultiFormatReader();
 
 export default function AWBProcessor() {
   const [file, setFile] = useState(null);
+  
+  // State cho file Danh sách đơn hàng (chèn vào AWB)
   const [csvFile, setCsvFile] = useState(null);
-  const [csvOrders, setCsvOrders] = useState(null); // Lưu dữ liệu đơn hàng từ file upload
+  const [csvOrders, setCsvOrders] = useState(null); 
+  
+  // State cho file Cập nhật Mã đơn HVC vào Database
+  const [trackingCsvFile, setTrackingCsvFile] = useState(null);
+  const [trackingUpdates, setTrackingUpdates] = useState([]); 
+  const [isUpdatingDB, setIsUpdatingDB] = useState(false);
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
@@ -39,14 +45,15 @@ export default function AWBProcessor() {
     boxWidth: 200,         
     fontSize: 12,
     lineHeight: 16,
-    textFormat: '{product} x{qty} -- {location}',
-    autoFillEmptyRows: true, // Tự động lặp lại ID & Mã HVC cho dòng trống
-    optimizeName: false,     // Rút gọn tên sản phẩm chỉ lấy mã số
-    autoPrint: false         // Tự động in sau khi hoàn thành
+    textFormat: '{product} -- {location}',
+    autoFillEmptyRows: true, 
+    optimizeName: false,     
+    autoPrint: false         
   });
 
   const fileInputRef = useRef(null);
   const csvInputRef = useRef(null);
+  const trackingCsvInputRef = useRef(null);
 
   // Dữ liệu giả lập cho Preview
   const mockProducts = [
@@ -115,7 +122,7 @@ export default function AWBProcessor() {
   };
 
   // ==========================================
-  // TẢI FILE CSV MẪU
+  // TẢI FILE CSV MẪU (DANH SÁCH ĐƠN HÀNG)
   // ==========================================
   const downloadSampleCSV = () => {
     const csvContent = "ID,Mã sản phẩm,Số lượng,Mã đơn hãng vận chuyển\n"
@@ -123,7 +130,6 @@ export default function AWBProcessor() {
                      + ",26AD2-JU488P-WH-M,2,\n"
                      + "834366780,CLAIRE 412 - Màu da đậm - S,1,SPXVN060413516179";
                      
-    // Dùng Uint8Array([0xEF, 0xBB, 0xBF]) để tạo BOM giúp Excel đọc đúng font Tiếng Việt
     const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -132,7 +138,26 @@ export default function AWBProcessor() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    addLog(`Đã tải file CSV mẫu`, 'info');
+    addLog(`Đã tải file CSV mẫu (Danh sách đơn hàng)`, 'info');
+  };
+
+  // ==========================================
+  // TẢI FILE CSV MẪU (CẬP NHẬT MÃ HVC)
+  // ==========================================
+  const downloadTrackingSampleCSV = () => {
+    const csvContent = "ID đơn hàng,Mã đơn HVC\n"
+                     + "834366779,SPXVN060413516178\n"
+                     + "834366780,SPXVN060413516179";
+                     
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "Mau_Cap_Nhat_Ma_HVC.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    addLog(`Đã tải file CSV mẫu (Cập nhật mã HVC)`, 'info');
   };
 
   // ==========================================
@@ -198,6 +223,94 @@ export default function AWBProcessor() {
   };
 
   // ==========================================
+  // XỬ LÝ UPLOAD & CẬP NHẬT MÃ HVC VÀO DATABASE
+  // ==========================================
+  const handleTrackingCsvChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const selectedFile = e.target.files[0];
+      setTrackingCsvFile(selectedFile);
+      
+      Papa.parse(selectedFile, {
+        header: false,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const rows = results.data;
+          let startIndex = 0;
+          
+          // Kiểm tra dòng tiêu đề
+          if (rows[0] && (String(rows[0][0]).toLowerCase().includes('id') || String(rows[0][1]).toLowerCase().includes('mã'))) {
+            startIndex = 1;
+          }
+
+          const updates = [];
+          for (let i = startIndex; i < rows.length; i++) {
+            const id = rows[i][0]?.trim();
+            const tracking_code = rows[i][1]?.trim();
+            
+            if (id && tracking_code) {
+              updates.push({ id, tracking_code });
+            }
+          }
+          
+          setTrackingUpdates(updates);
+          addLog(`Đã nạp CSV Cập nhật HVC: Tìm thấy ${updates.length} dòng hợp lệ`, 'success');
+        },
+        error: (error) => {
+          addLog(`Lỗi đọc CSV Cập nhật HVC: ${error.message}`, 'error');
+        }
+      });
+    }
+  };
+
+  const removeTrackingCsv = () => {
+    setTrackingCsvFile(null);
+    setTrackingUpdates([]);
+    if (trackingCsvInputRef.current) trackingCsvInputRef.current.value = '';
+  };
+
+  const updateTrackingCodesInDB = async () => {
+    if (!trackingUpdates.length) return;
+    setIsUpdatingDB(true);
+    addLog(`Bắt đầu cập nhật ${trackingUpdates.length} mã HVC vào Database...`, 'info');
+    
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      // Xử lý theo batch để tránh quá tải
+      const batchSize = 50;
+      for (let i = 0; i < trackingUpdates.length; i += batchSize) {
+        const batch = trackingUpdates.slice(i, i + batchSize);
+        const promises = batch.map(item => 
+          supabase
+            .from('orders')
+            .update({ carrier_code: item.tracking_code })
+            .eq('id', item.id)
+        );
+        
+        const results = await Promise.all(promises);
+        results.forEach(res => {
+          if (res.error) {
+            console.error(res.error);
+            errorCount++;
+          } else {
+            successCount++;
+          }
+        });
+      }
+      
+      addLog(`Đã lưu xong vào DB: Thành công ${successCount}, Lỗi ${errorCount}`, successCount > 0 ? 'success' : 'warning');
+      
+      // Tùy chọn: Xóa file sau khi update xong
+      // removeTrackingCsv(); 
+    } catch (err) {
+      addLog(`Lỗi hệ thống khi cập nhật DB: ${err.message}`, 'error');
+    } finally {
+      setIsUpdatingDB(false);
+    }
+  };
+
+  // ==========================================
   // XỬ LÝ IN PDF TRỰC TIẾP TỪ TRÌNH DUYỆT
   // ==========================================
   const printPDF = (pdfUrl) => {
@@ -213,7 +326,7 @@ export default function AWBProcessor() {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
         addLog('Đã gửi lệnh in thành công', 'success');
-      }, 500); // Đợi 500ms cho file load hoàn thiện
+      }, 500);
     };
   };
 
@@ -401,7 +514,6 @@ export default function AWBProcessor() {
       setDownloadUrl(objectUrl);
       addLog(`Xử lý hoàn tất! File đã sẵn sàng.`, 'success');
 
-      // Tự động IN nếu người dùng cấu hình
       if (config.autoPrint) {
         printPDF(objectUrl);
       }
@@ -433,7 +545,7 @@ export default function AWBProcessor() {
           {/* UPLOAD KHU VỰC CHÍNH */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden p-6 space-y-4">
             
-            {/* Upload PDF */}
+            {/* 1. Upload PDF */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase mb-2">1. File PDF Vận Đơn (Bắt buộc)</label>
               {!file ? (
@@ -461,14 +573,14 @@ export default function AWBProcessor() {
               )}
             </div>
 
-            {/* Upload CSV */}
-            <div>
+            {/* 2. Upload CSV Danh sách SP chèn */}
+            <div className="pt-2 border-t border-slate-100">
               <div className="flex justify-between items-center mb-2">
                 <label className="block text-xs font-bold text-slate-700 uppercase">
-                  2. Danh sách đơn hàng <span className="text-slate-400 font-normal text-[10px]">(Tuỳ chọn)</span>
+                  2. File Sản phẩm chèn vào PDF <span className="text-slate-400 font-normal text-[10px]">(Tuỳ chọn)</span>
                 </label>
                 <button onClick={downloadSampleCSV} className="text-xs font-bold text-blue-500 hover:text-blue-700 hover:underline">
-                  Tải file CSV mẫu
+                  Tải mẫu CSV
                 </button>
               </div>
               
@@ -480,7 +592,7 @@ export default function AWBProcessor() {
                   <input type="file" accept=".csv" className="hidden" ref={csvInputRef} onChange={handleCsvChange} />
                   <div className="flex items-center justify-center gap-2">
                     <FileSpreadsheet size={20} className="text-slate-400" />
-                    <p className="text-sm font-bold text-slate-600">Tải file CSV đơn hàng lên</p>
+                    <p className="text-sm font-bold text-slate-600">Upload CSV (ID, Mã SP, SL, Mã HVC)</p>
                   </div>
                 </div>
               ) : (
@@ -499,14 +611,64 @@ export default function AWBProcessor() {
               )}
             </div>
 
-            <div className="pt-2">
+            {/* 3. Upload CSV Cập nhật Mã HVC vào Database */}
+            <div className="pt-2 border-t border-slate-100">
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase">
+                  3. Cập nhật mã HVC vào Database <span className="text-slate-400 font-normal text-[10px]">(Tuỳ chọn)</span>
+                </label>
+                <button onClick={downloadTrackingSampleCSV} className="text-xs font-bold text-purple-500 hover:text-purple-700 hover:underline">
+                  Tải mẫu CSV
+                </button>
+              </div>
+              
+              {!trackingCsvFile ? (
+                <div 
+                  className="border-2 border-dashed border-slate-300 rounded-xl p-4 text-center hover:bg-purple-50 transition-colors cursor-pointer" 
+                  onClick={() => trackingCsvInputRef.current?.click()}
+                >
+                  <input type="file" accept=".csv" className="hidden" ref={trackingCsvInputRef} onChange={handleTrackingCsvChange} />
+                  <div className="flex items-center justify-center gap-2">
+                    <Database size={20} className="text-slate-400" />
+                    <p className="text-sm font-bold text-slate-600">Upload CSV (ID đơn hàng, Mã HVC)</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-purple-50 border border-purple-200 p-3 rounded-xl space-y-3">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                      <Database size={20} className="text-purple-500" />
+                      <div>
+                        <p className="text-sm font-bold text-slate-800 truncate w-48">{trackingCsvFile.name}</p>
+                        <p className="text-xs text-slate-500">Sẵn sàng cập nhật {trackingUpdates.length} dòng</p>
+                      </div>
+                    </div>
+                    <button onClick={removeTrackingCsv} disabled={isUpdatingDB} className="p-2 text-slate-400 hover:text-red-500">
+                      <X size={20} />
+                    </button>
+                  </div>
+                  
+                  <button 
+                    onClick={updateTrackingCodesInDB} 
+                    disabled={isUpdatingDB || trackingUpdates.length === 0}
+                    className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2 text-sm transition-all"
+                  >
+                    {isUpdatingDB ? <Loader2 size={16} className="animate-spin" /> : <Database size={16} />}
+                    {isUpdatingDB ? 'Đang lưu vào DB...' : 'Lưu vào Database ngay'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* ACTION CHÍNH */}
+            <div className="pt-4 border-t border-slate-100">
               <button
                 onClick={processPDF}
                 disabled={!file || isProcessing}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:bg-slate-300 transition-all shadow-sm"
               >
                 {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <LayoutTemplate size={18} />}
-                {isProcessing ? `Đang xử lý ${progress.current}/${progress.total}` : 'Bắt đầu Xử Lý PDF'}
+                {isProcessing ? `Đang xử lý PDF ${progress.current}/${progress.total}` : 'Bắt đầu Xử Lý PDF'}
               </button>
               
               {/* CỤM NÚT IN VÀ TẢI SAU KHI XỬ LÝ */}
@@ -537,7 +699,6 @@ export default function AWBProcessor() {
             </h3>
             
             <div className="space-y-4">
-              {/* Tùy chọn xử lý danh sách đơn */}
               <div className="flex flex-col gap-2 p-3 bg-white border border-slate-200 rounded-lg">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input 
@@ -561,7 +722,6 @@ export default function AWBProcessor() {
 
                 <hr className="my-1 border-slate-100" />
                 
-                {/* Tùy chọn in ấn tự động */}
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input 
                     type="checkbox" 
