@@ -18,7 +18,7 @@
     "dotenv": "^17.4.2",
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^1.29.0",
-    "papaparse": "^5.5.4",
+    "papaparse": "^5.7.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.2.108",
     "react": "^19.2.6",
