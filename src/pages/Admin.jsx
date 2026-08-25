@@ -487,9 +487,14 @@ export default function Admin() {
           <button onClick={() => { setActiveTab('configs'); setUserMessage(''); }} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap ${activeTab === 'configs' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}>
             Cấu hình API
           </button>
-          <button onClick={() => { setActiveTab('themes'); setUserMessage(''); }} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap ${activeTab === 'themes' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50 flex items-center gap-1.5' : 'text-slate-500 hover:text-slate-800 flex items-center gap-1.5'}`}>
-            <Palette size={16}/> Giao diện
-          </button>
+          {isOwner && (
+  <button 
+    onClick={() => { setActiveTab('themes'); setUserMessage(''); }} 
+    className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap ${activeTab === 'themes' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50 flex items-center gap-1.5' : 'text-slate-500 hover:text-slate-800 flex items-center gap-1.5'}`}
+  >
+    <Palette size={16}/> Giao diện
+  </button>
+)}
           <button onClick={() => { setActiveTab('users_management'); setUserMessage(''); }} className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all duration-200 whitespace-nowrap ${activeTab === 'users_management' ? 'bg-white text-blue-600 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800'}`}>
             Quản lý Users
           </button>
@@ -508,7 +513,7 @@ export default function Admin() {
       {/* ========================================== */}
       {/* RENDER TAB: GIAO DIỆN (THEMES)             */}
       {/* ========================================== */}
-      {activeTab === 'themes' && (
+      {activeTab === 'themes' &&  isOwner && (
         <div className="space-y-8 animate-in fade-in duration-300">
           <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
             <h2 className="text-xl font-bold mb-2 text-slate-800 flex items-center gap-2">
