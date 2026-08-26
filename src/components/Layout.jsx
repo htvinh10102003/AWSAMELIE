@@ -519,6 +519,7 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [isInitializing, setIsInitializing] = useState(true); // Trạng thái kiểm tra tải user
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   
   const [isSidebarPinned, setIsSidebarPinned] = useState(true);
@@ -559,12 +560,17 @@ export default function Layout() {
     const fetchUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
+      setIsInitializing(false);
     };
     fetchUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) navigate('/login');
-      else setUser(session.user);
+      if (!session) {
+        navigate('/login');
+      } else {
+        setUser(session.user);
+      }
+      setIsInitializing(false);
     });
 
     const fetchThemeConfig = async () => {
@@ -620,10 +626,41 @@ export default function Layout() {
   const userEmail = user?.email || '';
   const displayName = user?.user_metadata?.full_name || userEmail.split('@')[0] || 'Đang tải...';
   const avatarLetter = displayName.charAt(0).toUpperCase();
-  const isAdmin = user?.user_metadata?.role === 'admin';
   
+  const isAdmin = user?.user_metadata?.role === 'admin';
   const isOwner = user?.user_metadata?.is_owner === true;
   
+  // --------------------------------------------------
+  // BỘ TÍNH TOÁN QUYỀN TRUY CẬP (ROUTE GUARDS)
+  // --------------------------------------------------
+  const adminRoutes = [
+    '/admin', 
+    '/quan-ly-kpi', 
+    '/nhap-lieu-kpi', 
+    '/cap-nhat-nguoi-dong-goi',
+    '/cap-nhat-lich-lam-viec', 
+    '/cap-nhat-san-pham', 
+    '/cap-nhat-so-do-kho',
+    '/cap-nhat-day-ke', 
+    '/cap-nhat-webhook'
+  ];
+  
+  const ownerRoutes = [
+    '/cap-nhat-tinh-nang'
+  ];
+
+  // Kiểm tra đường dẫn hiện tại có bắt đầu bằng path nào trong mảng bị cấm không
+  const isRestrictedAdminRoute = adminRoutes.some(route => location.pathname.startsWith(route));
+  const isRestrictedOwnerRoute = ownerRoutes.some(route => location.pathname.startsWith(route));
+
+  let hasAccess = true;
+  if (isRestrictedOwnerRoute) {
+    hasAccess = isOwner; // Chỉ Owner mới vào được
+  } else if (isRestrictedAdminRoute) {
+    hasAccess = isAdmin || isOwner; // Admin hoặc Owner đều vào được
+  }
+  // --------------------------------------------------
+
   const isTet = tetTheme?.isTetEnabled || false;
   const isMidAutumn = (midAutumnTheme?.isMidAutumnEnabled || false) && !isTet;
   const isNationalDay = (nationalDayTheme?.isNationalDayEnabled || false) && !isTet && !isMidAutumn;
@@ -1307,8 +1344,38 @@ export default function Layout() {
             isXmas ? 'bg-gradient-to-b from-red-100/30 to-transparent' : 
             'bg-gradient-to-b from-blue-50/40 to-transparent'
           }`} />
+          
           <div className="relative z-10 p-8 h-full">
-            <Outlet />
+            {isInitializing ? (
+              // ⏳ Màn hình loading khi chưa fetch xong trạng thái quyền của user
+              <div className="flex items-center justify-center h-full">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <span className="text-sm text-gray-500 font-medium">Đang kiểm tra phân quyền...</span>
+                </div>
+              </div>
+            ) : hasAccess ? (
+              // ✅ Được phép truy cập thì render Outlet bình thường
+              <Outlet />
+            ) : (
+              // ❌ Bị chặn thì render màn hình này
+              <div className="flex flex-col items-center justify-center h-full text-center animate-in fade-in duration-500">
+                <div className="w-24 h-24 bg-red-50 rounded-full flex items-center justify-center mb-6 border-8 border-red-100">
+                  <ShieldAlert size={40} className="text-red-500" />
+                </div>
+                <h2 className="text-2xl font-black text-gray-800 mb-3 uppercase tracking-wide">Không có quyền truy cập</h2>
+                <p className="text-gray-500 mb-8 max-w-md text-sm leading-relaxed">
+                  Bạn không có đủ thẩm quyền để xem trang này. Vui lòng liên hệ quản trị viên (Admin) hoặc Chủ sở hữu (Owner) của hệ thống.
+                </p>
+                <button 
+                  onClick={() => navigate('/')} 
+                  className="px-6 py-3 bg-gray-900 text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-all shadow-lg shadow-gray-900/20 flex items-center gap-2"
+                >
+                  <Undo2 size={18} />
+                  Quay lại trang chủ
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
