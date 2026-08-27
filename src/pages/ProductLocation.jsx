@@ -23,7 +23,7 @@ export default function ProductLocation() {
 
   const [isScanning, setIsScanning] = useState(false);
   const html5QrCodeRef = useRef(null);
-
+const isProcessingRef = useRef(false);
   const [racks, setRacks] = useState([]);
 
   // ==========================================
@@ -138,12 +138,13 @@ export default function ProductLocation() {
   };
 
   // ==========================================
-  // XỬ LÝ QUÉT MÃ VẠCH (CHỐNG TRẮNG MÀN HÌNH)
+  // XỬ LÝ QUÉT MÃ VẠCH (CHỐNG TRẮNG MÀN HÌNH TỐI ĐA)
   // ==========================================
   const startScanner = () => {
     setIsScanning(true);
+    isProcessingRef.current = false; // Reset lại khóa mỗi lần mở camera
     
-    // Đợi 100ms để DOM render thẻ <div id="reader"> xong
+    // Đợi 150ms để DOM render thẻ <div id="reader"> xong hoàn toàn
     setTimeout(() => {
       const html5QrCode = new Html5Qrcode("reader");
       html5QrCodeRef.current = html5QrCode;
@@ -152,27 +153,34 @@ export default function ProductLocation() {
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 },
         async (decodedText) => {
-          // BƯỚC 1: QUÉT THÀNH CÔNG -> DỪNG CAMERA TRƯỚC TIÊN
+          // KHÓA LUỒNG: Nếu đang xử lý một mã rồi thì bỏ qua các mã quét được phía sau
+          if (isProcessingRef.current) return;
+          isProcessingRef.current = true; 
+
+          // DỪNG CAMERA (Bất đồng bộ)
           if (html5QrCodeRef.current) {
             try {
+                // CHỈ STOP camera, KHÔNG GỌI .clear() để tránh crash React
                 await html5QrCodeRef.current.stop();
-                html5QrCodeRef.current.clear();
             } catch (err) {
-                console.error("Lỗi khi tắt camera:", err);
+                console.error("Lỗi khi tắt luồng camera:", err);
             }
           }
-          // BƯỚC 2: TẮT GIAO DIỆN QUÉT VÀ TÌM KIẾM
+          
+          // Sau khi camera tắt hẳn mới ẩn giao diện quét và gọi tìm kiếm
           setIsScanning(false);
           setMapSearchTerm(decodedText);
           handleExactSearch(decodedText);
         },
-        (errorMessage) => { /* Bỏ qua các lỗi chưa nhận diện được mã */ }
+        (errorMessage) => { 
+          // Bỏ qua các cảnh báo không tìm thấy mã liên tục
+        }
       ).catch((err) => {
         console.error("Lỗi khởi động camera:", err);
         setMapMessage({ text: '❌ Lỗi mở camera. Vui lòng cấp quyền truy cập!', type: 'error' });
         setIsScanning(false);
       });
-    }, 100);
+    }, 150); // Tăng lên 150ms để an toàn hơn trên các dòng máy chậm
   };
 
   // Nút Hủy quét bằng tay
@@ -180,7 +188,7 @@ export default function ProductLocation() {
     if (html5QrCodeRef.current) {
         try {
             await html5QrCodeRef.current.stop();
-            html5QrCodeRef.current.clear();
+            // Tương tự, không dùng clear() ở đây
         } catch (err) {
             console.error("Lỗi dọn dẹp camera:", err);
         }
