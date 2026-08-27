@@ -140,11 +140,27 @@ const isProcessingRef = useRef(false);
   // ==========================================
   // XỬ LÝ QUÉT MÃ VẠCH (CHỐNG TRẮNG MÀN HÌNH TỐI ĐA)
   // ==========================================
+  // ==========================================
+  // XỬ LÝ QUÉT MÃ VẠCH (CHỐNG TRẮNG MÀN HÌNH TỐI ĐA)
+  // ==========================================
+  
+  // 1. Hàm dừng camera an toàn tuyệt đối
+  const safeStopScanner = async () => {
+    if (html5QrCodeRef.current) {
+      try {
+        // Bọc try..catch để bắt lỗi đồng bộ nếu camera chưa kịp chạy đã bị gọi stop
+        await html5QrCodeRef.current.stop();
+      } catch (error) {
+        console.warn("Bỏ qua lỗi tắt camera:", error);
+      }
+    }
+  };
+
+  // 2. Khởi động quét
   const startScanner = () => {
     setIsScanning(true);
-    isProcessingRef.current = false; // Reset lại khóa mỗi lần mở camera
+    isProcessingRef.current = false;
     
-    // Đợi 150ms để DOM render thẻ <div id="reader"> xong hoàn toàn
     setTimeout(() => {
       const html5QrCode = new Html5Qrcode("reader");
       html5QrCodeRef.current = html5QrCode;
@@ -153,59 +169,48 @@ const isProcessingRef = useRef(false);
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 150 }, aspectRatio: 1.0 },
         async (decodedText) => {
-          // KHÓA LUỒNG: Nếu đang xử lý một mã rồi thì bỏ qua các mã quét được phía sau
+          // Khóa luồng, chỉ xử lý mã đầu tiên quét được
           if (isProcessingRef.current) return;
           isProcessingRef.current = true; 
 
-          // DỪNG CAMERA (Bất đồng bộ)
-          if (html5QrCodeRef.current) {
-            try {
-                // CHỈ STOP camera, KHÔNG GỌI .clear() để tránh crash React
-                await html5QrCodeRef.current.stop();
-            } catch (err) {
-                console.error("Lỗi khi tắt luồng camera:", err);
-            }
-          }
+          // Dừng camera an toàn trước
+          await safeStopScanner();
           
-          // Sau khi camera tắt hẳn mới ẩn giao diện quét và gọi tìm kiếm
+          // Sau đó mới cập nhật UI và tìm kiếm
           setIsScanning(false);
           setMapSearchTerm(decodedText);
           handleExactSearch(decodedText);
         },
         (errorMessage) => { 
-          // Bỏ qua các cảnh báo không tìm thấy mã liên tục
+          // Ẩn các cảnh báo rác khi chưa tìm thấy mã
         }
       ).catch((err) => {
         console.error("Lỗi khởi động camera:", err);
         setMapMessage({ text: '❌ Lỗi mở camera. Vui lòng cấp quyền truy cập!', type: 'error' });
         setIsScanning(false);
       });
-    }, 150); // Tăng lên 150ms để an toàn hơn trên các dòng máy chậm
+    }, 150);
   };
 
-  // Nút Hủy quét bằng tay
+  // 3. Nút Hủy quét bằng tay
   const stopScannerManually = async () => {
-    if (html5QrCodeRef.current) {
-        try {
-            await html5QrCodeRef.current.stop();
-            // Tương tự, không dùng clear() ở đây
-        } catch (err) {
-            console.error("Lỗi dọn dẹp camera:", err);
-        }
-    }
+    await safeStopScanner();
     setIsScanning(false);
   };
 
-  // Dọn dẹp khi chuyển tab hoặc unmount
+  // 4. Xử lý dọn dẹp khi đổi Tab hoặc thoát component
   useEffect(() => {
     return () => {
-      if (html5QrCodeRef.current && isScanning) {
-        html5QrCodeRef.current.stop().then(() => {
-            html5QrCodeRef.current.clear();
-        }).catch(() => {});
+      if (html5QrCodeRef.current) {
+        try {
+          // Bắt buộc phải có try...catch ở đây để chống sập React khi unmount
+          html5QrCodeRef.current.stop().catch(() => {});
+        } catch (error) {
+          // Nuốt lỗi "Cannot stop..."
+        }
       }
     };
-  }, [isScanning]);
+  }, []);
 
   // ==========================================
   // XỬ LÝ TAB 2: DANH SÁCH (GIỮ NGUYÊN)
