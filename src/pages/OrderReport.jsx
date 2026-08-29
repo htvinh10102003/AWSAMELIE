@@ -116,6 +116,7 @@ export default function OrderReport() {
     // UI State
     const [activeTab, setActiveTab] = useState('printable');
     const [showActionMenu, setShowActionMenu] = useState(false);
+    const [showCopyMenu, setShowCopyMenu] = useState(false);
     const [showMissedModal, setShowMissedModal] = useState(false);
     const [showColSettings, setShowColSettings] = useState(false);
     
@@ -184,6 +185,7 @@ export default function OrderReport() {
     useEffect(() => {
         setSelectedOrders([]);
         setShowActionMenu(false);
+        setShowCopyMenu(false);
         setCurrentPage(1);
     }, [activeTab, searchId, searchProduct, selectedStatus, selectedCarrier, selectedChannel, searchNote, sortOrder, pageSize, agingFilter]);
 
@@ -208,7 +210,6 @@ export default function OrderReport() {
         return dict;
     };
 
-    // Hàm Preview: Chỉ đổi state hiển thị tạm thời
     const handleToggleColumn = (colId) => {
         const newCols = visibleCols.includes(colId) 
             ? visibleCols.filter(c => c !== colId) 
@@ -216,7 +217,6 @@ export default function OrderReport() {
         setVisibleCols(newCols);
     };
 
-    // Hàm Lưu: Update lên Database
     const handleSaveColumnConfig = async () => {
         if (!userEmail) return;
         setIsSavingCols(true);
@@ -228,7 +228,7 @@ export default function OrderReport() {
             });
             setCopyMessage('✅ Đã lưu cấu hình hiển thị cột');
             setTimeout(() => setCopyMessage(''), 3000);
-            setShowColSettings(false); // Đóng menu sau khi lưu xong
+            setShowColSettings(false);
         } catch (error) {
             console.error("Lỗi khi lưu cấu hình hiển thị:", error);
             setCopyMessage('⚠️ Đã xảy ra lỗi khi lưu cấu hình');
@@ -272,7 +272,6 @@ export default function OrderReport() {
     const getFilteredOrders = (orderList) => {
         if (!orderList) return [];
         let filtered = orderList.filter(order => {
-            // Lọc ID (Mã ĐH, Mã Sàn, Mã HVC)
             if (searchId) {
                 const query = searchId.trim().toLowerCase();
                 const matchId = String(order.id).toLowerCase().includes(query);
@@ -281,7 +280,6 @@ export default function OrderReport() {
                 if (!matchId && !matchEcom && !matchCarrier) return false;
             }
 
-            // Lọc Sản phẩm
             if (searchProduct) {
                 const prodQuery = searchProduct.trim().toLowerCase();
                 const hasProductMatch = order.order_products?.some(p => 
@@ -317,6 +315,9 @@ export default function OrderReport() {
 
     const currentRawList = data[activeTab] || [];
     const filteredOrders = getFilteredOrders(currentRawList);
+    
+    // Đếm số lượng ID sàn (Chỉ tính kênh Shopee - 42 và TikTok Shop - 48)
+    const ecomOrdersCount = filteredOrders.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id).length;
 
     const totalOrdersCount = filteredOrders.length;
     const totalPages = Math.ceil(totalOrdersCount / pageSize) || 1;
@@ -360,6 +361,39 @@ export default function OrderReport() {
         setCopyMessage(`✅ Đã gửi lệnh cập nhật webhook xong.`);
         setSelectedOrders([]);
         setTimeout(() => setCopyMessage(''), 5000);
+    };
+
+    const executeCopy = async (type) => {
+        if (filteredOrders.length === 0) return;
+        
+        let textToCopy = '';
+        let count = 0;
+
+        if (type === 'system') {
+            textToCopy = filteredOrders.map(order => order.id).join('\n');
+            count = filteredOrders.length;
+        } else if (type === 'ecom') {
+            const validOrders = filteredOrders.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id);
+            textToCopy = validOrders.map(o => o.ecom_order_id).join('\n');
+            count = validOrders.length;
+        }
+
+        if (!textToCopy) {
+            setCopyMessage(type === 'ecom' ? '⚠️ Không có ID đơn sàn Shopee/TikTok nào để copy.' : '⚠️ Không có mã nào để copy.');
+            setTimeout(() => setCopyMessage(''), 3000);
+            setShowCopyMenu(false);
+            return;
+        }
+
+        try {
+            await navigator.clipboard.writeText(textToCopy);
+            setCopyMessage(`✅ Đã copy ${count} mã ${type === 'ecom' ? 'đơn sàn' : 'hệ thống'}.`);
+        } catch (err) {
+            setCopyMessage('⚠️ Copy thất bại, vui lòng thử lại.');
+        }
+        
+        setTimeout(() => setCopyMessage(''), 3000);
+        setShowCopyMenu(false);
     };
 
     const handleSelectAll = (e) => {
@@ -509,6 +543,38 @@ export default function OrderReport() {
 
                         {/* Actions */}
                         <div className="flex items-center gap-2">
+                            {/* Copy Dropdown */}
+                            <div className="relative" onMouseLeave={() => setShowCopyMenu(false)}>
+                                <button 
+                                    onClick={() => setShowCopyMenu(!showCopyMenu)} 
+                                    disabled={filteredOrders.length === 0} 
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-sm ${filteredOrders.length > 0 ? 'bg-gray-800 text-white hover:bg-gray-900' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}
+                                >
+                                    <Copy size={15} /> Copy ({filteredOrders.length}) <ChevronDown size={14} />
+                                </button>
+                                {showCopyMenu && filteredOrders.length > 0 && (
+                                    <div className="absolute right-0 top-full mt-1 w-[260px] bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden py-1">
+                                        <button 
+                                            onClick={() => executeCopy('system')} 
+                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between"
+                                        >
+                                            <span className="font-medium">ID Hệ thống</span>
+                                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-bold">{filteredOrders.length}</span>
+                                        </button>
+                                        <button 
+                                            onClick={() => executeCopy('ecom')} 
+                                            disabled={ecomOrdersCount === 0}
+                                            className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between border-t border-gray-100 ${ecomOrdersCount > 0 ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed'}`}
+                                        >
+                                            <span className="font-medium">ID Đơn sàn (Shopee/TikTok)</span>
+                                            <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${ecomOrdersCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>
+                                                {ecomOrdersCount}
+                                            </span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Column Settings */}
                             <div className="relative" ref={colSettingsRef}>
                                 <button onClick={() => setShowColSettings(!showColSettings)} className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 focus:ring-2 focus:ring-gray-100 transition-all shadow-sm">
@@ -653,7 +719,7 @@ export default function OrderReport() {
                                                             </div>
                                                             {order.ecom_order_id && (
                                                                 <div className="text-[11px] text-gray-500 mb-0.5 flex items-center gap-1">
-                                                                    <span className="font-medium bg-gray-100 px-1.5 py-0.5 rounded">ID Sàn</span> {order.ecom_order_id}
+                                                                    <span className="font-medium bg-gray-100 px-1.5 py-0.5 rounded">Sàn</span> {order.ecom_order_id}
                                                                 </div>
                                                             )}
                                                             {order.carrier_code && (
