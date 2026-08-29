@@ -9,37 +9,34 @@ const SALE_CHANNELS = {
 };
 
 const CHANNEL_COLORS = {
-    '1': 'bg-slate-100 text-slate-700 border-slate-200',
+    '1': 'bg-blue-600 text-white border-blue-700 shadow-sm', // Admin - Xanh
     '2': 'bg-indigo-100 text-indigo-700 border-indigo-200',
     '10': 'bg-violet-100 text-violet-700 border-violet-200',
     '20': 'bg-blue-100 text-blue-700 border-blue-200',
     '21': 'bg-pink-100 text-pink-700 border-pink-200',
     '41': 'bg-orange-100 text-orange-700 border-orange-200',
-    '42': 'bg-red-100 text-red-700 border-red-200',
+    '42': 'bg-red-600 text-white border-red-700 shadow-sm', // Shopee - Đỏ
     '43': 'bg-cyan-100 text-cyan-700 border-cyan-200',
     '45': 'bg-teal-100 text-teal-700 border-teal-200',
-    '48': 'bg-gray-100 text-gray-700 border-gray-200',
+    '48': 'bg-black text-white border-gray-900 shadow-sm', // Tiktok Shop - Đen
     '49': 'bg-blue-100 text-blue-700 border-blue-200',
     '50': 'bg-red-100 text-red-700 border-red-200',
     '51': 'bg-orange-100 text-orange-700 border-orange-200',
     '52': 'bg-green-100 text-green-700 border-green-200'
 };
 
+// Chuẩn hóa ID Trạng thái Nhanh.vn sang màu sắc
 const STATUS_COLORS = {
-    '1': 'bg-gray-100 text-gray-700',
-    '2': 'bg-yellow-100 text-yellow-700',
-    '3': 'bg-blue-100 text-blue-700',
-    '4': 'bg-purple-100 text-purple-700',
-    '5': 'bg-indigo-100 text-indigo-700',
-    '6': 'bg-green-100 text-green-700',
-    '7': 'bg-teal-100 text-teal-700',
-    '8': 'bg-rose-100 text-rose-700',
-    '9': 'bg-red-100 text-red-700',
+    '1': 'bg-blue-700 text-white shadow-sm', // Đơn mới -> Xanh dương đậm
+    '2': 'bg-orange-500 text-white shadow-sm', // Chờ khách xác nhận -> Cam
+    '3': 'bg-blue-100 text-blue-800 border border-blue-300', // Đã xác nhận -> Xanh dương nhạt
+    '4': 'bg-gray-500 text-white shadow-sm', // Đang đóng gói -> Xám
+    '5': 'bg-[#8B4513] text-white shadow-sm', // Đã đóng gói -> Nâu
+    '6': 'bg-green-600 text-white shadow-sm', // Đã gửi HVC
+    '7': 'bg-teal-600 text-white shadow-sm',
+    '8': 'bg-rose-100 text-rose-700 border border-rose-300',
+    '9': 'bg-red-600 text-white shadow-sm',
     '10': 'bg-orange-100 text-orange-700',
-    '20': 'bg-cyan-100 text-cyan-700',
-    '30': 'bg-green-100 text-green-700',
-    '40': 'bg-emerald-100 text-emerald-700',
-    '42': 'bg-green-100 text-green-700',
 };
 
 const OPTIONAL_COLUMNS = [
@@ -316,8 +313,14 @@ export default function OrderReport() {
     const currentRawList = data[activeTab] || [];
     const filteredOrders = getFilteredOrders(currentRawList);
     
-    // Đếm số lượng ID sàn (Chỉ tính kênh Shopee - 42 và TikTok Shop - 48)
-    const ecomOrdersCount = filteredOrders.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id).length;
+    // Xác định list đơn hàng mục tiêu để COPY (Các đơn đã tick HOẶC Tất cả các đơn hiển thị)
+    const targetOrdersForCopy = selectedOrders.length > 0 
+        ? filteredOrders.filter(o => selectedOrders.includes(o.id)) 
+        : filteredOrders;
+
+    const copyTargetCount = targetOrdersForCopy.length;
+    const ecomOrdersCount = targetOrdersForCopy.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id).length;
+    const carrierOrdersCount = targetOrdersForCopy.filter(o => o.carrier_code).length;
 
     const totalOrdersCount = filteredOrders.length;
     const totalPages = Math.ceil(totalOrdersCount / pageSize) || 1;
@@ -364,22 +367,26 @@ export default function OrderReport() {
     };
 
     const executeCopy = async (type) => {
-        if (filteredOrders.length === 0) return;
+        if (targetOrdersForCopy.length === 0) return;
         
         let textToCopy = '';
         let count = 0;
 
         if (type === 'system') {
-            textToCopy = filteredOrders.map(order => order.id).join('\n');
-            count = filteredOrders.length;
+            textToCopy = targetOrdersForCopy.map(order => order.id).join('\n');
+            count = targetOrdersForCopy.length;
         } else if (type === 'ecom') {
-            const validOrders = filteredOrders.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id);
+            const validOrders = targetOrdersForCopy.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id);
             textToCopy = validOrders.map(o => o.ecom_order_id).join('\n');
+            count = validOrders.length;
+        } else if (type === 'carrier') {
+            const validOrders = targetOrdersForCopy.filter(o => o.carrier_code);
+            textToCopy = validOrders.map(o => o.carrier_code).join('\n');
             count = validOrders.length;
         }
 
         if (!textToCopy) {
-            setCopyMessage(type === 'ecom' ? '⚠️ Không có ID đơn sàn Shopee/TikTok nào để copy.' : '⚠️ Không có mã nào để copy.');
+            setCopyMessage('⚠️ Không có mã nào hợp lệ để copy.');
             setTimeout(() => setCopyMessage(''), 3000);
             setShowCopyMenu(false);
             return;
@@ -387,7 +394,7 @@ export default function OrderReport() {
 
         try {
             await navigator.clipboard.writeText(textToCopy);
-            setCopyMessage(`✅ Đã copy ${count} mã ${type === 'ecom' ? 'đơn sàn' : 'hệ thống'}.`);
+            setCopyMessage(`✅ Đã copy ${count} mã ${type === 'ecom' ? 'đơn sàn' : type === 'carrier' ? 'vận đơn' : 'hệ thống'}.`);
         } catch (err) {
             setCopyMessage('⚠️ Copy thất bại, vui lòng thử lại.');
         }
@@ -547,30 +554,44 @@ export default function OrderReport() {
                             <div className="relative" onMouseLeave={() => setShowCopyMenu(false)}>
                                 <button 
                                     onClick={() => setShowCopyMenu(!showCopyMenu)} 
-                                    disabled={filteredOrders.length === 0} 
-                                    className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-sm ${filteredOrders.length > 0 ? 'bg-gray-800 text-white hover:bg-gray-900' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}
+                                    disabled={copyTargetCount === 0} 
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-sm ${copyTargetCount > 0 ? 'bg-gray-800 text-white hover:bg-gray-900' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}
                                 >
-                                    <Copy size={15} /> Copy ({filteredOrders.length}) <ChevronDown size={14} />
+                                    <Copy size={15} /> Copy ({copyTargetCount}) <ChevronDown size={14} />
                                 </button>
-                                {showCopyMenu && filteredOrders.length > 0 && (
-                                    <div className="absolute right-0 top-full mt-1 w-[260px] bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden py-1">
-                                        <button 
-                                            onClick={() => executeCopy('system')} 
-                                            className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between"
-                                        >
-                                            <span className="font-medium">ID Hệ thống</span>
-                                            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-bold">{filteredOrders.length}</span>
-                                        </button>
-                                        <button 
-                                            onClick={() => executeCopy('ecom')} 
-                                            disabled={ecomOrdersCount === 0}
-                                            className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between border-t border-gray-100 ${ecomOrdersCount > 0 ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed'}`}
-                                        >
-                                            <span className="font-medium">ID Đơn sàn (Shopee/TikTok)</span>
-                                            <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${ecomOrdersCount > 0 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-400'}`}>
-                                                {ecomOrdersCount}
-                                            </span>
-                                        </button>
+                                
+                                {/* Thêm pt-2 ở thẻ div bọc để menu không bị tắt khi di chuột */}
+                                {showCopyMenu && copyTargetCount > 0 && (
+                                    <div className="absolute right-0 top-full pt-2 w-[270px] z-50">
+                                        <div className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden py-1">
+                                            <button 
+                                                onClick={() => executeCopy('system')} 
+                                                className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center justify-between"
+                                            >
+                                                <span className="font-medium">ID Hệ thống</span>
+                                                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-bold">{copyTargetCount}</span>
+                                            </button>
+                                            <button 
+                                                onClick={() => executeCopy('ecom')} 
+                                                disabled={ecomOrdersCount === 0}
+                                                className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between border-t border-gray-100 ${ecomOrdersCount > 0 ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed'}`}
+                                            >
+                                                <span className="font-medium">ID Đơn sàn (Shopee/TikTok)</span>
+                                                <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${ecomOrdersCount > 0 ? 'bg-pink-100 text-pink-700' : 'bg-gray-100 text-gray-400'}`}>
+                                                    {ecomOrdersCount}
+                                                </span>
+                                            </button>
+                                            <button 
+                                                onClick={() => executeCopy('carrier')} 
+                                                disabled={carrierOrdersCount === 0}
+                                                className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between border-t border-gray-100 ${carrierOrdersCount > 0 ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed'}`}
+                                            >
+                                                <span className="font-medium">Mã Vận đơn</span>
+                                                <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${carrierOrdersCount > 0 ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400'}`}>
+                                                    {carrierOrdersCount}
+                                                </span>
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -615,16 +636,18 @@ export default function OrderReport() {
                                     {sendingOrder || updatingSelected ? <RefreshCw size={16} className="animate-spin" /> : "Thao tác"} ({selectedOrders.length}) <ChevronDown size={14} />
                                 </button>
                                 {showActionMenu && selectedOrders.length > 0 && (
-                                    <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden py-1">
-                                        <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-400 uppercase bg-gray-50">In Ấn</div>
-                                        <button onClick={() => executePrint('A4')} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2"><Printer size={15} /> In khổ A4/A5</button>
-                                        <button onClick={() => executePrint('K80')} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
-                                        
-                                        <div className="px-3 py-1.5 mt-1 text-[11px] font-semibold text-gray-400 uppercase bg-gray-50 border-t border-gray-100">Vận Chuyển</div>
-                                        <button onClick={handleSendCarrier} className="w-full text-left px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 flex items-center gap-2"><Send size={15} /> Gửi Hãng Vận Chuyển</button>
+                                    <div className="absolute right-0 top-full pt-2 w-56 z-50">
+                                        <div className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden py-1">
+                                            <div className="px-3 py-1.5 text-[11px] font-semibold text-gray-400 uppercase bg-gray-50">In Ấn</div>
+                                            <button onClick={() => executePrint('A4')} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2"><Printer size={15} /> In khổ A4/A5</button>
+                                            <button onClick={() => executePrint('K80')} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
+                                            
+                                            <div className="px-3 py-1.5 mt-1 text-[11px] font-semibold text-gray-400 uppercase bg-gray-50 border-t border-gray-100">Vận Chuyển</div>
+                                            <button onClick={handleSendCarrier} className="w-full text-left px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 flex items-center gap-2"><Send size={15} /> Gửi Hãng Vận Chuyển</button>
 
-                                        <div className="px-3 py-1.5 mt-1 text-[11px] font-semibold text-gray-400 uppercase bg-gray-50 border-t border-gray-100">Hệ Thống</div>
-                                        <button onClick={handleUpdateSelectedWebhooks} className="w-full text-left px-4 py-2 text-sm text-blue-700 hover:bg-blue-50 flex items-center gap-2"><RefreshCw size={15} /> Cập nhật lại Webhook</button>
+                                            <div className="px-3 py-1.5 mt-1 text-[11px] font-semibold text-gray-400 uppercase bg-gray-50 border-t border-gray-100">Hệ Thống</div>
+                                            <button onClick={handleUpdateSelectedWebhooks} className="w-full text-left px-4 py-2 text-sm text-blue-700 hover:bg-blue-50 flex items-center gap-2"><RefreshCw size={15} /> Cập nhật lại Webhook</button>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -692,7 +715,7 @@ export default function OrderReport() {
                                         const isChecked = selectedOrders.includes(order.id);
                                         
                                         const channelColorClass = CHANNEL_COLORS[order.sale_channel] || 'bg-gray-100 text-gray-600 border-gray-200';
-                                        const statusColorClass = STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600';
+                                        const statusColorClass = STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600 border border-gray-200';
 
                                         const agingDays = order.printable_date ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24)) : 0;
                                         const isAgingOrder = activeTab === 'printable' && agingDays > 2;
@@ -714,17 +737,19 @@ export default function OrderReport() {
                                                     {/* Cột 2: Gộp ID (Order ID, Ecom ID, Carrier Code) */}
                                                     {index === 0 && (
                                                         <td rowSpan={rowCount} className="py-3 px-4 align-top border-r border-gray-100">
-                                                            <div className="font-bold text-blue-600 cursor-pointer hover:underline mb-1" onClick={() => handleSelectOne(order.id)}>
+                                                            <div className="font-bold text-gray-800 cursor-pointer hover:text-blue-600 mb-1" onClick={() => handleSelectOne(order.id)}>
                                                                 {order.id}
                                                             </div>
                                                             {order.ecom_order_id && (
-                                                                <div className="text-[11px] text-gray-500 mb-0.5 flex items-center gap-1">
-                                                                    <span className="font-medium bg-gray-100 px-1.5 py-0.5 rounded">Sàn</span> {order.ecom_order_id}
+                                                                <div className="text-[11px] mb-0.5 flex items-center gap-1.5">
+                                                                    <span className="font-medium bg-pink-100 text-pink-700 px-1.5 py-0.5 rounded shadow-sm border border-pink-200">Sàn</span>
+                                                                    <span className="text-pink-600 font-semibold">{order.ecom_order_id}</span>
                                                                 </div>
                                                             )}
                                                             {order.carrier_code && (
-                                                                <div className="text-[11px] text-gray-500 mb-1 flex items-center gap-1">
-                                                                    <span className="font-medium bg-gray-100 px-1.5 py-0.5 rounded">MVD</span> {order.carrier_code}
+                                                                <div className="text-[11px] mb-1 flex items-center gap-1.5">
+                                                                    <span className="font-medium bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded shadow-sm border border-purple-200">MVD</span>
+                                                                    <span className="text-purple-600 font-semibold">{order.carrier_code}</span>
                                                                 </div>
                                                             )}
                                                             <div className="text-[10px] text-gray-400 mt-1">
@@ -737,7 +762,7 @@ export default function OrderReport() {
                                                     {index === 0 && visibleCols.includes('carrier') && (
                                                         <td rowSpan={rowCount} className="py-3 px-4 align-top border-r border-gray-100">
                                                             <div className="font-semibold text-gray-700 text-sm mb-1.5">{order.carrier_name || 'Chưa phân bổ'}</div>
-                                                            <div className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium ${statusColorClass}`}>
+                                                            <div className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${statusColorClass}`}>
                                                                 {statusName}
                                                             </div>
                                                         </td>
@@ -746,7 +771,7 @@ export default function OrderReport() {
                                                     {/* Cột 4 (Tùy chọn): Kênh & Nguồn */}
                                                     {index === 0 && visibleCols.includes('source') && (
                                                         <td rowSpan={rowCount} className="py-3 px-4 align-top border-r border-gray-100">
-                                                            <div className={`inline-block px-2 py-0.5 rounded text-[11px] font-medium border mb-1.5 ${channelColorClass}`}>
+                                                            <div className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium border mb-1.5 ${channelColorClass}`}>
                                                                 {channelName}
                                                             </div>
                                                             {order.traffic_source && (
