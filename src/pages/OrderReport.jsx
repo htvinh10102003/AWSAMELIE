@@ -193,9 +193,9 @@ export default function OrderReport() {
         setStatusDict(dict);
 
         const [confRes, userConfRes] = await Promise.all([
-            supabase.from('system_configs').select('*').eq('key', 'nhanh_business_id').single(),
-            supabase.from('system_configs').select('*').eq('key', `order_cols_pref_${email}`).single()
-        ]);
+    supabase.from('system_configs').select('*').eq('key', 'nhanh_business_id').maybeSingle(),
+    supabase.from('system_configs').select('*').eq('key', `order_cols_pref_${email}`).maybeSingle()
+]);
 
         if (confRes.data) setBusinessId(confRes.data.value);
         if (userConfRes.data) {

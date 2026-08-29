@@ -834,7 +834,7 @@ export default function Layout() {
                   <ShieldAlert size={40} className="text-red-500" />
                 </div>
                 <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase tracking-tight">Truy cập bị từ chối</h2>
-                <p className="text-slate-500 mb-8 text-sm leading-relaxed font-medium">Bạn không có đủ thẩm quyền để xem trang này. Vui lòng liên hệ Quản trị viên để được cấp quyền.</p>
+                <p className="text-slate-500 mb-8 text-sm leading-relaxed font-medium">Bạn không có quyền truy cập trang này. Vui lòng liên hệ Quản trị viên để được cấp quyền.</p>
                 <button onClick={() => navigate('/')} className="px-6 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 shadow-md transition-all flex items-center gap-2">
                   <Undo2 size={18} /> Quay lại trang chủ
                 </button>

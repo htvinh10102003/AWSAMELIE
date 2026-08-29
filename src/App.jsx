@@ -19,7 +19,7 @@ import PrintedOrdersToday from './pages/PrintedOrdersToday';
 import UpdateWarehouseMap from './pages/UpdateWarehouseMap';
 import ProductLocation from './pages/ProductLocation';
 import KPI_Management from './pages/KPI_Management';
-import KPI_DataEntry from './pages/KPI_DataEntry'; // 🚀 IMPORT TRANG MỚI VÀO ĐÂY
+import KPI_DataEntry from './pages/KPI_DataEntry'; 
 import KPI_Report from './pages/KPI_Report';
 import SetupZone from './pages/SetupZone';
 import FilterByZone from './pages/FilterByZone';
@@ -27,11 +27,14 @@ import WebhookRetrier from './pages/WebhookRetrier';
 import DashboardDonHoan from './pages/DashboardDonHoan';
 import AWBProcessor from './pages/AWBProcessor';
 
-// các Import Mới Thêm
+// Các Import Mới Thêm
 import SpxPrinter from './pages/SpxPrinter'; 
 import StatusTransitionTracker from './pages/StatusTransitionTracker';
 import FeatureGuard from './components/FeatureGuard';
 import FeatureLockManager from './pages/FeatureLockManager';
+
+// 🚀 IMPORT TRANG 404 VÀO ĐÂY
+import NotFound from './pages/NotFound';
 
 export default function App() {
   return (
@@ -164,13 +167,16 @@ export default function App() {
           <Route path="cap-nhat-so-do-kho" element={<ProtectedRoute><UpdateWarehouseMap /></ProtectedRoute>} />
           
           <Route path="quan-ly-kpi" element={<ProtectedRoute><KPI_Management /></ProtectedRoute>} />
-          <Route path="nhap-lieu-kpi" element={<ProtectedRoute><KPI_DataEntry /></ProtectedRoute>} /> {/* 🚀 KHAI BÁO ROUTE TRANG MỚI */}
+          <Route path="nhap-lieu-kpi" element={<ProtectedRoute><KPI_DataEntry /></ProtectedRoute>} />
           
           <Route path="cap-nhat-day-ke" element={<ProtectedRoute><SetupZone /></ProtectedRoute>} />
           <Route path="cap-nhat-webhook" element={<ProtectedRoute><WebhookRetrier /></ProtectedRoute>} />
 
           {/* 🛡️ TRANG QUẢN LÝ KHÓA TÍNH NĂNG (DÀNH RIÊNG CHO OWNER) */}
           <Route path="cap-nhat-tinh-nang" element={<ProtectedRoute><FeatureLockManager /></ProtectedRoute>} />
+
+          {/* 🚀 BẮT MỌI LINK SAI Ở ĐÂY - PHẢI ĐẶT Ở DƯỚI CÙNG TRONG THẺ BỌC LAYOUT */}
+          <Route path="*" element={<NotFound />} />
 
         </Route>
       </Routes>
