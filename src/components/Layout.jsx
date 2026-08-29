@@ -177,7 +177,7 @@ const MidAutumnBanner = ({ customText }) => {
 const NationalDayBanner = ({ customText }) => {
   const [show, setShow] = useState(false);
   const [bannerMsg, setBannerMsg] = useState('');
-  const defaultMsgs = ["🇻🇳 Chào mừng Quốc khánh 2/9!", "🇻🇳 Tự hào Việt Nam - Đóng hàng thần tốc!"];
+  const defaultMsgs = ["🇻🇳 Chào mừng Quốc khánh 2/9!", "Tự hào Việt Nam - Đóng hàng thần tốc!"];
 
   useEffect(() => {
     const messages = customText ? customText.split('\n').filter(m => m.trim()) : defaultMsgs;
@@ -186,7 +186,7 @@ const NationalDayBanner = ({ customText }) => {
       if(Math.random() > 0.4 && !show) {
         setBannerMsg(finalMsgs[Math.floor(Math.random() * finalMsgs.length)]);
         setShow(true);
-        setTimeout(() => setShow(false), 10000); 
+        setTimeout(() => setShow(false), 8000); 
       }
     }, 52000); 
     return () => clearInterval(interval);
@@ -194,10 +194,14 @@ const NationalDayBanner = ({ customText }) => {
 
   if(!show) return null;
   return (
-    <div className="fixed z-[100] pointer-events-none top-0 left-1/2 transform -translate-x-1/2 animate-drop-down">
-      <div className="flex flex-col items-center justify-center bg-gradient-to-b from-red-600 to-red-500 border-4 border-yellow-400 px-8 py-4 shadow-2xl rounded-b-3xl">
-        <div className="text-4xl drop-shadow-md mb-2">🇻🇳🎇⭐️</div>
-        <div className="text-yellow-300 font-black text-lg tracking-wide uppercase drop-shadow-md whitespace-nowrap">{bannerMsg}</div>
+    <div className="fixed z-[100] pointer-events-none top-6 left-1/2 transform -translate-x-1/2 animate-drop-down">
+      <div className="bg-white/95 backdrop-blur-md border border-red-100 shadow-[0_8px_30px_rgb(218,37,29,0.12)] px-6 py-2.5 rounded-full flex items-center gap-3">
+        <div className="w-6 h-6 bg-[#da251d] rounded-full flex items-center justify-center shadow-inner shrink-0">
+          <svg viewBox="0 0 100 100" className="w-3.5 h-3.5">
+            <polygon points="50,10 60,40 90,40 65,60 75,90 50,70 25,90 35,60 10,40 40,40" fill="#ffff00"/>
+          </svg>
+        </div>
+        <div className="text-slate-700 font-bold text-sm tracking-wide">{bannerMsg}</div>
       </div>
     </div>
   );
@@ -279,38 +283,84 @@ const NationalDayOverlay = ({ theme }) => {
     window.addEventListener('resize', resizeCanvas);
 
     const createFirework = (x, y) => {
-      for (let i = 0; i < 60; i++) {
+      for (let i = 0; i < 45; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const speed = Math.random() * 5 + 2;
-        fireworks.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, alpha: 1, color: `hsl(${Math.random() * 360}, 100%, 60%)` });
+        const speed = Math.random() * 4 + 1;
+        // Pháo hoa chuyên nghiệp chỉ dùng màu đỏ và vàng
+        fireworks.push({ 
+          x, y, 
+          vx: Math.cos(angle) * speed, 
+          vy: Math.sin(angle) * speed, 
+          alpha: 1, 
+          color: Math.random() > 0.4 ? '#da251d' : '#ffff00' 
+        });
       }
     };
 
     const animate = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       fireworks.forEach((p, index) => {
-        p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.alpha -= 0.01;
+        p.x += p.vx; p.y += p.vy; p.vy += 0.03; p.alpha -= 0.015;
         if (p.alpha <= 0) { fireworks.splice(index, 1); return; }
-        ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2); ctx.fill();
       });
       animationId = requestAnimationFrame(animate);
     };
 
-    const interval = setInterval(() => { if (Math.random() > 0.5) createFirework(Math.random() * canvas.width, Math.random() * canvas.height * 0.5); }, 1500);
+    // Tần suất pháo hoa nhẹ nhàng hơn
+    const interval = setInterval(() => { 
+      if (Math.random() > 0.6) createFirework(Math.random() * canvas.width, Math.random() * canvas.height * 0.4); 
+    }, 2000);
     animate();
 
     return () => { cancelAnimationFrame(animationId); clearInterval(interval); window.removeEventListener('resize', resizeCanvas); };
   }, [theme.isFireworksEnabled]);
 
+  // Tạo mảng 24 lá cờ để phủ kín chiều ngang màn hình
+  const flags = Array.from({ length: 24 }); 
+
   return (
-    <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
-      <div className="absolute inset-0 flex items-center justify-center"><div className="text-yellow-500 text-[250px] animate-star-pulse opacity-3">★</div></div>
-      {theme.isFireworksEnabled && <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />}
-      <div className="absolute top-24 right-4 pointer-events-auto animate-flag-wave"><span className="text-4xl">🇻🇳</span></div>
-      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-black/30 to-transparent" />
-      <div className="absolute bottom-4 left-5 text-2xl opacity-40">🏢</div>
-      <div className="absolute bottom-4 right-10 text-2xl opacity-40">🏠</div>
-      <VietnamMapSVG />
+    <div className="fixed inset-0 z-[40] pointer-events-none overflow-hidden">
+      
+      {/* 🇻🇳 DẢI CỜ GIĂNG NGANG (BUNTING) */}
+      <div className="absolute top-0 left-0 w-full flex justify-between px-2 overflow-hidden opacity-95">
+        {/* Sợi dây cong nhẹ */}
+        <div className="absolute top-[-20px] left-[-5%] w-[110%] h-[40px] border-b-[1.5px] border-slate-800/20 rounded-[50%]" />
+        
+        {flags.map((_, i) => {
+          // Tính toán khoảng cách rủ xuống để tạo độ cong 3D tự nhiên ở giữa màn hình
+          const sag = Math.sin((i / (flags.length - 1)) * Math.PI) * 12; 
+          return (
+            <div 
+              key={i} 
+              className="relative origin-top animate-flag-wave drop-shadow-sm" 
+              style={{ 
+                animationDelay: `${(i % 4) * 0.25}s`, 
+                width: '3.5vw', minWidth: '32px', maxWidth: '42px', 
+                marginTop: `${12 + sag}px` 
+              }}
+            >
+              <svg viewBox="0 0 100 120" className="w-full h-auto">
+                {/* Cờ chữ nhật đuôi nheo */}
+                <polygon points="0,0 100,0 100,80 50,120 0,80" fill="#da251d" />
+                {/* Ngôi sao vàng */}
+                <polygon points="50,25 56,43 75,43 60,55 65,75 50,62 35,75 40,55 25,43 44,43" fill="#ffff00" />
+              </svg>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hiệu ứng pháo hoa */}
+      {theme.isFireworksEnabled && <canvas ref={canvasRef} className="absolute inset-0 w-full h-full opacity-60" />}
+      
+      {/* Lớp màu chuyển sắc gradient dưới đáy trang */}
+      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-red-900/5 to-transparent" />
+      
+      {/* Bản đồ VN mờ ở góc phải */}
+      <div className="absolute bottom-8 right-8 opacity-25 drop-shadow-sm scale-90 transition-opacity">
+        <VietnamMapSVG />
+      </div>
     </div>
   );
 };
