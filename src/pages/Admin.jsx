@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase';
 import { 
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
   Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert,
-  Palette, TreePine, PartyPopper, MessageSquareQuote, MoonStar, Flag, Database, HardDrive, Trash2, AlertTriangle, Info
+  Palette, TreePine, PartyPopper, MoonStar, Flag, Database, HardDrive, Trash2, AlertTriangle, Info,
+  BellRing, Megaphone
 } from 'lucide-react';
 
 // --- UTILS ---
@@ -90,13 +91,18 @@ export default function Admin() {
   const [confirmCleanStep, setConfirmCleanStep] = useState(false);
   const [dbUsage, setDbUsage] = useState({ used: 0, total: 500 * 1024 * 1024 });
 
-  // --- THEMES ---
-  const [xmasTheme, setXmasTheme] = useState({ isXmasEnabled: false, isSantaFlying: false, customMessages: '' });
-  const [tetTheme, setTetTheme] = useState({ isTetEnabled: false, isPetalFalling: false, customMessages: '' });
-  const [midAutumnTheme, setMidAutumnTheme] = useState({ isMidAutumnEnabled: false, isJadeRabbitEnabled: true, isLanternEnabled: true, customMessages: '' });
-  const [nationalDayTheme, setNationalDayTheme] = useState({ isNationalDayEnabled: false, isFireworksEnabled: true, customMessages: '' });
+  // --- THEMES (SIMPLIFIED) ---
+  const [xmasTheme, setXmasTheme] = useState({ isXmasEnabled: false });
+  const [tetTheme, setTetTheme] = useState({ isTetEnabled: false });
+  const [midAutumnTheme, setMidAutumnTheme] = useState({ isMidAutumnEnabled: false });
+  const [nationalDayTheme, setNationalDayTheme] = useState({ isNationalDayEnabled: false });
   const [themeLoading, setThemeLoading] = useState(false);
   const [themeMessage, setThemeMessage] = useState('');
+
+  // --- GLOBAL NOTIFICATION ---
+  const [globalNotif, setGlobalNotif] = useState({ enabled: false, type: 'info', title: '', content: '' });
+  const [notifLoading, setNotifLoading] = useState(false);
+  const [notifMessage, setNotifMessage] = useState('');
 
   // --- ENV CONSTANTS ---
   const projectUrl = "https://infljrayvhidhfimksfp.supabase.co";
@@ -174,7 +180,6 @@ export default function Admin() {
           nhanh_secret_key: configMap['nhanh_secret_key'] || ''
       }));
 
-      // Tính ngày hết hạn API Nhanh.vn
       if (configMap['nhanh_token_updated_at']) {
         const updatedDate = new Date(configMap['nhanh_token_updated_at']);
         const now = new Date();
@@ -218,6 +223,7 @@ export default function Admin() {
       if (configMap['theme_tet']) try { setTetTheme(JSON.parse(configMap['theme_tet'])); } catch(e) {}
       if (configMap['theme_mid_autumn']) try { setMidAutumnTheme(JSON.parse(configMap['theme_mid_autumn'])); } catch(e) {}
       if (configMap['theme_national_day']) try { setNationalDayTheme(JSON.parse(configMap['theme_national_day'])); } catch(e) {}
+      if (configMap['global_notification']) try { setGlobalNotif(JSON.parse(configMap['global_notification'])); } catch(e) {}
     }
   };
 
@@ -356,7 +362,6 @@ export default function Admin() {
       const { data, error } = await supabase.functions.invoke('nhanh-auth', { body: { ...apiConfigs, access_code: apiConfigs.nhanh_access_code } });
       if (error || data?.error) throw new Error(error?.message || data?.error);
       
-      // Update DB with current timestamp for 365-day tracking
       const nowIso = new Date().toISOString();
       await supabase.from('system_configs').upsert([
         { key: 'nhanh_token_updated_at', value: nowIso }
@@ -364,7 +369,7 @@ export default function Admin() {
 
       setApiMessage('✅ Đã đổi Token thành công!'); 
       setApiConfigs(prev => ({ ...prev, nhanh_access_code: '' }));
-      setNhanhDaysLeft(365); // Reset counter in UI instantly
+      setNhanhDaysLeft(365);
     } catch (error) { setApiMessage('❌ Lỗi: ' + error.message); } finally { setApiLoading(false); }
   };
 
@@ -513,7 +518,6 @@ export default function Admin() {
     } catch (err) { setSyncReturnsMessage({ text: `❌ Lỗi hệ thống: ${err.message}`, type: 'error' }); } finally { setIsSyncingReturns(false); }
   };
 
-  // --- UX Mới: Dọn dẹp dữ liệu ---
   const handleCleanData = async () => {
     if (!confirmCleanStep) {
         setConfirmCleanStep(true);
@@ -526,7 +530,7 @@ export default function Admin() {
       const { error } = await supabase.rpc('cleanup_old_data', { days_old: parseInt(cleanDays) });
       if (error) throw error;
       setCleanMessage({ text: `🎉 Đã dọn dẹp sạch sẽ dữ liệu cũ hơn ${cleanDays} ngày!`, type: 'success' });
-      fetchDbSize(); // Cập nhật lại thanh progress bar sau khi xóa
+      fetchDbSize();
     } catch (err) { 
       setCleanMessage({ text: `❌ Lỗi xóa dữ liệu: ${err.message}`, type: 'error' }); 
     } finally { 
@@ -554,7 +558,46 @@ export default function Admin() {
     }
   };
 
-  // Tính toán thanh tiến trình
+  // --- LƯU THÔNG BÁO GLOBAL ---
+  const handleSaveNotification = async (e) => {
+    e.preventDefault();
+    setNotifLoading(true); setNotifMessage('');
+    try {
+      const payload = {
+        ...globalNotif,
+        id: Date.now()
+      };
+      const { error } = await supabase.from('system_configs').upsert([
+        { key: 'global_notification', value: JSON.stringify(payload) }
+      ], { onConflict: 'key' });
+      
+      if (error) throw error;
+      setNotifMessage('✅ Đã lưu và phát thông báo toàn hệ thống!');
+      setGlobalNotif(payload);
+    } catch(err) {
+      setNotifMessage('❌ Lỗi: ' + err.message);
+    } finally {
+      setNotifLoading(false);
+    }
+  };
+
+  // --- XỬ LÝ BẬT/TẮT GIAO DIỆN ĐỘC QUYỀN (CHỈ CHỌN 1) ---
+  const handleToggleTheme = (themeName, isEnabled) => {
+    if (isEnabled) {
+      // Nếu bật 1 cái, ép tắt 3 cái còn lại
+      setNationalDayTheme(prev => ({ ...prev, isNationalDayEnabled: themeName === 'nationalDay' }));
+      setMidAutumnTheme(prev => ({ ...prev, isMidAutumnEnabled: themeName === 'midAutumn' }));
+      setXmasTheme(prev => ({ ...prev, isXmasEnabled: themeName === 'xmas' }));
+      setTetTheme(prev => ({ ...prev, isTetEnabled: themeName === 'tet' }));
+    } else {
+      // Nếu chủ động tắt cái đang bật
+      if (themeName === 'nationalDay') setNationalDayTheme(prev => ({ ...prev, isNationalDayEnabled: false }));
+      if (themeName === 'midAutumn') setMidAutumnTheme(prev => ({ ...prev, isMidAutumnEnabled: false }));
+      if (themeName === 'xmas') setXmasTheme(prev => ({ ...prev, isXmasEnabled: false }));
+      if (themeName === 'tet') setTetTheme(prev => ({ ...prev, isTetEnabled: false }));
+    }
+  };
+
   const dbUsagePercent = Math.min((dbUsage.used / dbUsage.total) * 100, 100).toFixed(1);
   let barColor = 'bg-emerald-500';
   if (dbUsagePercent > 60) barColor = 'bg-amber-500';
@@ -610,11 +653,13 @@ export default function Admin() {
           <button onClick={() => { setActiveTab('configs'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'configs' ? 'bg-white text-blue-700 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}>
             Cấu hình & Data
           </button>
+          
           {isOwner && (
-          <button onClick={() => { setActiveTab('themes'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'themes' ? 'bg-white text-blue-700 shadow-sm border border-slate-200/50 flex items-center justify-center gap-1.5' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 flex items-center justify-center gap-1.5'}`}>
-            <Palette size={16}/> Giao diện
-          </button>
+            <button onClick={() => { setActiveTab('notifications'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'notifications' ? 'bg-white text-blue-700 shadow-sm border border-slate-200/50 flex items-center justify-center gap-1.5' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 flex items-center justify-center gap-1.5'}`}>
+              <BellRing size={16}/> Thông báo
+            </button>
           )}
+
           <button onClick={() => { setActiveTab('users_management'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'users_management' ? 'bg-white text-blue-700 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}>
             Quản lý Users
           </button>
@@ -624,9 +669,92 @@ export default function Admin() {
         </div>
       </div>
 
-      {userMessage && !['profile', 'themes'].includes(activeTab) && (
+      {userMessage && !['profile', 'themes', 'notifications'].includes(activeTab) && (
         <div className={`p-4 rounded-2xl border text-sm font-bold flex items-center gap-3 shadow-sm animate-in slide-in-from-top-2 ${userMessage.includes('✅') || userMessage.includes('🎉') ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
           <CheckCircle2 size={20} className="flex-shrink-0"/> {userMessage}
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* TAB: THÔNG BÁO GLOBAL (OWNER ONLY) */}
+      {/* ============================================================== */}
+      {activeTab === 'notifications' && isOwner && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
+            <h2 className="text-xl font-black mb-2 text-slate-800 flex items-center gap-2">
+              <Megaphone size={22} className="text-blue-600"/> Phát thông báo toàn hệ thống
+            </h2>
+            <p className="text-sm text-slate-500 mb-8 font-medium">
+              Tạo và gửi thông báo khẩn cấp hoặc sự kiện đến toàn bộ nhân viên. Thông báo sẽ tự động bật lên ở giữa màn hình của tất cả các máy đang mở hệ thống.
+            </p>
+
+            {notifMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${notifMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {notifMessage}</div>}
+
+            <form onSubmit={handleSaveNotification} className="space-y-6">
+              
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-slate-50 border border-slate-200 rounded-2xl gap-4">
+                <div>
+                  <h3 className="text-sm font-black text-slate-800">Kích hoạt thông báo</h3>
+                  <p className="text-[11px] text-slate-500 font-medium mt-1">Bật để hiển thị thông báo. Tắt để ẩn thông báo với tất cả mọi người.</p>
+                </div>
+                <ToggleSwitch checked={globalNotif.enabled} onChange={(c) => setGlobalNotif({...globalNotif, enabled: c})} color="bg-blue-600" />
+              </div>
+
+              <div className={`transition-all duration-300 ${globalNotif.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Loại thông báo</label>
+                    <select 
+                      value={globalNotif.type} 
+                      onChange={(e) => setGlobalNotif({...globalNotif, type: e.target.value})}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 bg-white cursor-pointer transition"
+                    >
+                      <option value="info">Thông báo chung (Màu Xám)</option>
+                      <option value="update">Cập nhật tính năng (Màu Xanh)</option>
+                      <option value="celebrate">Sự kiện / Chúc mừng (Màu Vàng)</option>
+                    </select>
+                  </div>
+                  
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tiêu đề (Header)</label>
+                    <input 
+                      type="text" 
+                      value={globalNotif.title} 
+                      onChange={(e) => setGlobalNotif({...globalNotif, title: e.target.value})} 
+                      placeholder="VD: Cập nhật tính năng In Đơn tự động..." 
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" 
+                      required={globalNotif.enabled}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nội dung chi tiết</label>
+                  <textarea 
+                    rows={5} 
+                    value={globalNotif.content} 
+                    onChange={(e) => setGlobalNotif({...globalNotif, content: e.target.value})} 
+                    placeholder="Nhập nội dung cần thông báo cho nhân viên..." 
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white resize-none custom-scrollbar" 
+                    required={globalNotif.enabled}
+                  />
+                </div>
+                
+                <div className="mt-4 p-4 bg-blue-50/50 border border-blue-100 rounded-xl flex gap-3 text-blue-800 text-sm">
+                  <Info size={18} className="shrink-0 mt-0.5" />
+                  <p className="font-medium leading-relaxed">
+                    <strong>Lưu ý:</strong> Khi bạn bấm "Phát thông báo", một ID mới sẽ được tạo. Những nhân viên đã từng bấm <i>"Tắt thông báo này"</i> ở lần trước sẽ <strong>thấy lại popup này</strong> để đảm bảo họ không bỏ lỡ thông tin mới.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-slate-100 flex justify-end">
+                <button type="submit" disabled={notifLoading} className="w-full sm:w-auto px-8 py-3.5 bg-blue-600 text-white text-sm font-bold rounded-xl shadow-md hover:bg-blue-700 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
+                  {notifLoading ? <Loader2 size={18} className="animate-spin"/> : <Megaphone size={18}/>} Phát thông báo
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -852,7 +980,60 @@ export default function Admin() {
             </form>
           </div>
 
-          {/* SECTION 5: DANGER ZONE (DB CLEANUP) - Chuyên nghiệp */}
+          {/* SECTION 6: GIAO DIỆN LỄ HỘI (FESTIVE THEMES) */}
+<div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
+  <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-2">
+    <Palette size={20} className="text-indigo-600"/> Giao diện Lễ hội (Festive Themes)
+  </h2>
+  <p className="text-sm text-slate-500 mb-6 font-medium">Thay đổi không khí vận hành hệ thống. Bật/tắt ảnh nền giao diện tĩnh toàn màn hình (Chỉ được chọn 1).</p>
+
+  {themeMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${themeMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {themeMessage}</div>}
+
+  {isOwner ? (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Quốc Khánh */}
+        <div className={`p-5 rounded-2xl border-2 transition-all ${nationalDayTheme.isNationalDayEnabled ? 'border-red-400 bg-red-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-red-700 flex items-center gap-2"><Flag size={18}/> Quốc Khánh</h3>
+            <ToggleSwitch checked={nationalDayTheme.isNationalDayEnabled} onChange={(c) => handleToggleTheme('nationalDay', c)} color="bg-green-500" />
+          </div>
+        </div>
+        {/* Trung Thu */}
+        <div className={`p-5 rounded-2xl border-2 transition-all ${midAutumnTheme.isMidAutumnEnabled ? 'border-orange-400 bg-orange-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-orange-600 flex items-center gap-2"><MoonStar size={18}/> Trung Thu</h3>
+            <ToggleSwitch checked={midAutumnTheme.isMidAutumnEnabled} onChange={(c) => handleToggleTheme('midAutumn', c)} color="bg-green-500" />
+          </div>
+        </div>
+        {/* Giáng Sinh */}
+        <div className={`p-5 rounded-2xl border-2 transition-all ${xmasTheme.isXmasEnabled ? 'border-emerald-400 bg-emerald-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-emerald-700 flex items-center gap-2"><TreePine size={18}/> Giáng Sinh</h3>
+            <ToggleSwitch checked={xmasTheme.isXmasEnabled} onChange={(c) => handleToggleTheme('xmas', c)} color="bg-green-500" />
+          </div>
+        </div>
+        {/* Tết */}
+        <div className={`p-5 rounded-2xl border-2 transition-all ${tetTheme.isTetEnabled ? 'border-rose-400 bg-rose-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-rose-600 flex items-center gap-2"><PartyPopper size={18}/> Tết Nguyên Đán</h3>
+            <ToggleSwitch checked={tetTheme.isTetEnabled} onChange={(c) => handleToggleTheme('tet', c)} color="bg-green-500" />
+          </div>
+        </div>
+      </div>
+      
+      <div className="flex justify-end pt-2 border-t border-slate-100">
+        <button onClick={handleSaveThemes} disabled={themeLoading} className="px-8 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl shadow-md hover:bg-indigo-600 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2">
+            {themeLoading ? <Loader2 size={16} className="animate-spin"/> : <SaveIcon/>} Lưu cấu hình Giao diện
+        </button>
+      </div>
+    </div>
+  ) : (
+    <LockedFeature msg="Chỉ Chủ sở hữu (Owner) mới được quyền thay đổi giao diện nền lễ hội toàn hệ thống." />
+  )}
+</div>
+
+          {/* SECTION 7: DANGER ZONE (DB CLEANUP) */}
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border-2 border-red-100 mt-8 relative overflow-hidden">
             {/* Background warning pattern */}
             <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none"><Trash2 size={200} /></div>
@@ -878,7 +1059,6 @@ export default function Admin() {
                 <div className="w-full bg-slate-200 rounded-full h-2.5 overflow-hidden">
                   <div className={`h-2.5 rounded-full transition-all duration-1000 ${barColor}`} style={{width: `${dbUsagePercent}%`}}></div>
                 </div>
-                <p className="text-[11px] text-slate-400 font-semibold mt-2"></p>
               </div>
 
               {cleanMessage.text && (
@@ -936,136 +1116,7 @@ export default function Admin() {
               )}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ============================================================== */}
-      {/* TAB: GIAO DIỆN (THEMES) */}
-      {/* ============================================================== */}
-      {activeTab === 'themes' && isOwner && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
-            <h2 className="text-xl font-black mb-2 text-slate-800 flex items-center gap-2">
-              <Palette size={22} className="text-indigo-600"/> Quản lý Giao diện Lễ hội (Festive Themes)
-            </h2>
-            <p className="text-sm text-slate-500 mb-8 font-medium">Thay đổi không khí vận hành hệ thống. Áp dụng ngay lập tức (Realtime) cho tất cả nhân viên đang làm việc.</p>
-
-            {themeMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${themeMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {themeMessage}</div>}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* TET THEME */}
-              <div className={`border-2 rounded-3xl p-6 relative overflow-hidden shadow-sm transition-colors duration-300 ${tetTheme.isTetEnabled ? 'border-red-400 bg-red-50/30' : 'border-slate-200 bg-white'}`}>
-                <div className="absolute -top-4 -right-4 opacity-5"><PartyPopper size={120} /></div>
-                <div className="relative z-10 flex flex-col h-full justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-black text-red-700 flex items-center gap-2"><PartyPopper size={20}/> Tết Nguyên Đán</h3>
-                      <ToggleSwitch checked={tetTheme.isTetEnabled} onChange={(c) => setTetTheme({...tetTheme, isTetEnabled: c})} color="bg-red-600"/>
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium mb-4">Đỏ/Vàng ánh kim, Đèn lồng, Hoa rơi.</p>
-                    
-                    <div className={`transition-opacity duration-300 ${tetTheme.isTetEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                      <label className="text-[10px] font-black text-red-800/60 uppercase tracking-wider mb-1.5 block">Hiệu ứng</label>
-                      <label className="flex items-center justify-between p-3 rounded-xl bg-white/60 border border-red-100 cursor-pointer hover:bg-white mb-4 transition">
-                        <span className="text-sm font-bold text-slate-700 flex items-center gap-2">🌸 Hoa mai/đào rơi</span>
-                        <ToggleSwitch checked={tetTheme.isPetalFalling} onChange={(c) => setTetTheme({...tetTheme, isPetalFalling: c})} color="bg-amber-500" small/>
-                      </label>
-                      
-                      <label className="text-[10px] font-black text-red-800/60 uppercase tracking-wider mb-1.5 block">Banner Chúc Tết</label>
-                      <textarea rows={3} value={tetTheme.customMessages || ''} onChange={(e) => setTetTheme({...tetTheme, customMessages: e.target.value})} placeholder="🧧 Chúc Mừng Năm Mới\nVạn sự hanh thông" className="w-full text-sm p-3 rounded-xl border border-red-200 bg-white/80 outline-none focus:ring-2 focus:ring-red-200 text-red-900 font-medium placeholder-red-300 custom-scrollbar" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* CHRISTMAS THEME */}
-              <div className={`border-2 rounded-3xl p-6 relative overflow-hidden shadow-sm transition-colors duration-300 ${xmasTheme.isXmasEnabled ? 'border-green-400 bg-green-50/30' : 'border-slate-200 bg-white'}`}>
-                <div className="absolute -top-4 -right-4 opacity-5"><TreePine size={120} /></div>
-                <div className="relative z-10 flex flex-col h-full justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-black text-green-700 flex items-center gap-2"><TreePine size={20}/> Giáng Sinh (Noel)</h3>
-                      <ToggleSwitch checked={xmasTheme.isXmasEnabled} onChange={(c) => setXmasTheme({...xmasTheme, isXmasEnabled: c})} color="bg-green-600"/>
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium mb-4">Viền Neon, Tuyết rơi, Avatar mũ Noel.</p>
-                    
-                    <div className={`transition-opacity duration-300 ${xmasTheme.isXmasEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                      <label className="text-[10px] font-black text-green-800/60 uppercase tracking-wider mb-1.5 block">Hiệu ứng</label>
-                      <label className="flex items-center justify-between p-3 rounded-xl bg-white/60 border border-green-100 cursor-pointer hover:bg-white mb-4 transition">
-                        <span className="text-sm font-bold text-slate-700 flex items-center gap-2">🎅 Xe tuần lộc bay</span>
-                        <ToggleSwitch checked={xmasTheme.isSantaFlying} onChange={(c) => setXmasTheme({...xmasTheme, isSantaFlying: c})} color="bg-red-500" small/>
-                      </label>
-                      
-                      <label className="text-[10px] font-black text-green-800/60 uppercase tracking-wider mb-1.5 block">Lời chúc Ông già Noel</label>
-                      <textarea rows={3} value={xmasTheme.customMessages || ''} onChange={(e) => setXmasTheme({...xmasTheme, customMessages: e.target.value})} placeholder="Ho Ho Ho! Chốt đơn! 🎁" className="w-full text-sm p-3 rounded-xl border border-green-200 bg-white/80 outline-none focus:ring-2 focus:ring-green-200 text-green-900 font-medium placeholder-green-300 custom-scrollbar" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* MID AUTUMN */}
-              <div className={`border-2 rounded-3xl p-6 relative overflow-hidden shadow-sm transition-colors duration-300 ${midAutumnTheme.isMidAutumnEnabled ? 'border-indigo-400 bg-indigo-50/30' : 'border-slate-200 bg-white'}`}>
-                <div className="absolute -top-4 -right-4 opacity-5"><MoonStar size={120} /></div>
-                <div className="relative z-10 flex flex-col h-full justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-black text-indigo-700 flex items-center gap-2"><MoonStar size={20}/> Trung Thu</h3>
-                      <ToggleSwitch checked={midAutumnTheme.isMidAutumnEnabled} onChange={(c) => setMidAutumnTheme({...midAutumnTheme, isMidAutumnEnabled: c})} color="bg-indigo-600"/>
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium mb-4">Đêm trăng, thỏ ngọc, lồng đèn rước cỗ.</p>
-                    
-                    <div className={`transition-opacity duration-300 ${midAutumnTheme.isMidAutumnEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                      <label className="text-[10px] font-black text-indigo-800/60 uppercase tracking-wider mb-1.5 block">Hiệu ứng</label>
-                      <div className="grid grid-cols-2 gap-2 mb-4">
-                        <label className="flex flex-col gap-2 p-3 rounded-xl bg-white/60 border border-indigo-100 cursor-pointer hover:bg-white transition">
-                          <div className="flex justify-between items-center"><span className="text-sm font-bold text-slate-700">🐇 Thỏ ngọc</span><ToggleSwitch checked={midAutumnTheme.isJadeRabbitEnabled} onChange={(c) => setMidAutumnTheme({...midAutumnTheme, isJadeRabbitEnabled: c})} color="bg-yellow-500" small/></div>
-                        </label>
-                        <label className="flex flex-col gap-2 p-3 rounded-xl bg-white/60 border border-indigo-100 cursor-pointer hover:bg-white transition">
-                          <div className="flex justify-between items-center"><span className="text-sm font-bold text-slate-700">🏮 Lồng đèn</span><ToggleSwitch checked={midAutumnTheme.isLanternEnabled} onChange={(c) => setMidAutumnTheme({...midAutumnTheme, isLanternEnabled: c})} color="bg-red-500" small/></div>
-                        </label>
-                      </div>
-                      
-                      <label className="text-[10px] font-black text-indigo-800/60 uppercase tracking-wider mb-1.5 block">Câu chúc hiển thị</label>
-                      <textarea rows={3} value={midAutumnTheme.customMessages || ''} onChange={(e) => setMidAutumnTheme({...midAutumnTheme, customMessages: e.target.value})} placeholder="Trung thu đoàn viên 🌕" className="w-full text-sm p-3 rounded-xl border border-indigo-200 bg-white/80 outline-none focus:ring-2 focus:ring-indigo-200 text-indigo-900 font-medium placeholder-indigo-300 custom-scrollbar" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* NATIONAL DAY */}
-              <div className={`border-2 rounded-3xl p-6 relative overflow-hidden shadow-sm transition-colors duration-300 ${nationalDayTheme.isNationalDayEnabled ? 'border-red-400 bg-red-50/20' : 'border-slate-200 bg-white'}`}>
-                <div className="absolute -top-4 -right-4 opacity-5"><Flag size={120} /></div>
-                <div className="relative z-10 flex flex-col h-full justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-lg font-black text-red-700 flex items-center gap-2"><Flag size={20}/> Quốc Khánh 2/9</h3>
-                      <ToggleSwitch checked={nationalDayTheme.isNationalDayEnabled} onChange={(c) => setNationalDayTheme({...nationalDayTheme, isNationalDayEnabled: c})} color="bg-red-600"/>
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium mb-4">Cờ đỏ sao vàng, pháo hoa mừng lễ.</p>
-                    
-                    <div className={`transition-opacity duration-300 ${nationalDayTheme.isNationalDayEnabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
-                      <label className="text-[10px] font-black text-red-800/60 uppercase tracking-wider mb-1.5 block">Hiệu ứng</label>
-                      <label className="flex items-center justify-between p-3 rounded-xl bg-white/60 border border-red-100 cursor-pointer hover:bg-white mb-4 transition">
-                        <span className="text-sm font-bold text-slate-700 flex items-center gap-2">🎆 Pháo hoa</span>
-                        <ToggleSwitch checked={nationalDayTheme.isFireworksEnabled} onChange={(c) => setNationalDayTheme({...nationalDayTheme, isFireworksEnabled: c})} color="bg-yellow-500" small/>
-                      </label>
-                      
-                      <label className="text-[10px] font-black text-red-800/60 uppercase tracking-wider mb-1.5 block">Câu chúc hiển thị</label>
-                      <textarea rows={3} value={nationalDayTheme.customMessages || ''} onChange={(e) => setNationalDayTheme({...nationalDayTheme, customMessages: e.target.value})} placeholder="Chào mừng Quốc khánh 🇻🇳" className="w-full text-sm p-3 rounded-xl border border-red-200 bg-white/80 outline-none focus:ring-2 focus:ring-red-200 text-red-900 font-medium placeholder-red-300 custom-scrollbar" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-            
-            <div className="mt-8 pt-6 border-t border-slate-100 flex justify-end">
-              <button onClick={handleSaveThemes} disabled={themeLoading} className="w-full sm:w-auto px-8 py-3.5 bg-slate-900 text-white text-sm font-bold rounded-xl shadow-md hover:bg-indigo-600 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
-                {themeLoading ? <Loader2 size={18} className="animate-spin"/> : <SaveIcon/>} Áp dụng Giao diện Toàn hệ thống
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
@@ -1396,7 +1447,8 @@ const LockedFeature = ({ msg }) => (
 
 const ToggleSwitch = ({ checked, onChange, color, small = false }) => (
   <div className="relative inline-flex items-center cursor-pointer" onClick={() => onChange(!checked)}>
-    <div className={`${small ? 'w-9 h-5' : 'w-11 h-6'} bg-slate-200 rounded-full transition-colors ${checked ? color : ''}`}></div>
+    {/* Đã sửa đoạn này: Chỉ lấy màu mặc định (bg-slate-200) khi chưa checked */}
+    <div className={`${small ? 'w-9 h-5' : 'w-11 h-6'} rounded-full transition-colors ${checked ? color : 'bg-slate-200'}`}></div>
     <div className={`absolute bg-white border border-slate-200 rounded-full transition-transform ${small ? 'w-4 h-4 top-0.5 left-0.5' : 'w-5 h-5 top-0.5 left-0.5'} ${checked ? (small ? 'translate-x-4' : 'translate-x-5') : ''} shadow-sm`}></div>
   </div>
 );
