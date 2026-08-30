@@ -463,7 +463,7 @@ export default function OrderReport() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50/50 p-4 md:p-6 font-sans">
+        <div className="min-h-screen p-4 md:p-6 font-sans">
             <div className="max-w-[1400px] mx-auto space-y-6">
                 
                 {/* Header Area */}

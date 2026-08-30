@@ -155,7 +155,7 @@ export default function Dashboard() {
   const avgShipped = chartData.length > 0 ? Math.round(totalShippedInRange / chartData.length) : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50/30 p-3 sm:p-6 md:p-8">
+    <div className="min-h-screen from-slate-50 via-white to-blue-50/30 p-3 sm:p-6 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 pb-16 animate-in fade-in duration-300">
         
         {/* HEADER & THANH BỘ LỌC NGÀY (Responsive) */}

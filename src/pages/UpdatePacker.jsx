@@ -159,7 +159,7 @@ export default function UpdatePacker() {
   });
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-4 md:p-8">
+    <div className="min-h-screen p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* HEADER CHUYÊN NGHIỆP */}

@@ -204,7 +204,7 @@ export default function UpdateSchedule() {
   const today = new Date(scheduleDate).toLocaleDateString('vi-VN', { weekday: 'long', day: 'numeric', month: 'numeric', year: 'numeric' });
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-4 md:p-8">
+    <div className="min-h-screen  p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
         
         {/* HEADER CHUYÊN NGHIỆP */}
@@ -371,7 +371,7 @@ export default function UpdateSchedule() {
                   {staff.map(member => (
                     <div key={member.id} className="group p-4 border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all bg-white">
                       <div className="flex items-center gap-3 mb-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-blue-100 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full from-indigo-100 to-blue-100 flex items-center justify-center">
                           <UserPlus size={18} className="text-indigo-600" />
                         </div>
                         <div>
@@ -512,7 +512,7 @@ export default function UpdateSchedule() {
                   staff.map(member => (
                     <div key={member.id} className="p-4 flex items-center justify-between hover:bg-slate-50/80 transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-100 to-blue-100 flex items-center justify-center">
+                        <div className="w-10 h-10 rounded-full from-indigo-100 to-blue-100 flex items-center justify-center">
                           <span className="text-sm font-bold text-indigo-600">
                             {member.full_name.charAt(0).toUpperCase()}
                           </span>
