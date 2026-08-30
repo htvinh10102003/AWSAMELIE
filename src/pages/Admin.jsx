@@ -3,9 +3,8 @@ import { supabase } from '../lib/supabase';
 import { 
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
   Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert,
-  Palette, TreePine, PartyPopper, MessageSquareQuote, MoonStar, Flag, Database, HardDrive, Trash2
+  Palette, TreePine, PartyPopper, MessageSquareQuote, MoonStar, Flag, Database, HardDrive, Trash2, AlertTriangle, Info
 } from 'lucide-react';
-// import * as Papa from 'papaparse'; // Bỏ comment nếu bạn dùng Papa trong file thực tế
 
 // --- UTILS ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -23,6 +22,9 @@ export default function Admin() {
   const [currentUserMeta, setCurrentUserMeta] = useState({});
   const [currentUserEmail, setCurrentUserEmail] = useState('');
   
+  // --- CUSTOM DIALOG STATE ---
+  const [dialogConfig, setDialogConfig] = useState(null);
+
   // --- PROFILE ---
   const [profileName, setProfileName] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
@@ -47,6 +49,8 @@ export default function Admin() {
   const [apiConfigs, setApiConfigs] = useState({ nhanh_app_id: '', nhanh_business_id: '', nhanh_secret_key: '', nhanh_access_code: '' });
   const [apiLoading, setApiLoading] = useState(false);
   const [apiMessage, setApiMessage] = useState('');
+  const [nhanhDaysLeft, setNhanhDaysLeft] = useState(null);
+  const hasWarnedNhanh = useRef(false);
 
   // --- FILTER & PRIORITY ---
   const [filterConfigs, setFilterConfigs] = useState({ allowed_statuses: [] });
@@ -83,8 +87,8 @@ export default function Admin() {
   const [cleanDays, setCleanDays] = useState('180');
   const [isCleaning, setIsCleaning] = useState(false);
   const [cleanMessage, setCleanMessage] = useState({ text: '', type: '' });
-  const [confirmCleanStep, setConfirmCleanStep] = useState(false); // UX: Bấm 2 lần để xóa
-  const [dbUsage, setDbUsage] = useState({ used: 0, total: 500 * 1024 * 1024 }); // 500MB Free tier Supabase
+  const [confirmCleanStep, setConfirmCleanStep] = useState(false);
+  const [dbUsage, setDbUsage] = useState({ used: 0, total: 500 * 1024 * 1024 });
 
   // --- THEMES ---
   const [xmasTheme, setXmasTheme] = useState({ isXmasEnabled: false, isSantaFlying: false, customMessages: '' });
@@ -107,9 +111,21 @@ export default function Admin() {
 
   useEffect(() => {
     if (activeTab === 'users_management') fetchSystemUsers();
-    // Đặt lại trạng thái confirm khi chuyển tab
     if (activeTab !== 'configs') setConfirmCleanStep(false);
   }, [activeTab]);
+
+  // --- UTILITY: CUSTOM MODAL ---
+  const showCustomDialog = (type, title, message) => {
+    return new Promise((resolve) => {
+      setDialogConfig({
+        type, 
+        title, 
+        message,
+        onConfirm: () => { setDialogConfig(null); resolve(true); },
+        onCancel: () => { setDialogConfig(null); resolve(false); }
+      });
+    });
+  };
 
   const loadCurrentUserData = async () => {
     setIsAuthLoading(true);
@@ -157,6 +173,23 @@ export default function Admin() {
           nhanh_business_id: configMap['nhanh_business_id'] || '',
           nhanh_secret_key: configMap['nhanh_secret_key'] || ''
       }));
+
+      // Tính ngày hết hạn API Nhanh.vn
+      if (configMap['nhanh_token_updated_at']) {
+        const updatedDate = new Date(configMap['nhanh_token_updated_at']);
+        const now = new Date();
+        const diffTime = now - updatedDate;
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        const remain = 365 - diffDays;
+        setNhanhDaysLeft(remain);
+
+        if (remain < 15 && !hasWarnedNhanh.current) {
+          hasWarnedNhanh.current = true;
+          setTimeout(() => {
+            showCustomDialog('alert', '⚠️ Cảnh báo kết nối Nhanh.vn', `Kết nối Nhanh.vn còn ${remain} ngày nữa hết hạn (Hạn mức 365 ngày). Vui lòng cập nhật Access Code mới để tránh gián đoạn hệ thống.`);
+          }, 800);
+        }
+      }
 
       setSheetDailyUrl(configMap['sheet_daily_url'] || '');
       setSheetDailyGid(configMap['sheet_daily_gid'] || '0');
@@ -237,7 +270,10 @@ export default function Admin() {
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
-    if (!userForm.email || !userForm.password || !userForm.fullName) { alert('Vui lòng điền đầy đủ thông tin tài khoản!'); return; }
+    if (!userForm.email || !userForm.password || !userForm.fullName) { 
+      await showCustomDialog('alert', 'Thiếu thông tin', 'Vui lòng điền đầy đủ thông tin tài khoản (Tên, Email, Mật khẩu)!');
+      return; 
+    }
     setLoading(true); setUserMessage('');
     try {
       await callUserManagementApi({ action: 'create', ...userForm });
@@ -255,18 +291,26 @@ export default function Admin() {
 
   const handleSaveEditedInfo = async (e) => {
     e.preventDefault();
-    if (!editForm.fullName.trim()) { alert('Họ và tên không được để trống!'); return; }
+    if (!editForm.fullName.trim()) { 
+      await showCustomDialog('alert', 'Cảnh báo', 'Họ và tên không được để trống!');
+      return; 
+    }
     setLoading(true);
     try {
       await callUserManagementApi({ action: 'update_info', userId: editingUser.id, fullName: editForm.fullName, role: isOwner ? editForm.role : undefined });
       setUserMessage(`✅ Đã cập nhật thông tin thành công.`);
       setEditingUser(null); await fetchSystemUsers();
-    } catch (err) { alert(`❌ Lỗi lưu thông tin: ${err.message}`); } finally { setLoading(false); }
+    } catch (err) { 
+      await showCustomDialog('alert', 'Lỗi thao tác', `❌ Lỗi lưu thông tin: ${err.message}`);
+    } finally { setLoading(false); }
   };
 
   const handleToggleOwnerStatus = async (e, makeOwner) => {
     e.preventDefault();
-    if (!upgradePassword) { alert('Vui lòng nhập mật khẩu của bạn để xác nhận!'); return; }
+    if (!upgradePassword) { 
+      await showCustomDialog('alert', 'Bảo mật', 'Vui lòng nhập mật khẩu của bạn để xác nhận thao tác!');
+      return; 
+    }
     setLoading(true);
     try {
       const { error: verifyError } = await supabase.auth.signInWithPassword({ email: currentUserEmail, password: upgradePassword });
@@ -282,12 +326,19 @@ export default function Admin() {
       setUserMessage(makeOwner ? `🎉 Đã cấp quyền Owner cho [${editingUser.email}]` : `✅ Đã gỡ quyền Owner của [${editingUser.email}]`);
       setEditingUser(null); 
       await fetchSystemUsers();
-    } catch (err) { alert(`❌ Lỗi thao tác: ${err.message}`); } finally { setLoading(false); }
+    } catch (err) { 
+      await showCustomDialog('alert', 'Lỗi phân quyền', `❌ Lỗi thao tác: ${err.message}`); 
+    } finally { setLoading(false); }
   };
 
   const handleDeleteUser = async (targetUser) => {
-    if (targetUser.email === SUPER_OWNER_EMAIL) { alert('Không thể xóa tài khoản Super Owner!'); return; }
-    if (!confirm(`🚨 XÓA VĨNH VIỄN tài khoản [${targetUser.user_metadata?.full_name || targetUser.email}]?`)) return;
+    if (targetUser.email === SUPER_OWNER_EMAIL) { 
+      await showCustomDialog('alert', 'Từ chối', 'Không thể xóa tài khoản Super Owner!');
+      return; 
+    }
+    const confirmed = await showCustomDialog('confirm', 'Xác nhận vô hiệu hóa', `🚨 XÓA VĨNH VIỄN tài khoản [${targetUser.user_metadata?.full_name || targetUser.email}]? Dữ liệu không thể phục hồi.`);
+    if (!confirmed) return;
+
     setActionLoadingId(targetUser.id);
     try {
       await callUserManagementApi({ action: 'delete', userId: targetUser.id });
@@ -304,7 +355,16 @@ export default function Admin() {
     try {
       const { data, error } = await supabase.functions.invoke('nhanh-auth', { body: { ...apiConfigs, access_code: apiConfigs.nhanh_access_code } });
       if (error || data?.error) throw new Error(error?.message || data?.error);
-      setApiMessage('✅ Đã đổi Token thành công!'); setApiConfigs(prev => ({ ...prev, nhanh_access_code: '' }));
+      
+      // Update DB with current timestamp for 365-day tracking
+      const nowIso = new Date().toISOString();
+      await supabase.from('system_configs').upsert([
+        { key: 'nhanh_token_updated_at', value: nowIso }
+      ], { onConflict: 'key' });
+
+      setApiMessage('✅ Đã đổi Token thành công!'); 
+      setApiConfigs(prev => ({ ...prev, nhanh_access_code: '' }));
+      setNhanhDaysLeft(365); // Reset counter in UI instantly
     } catch (error) { setApiMessage('❌ Lỗi: ' + error.message); } finally { setApiLoading(false); }
   };
 
@@ -386,7 +446,9 @@ export default function Admin() {
   };
 
   const handleSyncMasterData = async () => {
-    if (!confirm("Quá trình cào Master Data (Tên, Mã Vạch) sẽ mất nhiều thời gian. Xác nhận chạy?")) return;
+    const confirmed = await showCustomDialog('confirm', 'Tải danh mục Sản phẩm', "Quá trình cào Master Data (Tên, Mã Vạch) sẽ mất nhiều thời gian. Xác nhận tiến hành chạy?");
+    if (!confirmed) return;
+    
     setIsSyncingMaster(true); setSyncMasterStatus('idle'); setSyncProductMessage(`Đang cào Master Data...`);
     try {
       const res = await fetch(`${projectUrl}/functions/v1/sync-products`, {
@@ -529,7 +591,7 @@ export default function Admin() {
   const dynamicOptions = getDynamicPriorityOptions();
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 pb-12 mt-8 px-4 sm:px-6">
+    <div className="max-w-6xl mx-auto space-y-8 pb-12 mt-8 px-4 sm:px-6 relative">
       
       {/* HEADER & TABS */}
       <div className="bg-white p-4 sm:p-6 border border-slate-200 rounded-3xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 sticky top-4 z-40 backdrop-blur-xl bg-white/90">
@@ -577,6 +639,15 @@ export default function Admin() {
           {/* SECTION 1: KẾT NỐI API */}
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
             <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6"><Settings size={20} className="text-blue-600"/> Cài đặt kết nối Nhanh.vn</h2>
+            
+            {/* THÔNG BÁO THỜI GIAN TOKEN */}
+            {nhanhDaysLeft !== null && (
+              <div className={`mb-6 p-4 rounded-xl border flex items-center gap-3 text-sm font-bold shadow-sm ${nhanhDaysLeft < 15 ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}>
+                {nhanhDaysLeft < 15 ? <AlertTriangle size={20} className="animate-pulse flex-shrink-0"/> : <CheckCircle2 size={20} className="flex-shrink-0"/>}
+                Trạng thái liên kết API: {nhanhDaysLeft < 0 ? 'Đã hết hạn! Vui lòng thay Token mới.' : `Hợp lệ (Còn lại ${nhanhDaysLeft} ngày)`}
+              </div>
+            )}
+
             {apiMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${apiMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {apiMessage}</div>}
             
             {isOwner ? (
@@ -602,7 +673,7 @@ export default function Admin() {
                     <input type="text" name="nhanh_access_code" value={apiConfigs.nhanh_access_code} onChange={handleApiChange} className="w-full px-4 py-3 border border-amber-300/60 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium transition placeholder:text-amber-300" placeholder="Paste access code lấy từ Nhanh.vn vào đây..." />
                   </div>
                   <button type="submit" disabled={apiLoading} className="w-full md:w-auto px-8 py-3 bg-slate-900 text-white font-bold rounded-xl shadow-md hover:bg-blue-600 transition-all cursor-pointer text-sm disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap">
-                    {apiLoading ? <Loader2 size={16} className="animate-spin" /> : <SaveIcon />} Đổi Token
+                    {apiLoading ? <Loader2 size={16} className="animate-spin" /> : <SaveIcon />} Lưu Token mới
                   </button>
                 </div>
               </form>
@@ -847,16 +918,16 @@ export default function Admin() {
                         </button>
                       )}
                       <button 
-  onClick={handleCleanData}
-  disabled={isCleaning}
-  className={`w-full sm:w-auto px-8 py-3 text-sm font-bold rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 ${
-    confirmCleanStep 
-      ? 'bg-red-600 text-white hover:bg-red-700 ring-4 ring-red-100 animate-pulse' 
-      : 'bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300'
-  }`}
->
-  {isCleaning ? <Loader2 size={18} className="animate-spin" /> : confirmCleanStep ? 'Bấm để Xóa Vĩnh Viễn!' : 'Dọn dẹp DB'}
-</button>
+                        onClick={handleCleanData}
+                        disabled={isCleaning}
+                        className={`w-full sm:w-auto px-8 py-3 text-sm font-bold rounded-xl shadow-md transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 ${
+                          confirmCleanStep 
+                            ? 'bg-red-600 text-white hover:bg-red-700 ring-4 ring-red-100 animate-pulse' 
+                            : 'bg-white text-red-600 border border-red-200 hover:bg-red-50 hover:border-red-300'
+                        }`}
+                      >
+                        {isCleaning ? <Loader2 size={18} className="animate-spin" /> : confirmCleanStep ? 'Bấm để Xóa Vĩnh Viễn!' : 'Dọn dẹp DB'}
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1271,6 +1342,36 @@ export default function Admin() {
               <button type="button" onClick={handleSaveEditedInfo} disabled={loading} className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition shadow-md cursor-pointer flex items-center gap-2 disabled:opacity-50">
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <SaveIcon/>} Lưu
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* CUSTOM DIALOG RENDERER */}
+      {/* ============================================================== */}
+      {dialogConfig && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${dialogConfig.type === 'confirm' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
+                {dialogConfig.type === 'confirm' ? <AlertTriangle size={32} /> : <Info size={32} />}
+              </div>
+              <h3 className="text-xl font-black text-slate-800 mb-2">{dialogConfig.title}</h3>
+              <p className="text-sm font-medium text-slate-600 mb-6 px-2">{dialogConfig.message}</p>
+              <div className="flex gap-3 justify-center">
+                {dialogConfig.type === 'confirm' && (
+                  <button onClick={dialogConfig.onCancel} className="px-6 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition cursor-pointer">
+                    Hủy
+                  </button>
+                )}
+                <button 
+                  onClick={dialogConfig.onConfirm} 
+                  className={`px-6 py-2.5 text-white font-bold rounded-xl transition cursor-pointer ${dialogConfig.type === 'confirm' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+                >
+                  {dialogConfig.type === 'confirm' ? 'Xác nhận' : 'Đã hiểu'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
