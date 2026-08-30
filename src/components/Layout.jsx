@@ -21,10 +21,13 @@ export default function Layout() {
   const [globalNotif, setGlobalNotif] = useState(null);
   const [dontShowAgain, setDontShowAgain] = useState(false);
 
-  // Layout Preferences
-  const [layoutPrefs, setLayoutPrefs] = useState({
-    pinned: true,
-    position: 'left' // 'left' | 'right' | 'top'
+  // Lấy cấu hình từ LocalStorage để render tức thì, chống giật layout
+  const [layoutPrefs, setLayoutPrefs] = useState(() => {
+    try {
+      const cached = localStorage.getItem('amelie_layout_prefs');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return { pinned: true, position: 'left' }; // Mặc định nếu chưa có cache
   });
   const [showLayoutSettings, setShowLayoutSettings] = useState(false);
   const layoutSettingsRef = useRef(null);
@@ -80,7 +83,11 @@ export default function Layout() {
       setUser(user);
       
       if (user) {
-        const userConfigKey = `layout_pref_${user.id}`;
+        if (item.key === userConfigKey) {
+                const parsedPrefs = JSON.parse(item.value);
+                setLayoutPrefs(parsedPrefs);
+                localStorage.setItem('amelie_layout_prefs', JSON.stringify(parsedPrefs)); // Đồng bộ về Cache
+              }
         const keys = ['theme_christmas', 'theme_tet', 'theme_mid_autumn', 'theme_national_day', 'global_notification', userConfigKey];
         const { data } = await supabase.from('system_configs').select('key, value').in('key', keys);
         
@@ -139,6 +146,8 @@ export default function Layout() {
 
   const updateLayoutPrefs = async (newPrefs) => {
     setLayoutPrefs(newPrefs);
+    localStorage.setItem('amelie_layout_prefs', JSON.stringify(newPrefs)); // Cập nhật Cache ngay lập tức
+    
     if (user) {
       await supabase.from('system_configs').upsert({
         key: `layout_pref_${user.id}`,
