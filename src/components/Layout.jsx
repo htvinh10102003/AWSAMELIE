@@ -77,17 +77,14 @@ export default function Layout() {
   }, [location.pathname]);
 
   // Khởi tạo và lắng nghe cấu hình
+  // Khởi tạo và lắng nghe cấu hình
   useEffect(() => {
     const fetchUserAndConfigs = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
       
       if (user) {
-        if (item.key === userConfigKey) {
-                const parsedPrefs = JSON.parse(item.value);
-                setLayoutPrefs(parsedPrefs);
-                localStorage.setItem('amelie_layout_prefs', JSON.stringify(parsedPrefs)); // Đồng bộ về Cache
-              }
+        const userConfigKey = `layout_pref_${user.id}`;
         const keys = ['theme_christmas', 'theme_tet', 'theme_mid_autumn', 'theme_national_day', 'global_notification', userConfigKey];
         const { data } = await supabase.from('system_configs').select('key, value').in('key', keys);
         
@@ -98,7 +95,14 @@ export default function Layout() {
               if (item.key === 'theme_tet') setTetTheme(JSON.parse(item.value));
               if (item.key === 'theme_mid_autumn') setMidAutumnTheme(JSON.parse(item.value));
               if (item.key === 'theme_national_day') setNationalDayTheme(JSON.parse(item.value));
-              if (item.key === userConfigKey) setLayoutPrefs(JSON.parse(item.value));
+              
+              // === ĐOẠN ĐƯỢC CHÈN NẰM TRONG VÒNG LẶP item ===
+              if (item.key === userConfigKey) {
+                const parsedPrefs = JSON.parse(item.value);
+                setLayoutPrefs(parsedPrefs);
+                localStorage.setItem('amelie_layout_prefs', JSON.stringify(parsedPrefs)); // Đồng bộ về Cache
+              }
+
               if (item.key === 'global_notification') {
                 const notifData = JSON.parse(item.value);
                 const dismissedId = localStorage.getItem('dismissed_notif_id');
@@ -106,7 +110,9 @@ export default function Layout() {
                   setGlobalNotif(notifData);
                 }
               }
-            } catch(e) {}
+            } catch(e) {
+              console.error("Lỗi parse config:", e);
+            }
           });
         }
       }
