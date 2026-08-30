@@ -4,7 +4,7 @@ import {
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
   Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert,
   Palette, TreePine, PartyPopper, MoonStar, Flag, Database, HardDrive, Trash2, AlertTriangle, Info,
-  BellRing, Megaphone
+  BellRing, Megaphone, MonitorPlay
 } from 'lucide-react';
 
 // --- UTILS ---
@@ -99,10 +99,15 @@ export default function Admin() {
   const [themeLoading, setThemeLoading] = useState(false);
   const [themeMessage, setThemeMessage] = useState('');
 
-  // --- GLOBAL NOTIFICATION ---
+  // --- GLOBAL NOTIFICATION (POPUP) ---
   const [globalNotif, setGlobalNotif] = useState({ enabled: false, type: 'info', title: '', content: '' });
   const [notifLoading, setNotifLoading] = useState(false);
   const [notifMessage, setNotifMessage] = useState('');
+
+  // --- GLOBAL BANNER (CHẠY NGANG) ---
+  const [bannerNotif, setBannerNotif] = useState({ enabled: false, type: 'info', content: '', speed: 15 });
+  const [bannerLoading, setBannerLoading] = useState(false);
+  const [bannerMessage, setBannerMessage] = useState('');
 
   // --- ENV CONSTANTS ---
   const projectUrl = "https://infljrayvhidhfimksfp.supabase.co";
@@ -219,11 +224,15 @@ export default function Admin() {
         setPriorities(restored);
       }
 
+      // Restore Themes
       if (configMap['theme_christmas']) try { setXmasTheme(JSON.parse(configMap['theme_christmas'])); } catch(e) {}
       if (configMap['theme_tet']) try { setTetTheme(JSON.parse(configMap['theme_tet'])); } catch(e) {}
       if (configMap['theme_mid_autumn']) try { setMidAutumnTheme(JSON.parse(configMap['theme_mid_autumn'])); } catch(e) {}
       if (configMap['theme_national_day']) try { setNationalDayTheme(JSON.parse(configMap['theme_national_day'])); } catch(e) {}
+      
+      // Restore Notifications
       if (configMap['global_notification']) try { setGlobalNotif(JSON.parse(configMap['global_notification'])); } catch(e) {}
+      if (configMap['global_banner']) try { setBannerNotif(JSON.parse(configMap['global_banner'])); } catch(e) {}
     }
   };
 
@@ -572,12 +581,30 @@ export default function Admin() {
       ], { onConflict: 'key' });
       
       if (error) throw error;
-      setNotifMessage('✅ Đã lưu và phát thông báo toàn hệ thống!');
+      setNotifMessage('✅ Đã lưu và phát thông báo Popup toàn hệ thống!');
       setGlobalNotif(payload);
     } catch(err) {
       setNotifMessage('❌ Lỗi: ' + err.message);
     } finally {
       setNotifLoading(false);
+    }
+  };
+
+  // --- LƯU THÔNG BÁO BANNER NGANG ---
+  const handleSaveBanner = async (e) => {
+    e.preventDefault();
+    setBannerLoading(true); setBannerMessage('');
+    try {
+      const { error } = await supabase.from('system_configs').upsert([
+        { key: 'global_banner', value: JSON.stringify(bannerNotif) }
+      ], { onConflict: 'key' });
+      
+      if (error) throw error;
+      setBannerMessage('✅ Đã lưu và cập nhật dải thông báo chạy chữ!');
+    } catch(err) {
+      setBannerMessage('❌ Lỗi: ' + err.message);
+    } finally {
+      setBannerLoading(false);
     }
   };
 
@@ -679,13 +706,87 @@ export default function Admin() {
       {/* TAB: THÔNG BÁO GLOBAL (OWNER ONLY) */}
       {/* ============================================================== */}
       {activeTab === 'notifications' && isOwner && (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          
+          {/* BANNER THÔNG BÁO (Dải chạy chữ ngang) */}
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
             <h2 className="text-xl font-black mb-2 text-slate-800 flex items-center gap-2">
-              <Megaphone size={22} className="text-blue-600"/> Phát thông báo toàn hệ thống
+              <MonitorPlay size={22} className="text-orange-500"/> Dải thông báo chạy ngang (Marquee)
             </h2>
             <p className="text-sm text-slate-500 mb-8 font-medium">
-              Tạo và gửi thông báo khẩn cấp hoặc sự kiện đến toàn bộ nhân viên. Thông báo sẽ tự động bật lên ở giữa màn hình của tất cả các máy đang mở hệ thống.
+              Chèn một dải thông báo chạy liên tục ngay trên cùng màn hình của hệ thống. Phù hợp để tuyên dương, cảnh báo hoặc push sale.
+            </p>
+
+            {bannerMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${bannerMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {bannerMessage}</div>}
+
+            <form onSubmit={handleSaveBanner} className="space-y-6">
+              
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-orange-50/50 border border-orange-200/50 rounded-2xl gap-4">
+                <div>
+                  <h3 className="text-sm font-black text-orange-900">Kích hoạt Dải chữ chạy</h3>
+                  <p className="text-[11px] text-orange-700 font-medium mt-1">Bật để hiển thị. Nội dung sẽ được cập nhật trực tiếp tới toàn bộ nhân viên kho.</p>
+                </div>
+                <ToggleSwitch checked={bannerNotif.enabled} onChange={(c) => setBannerNotif({...bannerNotif, enabled: c})} color="bg-orange-500" />
+              </div>
+
+              <div className={`transition-all duration-300 ${bannerNotif.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Loại giao diện Banner</label>
+                    <select 
+                      value={bannerNotif.type} 
+                      onChange={(e) => setBannerNotif({...bannerNotif, type: e.target.value})}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-orange-500/20 bg-white cursor-pointer transition"
+                    >
+                      <option value="info">Thông tin chung (Màu Xanh gradient)</option>
+                      <option value="celebrate">Khen thưởng & Chúc mừng (Pháo hoa, gradient Đỏ-Cam)</option>
+                      <option value="alert">Báo động khẩn (Màu Đỏ nhấp nháy)</option>
+                      <option value="warning">Cảnh báo (Màu Vàng-Cam)</option>
+                    </select>
+                  </div>
+                  
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tốc độ chạy (Giây)</label>
+                    <input 
+                      type="number" 
+                      min="5" max="60"
+                      value={bannerNotif.speed} 
+                      onChange={(e) => setBannerNotif({...bannerNotif, speed: Number(e.target.value)})} 
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" 
+                      required={bannerNotif.enabled}
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">Gợi ý: Dưới 10 là nhanh, 15 là vừa, trên 20 là chậm.</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nội dung chữ chạy (Nên dùng kèm Emoji)</label>
+                  <input 
+                    type="text"
+                    value={bannerNotif.content} 
+                    onChange={(e) => setBannerNotif({...bannerNotif, content: e.target.value})} 
+                    placeholder="VD: 🎉 Xin chúc mừng bộ phận Kho xuất sắc đạt 200% KPI ngày!..." 
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" 
+                    required={bannerNotif.enabled}
+                  />
+                </div>
+              </div>
+
+              <div className="pt-6 border-t border-slate-100 flex justify-end">
+                <button type="submit" disabled={bannerLoading} className="w-full sm:w-auto px-8 py-3.5 bg-orange-500 text-white text-sm font-bold rounded-xl shadow-md hover:bg-orange-600 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
+                  {bannerLoading ? <Loader2 size={18} className="animate-spin"/> : <SaveIcon/>} Lưu Dải thông báo
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* THÔNG BÁO POPUP CŨ (Nằm giữa màn hình) */}
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
+            <h2 className="text-xl font-black mb-2 text-slate-800 flex items-center gap-2">
+              <Megaphone size={22} className="text-blue-600"/> Phát thông báo dạng Popup
+            </h2>
+            <p className="text-sm text-slate-500 mb-8 font-medium">
+              Gửi thông báo bật lên chính giữa màn hình. Nhân viên phải bấm "Đã hiểu" hoặc "Tắt thông báo" để thu gọn.
             </p>
 
             {notifMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${notifMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {notifMessage}</div>}
@@ -694,7 +795,7 @@ export default function Admin() {
               
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-slate-50 border border-slate-200 rounded-2xl gap-4">
                 <div>
-                  <h3 className="text-sm font-black text-slate-800">Kích hoạt thông báo</h3>
+                  <h3 className="text-sm font-black text-slate-800">Kích hoạt thông báo Popup</h3>
                   <p className="text-[11px] text-slate-500 font-medium mt-1">Bật để hiển thị thông báo. Tắt để ẩn thông báo với tất cả mọi người.</p>
                 </div>
                 <ToggleSwitch checked={globalNotif.enabled} onChange={(c) => setGlobalNotif({...globalNotif, enabled: c})} color="bg-blue-600" />
@@ -750,7 +851,7 @@ export default function Admin() {
 
               <div className="pt-6 border-t border-slate-100 flex justify-end">
                 <button type="submit" disabled={notifLoading} className="w-full sm:w-auto px-8 py-3.5 bg-blue-600 text-white text-sm font-bold rounded-xl shadow-md hover:bg-blue-700 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
-                  {notifLoading ? <Loader2 size={18} className="animate-spin"/> : <Megaphone size={18}/>} Phát thông báo
+                  {notifLoading ? <Loader2 size={18} className="animate-spin"/> : <Megaphone size={18}/>} Phát thông báo Popup
                 </button>
               </div>
             </form>
@@ -981,57 +1082,57 @@ export default function Admin() {
           </div>
 
           {/* SECTION 6: GIAO DIỆN LỄ HỘI (FESTIVE THEMES) */}
-<div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
-  <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-2">
-    <Palette size={20} className="text-indigo-600"/> Giao diện Lễ hội (Festive Themes)
-  </h2>
-  <p className="text-sm text-slate-500 mb-6 font-medium">Thay đổi không khí vận hành hệ thống. Bật/tắt ảnh nền giao diện tĩnh toàn màn hình (Chỉ được chọn 1).</p>
+          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
+            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-2">
+              <Palette size={20} className="text-indigo-600"/> Giao diện Lễ hội (Festive Themes)
+            </h2>
+            <p className="text-sm text-slate-500 mb-6 font-medium">Thay đổi không khí vận hành hệ thống. Bật/tắt ảnh nền giao diện tĩnh toàn màn hình (Chỉ được chọn 1).</p>
 
-  {themeMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${themeMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {themeMessage}</div>}
+            {themeMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${themeMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {themeMessage}</div>}
 
-  {isOwner ? (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Quốc Khánh */}
-        <div className={`p-5 rounded-2xl border-2 transition-all ${nationalDayTheme.isNationalDayEnabled ? 'border-red-400 bg-red-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-red-700 flex items-center gap-2"><Flag size={18}/> Quốc Khánh</h3>
-            <ToggleSwitch checked={nationalDayTheme.isNationalDayEnabled} onChange={(c) => handleToggleTheme('nationalDay', c)} color="bg-green-500" />
+            {isOwner ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Quốc Khánh */}
+                  <div className={`p-5 rounded-2xl border-2 transition-all ${nationalDayTheme.isNationalDayEnabled ? 'border-red-400 bg-red-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-red-700 flex items-center gap-2"><Flag size={18}/> Quốc Khánh</h3>
+                      <ToggleSwitch checked={nationalDayTheme.isNationalDayEnabled} onChange={(c) => handleToggleTheme('nationalDay', c)} color="bg-green-500" />
+                    </div>
+                  </div>
+                  {/* Trung Thu */}
+                  <div className={`p-5 rounded-2xl border-2 transition-all ${midAutumnTheme.isMidAutumnEnabled ? 'border-orange-400 bg-orange-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-orange-600 flex items-center gap-2"><MoonStar size={18}/> Trung Thu</h3>
+                      <ToggleSwitch checked={midAutumnTheme.isMidAutumnEnabled} onChange={(c) => handleToggleTheme('midAutumn', c)} color="bg-green-500" />
+                    </div>
+                  </div>
+                  {/* Giáng Sinh */}
+                  <div className={`p-5 rounded-2xl border-2 transition-all ${xmasTheme.isXmasEnabled ? 'border-emerald-400 bg-emerald-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-emerald-700 flex items-center gap-2"><TreePine size={18}/> Giáng Sinh</h3>
+                      <ToggleSwitch checked={xmasTheme.isXmasEnabled} onChange={(c) => handleToggleTheme('xmas', c)} color="bg-green-500" />
+                    </div>
+                  </div>
+                  {/* Tết */}
+                  <div className={`p-5 rounded-2xl border-2 transition-all ${tetTheme.isTetEnabled ? 'border-rose-400 bg-rose-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-rose-600 flex items-center gap-2"><PartyPopper size={18}/> Tết Nguyên Đán</h3>
+                      <ToggleSwitch checked={tetTheme.isTetEnabled} onChange={(c) => handleToggleTheme('tet', c)} color="bg-green-500" />
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end pt-2 border-t border-slate-100">
+                  <button onClick={handleSaveThemes} disabled={themeLoading} className="px-8 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl shadow-md hover:bg-indigo-600 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2">
+                      {themeLoading ? <Loader2 size={16} className="animate-spin"/> : <SaveIcon/>} Lưu cấu hình Giao diện
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <LockedFeature msg="Chỉ Chủ sở hữu (Owner) mới được quyền thay đổi giao diện nền lễ hội toàn hệ thống." />
+            )}
           </div>
-        </div>
-        {/* Trung Thu */}
-        <div className={`p-5 rounded-2xl border-2 transition-all ${midAutumnTheme.isMidAutumnEnabled ? 'border-orange-400 bg-orange-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-orange-600 flex items-center gap-2"><MoonStar size={18}/> Trung Thu</h3>
-            <ToggleSwitch checked={midAutumnTheme.isMidAutumnEnabled} onChange={(c) => handleToggleTheme('midAutumn', c)} color="bg-green-500" />
-          </div>
-        </div>
-        {/* Giáng Sinh */}
-        <div className={`p-5 rounded-2xl border-2 transition-all ${xmasTheme.isXmasEnabled ? 'border-emerald-400 bg-emerald-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-emerald-700 flex items-center gap-2"><TreePine size={18}/> Giáng Sinh</h3>
-            <ToggleSwitch checked={xmasTheme.isXmasEnabled} onChange={(c) => handleToggleTheme('xmas', c)} color="bg-green-500" />
-          </div>
-        </div>
-        {/* Tết */}
-        <div className={`p-5 rounded-2xl border-2 transition-all ${tetTheme.isTetEnabled ? 'border-rose-400 bg-rose-50' : 'border-slate-100 bg-slate-50 hover:bg-slate-100'}`}>
-          <div className="flex items-center justify-between">
-            <h3 className="font-bold text-rose-600 flex items-center gap-2"><PartyPopper size={18}/> Tết Nguyên Đán</h3>
-            <ToggleSwitch checked={tetTheme.isTetEnabled} onChange={(c) => handleToggleTheme('tet', c)} color="bg-green-500" />
-          </div>
-        </div>
-      </div>
-      
-      <div className="flex justify-end pt-2 border-t border-slate-100">
-        <button onClick={handleSaveThemes} disabled={themeLoading} className="px-8 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl shadow-md hover:bg-indigo-600 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2">
-            {themeLoading ? <Loader2 size={16} className="animate-spin"/> : <SaveIcon/>} Lưu cấu hình Giao diện
-        </button>
-      </div>
-    </div>
-  ) : (
-    <LockedFeature msg="Chỉ Chủ sở hữu (Owner) mới được quyền thay đổi giao diện nền lễ hội toàn hệ thống." />
-  )}
-</div>
 
           {/* SECTION 7: DANGER ZONE (DB CLEANUP) */}
           <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border-2 border-red-100 mt-8 relative overflow-hidden">
@@ -1447,7 +1548,6 @@ const LockedFeature = ({ msg }) => (
 
 const ToggleSwitch = ({ checked, onChange, color, small = false }) => (
   <div className="relative inline-flex items-center cursor-pointer" onClick={() => onChange(!checked)}>
-    {/* Đã sửa đoạn này: Chỉ lấy màu mặc định (bg-slate-200) khi chưa checked */}
     <div className={`${small ? 'w-9 h-5' : 'w-11 h-6'} rounded-full transition-colors ${checked ? color : 'bg-slate-200'}`}></div>
     <div className={`absolute bg-white border border-slate-200 rounded-full transition-transform ${small ? 'w-4 h-4 top-0.5 left-0.5' : 'w-5 h-5 top-0.5 left-0.5'} ${checked ? (small ? 'translate-x-4' : 'translate-x-5') : ''} shadow-sm`}></div>
   </div>

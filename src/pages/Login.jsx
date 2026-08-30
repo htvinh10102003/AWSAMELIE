@@ -127,10 +127,9 @@ export default function Login() {
         </div>
 
         <div className="relative z-20 text-sm text-slate-400 font-medium pb-8 px-12 xl:px-16 flex items-center justify-between">
-          <span>© {new Date().getFullYear()} Amelie WMS Team.</span>
+          <span>© {new Date().getFullYear()} Vinh Studio WMS Team.</span>
           <div className="flex gap-4">
-            <a href="#" className="hover:text-white transition-colors">Bảo mật</a>
-            <a href="mailto:contact.hotavinh@gmail.com" className="hover:text-white transition-colors">Hỗ trợ</a>
+            <a href="mailto:contact@vinhstudio.io.vn" className="hover:text-white transition-colors">Hỗ trợ</a>
           </div>
         </div>
       </div>
@@ -184,7 +183,7 @@ export default function Login() {
                           setEmail(e.target.value);
                           if (error) setError('');
                         }}
-                        placeholder="hotavinh@gmail.com"
+                        placeholder="dev@vinhstudio.io.vn"
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10"
                       />
                       <Mail
@@ -345,16 +344,6 @@ export default function Login() {
                 </form>
               </div>
             )}
-          </div>
-
-          {/* Link phiên bản cũ */}
-          <div className="mt-8 text-center relative z-10">
-            <a
-              href="https://htvinh10102003.github.io/ameliebaocaokho/"
-              className="text-xs font-bold text-slate-400 transition-colors hover:text-orange-600"
-            >
-              Chuyển sang phiên bản cũ (Legacy)
-            </a>
           </div>
         </div>
       </div>
