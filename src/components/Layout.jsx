@@ -325,15 +325,13 @@ export default function Layout() {
 
   const toggleSubmenu = (id) => setMenuStates(prev => ({ ...prev, [id]: !prev[id] }));
 
-  // Hàm tính toán tọa độ bắn ra tooltip cố định
+  // Hàm tính toán tọa độ bắn ra tooltip cố định (Cho lề trái / phải)
   const handleMouseEnter = (e, label) => {
-    if (sidebarExpanded || isTopLayout) return; // Chỉ chạy khi đang thu gọn
+    if (sidebarExpanded || isTopLayout) return; 
     const rect = e.currentTarget.getBoundingClientRect();
-    
-    // Nếu lề trái -> Tooltip hiện bên phải icon. Lề phải -> Tooltip hiện bên trái icon.
     setActiveTooltip({
       label,
-      top: rect.top + rect.height / 2, // Căn giữa theo chiều dọc của icon
+      top: rect.top + rect.height / 2,
       left: layoutPrefs.position === 'left' ? rect.right + 12 : undefined,
       right: layoutPrefs.position === 'right' ? window.innerWidth - rect.left + 12 : undefined
     });
@@ -345,7 +343,7 @@ export default function Layout() {
     <div className={`flex h-screen font-sans antialiased overflow-hidden relative ${themeVars.bgImage === 'none' ? 'bg-slate-50' : 'bg-transparent'} 
       ${isTopLayout ? 'flex-col' : layoutPrefs.position === 'right' ? 'flex-row-reverse' : 'flex-row'}`}
     >
-      {/* TOOLTIP ĐỘC LẬP TẦNG TRÊN CÙNG */}
+      {/* TOOLTIP ĐỘC LẬP TẦNG TRÊN CÙNG (Cho Sidebar dọc thu gọn) */}
       {activeTooltip && (
         <div 
           className="fixed z-[99999] px-3 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-lg whitespace-nowrap shadow-xl pointer-events-none animate-in fade-in zoom-in-95 duration-150"
@@ -357,7 +355,6 @@ export default function Layout() {
           }}
         >
           {activeTooltip.label}
-          {/* Mũi tên tam giác chỉ ngược lại icon */}
           <div className={`absolute top-1/2 -translate-y-1/2 border-[5px] border-transparent 
             ${layoutPrefs.position === 'left' ? 'right-full border-r-slate-800' : 'left-full border-l-slate-800'}
           `} />
@@ -369,7 +366,7 @@ export default function Layout() {
              style={{ backgroundImage: themeVars.bgImage, backgroundSize: '100% 100%' }} />
       )}
 
-      {/* NAVIGATION BAR */}
+      {/* NAVIGATION BAR CONTAINER */}
       <div
         onClick={(e) => { if (e.target.closest('a')) setMobileMenuOpen(false); }}
         className={`flex-shrink-0 z-40 flex transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] relative ${themeVars.sidebar}
@@ -399,53 +396,125 @@ export default function Layout() {
           )}
         </div>
 
-        {/* MENU AREA */}
-        <div className={`${isTopLayout ? 'flex-1 flex items-center gap-2 overflow-x-auto scrollbar-hide' : 'flex-1 overflow-y-auto overflow-x-hidden py-4 scrollbar-thin'}`}>
-          {MENU_CONFIG.map((group, gIdx) => {
+        {/* MENU AREA (Dynamic rendering Top vs Sidebar) */}
+        <div className={`${isTopLayout ? 'flex-1 flex items-center h-full px-2' : 'flex-1 overflow-y-auto overflow-x-hidden py-4 scrollbar-thin'}`}>
+          
+          {/* ======================= */}
+          {/* RENDER DÀNH CHO LỀ TRÊN */}
+          {/* ======================= */}
+          {isTopLayout && (
+            <div className="flex h-full items-center gap-2 relative">
+              {MENU_CONFIG.map((group, gIdx) => {
+                const isAdminGroup = group.groupLabel === 'Hệ thống Quản trị';
+                // Nhóm admin được làm nổi bật viền đỏ nhạt
+                return (
+                  <div key={gIdx} className="h-full flex items-center group/mainnav">
+                    {/* Mục To Nhất */}
+                    <button className={`h-10 px-4 flex items-center gap-2 rounded-xl text-sm font-bold transition-all
+                      ${isAdminGroup ? 'text-red-700 bg-red-50 hover:bg-red-100' : `${themeVars.textPrimary} hover:bg-slate-100/60`}
+                    `}>
+                      {group.groupLabel}
+                      <ChevronDown size={16} className={isAdminGroup ? 'text-red-500' : themeVars.textMuted} />
+                    </button>
+
+                    {/* Sổ xuống Tính năng to (Level 1 Dropdown) */}
+                    <div className="absolute top-full left-0 mt-1 w-64 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 z-[100] py-2 opacity-0 invisible group-hover/mainnav:opacity-100 group-hover/mainnav:visible transition-all duration-200">
+                      {group.items.map((item) => {
+                        const hasSubItems = !!item.subItems;
+                        const isActive = hasSubItems 
+                          ? item.matchRoutes.some(route => location.pathname.includes(route)) || (location.pathname === '/' && item.id === 'dashboard')
+                          : location.pathname === item.path;
+
+                        return (
+                          <div key={item.id} className="relative group/subnav">
+                            {hasSubItems ? (
+                              <button className={`w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors ${isActive ? 'text-blue-600 bg-blue-50/50' : 'text-slate-700'}`}>
+                                <div className="flex items-center gap-3">
+                                  <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-blue-600' : 'text-slate-400'} />
+                                  <span className={`text-sm ${isActive ? 'font-bold' : 'font-medium'}`}>{item.label}</span>
+                                </div>
+                                <ChevronRight size={16} className={isActive ? 'text-blue-500' : 'text-slate-400'} />
+                              </button>
+                            ) : (
+                              <Link to={item.path} className={`w-full flex items-center px-4 py-3 hover:bg-slate-50 transition-colors ${isActive ? 'text-blue-600 bg-blue-50/50' : 'text-slate-700'}`}>
+                                <div className="flex items-center gap-3">
+                                  <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-blue-600' : 'text-slate-400'} />
+                                  <span className={`text-sm ${isActive ? 'font-bold' : 'font-medium'}`}>{item.label}</span>
+                                </div>
+                              </Link>
+                            )}
+
+                            {/* Sổ ngang sang Tính năng nhỏ (Level 2 Flyout) */}
+                            {hasSubItems && (
+                              <div className="absolute top-0 left-full -ml-1 pl-1">
+                                <div className="w-64 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 z-[101] py-2 opacity-0 invisible group-hover/subnav:opacity-100 group-hover/subnav:visible transition-all duration-200">
+                                  {item.subItems.map((sub, sIdx) => {
+                                    const isSubActive = location.pathname === sub.path;
+                                    return (
+                                      <Link key={sIdx} to={sub.path} className={`flex items-start gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors ${isSubActive ? 'bg-blue-50 text-blue-600' : 'text-slate-700'}`}>
+                                        <sub.icon size={18} strokeWidth={isSubActive ? 2.5 : 2} className={`mt-0.5 shrink-0 ${isSubActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                                        <div className="flex flex-col flex-1">
+                                          <span className={`text-sm leading-tight ${isSubActive ? 'font-bold' : 'font-medium'}`}>{sub.label}</span>
+                                          {sub.subtitle && <span className="text-[11px] mt-1 text-slate-500">{sub.subtitle}</span>}
+                                        </div>
+                                      </Link>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ============================= */}
+          {/* RENDER DÀNH CHO LỀ TRÁI / PHẢI */}
+          {/* ============================= */}
+          {!isTopLayout && MENU_CONFIG.map((group, gIdx) => {
             const isAdminGroup = group.groupLabel === 'Hệ thống Quản trị';
             
             return (
-              <div key={gIdx}>
-                {/* Thanh ngang phân cách khi thu gọn menu (User vs Admin) */}
-                {!sidebarExpanded && !isTopLayout && isAdminGroup && (
+              <div key={gIdx} className="mb-6">
+                {!sidebarExpanded && isAdminGroup && (
                   <hr className="border-t-2 border-dashed border-slate-200 mx-4 my-4" />
                 )}
                 
-                {/* Block Group (Khung đỏ cho Admin khi thu gọn) */}
                 <div className={`
-                  ${isTopLayout ? 'flex items-center gap-2' : 'mb-6'}
-                  ${!sidebarExpanded && !isTopLayout && isAdminGroup ? 'border-[1.5px] border-red-400 rounded-2xl mx-1.5 py-1.5 bg-red-50/20 shadow-inner' : ''}
+                  ${!sidebarExpanded && isAdminGroup ? 'border-[1.5px] border-red-400 rounded-2xl mx-1.5 py-1.5 bg-red-50/20 shadow-inner' : ''}
                 `}>
+                  <div className={`px-5 mb-2 text-[11px] font-black uppercase tracking-widest transition-opacity duration-300 whitespace-nowrap ${themeVars.textMuted} ${sidebarExpanded ? 'opacity-100' : 'hidden'}`}>
+                    {group.groupLabel}
+                  </div>
                   
-                  {!isTopLayout && (
-                    <div className={`px-5 mb-2 text-[11px] font-black uppercase tracking-widest transition-opacity duration-300 whitespace-nowrap ${themeVars.textMuted} ${sidebarExpanded ? 'opacity-100' : 'hidden'}`}>
-                      {group.groupLabel}
-                    </div>
-                  )}
-                  
-                  <nav className={`${isTopLayout ? 'flex items-center gap-1' : sidebarExpanded ? 'space-y-1 px-3' : 'space-y-1'}`}>
+                  <nav className={`${sidebarExpanded ? 'space-y-1 px-3' : 'space-y-1'}`}>
                     {group.items.map(item => {
                       const hasSubItems = !!item.subItems;
                       const isActive = hasSubItems 
                         ? item.matchRoutes.some(route => location.pathname.includes(route)) || (location.pathname === '/' && item.id === 'dashboard')
                         : location.pathname === item.path;
-                      const isOpen = menuStates[item.id] && !isTopLayout;
+                      const isOpen = menuStates[item.id];
 
                       if (hasSubItems) {
                         return (
-                          <div key={item.id} className={`relative group ${isTopLayout ? 'flex-shrink-0' : sidebarExpanded ? '' : 'px-1'}`}>
+                          <div key={item.id} className={`relative group ${sidebarExpanded ? '' : 'px-1'}`}>
                             <button 
-                              onClick={() => !isTopLayout && toggleSubmenu(item.id)} 
+                              onClick={() => toggleSubmenu(item.id)} 
                               onMouseEnter={(e) => handleMouseEnter(e, item.label)}
                               onMouseLeave={handleMouseLeave}
-                              className={`w-full flex items-center rounded-xl cursor-pointer transition-all ${isTopLayout ? 'px-3 py-2' : sidebarExpanded ? 'px-3 py-3' : 'p-3 justify-center'} ${themeVars.hoverBg} ${isActive && !isOpen ? themeVars.activeBg : ''}`}
+                              className={`w-full flex items-center rounded-xl cursor-pointer transition-all ${sidebarExpanded ? 'px-3 py-3' : 'p-3 justify-center'} ${themeVars.hoverBg} ${isActive && !isOpen ? themeVars.activeBg : ''}`}
                             >
-                              <div className={`shrink-0 flex items-center justify-center ${isTopLayout ? 'w-6 mr-2' : 'w-8'}`}>
+                              <div className={`shrink-0 flex items-center justify-center w-8`}>
                                 <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors ${isActive ? themeVars.iconActive : themeVars.iconColor}`} />
                               </div>
-                              <div className={`flex items-center justify-between flex-1 transition-all duration-300 overflow-hidden ${sidebarExpanded || isTopLayout ? 'opacity-100' : 'opacity-0 w-0'}`}>
+                              <div className={`flex items-center justify-between flex-1 transition-all duration-300 overflow-hidden ${sidebarExpanded ? 'opacity-100' : 'opacity-0 w-0'}`}>
                                 <span className={`text-sm tracking-wide leading-snug whitespace-nowrap ${isActive ? themeVars.activeText : `font-medium ${themeVars.textPrimary}`}`}>{item.label}</span>
-                                {!isTopLayout && sidebarExpanded && (
+                                {sidebarExpanded && (
                                   <div className="shrink-0 ml-2">
                                     {isOpen ? <ChevronDown size={16} className={themeVars.textMuted}/> : <ChevronRight size={16} className={themeVars.textMuted}/>}
                                   </div>
@@ -453,68 +522,49 @@ export default function Layout() {
                               </div>
                             </button>
                             
-                            {/* Submenu cho Top Layout (Hover Dropdown) */}
-                            {isTopLayout && (
-                              <div className={`absolute top-full left-0 mt-1 w-56 hidden group-hover:block bg-white rounded-xl shadow-xl border border-slate-100 z-50 py-2`}>
-                                {item.subItems.map((sub, sIdx) => {
-                                  const isSubActive = location.pathname === sub.path;
-                                  return (
-                                    <Link key={sIdx} to={sub.path} className={`flex items-start gap-3 px-4 py-2 hover:bg-slate-50 transition-colors ${isSubActive ? 'bg-blue-50 text-blue-600' : 'text-slate-700'}`}>
-                                      <sub.icon size={16} strokeWidth={isSubActive ? 2.5 : 2} className={`mt-0.5 shrink-0 ${isSubActive ? 'text-blue-600' : 'text-slate-400'}`} />
-                                      <span className={`text-sm leading-tight ${isSubActive ? 'font-bold' : 'font-medium'}`}>{sub.label}</span>
-                                    </Link>
-                                  )
-                                })}
-                              </div>
-                            )}
-
-                            {/* Submenu cho Vertical Layout */}
-                            {!isTopLayout && (
-                              <div className={`grid transition-all duration-300 ease-in-out ${isOpen ? 'grid-rows-[1fr] opacity-100 mt-1 mb-2' : 'grid-rows-[0fr] opacity-0'}`}>
-                                <div className="overflow-hidden">
-                                  {/* Tuỳ chỉnh hiển thị list theo trạng thái ghim/thu gọn */}
-                                  <div className={`flex flex-col gap-1 ${sidebarExpanded ? 'ml-7 pl-3 border-l-2 border-slate-200/50' : 'items-center bg-slate-100/60 mx-1 py-1.5 rounded-xl shadow-inner'}`}>
-                                    {item.subItems.map((sub, sIdx) => {
-                                      const isSubActive = location.pathname === sub.path;
-                                      return (
-                                        <Link 
-                                          key={sIdx} 
-                                          to={sub.path} 
-                                          onMouseEnter={(e) => handleMouseEnter(e, sub.label)}
-                                          onMouseLeave={handleMouseLeave}
-                                          className={`relative group flex items-start rounded-xl transition-all ${sidebarExpanded ? 'px-3 py-2.5 gap-3 w-full' : 'p-2 justify-center w-10 h-10'} ${themeVars.hoverBg} ${isSubActive ? themeVars.activeBg + ' ' + (sidebarExpanded ? themeVars.activeBorder : 'shadow-sm') : ''}`}
-                                        >
-                                          <sub.icon size={sidebarExpanded ? 16 : 18} strokeWidth={isSubActive ? 2.5 : 2} className={`${sidebarExpanded ? 'mt-0.5' : ''} shrink-0 ${isSubActive ? themeVars.iconActive : themeVars.textMuted}`} />
-                                          
-                                          {sidebarExpanded && (
-                                            <div className="flex flex-col flex-1">
-                                              <span className={`text-sm whitespace-normal leading-snug break-words ${isSubActive ? themeVars.activeText : `font-medium ${themeVars.textPrimary}`}`}>{sub.label}</span>
-                                              {sub.subtitle && <span className={`text-[11px] mt-0.5 whitespace-normal leading-tight ${themeVars.textMuted}`}>{sub.subtitle}</span>}
-                                            </div>
-                                          )}
-                                        </Link>
-                                      )
-                                    })}
-                                  </div>
+                            <div className={`grid transition-all duration-300 ease-in-out ${isOpen ? 'grid-rows-[1fr] opacity-100 mt-1 mb-2' : 'grid-rows-[0fr] opacity-0'}`}>
+                              <div className="overflow-hidden">
+                                <div className={`flex flex-col gap-1 ${sidebarExpanded ? 'ml-7 pl-3 border-l-2 border-slate-200/50' : 'items-center bg-slate-100/60 mx-1 py-1.5 rounded-xl shadow-inner'}`}>
+                                  {item.subItems.map((sub, sIdx) => {
+                                    const isSubActive = location.pathname === sub.path;
+                                    return (
+                                      <Link 
+                                        key={sIdx} 
+                                        to={sub.path} 
+                                        onMouseEnter={(e) => handleMouseEnter(e, sub.label)}
+                                        onMouseLeave={handleMouseLeave}
+                                        className={`relative group flex items-start rounded-xl transition-all ${sidebarExpanded ? 'px-3 py-2.5 gap-3 w-full' : 'p-2 justify-center w-10 h-10'} ${themeVars.hoverBg} ${isSubActive ? themeVars.activeBg + ' ' + (sidebarExpanded ? themeVars.activeBorder : 'shadow-sm') : ''}`}
+                                      >
+                                        <sub.icon size={sidebarExpanded ? 16 : 18} strokeWidth={isSubActive ? 2.5 : 2} className={`${sidebarExpanded ? 'mt-0.5' : ''} shrink-0 ${isSubActive ? themeVars.iconActive : themeVars.textMuted}`} />
+                                        
+                                        {sidebarExpanded && (
+                                          <div className="flex flex-col flex-1">
+                                            <span className={`text-sm whitespace-normal leading-snug break-words ${isSubActive ? themeVars.activeText : `font-medium ${themeVars.textPrimary}`}`}>{sub.label}</span>
+                                            {sub.subtitle && <span className={`text-[11px] mt-0.5 whitespace-normal leading-tight ${themeVars.textMuted}`}>{sub.subtitle}</span>}
+                                          </div>
+                                        )}
+                                      </Link>
+                                    )
+                                  })}
                                 </div>
                               </div>
-                            )}
+                            </div>
                           </div>
                         )
                       }
 
                       return (
-                        <div key={item.path} className={`relative group ${isTopLayout ? 'flex-shrink-0' : sidebarExpanded ? 'w-full' : 'px-1'}`}>
+                        <div key={item.path} className={`relative group ${sidebarExpanded ? 'w-full' : 'px-1'}`}>
                           <Link 
                             to={item.path} 
                             onMouseEnter={(e) => handleMouseEnter(e, item.label)}
                             onMouseLeave={handleMouseLeave}
-                            className={`flex items-center rounded-xl transition-all ${isTopLayout ? 'px-3 py-2' : sidebarExpanded ? 'px-3 py-3 w-full' : 'p-3 justify-center'} ${themeVars.hoverBg} ${isActive ? themeVars.activeBg : ''}`}
+                            className={`flex items-center rounded-xl transition-all ${sidebarExpanded ? 'px-3 py-3 w-full' : 'p-3 justify-center'} ${themeVars.hoverBg} ${isActive ? themeVars.activeBg : ''}`}
                           >
-                            <div className={`shrink-0 flex items-center justify-center ${isTopLayout ? 'w-6 mr-2' : 'w-8'}`}>
+                            <div className={`shrink-0 flex items-center justify-center w-8`}>
                               <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors ${isActive ? themeVars.iconActive : themeVars.iconColor}`} />
                             </div>
-                            <div className={`flex items-center flex-1 transition-all duration-300 overflow-hidden ${sidebarExpanded || isTopLayout ? 'opacity-100' : 'opacity-0 w-0'}`}>
+                            <div className={`flex items-center flex-1 transition-all duration-300 overflow-hidden ${sidebarExpanded ? 'opacity-100' : 'opacity-0 w-0'}`}>
                               <span className={`text-sm tracking-wide leading-snug whitespace-nowrap ${isActive ? themeVars.activeText : `font-medium ${themeVars.textPrimary}`}`}>{item.label}</span>
                             </div>
                           </Link>
