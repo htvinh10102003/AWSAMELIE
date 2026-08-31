@@ -221,6 +221,42 @@ export default function Layout() {
   const isNationalDay = (nationalDayTheme?.isNationalDayEnabled || false) && !isTet && !isMidAutumn;
   const isXmas = (xmasTheme?.isXmasEnabled || false) && !isTet && !isMidAutumn && !isNationalDay;
 
+// ====== HIỆU ỨNG THAY ĐỔI FAVICON (ICON TRÌNH DUYỆT) ======
+  useEffect(() => {
+    const changeFavicon = (iconPath) => {
+      let link = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      
+      // Thay đổi đường dẫn ảnh
+      link.href = iconPath;
+      
+      // Quan trọng: Cập nhật đúng định dạng file để trình duyệt không báo lỗi
+      if (iconPath.endsWith('.svg')) {
+        link.type = 'image/svg+xml';
+      } else if (iconPath.endsWith('.png')) {
+        link.type = 'image/png';
+      } else if (iconPath.endsWith('.ico')) {
+        link.type = 'image/x-icon';
+      }
+    };
+
+    if (isTet) {
+      changeFavicon('/icon-tet.png');
+    } else if (isMidAutumn) {
+      changeFavicon('/icon-mid-autumn.png');
+    } else if (isNationalDay) {
+      changeFavicon('/icon-national-day.png');
+    } else if (isXmas) {
+      changeFavicon('/icon-xmas.png');
+    } else {
+      changeFavicon('/icon.svg'); // Trở về mặc định
+    }
+  }, [isTet, isMidAutumn, isNationalDay, isXmas]);
+
   const getThemeVars = () => {
     if (isTet) return {
       bgImage: "url('/assets/bg-tet.jpg')",
