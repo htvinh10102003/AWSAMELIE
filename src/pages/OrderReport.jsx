@@ -44,8 +44,11 @@ const OPTIONAL_COLUMNS = [
     { id: 'source', label: 'Nguồn đơn & Kênh' },
     { id: 'notes', label: 'Ghi chú' },
     { id: 'aging', label: 'Tồn kho / Ngày tồn' },
-    { id: 'creator', label: 'Người tạo đơn' }
+    { id: 'creator', label: 'Người tạo đơn' },
+    { id: 'printed_at', label: 'Ngày in gần nhất' }
 ];
+
+const DEFAULT_VISIBLE_COLS = ['carrier', 'source', 'notes', 'aging', 'creator'];
 
 const MultiSelect = ({ options, selected, onChange, placeholder }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -118,7 +121,7 @@ export default function OrderReport() {
     const [showColSettings, setShowColSettings] = useState(false);
     
     // Config State
-    const [visibleCols, setVisibleCols] = useState(OPTIONAL_COLUMNS.map(c => c.id));
+    const [visibleCols, setVisibleCols] = useState(DEFAULT_VISIBLE_COLS);
     const [isSavingCols, setIsSavingCols] = useState(false);
 
     // Filter State
@@ -128,6 +131,7 @@ export default function OrderReport() {
     const [selectedStatus, setSelectedStatus] = useState([]);
     const [selectedCarrier, setSelectedCarrier] = useState([]);
     const [selectedChannel, setSelectedChannel] = useState([]);
+    const [selectedCreator, setSelectedCreator] = useState([]);
     const [selectedOrders, setSelectedOrders] = useState([]);
     const [sortOrder, setSortOrder] = useState('');
     const [agingFilter, setAgingFilter] = useState(false);
@@ -147,6 +151,7 @@ export default function OrderReport() {
     const [carrierOptions, setCarrierOptions] = useState([]);
     const [statusOptions, setStatusOptions] = useState([]);
     const [channelOptions, setChannelOptions] = useState([]);
+    const [creatorOptions, setCreatorOptions] = useState([]);
 
     const colSettingsRef = useRef(null);
 
@@ -184,7 +189,7 @@ export default function OrderReport() {
         setShowActionMenu(false);
         setShowCopyMenu(false);
         setCurrentPage(1);
-    }, [activeTab, searchId, searchProduct, selectedStatus, selectedCarrier, selectedChannel, searchNote, sortOrder, pageSize, agingFilter]);
+    }, [activeTab, searchId, searchProduct, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, searchNote, sortOrder, pageSize, agingFilter]);
 
     const fetchSystemData = async (email) => {
         const { data: stData } = await supabase.from('order_statuses').select('*');
@@ -193,9 +198,9 @@ export default function OrderReport() {
         setStatusDict(dict);
 
         const [confRes, userConfRes] = await Promise.all([
-    supabase.from('system_configs').select('*').eq('key', 'nhanh_business_id').maybeSingle(),
-    supabase.from('system_configs').select('*').eq('key', `order_cols_pref_${email}`).maybeSingle()
-]);
+            supabase.from('system_configs').select('*').eq('key', 'nhanh_business_id').maybeSingle(),
+            supabase.from('system_configs').select('*').eq('key', `order_cols_pref_${email}`).maybeSingle()
+        ]);
 
         if (confRes.data) setBusinessId(confRes.data.value);
         if (userConfRes.data) {
@@ -244,6 +249,7 @@ export default function OrderReport() {
             setData(data || { printable: [], holding: [], outOfStock: [], invalidCount: 0 });
 
             const allOrders = [...(data.printable || []), ...(data.holding || []), ...(data.outOfStock || [])];
+            
             setCarrierOptions([...new Set(allOrders.map(o => o.carrier_name).filter(Boolean))]);
 
             const uniqueStatusCodes = [...new Set(allOrders.map(o => o.status).filter(Boolean))];
@@ -256,6 +262,12 @@ export default function OrderReport() {
             setChannelOptions(uniqueChannels.map(ch => ({
                 value: String(ch),
                 label: SALE_CHANNELS[ch] || `Kênh ${ch}`
+            })));
+
+            const uniqueCreators = [...new Set(allOrders.map(o => o.created_by_name).filter(Boolean))];
+            setCreatorOptions(uniqueCreators.map(c => ({
+                value: String(c),
+                label: c
             })));
 
             setSelectedOrders([]);
@@ -289,6 +301,7 @@ export default function OrderReport() {
             if (selectedStatus.length > 0 && !selectedStatus.includes(String(order.status))) return false;
             if (selectedCarrier.length > 0 && !selectedCarrier.includes(order.carrier_name)) return false;
             if (selectedChannel.length > 0 && !selectedChannel.includes(String(order.sale_channel))) return false;
+            if (selectedCreator.length > 0 && !selectedCreator.includes(order.created_by_name)) return false;
             
             if (searchNote) {
                 const note = (order.description || '') + ' ' + (order.private_description || '');
@@ -546,6 +559,9 @@ export default function OrderReport() {
                             <div className="w-[150px]">
                                 <MultiSelect options={statusOptions} selected={selectedStatus} onChange={setSelectedStatus} placeholder="Trạng thái" />
                             </div>
+                            <div className="w-[150px]">
+                                <MultiSelect options={creatorOptions} selected={selectedCreator} onChange={setSelectedCreator} placeholder="Nhân viên" />
+                            </div>
                         </div>
 
                         {/* Actions */}
@@ -560,7 +576,6 @@ export default function OrderReport() {
                                     <Copy size={15} /> Copy ({copyTargetCount}) <ChevronDown size={14} />
                                 </button>
                                 
-                                {/* Thêm pt-2 ở thẻ div bọc để menu không bị tắt khi di chuột */}
                                 {showCopyMenu && copyTargetCount > 0 && (
                                     <div className="absolute right-0 top-full pt-2 w-[270px] z-50">
                                         <div className="bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden py-1">
@@ -704,6 +719,7 @@ export default function OrderReport() {
                                         
                                         {visibleCols.includes('aging') && <th className="py-3 px-4 font-semibold whitespace-nowrap">{activeTab === 'printable' ? 'Ngày tồn' : 'Kho / Thiếu'}</th>}
                                         {visibleCols.includes('creator') && <th className="py-3 px-4 font-semibold text-center whitespace-nowrap">Nhân viên</th>}
+                                        {visibleCols.includes('printed_at') && <th className="py-3 px-4 font-semibold text-center whitespace-nowrap">Ngày in gần nhất</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -840,6 +856,15 @@ export default function OrderReport() {
                                                             <div className="inline-flex items-center gap-1.5 text-gray-600 bg-gray-50 px-2 py-1 rounded text-xs">
                                                                 <User size={13} className="text-gray-400" /> 
                                                                 <span className="truncate max-w-[80px]" title={order.created_by_name || 'Hệ thống'}>{order.created_by_name || 'Hệ thống'}</span>
+                                                            </div>
+                                                        </td>
+                                                    )}
+                                                    
+                                                    {/* Cột 10 (Tùy chọn): Ngày in gần nhất */}
+                                                    {index === 0 && visibleCols.includes('printed_at') && (
+                                                        <td rowSpan={rowCount} className="py-3 px-4 align-top text-center border-l border-gray-100">
+                                                            <div className="text-[12px] text-gray-600">
+                                                                {order.printed_at ? new Date(order.printed_at).toLocaleString('vi-VN') : '-'}
                                                             </div>
                                                         </td>
                                                     )}
