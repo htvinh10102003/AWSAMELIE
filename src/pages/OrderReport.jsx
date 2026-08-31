@@ -589,7 +589,7 @@ export default function OrderReport() {
                             <div className="w-[150px]">
                                 <MultiSelect options={depotOptions} selected={selectedDepot} onChange={setSelectedDepot} placeholder="Kho hàng" />
                             </div>
-                            <div className="w-[150px]">
+                            <div className="w-[250px]">
                                 <MultiSelect options={creatorOptions} selected={selectedCreator} onChange={setSelectedCreator} placeholder="Nhân viên" />
                             </div>
                         </div>
