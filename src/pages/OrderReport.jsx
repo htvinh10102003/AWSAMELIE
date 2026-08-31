@@ -45,7 +45,7 @@ const OPTIONAL_COLUMNS = [
     { id: 'notes', label: 'Ghi chú' },
     { id: 'aging', label: 'Tồn kho / Ngày tồn' },
     { id: 'creator', label: 'Người tạo đơn' },
-    { id: 'printed_at', label: 'Ngày in gần nhất' }
+    { id: 'printed_at', label: 'Hiện Ngày in cuối (dưới thông tin đơn)' }
 ];
 
 const DEFAULT_VISIBLE_COLS = ['carrier', 'source', 'notes', 'aging', 'creator'];
@@ -132,6 +132,7 @@ export default function OrderReport() {
     const [selectedCarrier, setSelectedCarrier] = useState([]);
     const [selectedChannel, setSelectedChannel] = useState([]);
     const [selectedCreator, setSelectedCreator] = useState([]);
+    const [printedFilter, setPrintedFilter] = useState(''); // Bộ lọc ngày in
     const [selectedOrders, setSelectedOrders] = useState([]);
     const [sortOrder, setSortOrder] = useState('');
     const [agingFilter, setAgingFilter] = useState(false);
@@ -189,7 +190,7 @@ export default function OrderReport() {
         setShowActionMenu(false);
         setShowCopyMenu(false);
         setCurrentPage(1);
-    }, [activeTab, searchId, searchProduct, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, searchNote, sortOrder, pageSize, agingFilter]);
+    }, [activeTab, searchId, searchProduct, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, searchNote, sortOrder, pageSize, agingFilter, printedFilter]);
 
     const fetchSystemData = async (email) => {
         const { data: stData } = await supabase.from('order_statuses').select('*');
@@ -281,6 +282,7 @@ export default function OrderReport() {
     const getFilteredOrders = (orderList) => {
         if (!orderList) return [];
         let filtered = orderList.filter(order => {
+            // Text filters
             if (searchId) {
                 const query = searchId.trim().toLowerCase();
                 const matchId = String(order.id).toLowerCase().includes(query);
@@ -298,16 +300,27 @@ export default function OrderReport() {
                 if (!hasProductMatch) return false;
             }
 
+            if (searchNote) {
+                const note = (order.description || '') + ' ' + (order.private_description || '');
+                if (!note.toLowerCase().includes(searchNote.toLowerCase())) return false;
+            }
+
+            // Status and Option Filters
             if (selectedStatus.length > 0 && !selectedStatus.includes(String(order.status))) return false;
             if (selectedCarrier.length > 0 && !selectedCarrier.includes(order.carrier_name)) return false;
             if (selectedChannel.length > 0 && !selectedChannel.includes(String(order.sale_channel))) return false;
             if (selectedCreator.length > 0 && !selectedCreator.includes(order.created_by_name)) return false;
             
-            if (searchNote) {
-                const note = (order.description || '') + ' ' + (order.private_description || '');
-                if (!note.toLowerCase().includes(searchNote.toLowerCase())) return false;
+            // Lọc Ngày in gần nhất
+            if (printedFilter === 'not_printed' && order.printed_at) return false;
+            if (printedFilter === 'printed' && !order.printed_at) return false;
+            if (printedFilter === 'today') {
+                if (!order.printed_at) return false;
+                const isToday = new Date(order.printed_at).toDateString() === new Date().toDateString();
+                if (!isToday) return false;
             }
-            
+
+            // Aging Filter
             if (agingFilter && activeTab === 'printable') {
                 const days = order.printable_date
                     ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24))
@@ -559,7 +572,7 @@ export default function OrderReport() {
                             <div className="w-[150px]">
                                 <MultiSelect options={statusOptions} selected={selectedStatus} onChange={setSelectedStatus} placeholder="Trạng thái" />
                             </div>
-                            <div className="w-[250px]">
+                            <div className="w-[150px]">
                                 <MultiSelect options={creatorOptions} selected={selectedCreator} onChange={setSelectedCreator} placeholder="Nhân viên" />
                             </div>
                         </div>
@@ -676,6 +689,12 @@ export default function OrderReport() {
                             <option value="asc">Cũ nhất trước</option>
                             <option value="desc">Mới nhất trước</option>
                         </select>
+                        <select value={printedFilter} onChange={(e) => setPrintedFilter(e.target.value)} className="w-[180px] px-3 py-1.5 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-gray-50">
+                            <option value="">Lọc theo Trạng thái in</option>
+                            <option value="not_printed">Chưa có ngày in gần nhất</option>
+                            <option value="printed">Đã có ngày in</option>
+                            <option value="today">Đã in hôm nay</option>
+                        </select>
                         {activeTab === 'printable' && (
                             <label className="flex items-center gap-2 cursor-pointer ml-2">
                                 <input type="checkbox" checked={agingFilter} onChange={(e) => setAgingFilter(e.target.checked)} className="w-4 h-4 text-red-600 rounded border-gray-300 focus:ring-red-500" />
@@ -719,7 +738,6 @@ export default function OrderReport() {
                                         
                                         {visibleCols.includes('aging') && <th className="py-3 px-4 font-semibold whitespace-nowrap">{activeTab === 'printable' ? 'Ngày tồn' : 'Kho / Thiếu'}</th>}
                                         {visibleCols.includes('creator') && <th className="py-3 px-4 font-semibold text-center whitespace-nowrap">Nhân viên</th>}
-                                        {visibleCols.includes('printed_at') && <th className="py-3 px-4 font-semibold text-center whitespace-nowrap">Ngày in gần nhất</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -750,7 +768,7 @@ export default function OrderReport() {
                                                         </td>
                                                     )}
 
-                                                    {/* Cột 2: Gộp ID (Order ID, Ecom ID, Carrier Code) */}
+                                                    {/* Cột 2: Gộp ID (Order ID, Ecom ID, Carrier Code) và Hiện ngày in */}
                                                     {index === 0 && (
                                                         <td rowSpan={rowCount} className="py-3 px-4 align-top border-r border-gray-100">
                                                             <div className="font-bold text-gray-800 cursor-pointer hover:text-blue-600 mb-1" onClick={() => handleSelectOne(order.id)}>
@@ -771,6 +789,13 @@ export default function OrderReport() {
                                                             <div className="text-[10px] text-gray-400 mt-1">
                                                                 {new Date(order.created_at).toLocaleString('vi-VN')}
                                                             </div>
+                                                            
+                                                            {/* Thông tin Ngày in cuối */}
+                                                            {visibleCols.includes('printed_at') && (
+                                                                <div className="text-[10px] text-gray-500 mt-1">
+                                                                    Ngày in cuối: <span className="font-medium text-gray-700">{order.printed_at ? new Date(order.printed_at).toLocaleDateString('vi-VN') : 'Chưa in'}</span>
+                                                                </div>
+                                                            )}
                                                         </td>
                                                     )}
 
@@ -850,21 +875,12 @@ export default function OrderReport() {
                                                         </td>
                                                     )}
 
-                                                    {/* Cột 9 (Tùy chọn): Nhân viên */}
+                                                    {/* Cột 9 (Tùy chọn): Nhân viên (Đã fix lỗi hiển thị ...) */}
                                                     {index === 0 && visibleCols.includes('creator') && (
                                                         <td rowSpan={rowCount} className="py-3 px-4 align-top text-center border-l border-gray-100">
                                                             <div className="inline-flex items-center gap-1.5 text-gray-600 bg-gray-50 px-2 py-1 rounded text-xs">
-                                                                <User size={13} className="text-gray-400" /> 
-                                                                <span className="truncate max-w-[80px]" title={order.created_by_name || 'Hệ thống'}>{order.created_by_name || 'Hệ thống'}</span>
-                                                            </div>
-                                                        </td>
-                                                    )}
-                                                    
-                                                    {/* Cột 10 (Tùy chọn): Ngày in gần nhất */}
-                                                    {index === 0 && visibleCols.includes('printed_at') && (
-                                                        <td rowSpan={rowCount} className="py-3 px-4 align-top text-center border-l border-gray-100">
-                                                            <div className="text-[12px] text-gray-600">
-                                                                {order.printed_at ? new Date(order.printed_at).toLocaleString('vi-VN') : '-'}
+                                                                <User size={13} className="text-gray-400 shrink-0" /> 
+                                                                <span title={order.created_by_name || 'Hệ thống'}>{order.created_by_name || 'Hệ thống'}</span>
                                                             </div>
                                                         </td>
                                                     )}
