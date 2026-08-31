@@ -39,6 +39,11 @@ const STATUS_COLORS = {
     '10': 'bg-orange-100 text-orange-700',
 };
 
+const DEPOT_NAMES = {
+    '180540': 'AMELIE',
+    '225005': 'LUNARA'
+};
+
 const OPTIONAL_COLUMNS = [
     { id: 'carrier', label: 'Hãng vận chuyển & Trạng thái' },
     { id: 'source', label: 'Nguồn đơn & Kênh' },
@@ -132,6 +137,7 @@ export default function OrderReport() {
     const [selectedCarrier, setSelectedCarrier] = useState([]);
     const [selectedChannel, setSelectedChannel] = useState([]);
     const [selectedCreator, setSelectedCreator] = useState([]);
+    const [selectedDepot, setSelectedDepot] = useState([]);
     const [printedFilter, setPrintedFilter] = useState(''); // Bộ lọc ngày in
     const [selectedOrders, setSelectedOrders] = useState([]);
     const [sortOrder, setSortOrder] = useState('');
@@ -153,6 +159,7 @@ export default function OrderReport() {
     const [statusOptions, setStatusOptions] = useState([]);
     const [channelOptions, setChannelOptions] = useState([]);
     const [creatorOptions, setCreatorOptions] = useState([]);
+    const [depotOptions, setDepotOptions] = useState([]);
 
     const colSettingsRef = useRef(null);
 
@@ -190,7 +197,7 @@ export default function OrderReport() {
         setShowActionMenu(false);
         setShowCopyMenu(false);
         setCurrentPage(1);
-    }, [activeTab, searchId, searchProduct, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, searchNote, sortOrder, pageSize, agingFilter, printedFilter]);
+    }, [activeTab, searchId, searchProduct, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, searchNote, sortOrder, pageSize, agingFilter, printedFilter]);
 
     const fetchSystemData = async (email) => {
         const { data: stData } = await supabase.from('order_statuses').select('*');
@@ -270,6 +277,12 @@ export default function OrderReport() {
                 value: String(c),
                 label: c
             })));
+            
+            const uniqueDepots = [...new Set(allOrders.map(o => o.depot_id).filter(Boolean))];
+            setDepotOptions(uniqueDepots.map(id => ({
+                value: String(id),
+                label: DEPOT_NAMES[id] || `Kho ${id}`
+            })));
 
             setSelectedOrders([]);
         } catch (error) {
@@ -310,6 +323,7 @@ export default function OrderReport() {
             if (selectedCarrier.length > 0 && !selectedCarrier.includes(order.carrier_name)) return false;
             if (selectedChannel.length > 0 && !selectedChannel.includes(String(order.sale_channel))) return false;
             if (selectedCreator.length > 0 && !selectedCreator.includes(order.created_by_name)) return false;
+            if (selectedDepot.length > 0 && !selectedDepot.includes(String(order.depot_id))) return false;
             
             // Lọc Ngày in gần nhất
             if (printedFilter === 'not_printed' && order.printed_at) return false;
@@ -571,6 +585,9 @@ export default function OrderReport() {
                             </div>
                             <div className="w-[150px]">
                                 <MultiSelect options={statusOptions} selected={selectedStatus} onChange={setSelectedStatus} placeholder="Trạng thái" />
+                            </div>
+                            <div className="w-[150px]">
+                                <MultiSelect options={depotOptions} selected={selectedDepot} onChange={setSelectedDepot} placeholder="Kho hàng" />
                             </div>
                             <div className="w-[150px]">
                                 <MultiSelect options={creatorOptions} selected={selectedCreator} onChange={setSelectedCreator} placeholder="Nhân viên" />
