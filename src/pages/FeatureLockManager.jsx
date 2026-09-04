@@ -1,54 +1,90 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { Lock, Unlock, Save, ShieldAlert, Loader2, AlertTriangle, ChevronDown, ChevronRight, FileEdit } from 'lucide-react';
+import { Lock, Unlock, Save, ShieldAlert, Loader2, AlertTriangle, ChevronDown, ChevronRight, FileEdit, Dot } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-// KHAI BÁO CẤU TRÚC CÂY: MỤC TO -> CÁC MỤC NHỎ
+// CẤU TRÚC ĐƯỢC CHIA LẠI KHỚP 100% VỚI LAYOUT.JSX
 const FEATURES = [
   { 
-    id: 'dashboard', name: 'Dashboard Tổng quan', icon: 'LayoutDashboard',
+    id: 'dashboard', name: 'Dashboard', 
     subs: [
-      { id: 'tong_quan', name: 'Đơn đi hàng ngày' },
-      { id: 'don_hoan', name: 'SL Đơn hoàn theo ngày' },
-      { id: 'kpi', name: 'Tổng quan KPI tháng' },
-      { id: 'tra_cuu', name: 'Tra cứu luân chuyển' },
+      { id: 'don_di_hang_ngay', name: 'Đơn đi hàng ngày' },
+      { id: 'dashboard_don_hoan', name: 'SL Đơn hoàn theo ngày' },
+      { id: 'dashboard_kpi', name: 'Tổng quan KPI tháng' },
+      { id: 'tra_cuu_luan_chuyen', name: 'Tra cứu luân chuyển' },
     ]
   },
   { 
-    id: 'print_orders', name: 'Đơn in & Xử lý AWB', icon: 'Printer',
+    id: 'print_orders', name: 'Đơn in', 
     subs: [
-      { id: 'bao_cao', name: 'Đơn có thể in' },
-      { id: 'da_in', name: 'Đơn đã in hôm nay' },
-      { id: 'loc_day_ke', name: 'Lọc đơn chia theo dãy kệ' },
-      { id: 'chen_awb', name: 'Chèn vị trí SP vào AWB' },
-      { id: 'in_spx', name: 'In Đơn SPX Tự Động' }
+      { id: 'bao_cao_don', name: 'Đơn có thể in' },
+      { id: 'don_da_in', name: 'Đơn đã in hôm nay' },
+      { id: 'loc_don_day_ke', name: 'Lọc đơn chia theo dãy kệ' },
+      { id: 'chen_vi_tri_awb', name: 'Chèn vị trí SP vào AWB' },
+      { id: 'in_don_spx', name: 'In Đơn SPX Tự Động' }
     ]
   },
   { 
-    id: 'packing', name: 'Đóng gói đơn hàng', icon: 'Box',
+    id: 'packing', name: 'Đóng gói',
     subs: [
-      { id: 'dong_goi', name: 'Đóng gói đơn hàng' },
-      { id: 'toc_do_chung', name: 'Đóng gói chung' },
-      { id: 'toc_do_ns', name: 'Đóng gói theo nhân sự' }
+      { id: 'dong_goi_don_hang', name: 'Đóng gói đơn hàng' },
+      { id: 'toc_do_dong_goi_chung', name: 'Đóng gói chung' },
+      { id: 'toc_do_dong_goi_nhan_su', name: 'Theo nhân sự' }
     ]
   },
   { 
-    id: 'returns', name: 'Xử lý đơn hoàn', icon: 'Undo2',
+    id: 'return_orders', name: 'Báo cáo đơn hoàn', 
     subs: [
-      { id: 'tong_hop', name: 'Tổng hợp đơn hoàn' },
-      { id: 'xu_ly', name: 'Xử lý Đơn hoàn' },
-      { id: 'kiem_tra', name: 'Kiểm tra & Chốt SL' }
+      { id: 'bao_cao_hoan_tong_hop', name: 'Tổng hợp đơn hoàn' },
+      { id: 'xu_ly_don_hoan', name: 'Xử lý Đơn hoàn' },
+      { id: 'kiem_tra_don_hoan', name: 'Kiểm tra & Chốt SL' }
     ]
   },
   { 
-    id: 'inventory', name: 'Báo cáo & Kiểm kê tồn kho', icon: 'Boxes',
+    id: 'inventory_check', name: 'Báo cáo kiểm kê',
     subs: [
-      { id: 'thong_ke_kiem_ke', name: 'Báo cáo chung (Kiểm kê)' },
-      { id: 'ds_kiem_ke', name: 'Danh sách cần kiểm kê' },
-      { id: 'ton_kho', name: 'Tồn kho thực tế' },
-      { id: 'vi_tri', name: 'Vị trí sản phẩm' }
+      { id: 'thong_ke_kiem_ke', name: 'Báo cáo chung' },
+      { id: 'danh_sach_kiem_ke', name: 'Danh sách cần kiểm kê' }
     ]
   },
+  { 
+    id: 'standalone_doi_soat', name: 'Đối soát đơn cuối ngày', 
+    subs: [] // Mục đơn
+  },
+  { 
+    id: 'inventory_report', name: 'Báo cáo tồn kho',
+    subs: [
+      { id: 'bao_cao_ton_kho', name: 'Tồn kho thực tế' },
+      { id: 'vi_tri_san_pham', name: 'Vị trí sản phẩm' }
+    ]
+  },
+  { 
+    id: 'standalone_khai_gia', name: 'Đơn không khai giá', 
+    subs: [] // Mục đơn
+  },
+  { 
+    id: 'admin_sys', name: 'Quản trị Hệ thống', 
+    subs: [] // Mục đơn
+  },
+  { 
+    id: 'kpi', name: 'Quản lý KPI & Lỗi',
+    subs: [
+      { id: 'quan_ly_kpi', name: 'Cấu hình KPI' },
+      { id: 'nhap_lieu_kpi', name: 'Nhập liệu hàng ngày' }
+    ]
+  },
+  { 
+    id: 'system_adjust', name: 'Cập nhật & Hiệu chỉnh',
+    subs: [
+      // Bỏ qua Khóa tính năng (cap-nhat-tinh-nang) để tránh Owner tự khóa chính mình
+      { id: 'cap_nhat_nguoi_dong_goi', name: 'Người đóng gói' },
+      { id: 'cap_nhat_lich_lam_viec', name: 'Lịch làm việc' },
+      { id: 'cap_nhat_san_pham', name: 'Hiệu chỉnh sản phẩm' },
+      { id: 'cap_nhat_so_do_kho', name: 'Sơ đồ Kho hàng' },
+      { id: 'cap_nhat_day_ke', name: 'Quy ước dãy kệ' },
+      { id: 'cap_nhat_webhook', name: 'Chạy lại Webhook' }
+    ]
+  }
 ];
 
 export default function FeatureLockManager() {
@@ -57,7 +93,7 @@ export default function FeatureLockManager() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [hasPermission, setHasPermission] = useState(false);
-  const [expandedKeys, setExpandedKeys] = useState({}); // Quản lý mở rộng các mục con
+  const [expandedKeys, setExpandedKeys] = useState({});
 
   useEffect(() => {
     checkPermissionAndFetch();
@@ -81,23 +117,26 @@ export default function FeatureLockManager() {
     FEATURES.forEach(parent => {
       const dbConfig = data?.find(d => d.key === `feature_lock_${parent.id}`);
       
-      // Tạo cấu trúc mặc định nếu db chưa có
       let parsedConfig = { isLocked: false, message: 'Tính năng đang bảo trì.', subs: {} };
-      parent.subs.forEach(sub => {
-        parsedConfig.subs[sub.id] = { isLocked: false, message: 'Chức năng đang bảo trì.' };
-      });
+      if (parent.subs.length > 0) {
+        parent.subs.forEach(sub => {
+          parsedConfig.subs[sub.id] = { isLocked: false, message: 'Chức năng đang bảo trì.' };
+        });
+      }
 
       if (dbConfig && dbConfig.value) {
         const saved = JSON.parse(dbConfig.value);
         parsedConfig.isLocked = saved.isLocked ?? false;
         parsedConfig.message = saved.message ?? 'Tính năng đang bảo trì.';
-        // Map lại các mục con đã lưu
-        parent.subs.forEach(sub => {
-          parsedConfig.subs[sub.id] = {
-            isLocked: saved.subs?.[sub.id]?.isLocked ?? false,
-            message: saved.subs?.[sub.id]?.message ?? 'Chức năng đang bảo trì.'
-          };
-        });
+        
+        if (parent.subs.length > 0) {
+          parent.subs.forEach(sub => {
+            parsedConfig.subs[sub.id] = {
+              isLocked: saved.subs?.[sub.id]?.isLocked ?? false,
+              message: saved.subs?.[sub.id]?.message ?? 'Chức năng đang bảo trì.'
+            };
+          });
+        }
       }
       initialConfigs[parent.id] = parsedConfig;
     });
@@ -136,7 +175,8 @@ export default function FeatureLockManager() {
     });
   };
 
-  const toggleExpand = (parentId) => {
+  const toggleExpand = (parentId, hasSubs) => {
+    if (!hasSubs) return;
     setExpandedKeys(prev => ({ ...prev, [parentId]: !prev[parentId] }));
   };
 
@@ -191,6 +231,7 @@ export default function FeatureLockManager() {
         {FEATURES.map(parent => {
           const config = configs[parent.id];
           const isExpanded = expandedKeys[parent.id];
+          const hasSubs = parent.subs.length > 0;
           
           return (
             <div key={parent.id} className={`rounded-2xl border-2 transition-all duration-300 shadow-sm overflow-hidden ${config.isLocked ? 'border-red-300' : 'border-slate-200'}`}>
@@ -198,14 +239,17 @@ export default function FeatureLockManager() {
               {/* CARD PHÂN HỆ LỚN */}
               <div className={`p-5 flex flex-col md:flex-row md:items-center gap-4 ${config.isLocked ? 'bg-red-50' : 'bg-white'}`}>
                 <div 
-                  className="flex items-center gap-4 min-w-[250px] cursor-pointer group select-none"
-                  onClick={() => toggleExpand(parent.id)}
+                  className={`flex items-center gap-4 min-w-[250px] group select-none ${hasSubs ? 'cursor-pointer' : ''}`}
+                  onClick={() => toggleExpand(parent.id, hasSubs)}
                 >
-                  <div className={`p-2 rounded-xl transition-colors ${config.isLocked ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>
-                    {isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                  <div className={`p-2 rounded-xl transition-colors flex items-center justify-center 
+                    ${config.isLocked ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'} 
+                    ${hasSubs && !config.isLocked ? 'group-hover:bg-blue-100 group-hover:text-blue-600' : ''}`}
+                  >
+                    {!hasSubs ? <Dot size={20} /> : isExpanded ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
                   </div>
                   <div>
-                    <h3 className="font-bold text-slate-800 text-lg uppercase tracking-tight">{parent.name}</h3>
+                    <h3 className="font-bold text-slate-800 text-lg tracking-tight">{parent.name}</h3>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded mt-1 inline-block ${config.isLocked ? 'bg-red-200 text-red-700' : 'bg-green-100 text-green-700'}`}>
                       {config.isLocked ? 'KHÓA TOÀN BỘ' : 'HOẠT ĐỘNG'}
                     </span>
@@ -217,19 +261,19 @@ export default function FeatureLockManager() {
                   <input 
                     type="text" value={config.message} onChange={(e) => handleMessageParent(parent.id, e.target.value)}
                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none bg-white"
-                    placeholder="Thông báo khi khóa phân hệ lớn..."
+                    placeholder={`Thông báo khi khóa ${hasSubs ? 'toàn bộ' : 'mục này'}...`}
                   />
                 </div>
 
                 <div className="shrink-0">
                   <button onClick={() => handleToggleParent(parent.id)} className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold transition-all ${config.isLocked ? 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 shadow-sm' : 'bg-red-50 border border-red-100 text-red-600 hover:bg-red-100'}`}>
-                    {config.isLocked ? <><Unlock size={18} /> Mở khóa toàn bộ</> : <><Lock size={18} /> Khóa toàn bộ</>}
+                    {config.isLocked ? <><Unlock size={18} /> Mở khóa</> : <><Lock size={18} /> Khóa {hasSubs ? 'toàn bộ' : ''}</>}
                   </button>
                 </div>
               </div>
 
               {/* LIST CÁC CHỨC NĂNG CON */}
-              {isExpanded && (
+              {isExpanded && hasSubs && (
                 <div className={`border-t bg-slate-50 divide-y divide-slate-200 ${config.isLocked ? 'opacity-50 pointer-events-none border-red-200' : 'border-slate-200'}`}>
                   {parent.subs.map(sub => {
                     const subConfig = config.subs[sub.id];

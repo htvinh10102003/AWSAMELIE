@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
   ScanBarcode, Calendar, Trash2, PackagePlus, PackageMinus, AlertCircle, 
   CheckCircle2, XCircle, CheckCircle, Download, Camera, CameraOff, 
-  RefreshCw, List, Plus, ChevronLeft, Clock, Search, Filter
+  RefreshCw, List, Plus, ChevronLeft, Clock, Search, Filter, Info
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 
@@ -30,6 +30,22 @@ export default function OrderReconciliation() {
   const [currentUserMeta, setCurrentUserMeta] = useState({});
   const [view, setView] = useState('list');
   
+  // ==========================================
+  // CUSTOM DIALOG STATE
+  // ==========================================
+  const [dialogConfig, setDialogConfig] = useState({
+    isOpen: false,
+    type: 'alert', // 'alert' | 'confirm'
+    title: '',
+    message: '',
+    onConfirm: null
+  });
+
+  const showDialog = (type, title, message, onConfirm = null) => {
+    setDialogConfig({ isOpen: true, type, title, message, onConfirm });
+  };
+  const closeDialog = () => setDialogConfig({ ...dialogConfig, isOpen: false });
+
   // ==========================================
   // SESSIONS & FILTER STATE
   // ==========================================
@@ -65,12 +81,17 @@ export default function OrderReconciliation() {
 
   const inputRef = useRef(null);
   const audioCtxRef = useRef(null); 
-  const lastKeyTimeRef = useRef(Date.now()); // Dùng để check tốc độ gõ (chặn gõ tay)
+  const lastKeyTimeRef = useRef(Date.now());
 
   useEffect(() => {
     const loadUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) setCurrentUserMeta(user.user_metadata || {});
+      if (user) {
+        const meta = user.user_metadata || {};
+        // Ưu tiên lấy full_name hoặc name. Nếu không có lấy tên từ email (phần trước @)
+        const displayName = meta.full_name || meta.name || user.email?.split('@')[0] || 'Nhân viên';
+        setCurrentUserMeta({ ...meta, displayName });
+      }
     };
     loadUser();
   }, []);
@@ -117,7 +138,7 @@ export default function OrderReconciliation() {
   }, [view, filterStartDate, filterEndDate]);
 
   const handleCreateSession = async () => {
-    const sessionName = `Biên bản đối soát - ${new Date().toLocaleString('vi-VN')}`;
+    const sessionName = `Biên bản - ${currentUserMeta.displayName || 'Hệ thống'} - ${new Date().toLocaleString('vi-VN')}`;
     try {
       const { data, error } = await supabase.from('reconciliation_sessions').insert([{
         session_name: sessionName,
@@ -130,20 +151,26 @@ export default function OrderReconciliation() {
       if (error) throw error;
       handleOpenSession(data);
     } catch (err) {
-      alert("Lỗi tạo biên bản mới: " + err.message);
+      showDialog('alert', 'Lỗi tạo biên bản', "Lỗi tạo biên bản mới: " + err.message);
     }
   };
 
-  const handleDeleteSession = async (sessionId, e) => {
+  const handleDeleteSession = (sessionId, e) => {
     e.stopPropagation();
-    if (!confirm("🚨 CẢNH BÁO: Bạn có chắc chắn muốn xóa vĩnh viễn biên bản này không?")) return;
-    try {
-      const { error } = await supabase.from('reconciliation_sessions').delete().eq('id', sessionId);
-      if (error) throw error;
-      fetchSessions(false); 
-    } catch (err) {
-      alert("Lỗi khi xóa biên bản: " + err.message);
-    }
+    showDialog(
+      'confirm', 
+      'Xác nhận xóa', 
+      'CẢNH BÁO: Bạn có chắc chắn muốn xóa vĩnh viễn biên bản này không?',
+      async () => {
+        try {
+          const { error } = await supabase.from('reconciliation_sessions').delete().eq('id', sessionId);
+          if (error) throw error;
+          fetchSessions(false); 
+        } catch (err) {
+          showDialog('alert', 'Lỗi', "Lỗi khi xóa biên bản: " + err.message);
+        }
+      }
+    );
   };
 
   const handleOpenSession = (sessionData) => {
@@ -196,10 +223,10 @@ export default function OrderReconciliation() {
   }, [view, currentSession?.status]);
 
   useEffect(() => {
-    if (inputRef.current && !isCameraOpen && view === 'audit') {
+    if (inputRef.current && !isCameraOpen && view === 'audit' && !dialogConfig.isOpen) {
       inputRef.current.focus();
     }
-  }, [scannedCodes, inputCode, alertBanner, isCameraOpen, view]);
+  }, [scannedCodes, inputCode, alertBanner, isCameraOpen, view, dialogConfig.isOpen]);
 
   const isScanned = (order) => scannedCodes.includes(order.id) || (order.carrier_code && scannedCodes.includes(order.carrier_code));
 
@@ -236,7 +263,7 @@ export default function OrderReconciliation() {
   };
 
   const processBarcode = useCallback(async (code) => {
-    if (!code || isConfirmed) return;
+    if (!code || isConfirmed || dialogConfig.isOpen) return;
 
     if (scannedCodes.includes(code)) {
       setDuplicateCode(code);
@@ -275,7 +302,7 @@ export default function OrderReconciliation() {
     }
     
     setInputCode('');
-  }, [scannedCodes, todayOrders, isConfirmed]);
+  }, [scannedCodes, todayOrders, isConfirmed, dialogConfig.isOpen]);
 
   const handleBarcodeSubmit = (e) => { e.preventDefault(); processBarcode(inputCode.trim()); };
 
@@ -286,16 +313,15 @@ export default function OrderReconciliation() {
     if (e.key === 'Enter') return; 
     
     const currentTime = Date.now();
-    // Máy quét thường gõ mỗi ký tự cách nhau dưới 30ms. Đặt 50ms để bắt lỗi người gõ.
     if (currentTime - lastKeyTimeRef.current > 50) {
-      setInputCode(''); // Tự động xóa nếu phát hiện gõ tay chậm
+      setInputCode('');
     }
     lastKeyTimeRef.current = currentTime;
   };
 
   const handlePasteDropBlock = (e) => {
     e.preventDefault();
-    alert("❌ Không được copy dán. Vui lòng sử dụng súng bắn mã vạch!");
+    showDialog('alert', 'Cảnh báo', 'Không được copy dán. Vui lòng sử dụng súng bắn mã vạch!');
   };
 
   // ==========================================
@@ -305,13 +331,35 @@ export default function OrderReconciliation() {
     setIsConfirmed(true);
     setLoading(true);
     try {
+      // TỐI ƯU DATA PAYLOAD (Yêu cầu 3)
+      const optimizedExpectedCorrect = expectedCorrect.map(o => ({
+        id: o.id,
+        carrier_code: o.carrier_code,
+        order_products: o.order_products?.map(p => ({
+          product_code: p.product_code,
+          product_name: p.product_name,
+          quantity: p.quantity
+        })) || []
+      }));
+
+      const optimizedExpectedCanceled = expectedCanceled.map(o => ({ id: o.id }));
+      const optimizedMissing = allMissing.map(o => ({ id: o.id }));
+      const optimizedSurplus = surplusOrders.map(o => ({ id: o.id, status: o.status }));
+
       const updates = {
-        status: 'completed', completed_at: new Date().toISOString(),
-        total_printed: totalPrintedCount, total_expected: expectedCorrect.length,
-        total_canceled: expectedCanceled.length, total_scanned: scannedCodes.length,
-        total_missing: allMissing.length, total_surplus: surplusOrders.length,
-        scanned_codes: scannedCodes, surplus_orders: surplusOrders,
-        expected_correct: expectedCorrect, expected_canceled: expectedCanceled, missing_orders: allMissing
+        status: 'completed', 
+        completed_at: new Date().toISOString(),
+        total_printed: totalPrintedCount, 
+        total_expected: expectedCorrect.length,
+        total_canceled: expectedCanceled.length, 
+        total_scanned: scannedCodes.length,
+        total_missing: allMissing.length, 
+        total_surplus: surplusOrders.length,
+        scanned_codes: scannedCodes, 
+        surplus_orders: optimizedSurplus,
+        expected_correct: optimizedExpectedCorrect, 
+        expected_canceled: optimizedExpectedCanceled, 
+        missing_orders: optimizedMissing
       };
 
       const { error } = await supabase.from('reconciliation_sessions').update(updates).eq('id', currentSession.id);
@@ -320,37 +368,45 @@ export default function OrderReconciliation() {
       setCurrentSession(prev => ({...prev, ...updates}));
       setAlertBanner({ type: 'success', message: '🎉 Đã chốt và lưu cứng dữ liệu đối soát thành công!' });
     } catch (err) {
-      alert("Lỗi khi chốt biên bản: " + err.message);
+      showDialog('alert', 'Lỗi', "Lỗi khi chốt biên bản: " + err.message);
       setIsConfirmed(false);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleResetAudit = async () => {
-    if (confirm("Xác nhận quét lại từ đầu? Lịch sử quét và biên bản hiện tại sẽ bị xóa sạch.")) {
-      setScannedCodes([]); setSurplusOrders([]); setIsConfirmed(false);
-      setAlertBanner(null); setShowDuplicatePopup(false);
-      if (isCameraOpen) stopCamera();
-      
-      const resetData = {
-        status: 'draft', scanned_codes: [], surplus_orders: [], completed_at: null,
-        expected_correct: null, expected_canceled: null, missing_orders: null
-      };
+  const handleResetAudit = () => {
+    showDialog(
+      'confirm',
+      'Quét lại từ đầu',
+      'Xác nhận quét lại từ đầu? Lịch sử quét và biên bản hiện tại sẽ bị xóa sạch.',
+      async () => {
+        setScannedCodes([]); setSurplusOrders([]); setIsConfirmed(false);
+        setAlertBanner(null); setShowDuplicatePopup(false);
+        if (isCameraOpen) stopCamera();
+        
+        const resetData = {
+          status: 'draft', scanned_codes: [], surplus_orders: [], completed_at: null,
+          expected_correct: null, expected_canceled: null, missing_orders: null
+        };
 
-      await supabase.from('reconciliation_sessions').update(resetData).eq('id', currentSession.id);
-      setCurrentSession(prev => ({...prev, ...resetData}));
-    }
+        await supabase.from('reconciliation_sessions').update(resetData).eq('id', currentSession.id);
+        setCurrentSession(prev => ({...prev, ...resetData}));
+      }
+    );
   };
 
   const handleExportExcel = () => {
     const allExpected = [...expectedCorrect, ...expectedCanceled];
-    if (allExpected.length === 0) return alert("Không có đơn nào để xuất Excel!");
+    if (allExpected.length === 0) {
+      showDialog('alert', 'Trống', 'Không có đơn nào để xuất Excel!');
+      return;
+    }
 
     let csvContent = "\uFEFFMã Đơn Hàng (ID),Mã Vận Đơn,Trạng Thái Sàn,Đã Trả/Chưa Trả,Mã Sản Phẩm,Tên Sản Phẩm,Số Lượng\n";
     allExpected.forEach(order => {
       const carrierCode = order.carrier_code || '---';
-      const statusText = STATUS_MAP[order.status] || order.status;
+      const statusText = STATUS_MAP[order.status] || (order.status ? String(order.status) : '---');
       const scannedStatus = isScanned(order) ? "Đã trả lại" : "Chưa trả lại";
 
       if (order.order_products && order.order_products.length > 0) {
@@ -404,7 +460,33 @@ export default function OrderReconciliation() {
   // ==========================================
   if (view === 'list') {
     return (
-      <div className="space-y-6 pb-10 px-2 sm:px-0">
+      <div className="space-y-6 pb-10 px-2 sm:px-0 relative">
+        {/* Custom Dialog Render */}
+        {dialogConfig.isOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+            <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full space-y-5 animate-in fade-in zoom-in duration-200">
+              <div className="flex items-center gap-3 text-slate-800">
+                {dialogConfig.type === 'confirm' ? <AlertCircle className="text-blue-500" size={24}/> : <Info className="text-amber-500" size={24}/>}
+                <h3 className="text-lg font-black">{dialogConfig.title}</h3>
+              </div>
+              <p className="text-sm font-medium text-slate-600 leading-relaxed">{dialogConfig.message}</p>
+              <div className="flex justify-end gap-3 pt-2">
+                <button onClick={closeDialog} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl transition">
+                  {dialogConfig.type === 'confirm' ? 'Hủy bỏ' : 'Đóng'}
+                </button>
+                {dialogConfig.type === 'confirm' && (
+                  <button 
+                    onClick={() => { dialogConfig.onConfirm && dialogConfig.onConfirm(); closeDialog(); }} 
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-md transition"
+                  >
+                    Xác nhận
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
           <div>
             <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
@@ -416,8 +498,6 @@ export default function OrderReconciliation() {
         </div>
 
         <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm space-y-6">
-          
-          {/* Vùng tạo biên bản mới */}
           <div className="flex flex-col sm:flex-row gap-3 items-end p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
             <div className="flex-1 w-full">
               <label className="block text-xs font-bold text-slate-700 mb-1">Ngày dữ liệu đơn in cần đối soát mới</label>
@@ -430,7 +510,6 @@ export default function OrderReconciliation() {
 
           <hr className="border-slate-100" />
 
-          {/* Vùng lọc biên bản cũ */}
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2"><Filter size={16}/> Lịch sử đối soát</h3>
@@ -490,8 +569,34 @@ export default function OrderReconciliation() {
   // RENDER: VIEW TRANG ĐỐI SOÁT
   // ==========================================
   return (
-    <div className="space-y-4 sm:space-y-6 pb-10 px-2 sm:px-0">
-      
+    <div className="space-y-4 sm:space-y-6 pb-10 px-2 sm:px-0 relative">
+
+      {/* Custom Dialog Render */}
+      {dialogConfig.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full space-y-5 animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center gap-3 text-slate-800">
+              {dialogConfig.type === 'confirm' ? <AlertCircle className="text-blue-500" size={24}/> : <Info className="text-amber-500" size={24}/>}
+              <h3 className="text-lg font-black">{dialogConfig.title}</h3>
+            </div>
+            <p className="text-sm font-medium text-slate-600 leading-relaxed">{dialogConfig.message}</p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button onClick={closeDialog} className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl transition">
+                {dialogConfig.type === 'confirm' ? 'Hủy bỏ' : 'Đóng'}
+              </button>
+              {dialogConfig.type === 'confirm' && (
+                <button 
+                  onClick={() => { dialogConfig.onConfirm && dialogConfig.onConfirm(); closeDialog(); }} 
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-md transition"
+                >
+                  Xác nhận
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
         <div className="flex items-center gap-3">
           <button onClick={handleBackToList} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition" title="Quay lại danh sách">
@@ -519,7 +624,7 @@ export default function OrderReconciliation() {
 
       {showDuplicatePopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
-          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-xs w-full text-center space-y-4">
+          <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-xs w-full text-center space-y-4 animate-in zoom-in duration-200">
             <div className="text-4xl">⚠️</div>
             <h3 className="text-lg font-black text-red-600">Mã đã quét rồi!</h3>
             <p className="text-sm text-slate-600 font-medium">Mã <span className="font-black text-slate-800">{duplicateCode}</span> đã được quét trước đó.</p>
@@ -541,9 +646,9 @@ export default function OrderReconciliation() {
               <input 
                 ref={inputRef} type="text" placeholder="Bắn mã vạch đơn trả về ..." value={inputCode} 
                 onChange={e => setInputCode(e.target.value)} 
-                onKeyDown={handleBarcodeKeyDown} // Bắt tốc độ gõ phím
-                onPaste={handlePasteDropBlock} // Chặn dán
-                onDrop={handlePasteDropBlock}  // Chặn kéo thả
+                onKeyDown={handleBarcodeKeyDown}
+                onPaste={handlePasteDropBlock} 
+                onDrop={handlePasteDropBlock} 
                 disabled={isCameraOpen}
                 className="flex-1 text-center text-sm font-bold tracking-wide py-2.5 sm:py-3 px-3 sm:px-4 bg-slate-50 border-2 border-dashed border-blue-400 rounded-xl outline-none focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition disabled:opacity-50"
               />
@@ -608,7 +713,6 @@ export default function OrderReconciliation() {
         </div>
       </div>
 
-      {/* Button xuất Excel chung cho cả Đơn Tồn và Đơn Hủy */}
       <div className="flex justify-end">
         <button onClick={handleExportExcel} disabled={expectedCorrect.length === 0 && expectedCanceled.length === 0} 
           className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold rounded-xl shadow-md transition cursor-pointer text-sm">
@@ -670,19 +774,19 @@ export default function OrderReconciliation() {
                     <div className="flex justify-between items-start gap-2 text-xs font-bold mb-2">
                       <div className="flex flex-col">
                         <span className={scanned ? 'text-red-800' : 'text-red-600'}>ID: {order.id}</span>
+                        {/* LƯU Ý: Với Payload mới, MVD của đơn hủy có thể bị loại bỏ để nhẹ data -> Sẽ fallback về '---' */}
                         <span className="text-[10px] text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
                       </div>
                       {scanned ? <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-black">ĐÃ LẤY RA</span> 
                                : <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded font-black animate-pulse text-red-500">CẦN TÌM GẤP</span>}
                     </div>
-                    {/* Danh sách SP */}
                     <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
                       {order.order_products?.length > 0 ? order.order_products.map((p, i) => (
                         <div key={i} className="text-[11px] text-slate-600 flex justify-between">
                           <span className="truncate pr-2">• {p.product_name}</span>
                           <span className="font-bold whitespace-nowrap">x{p.quantity}</span>
                         </div>
-                      )) : <span className="text-[10px] text-slate-400 italic">Không có dữ liệu SP</span>}
+                      )) : <span className="text-[10px] text-slate-400 italic">ID bị huỷ (Đã tối ưu lưu trữ)</span>}
                     </div>
                   </div>
                 )
