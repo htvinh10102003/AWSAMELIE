@@ -573,7 +573,7 @@ export default function OrderReconciliation() {
             )}
 
             <div className="flex justify-center gap-2 sm:gap-3 pt-4 flex-wrap border-t border-slate-100 mt-4">
-              <button onClick={handleConfirmSession} disabled={scannedCodes.length === 0 || loading}
+              <button onClick={handleConfirmSession} disabled={loading}
                 className="px-4 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition disabled:opacity-50">
                 {loading ? 'Đang lưu...' : '✓ Chốt biên bản & Lưu Log'}
               </button>
