@@ -536,7 +536,7 @@ export default function Admin() {
     setIsCleaning(true); 
     setCleanMessage({ text: 'Đang quét và xóa dữ liệu, vui lòng không tắt trang...', type: 'processing' });
     try {
-      const { error } = await supabase.rpc('cleanup_old_data', { days_old: parseInt(cleanDays) });
+      const { error } = await supabase.rpc('request_cleanup', { days_old: parseInt(cleanDays) });
       if (error) throw error;
       setCleanMessage({ text: `🎉 Đã dọn dẹp sạch sẽ dữ liệu cũ hơn ${cleanDays} ngày!`, type: 'success' });
       fetchDbSize();
