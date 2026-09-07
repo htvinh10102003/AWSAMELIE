@@ -339,7 +339,7 @@ export default function OrderReport() {
                 const days = order.printable_date
                     ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24))
                     : 0;
-                if (days <= 2) return false;
+                if (days < 2) return false;
             }
             
             return true;
@@ -715,7 +715,7 @@ export default function OrderReport() {
                         {activeTab === 'printable' && (
                             <label className="flex items-center gap-2 cursor-pointer ml-2">
                                 <input type="checkbox" checked={agingFilter} onChange={(e) => setAgingFilter(e.target.checked)} className="w-4 h-4 text-red-600 rounded border-gray-300 focus:ring-red-500" />
-                                <span className="text-sm font-medium text-gray-700">Chỉ đơn tồn &gt; 2 ngày</span>
+                                <span className="text-sm font-medium text-gray-700">Chỉ đơn tồn &gt;= 2 ngày</span>
                             </label>
                         )}
                     </div>
@@ -769,7 +769,7 @@ export default function OrderReport() {
                                         const statusColorClass = STATUS_COLORS[order.status] || 'bg-gray-100 text-gray-600 border border-gray-200';
 
                                         const agingDays = order.printable_date ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24)) : 0;
-                                        const isAgingOrder = activeTab === 'printable' && agingDays > 2;
+                                        const isAgingOrder = activeTab === 'printable' && agingDays >= 2;
 
                                         return products.map((prod, index) => {
                                             const shortItem = data.holding?.concat(data.outOfStock)?.find(o => o.id === order.id)?.debug_shortItems?.find(i => i.name === prod.product_name);
