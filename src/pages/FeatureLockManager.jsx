@@ -58,6 +58,15 @@ const FEATURES = [
       { id: 'vi_tri_san_pham', name: 'Vị trí sản phẩm' }
     ]
   },
+  // === MỚI THÊM: CỤM KHIẾU NẠI ===
+  {
+    id: 'complaints', name: 'Khiếu nại',
+    subs: [
+      { id: 'tong_hop_khieu_nai', name: 'Tổng hợp đơn khiếu nại' },
+      { id: 'video_khieu_nai', name: 'Video khiếu nại' }
+    ]
+  },
+  // ==============================
   { 
     id: 'standalone_khai_gia', name: 'Đơn không khai giá', 
     subs: [] // Mục đơn
@@ -82,7 +91,8 @@ const FEATURES = [
       { id: 'cap_nhat_san_pham', name: 'Hiệu chỉnh sản phẩm' },
       { id: 'cap_nhat_so_do_kho', name: 'Sơ đồ Kho hàng' },
       { id: 'cap_nhat_day_ke', name: 'Quy ước dãy kệ' },
-      { id: 'cap_nhat_webhook', name: 'Chạy lại Webhook' }
+      { id: 'cap_nhat_webhook', name: 'Chạy lại Webhook' },
+      { id: 'upload_video_hoan', name: 'Upload video hàng hoàn' } // Thêm cả phần upload vào khóa cho đồng bộ
     ]
   }
 ];

@@ -36,6 +36,11 @@ import FeatureLockManager from './pages/FeatureLockManager';
 // 🚀 IMPORT TRANG 404 VÀO ĐÂY
 import NotFound from './pages/NotFound';
 
+// === CÁC COMPONENT KHIẾU NẠI MỚI THÊM ===
+import UploadVideoHoan from './pages/UploadVideoHoan';
+import VideoKhieuNai from './pages/VideoKhieuNai';
+import TongHopKhieuNai from './pages/TongHopKhieuNai';
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -153,6 +158,18 @@ export default function App() {
             </FeatureGuard>
           } />
 
+          {/* ⚠️ TAB KHIẾU NẠI - Cụm featureId="complaints" (MỚI) */}
+          <Route path="tong-hop-khieu-nai" element={
+            <FeatureGuard featureId="complaints" subFeatureId="tong_hop_khieu_nai">
+              <TongHopKhieuNai />
+            </FeatureGuard>
+          } />
+          <Route path="video-khieu-nai" element={
+            <FeatureGuard featureId="complaints" subFeatureId="video_khieu_nai">
+              <VideoKhieuNai />
+            </FeatureGuard>
+          } />
+
           {/* ⚠️ CÁC BÁO CÁO ĐƠN LẺ */}
           <Route path="don-khong-khai-gia" element={<DeclaredFeeReport />} />
           <Route path="doi-soat-kho" element={<OrderReconciliation />} />
@@ -171,6 +188,9 @@ export default function App() {
           
           <Route path="cap-nhat-day-ke" element={<ProtectedRoute><SetupZone /></ProtectedRoute>} />
           <Route path="cap-nhat-webhook" element={<ProtectedRoute><WebhookRetrier /></ProtectedRoute>} />
+
+          {/* === TRANG UPLOAD VIDEO CHO ADMIN === */}
+          <Route path="upload-video-hoan" element={<ProtectedRoute><UploadVideoHoan /></ProtectedRoute>} />
 
           {/* 🛡️ TRANG QUẢN LÝ KHÓA TÍNH NĂNG (DÀNH RIÊNG CHO OWNER) */}
           <Route path="cap-nhat-tinh-nang" element={<ProtectedRoute><FeatureLockManager /></ProtectedRoute>} />

@@ -8,7 +8,8 @@ import {
   LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2, Menu,
   Filter, FileEdit, LayoutGrid, Webhook, History, ShieldAlert, Settings2, Loader2, Info, PartyPopper,
   AlignLeft, AlignRight, AlignVerticalSpaceAround, Settings as SettingsIcon,
-  Megaphone, Bell, Sparkles, Gift, Rocket, Flame, Star, Zap, Lock
+  Megaphone, Bell, Sparkles, Gift, Rocket, Flame, Star, Zap, Lock,
+  MessageSquareWarning, Video, UploadCloud
 } from 'lucide-react';
 
 // === MAP URL VỚI TÍNH NĂNG ===
@@ -40,6 +41,9 @@ const ROUTE_TO_FEATURE_MAP = {
   '/bao-cao-ton-kho': { parent: 'inventory_report', sub: 'bao_cao_ton_kho' },
   '/vi-tri-san-pham': { parent: 'inventory_report', sub: 'vi_tri_san_pham' },
 
+  '/tong-hop-khieu-nai': { parent: 'complaints', sub: 'tong_hop_khieu_nai' },
+  '/video-khieu-nai': { parent: 'complaints', sub: 'video_khieu_nai' },
+
   '/don-khong-khai-gia': { parent: 'standalone_khai_gia', sub: null },
   '/admin': { parent: 'admin_sys', sub: null },
 
@@ -51,7 +55,8 @@ const ROUTE_TO_FEATURE_MAP = {
   '/cap-nhat-san-pham': { parent: 'system_adjust', sub: 'cap_nhat_san_pham' },
   '/cap-nhat-so-do-kho': { parent: 'system_adjust', sub: 'cap_nhat_so_do_kho' },
   '/cap-nhat-day-ke': { parent: 'system_adjust', sub: 'cap_nhat_day_ke' },
-  '/cap-nhat-webhook': { parent: 'system_adjust', sub: 'cap_nhat_webhook' }
+  '/cap-nhat-webhook': { parent: 'system_adjust', sub: 'cap_nhat_webhook' },
+  '/upload-video-hoan': { parent: 'system_adjust', sub: 'upload_video_hoan' }
 };
 
 export default function Layout() {
@@ -84,7 +89,7 @@ export default function Layout() {
   const [menuStates, setMenuStates] = useState({
     dashboard: false, print_orders: false, packing: false, 
     return_orders: false, inventory_check: false, inventory_report: false, 
-    kpi: false, system_adjust: false
+    complaints: false, kpi: false, system_adjust: false
   });
 
   const [activeTooltip, setActiveTooltip] = useState(null);
@@ -114,8 +119,9 @@ export default function Layout() {
       return_orders: prev.return_orders || ['/bao-cao-hoan-', '/kiem-tra-don-hoan', '/xu-ly-don-hoan'].some(m => p.includes(m)),
       inventory_check: prev.inventory_check || ['/thong-ke-kiem-ke', '/danh-sach-kiem-ke'].some(m => p.includes(m)),
       inventory_report: prev.inventory_report || ['/bao-cao-ton-kho', '/vi-tri-san-pham'].some(m => p.includes(m)),
+      complaints: prev.complaints || ['/tong-hop-khieu-nai', '/video-khieu-nai'].some(m => p.includes(m)),
       kpi: prev.kpi || ['/quan-ly-kpi', '/nhap-lieu-kpi'].some(m => p.includes(m)),
-      system_adjust: prev.system_adjust || ['/cap-nhat-'].some(m => p.includes(m))
+      system_adjust: prev.system_adjust || ['/cap-nhat-', '/upload-video-hoan'].some(m => p.includes(m))
     }));
   }, [location.pathname]);
 
@@ -260,7 +266,7 @@ export default function Layout() {
   const isAdmin = user?.user_metadata?.role === 'admin';
   const isOwner = user?.user_metadata?.is_owner === true;
   
-  const adminRoutes = ['/admin', '/quan-ly-kpi', '/nhap-lieu-kpi', '/cap-nhat-nguoi-dong-goi', '/cap-nhat-lich-lam-viec', '/cap-nhat-san-pham', '/cap-nhat-so-do-kho', '/cap-nhat-day-ke', '/cap-nhat-webhook'];
+  const adminRoutes = ['/admin', '/quan-ly-kpi', '/nhap-lieu-kpi', '/cap-nhat-nguoi-dong-goi', '/cap-nhat-lich-lam-viec', '/cap-nhat-san-pham', '/cap-nhat-so-do-kho', '/cap-nhat-day-ke', '/cap-nhat-webhook', '/upload-video-hoan'];
   const ownerRoutes = ['/cap-nhat-tinh-nang'];
 
   let hasAccess = true;
@@ -428,6 +434,14 @@ export default function Layout() {
             { path: '/vi-tri-san-pham', label: 'Vị trí sản phẩm', icon: MapPin }
           ]
         },
+        {
+          id: 'complaints', label: 'Khiếu nại', icon: MessageSquareWarning,
+          matchRoutes: ['/tong-hop-khieu-nai', '/video-khieu-nai'],
+          subItems: [
+            { path: '/tong-hop-khieu-nai', label: 'Tổng hợp đơn khiếu nại', icon: BarChart3 },
+            { path: '/video-khieu-nai', label: 'Video khiếu nại', icon: Video }
+          ]
+        },
         { id: 'standalone_khai_gia', label: 'Đơn không khai giá', path: '/don-khong-khai-gia', icon: AlertTriangle }
       ]
     },
@@ -445,7 +459,7 @@ export default function Layout() {
         },
         {
           id: 'system_adjust', label: 'Cập nhật & Hiệu chỉnh', icon: Wrench,
-          matchRoutes: ['/cap-nhat-'],
+          matchRoutes: ['/cap-nhat-', '/upload-video-hoan'],
           subItems: [
             ...(isOwner ? [{ path: '/cap-nhat-tinh-nang', label: 'Khóa tính năng', icon: ShieldAlert }] : []),
             { path: '/cap-nhat-nguoi-dong-goi', label: 'Người đóng gói', icon: UserCog },
@@ -453,7 +467,8 @@ export default function Layout() {
             { path: '/cap-nhat-san-pham', label: 'Hiệu chỉnh sản phẩm', icon: PackageSearch },
             { path: '/cap-nhat-so-do-kho', label: 'Sơ đồ Kho hàng', icon: MapPin },
             { path: '/cap-nhat-day-ke', label: 'Quy ước dãy kệ', icon: LayoutGrid },
-            { path: '/cap-nhat-webhook', label: 'Chạy lại Webhook', icon: Webhook }
+            { path: '/cap-nhat-webhook', label: 'Chạy lại Webhook', icon: Webhook },
+            { path: '/upload-video-hoan', label: 'Upload video hàng hoàn', icon: UploadCloud }
           ]
         }
       ]
@@ -715,9 +730,9 @@ export default function Layout() {
                                       const isSubActive = location.pathname === sub.path;
                                       return (
                                         <Link key={sIdx} to={sub.path} className={`flex items-start gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors ${isSubActive ? 'bg-blue-50 text-blue-600' : 'text-slate-700'}`}>
-                                          <sub.icon size={18} strokeWidth={isSubActive ? 2.5 : 2} className={`mt-0.5 shrink-0 ${isSubActive ? 'text-blue-600' : 'text-slate-400'}`} />
+                                          <sub.icon size={18} strokeWidth={isSubActive ? 2.5 : 2} className={`mt-0.5 shrink-0 ${isSubActive ? 'text-blue-600' : 'text-slate-400'} ${sub.highlight ? 'text-rose-500' : ''}`} />
                                           <div className="flex flex-col flex-1">
-                                            <span className={`text-sm leading-tight ${isSubActive ? 'font-bold' : 'font-medium'}`}>{sub.label}</span>
+                                            <span className={`text-sm leading-tight ${isSubActive ? 'font-bold' : 'font-medium'} ${sub.highlight ? 'text-rose-600 font-bold' : ''}`}>{sub.label}</span>
                                             {sub.subtitle && <span className="text-[11px] mt-1 text-slate-500">{sub.subtitle}</span>}
                                           </div>
                                         </Link>
@@ -795,11 +810,11 @@ export default function Layout() {
                                           onMouseLeave={handleMouseLeave}
                                           className={`relative group flex items-start rounded-xl transition-all ${sidebarExpanded ? 'px-3 py-2.5 gap-3 w-full' : 'p-2 justify-center w-10 h-10'} ${themeVars.hoverBg} ${isSubActive ? themeVars.activeBg + ' ' + (sidebarExpanded ? themeVars.activeBorder : 'shadow-sm') : ''}`}
                                         >
-                                          <sub.icon size={sidebarExpanded ? 16 : 18} strokeWidth={isSubActive ? 2.5 : 2} className={`${sidebarExpanded ? 'mt-0.5' : ''} shrink-0 ${isSubActive ? themeVars.iconActive : themeVars.textMuted}`} />
+                                          <sub.icon size={sidebarExpanded ? 16 : 18} strokeWidth={isSubActive ? 2.5 : 2} className={`${sidebarExpanded ? 'mt-0.5' : ''} shrink-0 ${isSubActive ? themeVars.iconActive : themeVars.textMuted} ${sub.highlight ? 'text-rose-500' : ''}`} />
                                           
                                           {sidebarExpanded && (
                                             <div className="flex flex-col flex-1">
-                                              <span className={`text-sm whitespace-normal leading-snug break-words ${isSubActive ? themeVars.activeText : `font-medium ${themeVars.textPrimary}`}`}>{sub.label}</span>
+                                              <span className={`text-sm whitespace-normal leading-snug break-words ${isSubActive ? themeVars.activeText : `font-medium ${themeVars.textPrimary}`} ${sub.highlight ? 'text-rose-600 font-bold' : ''}`}>{sub.label}</span>
                                               {sub.subtitle && <span className={`text-[11px] mt-0.5 whitespace-normal leading-tight ${themeVars.textMuted}`}>{sub.subtitle}</span>}
                                             </div>
                                           )}
