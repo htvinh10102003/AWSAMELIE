@@ -10,13 +10,16 @@ import { BrowserMultiFormatReader } from '@zxing/library';
 import { supabase } from '../lib/supabase';
 import { 
   FileText, UploadCloud, Settings, Download, Loader2, 
-  LayoutTemplate, X, MousePointerClick, Maximize, FileSpreadsheet, Printer, Database
+  LayoutTemplate, X, MousePointerClick, Maximize, FileSpreadsheet, Printer, Database, ScanLine
 } from 'lucide-react';
 
 const codeReader = new BrowserMultiFormatReader();
 
 export default function AWBProcessor() {
   const [file, setFile] = useState(null);
+  
+  // Tùy chọn chế độ quét (Mặc định HVC, Shopee, TikTok)
+  const [scanMode, setScanMode] = useState('default');
   
   // State cho file Danh sách đơn hàng (chèn vào AWB)
   const [csvFile, setCsvFile] = useState(null);
@@ -125,7 +128,7 @@ export default function AWBProcessor() {
   // TẢI FILE CSV MẪU (DANH SÁCH ĐƠN HÀNG)
   // ==========================================
   const downloadSampleCSV = () => {
-    const csvContent = "ID,Mã sản phẩm,Số lượng,Mã đơn hãng vận chuyển\n"
+    const csvContent = "ID,Mã sản phẩm,Số lượng,Mã đối chiếu (HVC hoặc Mã Đơn)\n"
                      + "834366779,26AD2-JU488P-WH-S,1,SPXVN060413516178\n"
                      + ",26AD2-JU488P-WH-M,2,\n"
                      + "834366780,CLAIRE 412 - Màu da đậm - S,1,SPXVN060413516179";
@@ -206,7 +209,7 @@ export default function AWBProcessor() {
           }
           
           setCsvOrders(orders);
-          addLog(`Đã nạp CSV: Nhận diện được ${Object.keys(orders).length} mã HVC`, 'success');
+          addLog(`Đã nạp CSV: Nhận diện được ${Object.keys(orders).length} mã đối chiếu`, 'success');
         },
         error: (error) => {
           addLog(`Lỗi đọc CSV: ${error.message}`, 'error');
@@ -301,8 +304,6 @@ export default function AWBProcessor() {
       
       addLog(`Đã lưu xong vào DB: Thành công ${successCount}, Lỗi ${errorCount}`, successCount > 0 ? 'success' : 'warning');
       
-      // Tùy chọn: Xóa file sau khi update xong
-      // removeTrackingCsv(); 
     } catch (err) {
       addLog(`Lỗi hệ thống khi cập nhật DB: ${err.message}`, 'error');
     } finally {
@@ -344,10 +345,19 @@ export default function AWBProcessor() {
     });
   };
 
-  const fetchOrderDetails = async (trackingCode) => {
-    if (!trackingCode) return [];
+  const fetchOrderDetails = async (extractedCode) => {
+    if (!extractedCode) return [];
     try {
-      const { data, error } = await supabase.rpc('get_awb_products', { p_tracking_code: trackingCode });
+      let rpcName = 'get_awb_products'; // RPC Mặc định tìm theo HVC
+      let params = { p_tracking_code: extractedCode };
+
+      // Nếu quét theo mã đơn Ecom (Shopee/TikTok), gọi RPC mới
+      if (scanMode === 'shopee' || scanMode === 'tiktok') {
+        rpcName = 'get_awb_products_by_ecom_id'; 
+        params = { p_ecom_id: extractedCode };
+      }
+
+      const { data, error } = await supabase.rpc(rpcName, params);
       if (error) throw error;
       return data || [];
     } catch (err) {
@@ -366,7 +376,7 @@ export default function AWBProcessor() {
     if (!file) return;
     setIsProcessing(true);
     setDownloadUrl(null);
-    addLog('Bắt đầu đọc quét mã hàng loạt...', 'info');
+    addLog(`Bắt đầu quét hàng loạt (Chế độ: ${scanMode})...`, 'info');
 
     try {
       const baseBuffer = await file.arrayBuffer();
@@ -389,31 +399,56 @@ export default function AWBProcessor() {
 
       for (let i = 1; i <= totalPages; i++) {
         const pageJS = await pdfjsDoc.getPage(i);
-        let barcodeText = null;
+        let targetCode = null;
 
+        // 1. TRÍCH XUẤT TEXT DỰA TRÊN CHẾ ĐỘ CHỌN KÊNH BÁN
         try {
           const textContent = await pageJS.getTextContent();
           const fullText = textContent.items.map(item => item.str).join(' ');
-          const trackingRegex = /(SPX[A-Z0-9]+|SPEVN[A-Z0-9]+|JT[0-9]+|VN[A-Z0-9]+|S[0-9A-Z]+\.[0-9A-Z\.]+|8[0-9]{9,20}|[A-Z0-9]{10,25})/g;
-          let matches = fullText.match(trackingRegex);
 
-          if (matches && matches.length > 0) {
-            let uniqueMatches = [...new Set(matches)];
-            const priorityPrefixes = ['SPX', 'SPEVN', 'JT', 'VN', 'S', '8'];
-            uniqueMatches.sort((a, b) => {
-              const aHasPrefix = priorityPrefixes.some(p => a.startsWith(p));
-              const bHasPrefix = priorityPrefixes.some(p => b.startsWith(p));
-              if (aHasPrefix && !bHasPrefix) return -1;
-              if (!aHasPrefix && bHasPrefix) return 1;
-              return b.length - a.length; 
-            });
-            barcodeText = uniqueMatches[0].toUpperCase();
+          if (scanMode === 'shopee') {
+            // Shopee: Mã đơn hàng (Thường 14-15 ký tự, bắt đầu bằng 6 số ngày tháng)
+            const shopeeMatch = fullText.match(/Mã đơn hàng[:\s]*([A-Z0-9]{10,20})/i);
+            if (shopeeMatch && shopeeMatch[1]) {
+              targetCode = shopeeMatch[1].toUpperCase();
+            } else {
+              const fallback = fullText.match(/\b([0-9]{6}[A-Z0-9]{8,10})\b/);
+              if (fallback) targetCode = fallback[1].toUpperCase();
+            }
+          } 
+          else if (scanMode === 'tiktok') {
+            // TikTok: Order ID (Thường 15-25 số)
+            const tiktokMatch = fullText.match(/Order ID[:\s]*([0-9]{15,25})/i);
+            if (tiktokMatch && tiktokMatch[1]) {
+              targetCode = tiktokMatch[1];
+            } else {
+              const fallback = fullText.match(/\b([0-9]{15,25})\b/);
+              if (fallback) targetCode = fallback[1];
+            }
+          } 
+          else {
+            // Mặc định: Tracking Code (Mã HVC)
+            const trackingRegex = /(SPX[A-Z0-9]+|SPEVN[A-Z0-9]+|JT[0-9]+|VN[A-Z0-9]+|S[0-9A-Z]+\.[0-9A-Z\.]+|8[0-9]{9,20}|[A-Z0-9]{10,25})/g;
+            let matches = fullText.match(trackingRegex);
+            if (matches && matches.length > 0) {
+              let uniqueMatches = [...new Set(matches)];
+              const priorityPrefixes = ['SPX', 'SPEVN', 'JT', 'VN', 'S', '8'];
+              uniqueMatches.sort((a, b) => {
+                const aHasPrefix = priorityPrefixes.some(p => a.startsWith(p));
+                const bHasPrefix = priorityPrefixes.some(p => b.startsWith(p));
+                if (aHasPrefix && !bHasPrefix) return -1;
+                if (!aHasPrefix && bHasPrefix) return 1;
+                return b.length - a.length; 
+              });
+              targetCode = uniqueMatches[0].toUpperCase();
+            }
           }
         } catch (e) {
           console.warn(`Lỗi đọc text trang ${i}:`, e);
         }
 
-        if (!barcodeText) {
+        // 2. FALLBACK BARCODE SCANNER (CHỈ ÁP DỤNG NẾU LÀ MÃ HVC)
+        if (!targetCode && scanMode === 'default') {
           const scales = [2.0, 3.0, 1.5, 4.0];
           for (const scale of scales) {
             try {
@@ -423,25 +458,26 @@ export default function AWBProcessor() {
               canvas.height = viewport.height;
               await pageJS.render({ canvasContext: canvas.getContext('2d', { willReadFrequently: true }), viewport }).promise;
               const result = await codeReader.decodeFromCanvas(canvas);
-              barcodeText = result.getText();
-              if (barcodeText) break; 
+              targetCode = result.getText();
+              if (targetCode) break; 
             } catch (e) { }
           }
         }
 
-        if (barcodeText) {
-          if (processedCodes.has(barcodeText)) {
-            addLog(`Trang ${i}: Bỏ qua mã [${barcodeText}] do trùng lặp!`, 'warning');
+        // 3. XỬ LÝ CHÈN PDF
+        if (targetCode) {
+          if (processedCodes.has(targetCode)) {
+            addLog(`Trang ${i}: Bỏ qua mã [${targetCode}] do trùng lặp!`, 'warning');
             setProgress({ current: i, total: totalPages });
             continue; 
           }
-          processedCodes.add(barcodeText);
+          processedCodes.add(targetCode);
 
           let productsInfo = [];
-          if (csvOrders && csvOrders[barcodeText]) {
-            productsInfo = csvOrders[barcodeText];
+          if (csvOrders && csvOrders[targetCode]) {
+            productsInfo = csvOrders[targetCode];
           } else {
-            productsInfo = await fetchOrderDetails(barcodeText);
+            productsInfo = await fetchOrderDetails(targetCode);
           }
           
           if (productsInfo.length > 0) {
@@ -497,12 +533,12 @@ export default function AWBProcessor() {
               textY -= Number(config.lineHeight);
             });
 
-            addLog(`Trang ${i}: [${barcodeText}] - Chèn ${productsInfo.length} SP`, 'success');
+            addLog(`Trang ${i}: [${targetCode}] - Chèn ${productsInfo.length} SP`, 'success');
           } else {
-            addLog(`Trang ${i}: [${barcodeText}] - Không có dữ liệu SP`, 'warning');
+            addLog(`Trang ${i}: [${targetCode}] - Không có dữ liệu SP`, 'warning');
           }
         } else {
-          addLog(`Trang ${i}: Không quét được mã vận đơn!`, 'error');
+          addLog(`Trang ${i}: Không quét được ${scanMode === 'default' ? 'mã HVC' : 'Mã Đơn hàng/OrderID'}!`, 'error');
         }
         
         setProgress({ current: i, total: totalPages });
@@ -545,9 +581,29 @@ export default function AWBProcessor() {
           {/* UPLOAD KHU VỰC CHÍNH */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden p-6 space-y-4">
             
-            {/* 1. Upload PDF */}
+            {/* 1. Upload PDF & CHỌN CHẾ ĐỘ QUÉT */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase mb-2">1. File PDF Vận Đơn (Bắt buộc)</label>
+              
+              {/* CỤM CHỌN KÊNH BÁN */}
+              <div className="mb-4 flex flex-col gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                <p className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1"><ScanLine size={14}/> Đối tượng quét trên bill:</p>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="scanMode" value="default" checked={scanMode === 'default'} onChange={(e) => setScanMode(e.target.value)} className="w-4 h-4 text-blue-600 focus:ring-blue-500" />
+                    <span className="text-sm font-medium text-slate-700">Mã HVC</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="scanMode" value="shopee" checked={scanMode === 'shopee'} onChange={(e) => setScanMode(e.target.value)} className="w-4 h-4 text-orange-500 focus:ring-orange-500" />
+                    <span className="text-sm font-medium text-slate-700">Đơn Shopee</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="scanMode" value="tiktok" checked={scanMode === 'tiktok'} onChange={(e) => setScanMode(e.target.value)} className="w-4 h-4 text-black focus:ring-black" />
+                    <span className="text-sm font-medium text-slate-700">Đơn TikTok</span>
+                  </label>
+                </div>
+              </div>
+
               {!file ? (
                 <div 
                   className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:bg-slate-50 transition-colors cursor-pointer" 
@@ -592,7 +648,7 @@ export default function AWBProcessor() {
                   <input type="file" accept=".csv" className="hidden" ref={csvInputRef} onChange={handleCsvChange} />
                   <div className="flex items-center justify-center gap-2">
                     <FileSpreadsheet size={20} className="text-slate-400" />
-                    <p className="text-sm font-bold text-slate-600">Upload CSV (ID, Mã SP, SL, Mã HVC)</p>
+                    <p className="text-sm font-bold text-slate-600">Upload CSV (ID, Mã SP, SL, Mã đối chiếu)</p>
                   </div>
                 </div>
               ) : (
