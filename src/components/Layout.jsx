@@ -860,7 +860,9 @@ export default function Layout() {
               </div>
               <div className={`flex flex-col transition-all duration-300 overflow-hidden ${sidebarExpanded || isTopLayout ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>
                 <span className={`text-sm font-bold truncate leading-tight whitespace-nowrap max-w-[120px] ${themeVars.textPrimary}`}>{displayName}</span>
-                <span className={`text-[10px] font-bold uppercase tracking-widest mt-0.5 ${themeVars.textMuted}`}>{isAdmin ? 'Admin' : 'Nhân viên'}</span>
+                <span className={`text-[10px] font-bold uppercase tracking-widest mt-0.5 ${themeVars.textMuted}`}>
+  {isOwner ? 'Chủ sở hữu' : isAdmin ? 'Admin' : 'Nhân viên'}
+</span>
               </div>
             </div>
             
