@@ -26,10 +26,8 @@ const CANCELED_STATUS_CODES = [58, 63, 64];
 // ==========================================
 const SALE_CHANNEL_MAP = {
   1: { name: 'Admin', style: 'bg-slate-100 text-slate-700 border-slate-300' },
-  2: { name: 'Shopee', style: 'bg-orange-100 text-orange-700 border-orange-300' },
-  3: { name: 'TikTok', style: 'bg-zinc-800 text-white border-zinc-900' },
-  4: { name: 'Lazada', style: 'bg-indigo-100 text-indigo-700 border-indigo-300' },
-  5: { name: 'Facebook', style: 'bg-blue-100 text-blue-700 border-blue-300' },
+  42: { name: 'Shopee', style: 'bg-orange-100 text-orange-700 border-orange-300' },
+  48: { name: 'TikTok', style: 'bg-zinc-800 text-white border-zinc-900' },
 };
 
 const getChannelBadge = (channelId) => {
