@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase';
 import { 
   ScanBarcode, Calendar, Trash2, PackagePlus, PackageMinus, AlertCircle, 
   CheckCircle2, XCircle, CheckCircle, Download, Camera, CameraOff, 
-  RefreshCw, List, Plus, ChevronLeft, Clock, Search, Filter, Info
+  RefreshCw, List, Plus, ChevronLeft, Clock, Search, Filter, Info,
+  Store // Icon thêm cho Kênh bán
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 
@@ -18,6 +19,28 @@ const STATUS_MAP = {
 
 const EXCLUDED_STATUS_CODES = [40, 43, 59, 60, 61, 71, 72, 74];
 const CANCELED_STATUS_CODES = [58, 63, 64];
+
+// ==========================================
+// MAPPING KÊNH BÁN (SALE CHANNELS)
+// Tùy chỉnh ID (1, 2, 3...) cho khớp với database của bạn
+// ==========================================
+const SALE_CHANNEL_MAP = {
+  1: { name: 'Admin', style: 'bg-slate-100 text-slate-700 border-slate-300' },
+  2: { name: 'Shopee', style: 'bg-orange-100 text-orange-700 border-orange-300' },
+  3: { name: 'TikTok', style: 'bg-zinc-800 text-white border-zinc-900' },
+  4: { name: 'Lazada', style: 'bg-indigo-100 text-indigo-700 border-indigo-300' },
+  5: { name: 'Facebook', style: 'bg-blue-100 text-blue-700 border-blue-300' },
+};
+
+const getChannelBadge = (channelId) => {
+  if (channelId === null || channelId === undefined) return null;
+  const channel = SALE_CHANNEL_MAP[channelId] || { name: `Kênh ${channelId}`, style: 'bg-gray-100 text-gray-600 border-gray-200' };
+  return (
+    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${channel.style} flex items-center gap-1 w-fit`}>
+      <Store size={10} /> {channel.name}
+    </span>
+  );
+};
 
 export default function OrderReconciliation() {
   const getTodayStr = () => new Date().toISOString().split('T')[0];
@@ -88,7 +111,6 @@ export default function OrderReconciliation() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const meta = user.user_metadata || {};
-        // Ưu tiên lấy full_name hoặc name. Nếu không có lấy tên từ email (phần trước @)
         const displayName = meta.full_name || meta.name || user.email?.split('@')[0] || 'Nhân viên';
         setCurrentUserMeta({ ...meta, displayName });
       }
@@ -201,7 +223,7 @@ export default function OrderReconciliation() {
       const { data, error } = await supabase
         .from('orders')
         .select(`
-          id, created_at, carrier_code, status, printed_at, packed_at, carrier_date,
+          id, created_at, carrier_code, status, printed_at, packed_at, carrier_date, sale_channel,
           order_products (product_code, product_name, quantity)
         `)
         .gte('printed_at', startOfDay)
@@ -288,7 +310,7 @@ export default function OrderReconciliation() {
       }
       setScannedCodes(prev => [...prev, code]);
     } else {
-      const { data } = await supabase.from('orders').select(`id, carrier_code, status, order_products (product_code, product_name, quantity)`).or(`id.eq.${code},carrier_code.eq.${code}`).maybeSingle();
+      const { data } = await supabase.from('orders').select(`id, carrier_code, status, sale_channel, order_products (product_code, product_name, quantity)`).or(`id.eq.${code},carrier_code.eq.${code}`).maybeSingle();
 
       if (data) {
         setSurplusOrders(prev => [...prev, data]);
@@ -296,7 +318,7 @@ export default function OrderReconciliation() {
           setAlertBanner({ type: 'danger', message: `🚨 ĐƠN HỦY LẠC NGÀY KHÁC! Mã ${data.id} báo hủy. Thu hồi ngay!` });
         }
       } else {
-        setSurplusOrders(prev => [...prev, { id: code, carrier_code: 'Không rõ', status: 'Mã vạch lạ hoắc', order_products: [] }]);
+        setSurplusOrders(prev => [...prev, { id: code, carrier_code: 'Không rõ', status: 'Mã vạch lạ hoắc', sale_channel: null, order_products: [] }]);
       }
       setScannedCodes(prev => [...prev, code]);
     }
@@ -331,10 +353,11 @@ export default function OrderReconciliation() {
     setIsConfirmed(true);
     setLoading(true);
     try {
-      // TỐI ƯU DATA PAYLOAD (Yêu cầu 3)
+      // Bổ sung sale_channel vào Payload để lưu trữ
       const optimizedExpectedCorrect = expectedCorrect.map(o => ({
         id: o.id,
         carrier_code: o.carrier_code,
+        sale_channel: o.sale_channel,
         order_products: o.order_products?.map(p => ({
           product_code: p.product_code,
           product_name: p.product_name,
@@ -342,9 +365,9 @@ export default function OrderReconciliation() {
         })) || []
       }));
 
-      const optimizedExpectedCanceled = expectedCanceled.map(o => ({ id: o.id }));
-      const optimizedMissing = allMissing.map(o => ({ id: o.id }));
-      const optimizedSurplus = surplusOrders.map(o => ({ id: o.id, status: o.status }));
+      const optimizedExpectedCanceled = expectedCanceled.map(o => ({ id: o.id, sale_channel: o.sale_channel, carrier_code: o.carrier_code }));
+      const optimizedMissing = allMissing.map(o => ({ id: o.id, sale_channel: o.sale_channel }));
+      const optimizedSurplus = surplusOrders.map(o => ({ id: o.id, status: o.status, sale_channel: o.sale_channel }));
 
       const updates = {
         status: 'completed', 
@@ -403,18 +426,19 @@ export default function OrderReconciliation() {
       return;
     }
 
-    let csvContent = "\uFEFFMã Đơn Hàng (ID),Mã Vận Đơn,Trạng Thái Sàn,Đã Trả/Chưa Trả,Mã Sản Phẩm,Tên Sản Phẩm,Số Lượng\n";
+    let csvContent = "\uFEFFMã Đơn Hàng (ID),Kênh Bán,Mã Vận Đơn,Trạng Thái Sàn,Đã Trả/Chưa Trả,Mã Sản Phẩm,Tên Sản Phẩm,Số Lượng\n";
     allExpected.forEach(order => {
       const carrierCode = order.carrier_code || '---';
       const statusText = STATUS_MAP[order.status] || (order.status ? String(order.status) : '---');
       const scannedStatus = isScanned(order) ? "Đã trả lại" : "Chưa trả lại";
+      const channelName = order.sale_channel ? (SALE_CHANNEL_MAP[order.sale_channel]?.name || `Kênh ${order.sale_channel}`) : '---';
 
       if (order.order_products && order.order_products.length > 0) {
         order.order_products.forEach(p => { 
-          csvContent += `"${order.id}","${carrierCode}","${statusText}","${scannedStatus}","${p.product_code || '---'}","${p.product_name}","${p.quantity}"\n`; 
+          csvContent += `"${order.id}","${channelName}","${carrierCode}","${statusText}","${scannedStatus}","${p.product_code || '---'}","${p.product_name}","${p.quantity}"\n`; 
         });
       } else {
-        csvContent += `"${order.id}","${carrierCode}","${statusText}","${scannedStatus}","---","Đơn trống sản phẩm","0"\n`;
+        csvContent += `"${order.id}","${channelName}","${carrierCode}","${statusText}","${scannedStatus}","---","Đơn trống sản phẩm","0"\n`;
       }
     });
 
@@ -716,7 +740,7 @@ export default function OrderReconciliation() {
       <div className="flex justify-end">
         <button onClick={handleExportExcel} disabled={expectedCorrect.length === 0 && expectedCanceled.length === 0} 
           className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold rounded-xl shadow-md transition cursor-pointer text-sm">
-          <Download size={16} /> Xuất Báo Cáo Excel (Tồn & Hủy)
+          <Download size={16} /> Xuất Báo Cáo Excel
         </button>
       </div>
 
@@ -735,8 +759,11 @@ export default function OrderReconciliation() {
                 return (
                   <div key={order.id + idx} className={`p-3 border rounded-xl transition-all duration-300 ${scanned ? 'bg-emerald-50/60 border-emerald-300' : 'bg-white border-slate-200 shadow-sm'}`}>
                     <div className="flex justify-between items-start text-xs font-bold mb-2">
-                      <div className="flex flex-col">
-                        <span className={scanned ? 'text-emerald-700' : 'text-slate-800'}>ID: {order.id}</span>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className={scanned ? 'text-emerald-700' : 'text-slate-800'}>ID: {order.id}</span>
+                          {getChannelBadge(order.sale_channel)}
+                        </div>
                         <span className="text-[10px] text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
                       </div>
                       {scanned ? <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-black">ĐÃ TRẢ LẠI</span> 
@@ -772,9 +799,11 @@ export default function OrderReconciliation() {
                 return (
                   <div key={order.id + idx} className={`p-3 border rounded-xl transition-all duration-300 ${scanned ? 'bg-red-50 border-red-300' : 'bg-white border-red-200 shadow-sm'}`}>
                     <div className="flex justify-between items-start gap-2 text-xs font-bold mb-2">
-                      <div className="flex flex-col">
-                        <span className={scanned ? 'text-red-800' : 'text-red-600'}>ID: {order.id}</span>
-                        {/* LƯU Ý: Với Payload mới, MVD của đơn hủy có thể bị loại bỏ để nhẹ data -> Sẽ fallback về '---' */}
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className={scanned ? 'text-red-800' : 'text-red-600'}>ID: {order.id}</span>
+                          {getChannelBadge(order.sale_channel)}
+                        </div>
                         <span className="text-[10px] text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
                       </div>
                       {scanned ? <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-black">ĐÃ LẤY RA</span> 
@@ -807,7 +836,10 @@ export default function OrderReconciliation() {
               surplusOrders.map((order, idx) => (
                 <div key={order.id + idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
                   <div className="flex flex-col gap-1 text-xs font-bold">
-                    <span className="text-slate-700">ID: {order.id}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-700">ID: {order.id}</span>
+                      {getChannelBadge(order.sale_channel)}
+                    </div>
                     <span className="text-slate-500 text-[10px] font-medium">Trạng thái: {STATUS_MAP[order.status] || order.status}</span>
                   </div>
                 </div>
@@ -833,8 +865,9 @@ export default function OrderReconciliation() {
               </div>
             ) : (
               allMissing.map(order => (
-                <div key={order.id} className="p-3 bg-white border border-amber-200 rounded-xl">
-                  <div className="text-xs font-bold flex justify-between"><span className="text-amber-800">ID: {order.id}</span></div>
+                <div key={order.id} className="p-3 bg-white border border-amber-200 rounded-xl flex items-center justify-between">
+                  <div className="text-xs font-bold text-amber-800">ID: {order.id}</div>
+                  {getChannelBadge(order.sale_channel)}
                 </div>
               ))
             )}
