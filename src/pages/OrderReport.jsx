@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, CheckCircle, AlertTriangle, XCircle, RefreshCw, MessageSquare, Lock, User, ChevronDown, Printer, ChevronLeft, ChevronRight, Copy, Send, Settings2, PackageSearch, Save } from 'lucide-react';
+import { Search, CheckCircle, AlertTriangle, XCircle, RefreshCw, MessageSquare, Lock, User, ChevronDown, Printer, ChevronLeft, ChevronRight, Copy, Send, Settings2, PackageSearch, Save, Download } from 'lucide-react';
 
 const SALE_CHANNELS = {
     '1': 'Admin', '2': 'Website', '10': 'API', '20': 'Facebook', '21': 'Instagram',
@@ -9,30 +9,29 @@ const SALE_CHANNELS = {
 };
 
 const CHANNEL_COLORS = {
-    '1': 'bg-blue-600 text-white border-blue-700 shadow-sm', // Admin - Xanh
+    '1': 'bg-blue-600 text-white border-blue-700 shadow-sm',
     '2': 'bg-indigo-100 text-indigo-700 border-indigo-200',
     '10': 'bg-violet-100 text-violet-700 border-violet-200',
     '20': 'bg-blue-100 text-blue-700 border-blue-200',
     '21': 'bg-pink-100 text-pink-700 border-pink-200',
     '41': 'bg-orange-100 text-orange-700 border-orange-200',
-    '42': 'bg-red-600 text-white border-red-700 shadow-sm', // Shopee - Đỏ
+    '42': 'bg-red-600 text-white border-red-700 shadow-sm',
     '43': 'bg-cyan-100 text-cyan-700 border-cyan-200',
     '45': 'bg-teal-100 text-teal-700 border-teal-200',
-    '48': 'bg-black text-white border-gray-900 shadow-sm', // Tiktok Shop - Đen
+    '48': 'bg-black text-white border-gray-900 shadow-sm',
     '49': 'bg-blue-100 text-blue-700 border-blue-200',
     '50': 'bg-red-100 text-red-700 border-red-200',
     '51': 'bg-orange-100 text-orange-700 border-orange-200',
     '52': 'bg-green-100 text-green-700 border-green-200'
 };
 
-// Chuẩn hóa ID Trạng thái Nhanh.vn sang màu sắc
 const STATUS_COLORS = {
-    '1': 'bg-blue-700 text-white shadow-sm', // Đơn mới -> Xanh dương đậm
-    '2': 'bg-orange-500 text-white shadow-sm', // Chờ khách xác nhận -> Cam
-    '3': 'bg-blue-100 text-blue-800 border border-blue-300', // Đã xác nhận -> Xanh dương nhạt
-    '4': 'bg-gray-500 text-white shadow-sm', // Đang đóng gói -> Xám
-    '5': 'bg-[#8B4513] text-white shadow-sm', // Đã đóng gói -> Nâu
-    '6': 'bg-green-600 text-white shadow-sm', // Đã gửi HVC
+    '1': 'bg-blue-700 text-white shadow-sm',
+    '2': 'bg-orange-500 text-white shadow-sm',
+    '3': 'bg-blue-100 text-blue-800 border border-blue-300',
+    '4': 'bg-gray-500 text-white shadow-sm',
+    '5': 'bg-[#8B4513] text-white shadow-sm',
+    '6': 'bg-green-600 text-white shadow-sm',
     '7': 'bg-teal-600 text-white shadow-sm',
     '8': 'bg-rose-100 text-rose-700 border border-rose-300',
     '9': 'bg-red-600 text-white shadow-sm',
@@ -138,7 +137,7 @@ export default function OrderReport() {
     const [selectedChannel, setSelectedChannel] = useState([]);
     const [selectedCreator, setSelectedCreator] = useState([]);
     const [selectedDepot, setSelectedDepot] = useState([]);
-    const [printedFilter, setPrintedFilter] = useState(''); // Bộ lọc ngày in
+    const [printedFilter, setPrintedFilter] = useState(''); 
     const [selectedOrders, setSelectedOrders] = useState([]);
     const [sortOrder, setSortOrder] = useState('');
     const [agingFilter, setAgingFilter] = useState(false);
@@ -153,6 +152,7 @@ export default function OrderReport() {
     const [updateProgress, setUpdateProgress] = useState(0);
     const [copyMessage, setCopyMessage] = useState('');
     const [sendingOrder, setSendingOrder] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     // Options mapping
     const [carrierOptions, setCarrierOptions] = useState([]);
@@ -240,7 +240,6 @@ export default function OrderReport() {
             setTimeout(() => setCopyMessage(''), 3000);
             setShowColSettings(false);
         } catch (error) {
-            console.error("Lỗi khi lưu cấu hình hiển thị:", error);
             setCopyMessage('⚠️ Đã xảy ra lỗi khi lưu cấu hình');
             setTimeout(() => setCopyMessage(''), 3000);
         } finally {
@@ -353,14 +352,14 @@ export default function OrderReport() {
     const currentRawList = data[activeTab] || [];
     const filteredOrders = getFilteredOrders(currentRawList);
     
-    // Xác định list đơn hàng mục tiêu để COPY (Các đơn đã tick HOẶC Tất cả các đơn hiển thị)
-    const targetOrdersForCopy = selectedOrders.length > 0 
+    // Xác định list đơn hàng mục tiêu để COPY & XUẤT EXCEL (Các đơn đã tick HOẶC Tất cả các đơn hiển thị)
+    const targetOrdersAction = selectedOrders.length > 0 
         ? filteredOrders.filter(o => selectedOrders.includes(o.id)) 
         : filteredOrders;
 
-    const copyTargetCount = targetOrdersForCopy.length;
-    const ecomOrdersCount = targetOrdersForCopy.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id).length;
-    const carrierOrdersCount = targetOrdersForCopy.filter(o => o.carrier_code).length;
+    const copyTargetCount = targetOrdersAction.length;
+    const ecomOrdersCount = targetOrdersAction.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id).length;
+    const carrierOrdersCount = targetOrdersAction.filter(o => o.carrier_code).length;
 
     const totalOrdersCount = filteredOrders.length;
     const totalPages = Math.ceil(totalOrdersCount / pageSize) || 1;
@@ -368,6 +367,15 @@ export default function OrderReport() {
     
     const allRawOrders = [...(data.printable || []), ...(data.holding || []), ...(data.outOfStock || [])];
     const missedWebhookOrders = allRawOrders.filter(order => !order.order_products || order.order_products.length === 0);
+
+    // HÀM CHIA NHỎ MẢNG (CHUNK) ĐỂ CHẠY SONG SONG
+    const chunkArray = (array, chunkSize) => {
+        const chunks = [];
+        for (let i = 0; i < array.length; i += chunkSize) {
+            chunks.push(array.slice(i, i + chunkSize));
+        }
+        return chunks;
+    };
 
     const handleAutoUpdateWebhooks = async () => {
         setIsUpdatingWebhooks(true);
@@ -386,18 +394,30 @@ export default function OrderReport() {
         setShowMissedModal(false);
     };
 
+    // NÂNG CẤP: Chạy song song từng cục 5 ID
     const handleUpdateSelectedWebhooks = async () => {
         if (selectedOrders.length === 0) return;
         setUpdatingSelected(true);
         setShowActionMenu(false);
         setCopyMessage(`Đang cập nhật webhook cho ${selectedOrders.length} đơn...`);
-        for (let i = 0; i < selectedOrders.length; i++) {
-            const orderId = selectedOrders[i];
-            try {
-                await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
-            } catch (err) {}
-            await new Promise(resolve => setTimeout(resolve, 300));
-        }
+
+        // Chia mảng ID thành các cục, mỗi cục 5 ID
+        const chunks = chunkArray(selectedOrders, 5);
+
+        const processChunk = async (chunk) => {
+            for (let i = 0; i < chunk.length; i++) {
+                const orderId = chunk[i];
+                try {
+                    await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
+                } catch (err) {}
+                // Tránh gọi quá dày đặc, delay nhẹ trong vòng lặp của chunk
+                await new Promise(resolve => setTimeout(resolve, 200)); 
+            }
+        };
+
+        // Kích hoạt tất cả các cục chạy song song cùng lúc
+        await Promise.all(chunks.map(chunk => processChunk(chunk)));
+
         await new Promise(resolve => setTimeout(resolve, 1500));
         await fetchAllocation(statusDict);
         setUpdatingSelected(false);
@@ -407,20 +427,20 @@ export default function OrderReport() {
     };
 
     const executeCopy = async (type) => {
-        if (targetOrdersForCopy.length === 0) return;
+        if (targetOrdersAction.length === 0) return;
         
         let textToCopy = '';
         let count = 0;
 
         if (type === 'system') {
-            textToCopy = targetOrdersForCopy.map(order => order.id).join('\n');
-            count = targetOrdersForCopy.length;
+            textToCopy = targetOrdersAction.map(order => order.id).join('\n');
+            count = targetOrdersAction.length;
         } else if (type === 'ecom') {
-            const validOrders = targetOrdersForCopy.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id);
+            const validOrders = targetOrdersAction.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id);
             textToCopy = validOrders.map(o => o.ecom_order_id).join('\n');
             count = validOrders.length;
         } else if (type === 'carrier') {
-            const validOrders = targetOrdersForCopy.filter(o => o.carrier_code);
+            const validOrders = targetOrdersAction.filter(o => o.carrier_code);
             textToCopy = validOrders.map(o => o.carrier_code).join('\n');
             count = validOrders.length;
         }
@@ -441,6 +461,95 @@ export default function OrderReport() {
         
         setTimeout(() => setCopyMessage(''), 3000);
         setShowCopyMenu(false);
+    };
+
+    // TÍNH NĂNG MỚI: XUẤT EXCEL
+    const handleExportExcel = async () => {
+        if (targetOrdersAction.length === 0) {
+            setCopyMessage('⚠️ Không có dữ liệu để xuất.');
+            setTimeout(() => setCopyMessage(''), 3000);
+            return;
+        }
+
+        setIsExporting(true);
+        setCopyMessage(`Đang xuất file Excel cho ${targetOrdersAction.length} đơn hàng...`);
+
+        try {
+            // Import động thư viện xlsx (Yêu cầu đã cài đặt qua npm install xlsx)
+            const XLSX = await import('xlsx');
+
+            const rowData = [];
+            
+            targetOrdersAction.forEach(order => {
+                const products = order.order_products || [];
+                
+                // Gom các dữ liệu cơ bản luôn có
+                const baseRow = {
+                    "ID Đơn": order.id,
+                    "ID Sàn": order.ecom_order_id || '',
+                    "Trạng thái": statusDict[order.status] || `Mã ${order.status}`,
+                };
+
+                // Lắp ráp dữ liệu phụ thuộc vào cấu hình Cột đang hiển thị
+                if (visibleCols.includes('carrier')) {
+                    baseRow["Hãng vận chuyển"] = order.carrier_name || '';
+                    baseRow["Mã vận đơn"] = order.carrier_code || '';
+                }
+                if (visibleCols.includes('source')) {
+                    baseRow["Kênh bán"] = SALE_CHANNELS[order.sale_channel] || order.sale_channel || '';
+                    baseRow["Nguồn"] = order.traffic_source || '';
+                }
+                if (visibleCols.includes('notes')) {
+                    baseRow["Ghi chú khách"] = order.description || '';
+                    baseRow["Ghi chú nội bộ"] = order.private_description || '';
+                }
+                if (visibleCols.includes('aging')) {
+                    const agingDays = order.printable_date ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24)) : 0;
+                    baseRow["Ngày tồn / Thiếu"] = activeTab === 'printable' ? `${agingDays} ngày` : 'Đang thiếu hàng';
+                }
+                if (visibleCols.includes('creator')) {
+                    baseRow["Người tạo"] = order.created_by_name || 'Hệ thống';
+                }
+                if (visibleCols.includes('printed_at')) {
+                    baseRow["Ngày in cuối"] = order.printed_at ? new Date(order.printed_at).toLocaleString('vi-VN') : 'Chưa in';
+                }
+
+                // Xử lý chèn thông tin Sản phẩm (Mỗi sản phẩm 1 dòng)
+                if (products.length === 0) {
+                    rowData.push({
+                        ...baseRow,
+                        "Tên sản phẩm": 'Không có dữ liệu SP',
+                        "Mã sản phẩm": '',
+                        "Số lượng": 0
+                    });
+                } else {
+                    products.forEach(prod => {
+                        rowData.push({
+                            ...baseRow,
+                            "Tên sản phẩm": prod.product_name || '',
+                            "Mã sản phẩm": prod.product_code || '',
+                            "Số lượng": prod.quantity || 0
+                        });
+                    });
+                }
+            });
+
+            // Tạo sheet và workbook
+            const worksheet = XLSX.utils.json_to_sheet(rowData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "DanhSachDonHang");
+            
+            // Tự động tải file
+            XLSX.writeFile(workbook, `Bao_cao_don_hang_${new Date().getTime()}.xlsx`);
+
+            setCopyMessage('✅ Đã xuất file Excel thành công.');
+        } catch (error) {
+            console.error("Lỗi xuất Excel:", error);
+            setCopyMessage('⚠️ Lỗi: Chưa cài đặt thư viện xlsx (vui lòng chạy npm install xlsx)');
+        } finally {
+            setIsExporting(false);
+            setTimeout(() => setCopyMessage(''), 5000);
+        }
     };
 
     const handleSelectAll = (e) => {
@@ -641,6 +750,16 @@ export default function OrderReport() {
                                 )}
                             </div>
 
+                            {/* Export Excel Button */}
+                            <button
+                                onClick={handleExportExcel}
+                                disabled={isExporting || targetOrdersAction.length === 0}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-sm ${targetOrdersAction.length > 0 ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}
+                            >
+                                {isExporting ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />} 
+                                Xuất Excel
+                            </button>
+
                             {/* Column Settings */}
                             <div className="relative" ref={colSettingsRef}>
                                 <button onClick={() => setShowColSettings(!showColSettings)} className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-50 focus:ring-2 focus:ring-gray-100 transition-all shadow-sm">
@@ -676,6 +795,7 @@ export default function OrderReport() {
                                 )}
                             </div>
 
+                            {/* Actions Dropdown */}
                             <div className="relative" onMouseLeave={() => setShowActionMenu(false)}>
                                 <button onClick={() => setShowActionMenu(!showActionMenu)} disabled={selectedOrders.length === 0 || sendingOrder || updatingSelected} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-sm ${selectedOrders.length > 0 ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}>
                                     {sendingOrder || updatingSelected ? <RefreshCw size={16} className="animate-spin" /> : "Thao tác"} ({selectedOrders.length}) <ChevronDown size={14} />
@@ -785,7 +905,7 @@ export default function OrderReport() {
                                                         </td>
                                                     )}
 
-                                                    {/* Cột 2: Gộp ID (Order ID, Ecom ID, Carrier Code) và Hiện ngày in */}
+                                                    {/* Cột 2: Gộp ID */}
                                                     {index === 0 && (
                                                         <td rowSpan={rowCount} className="py-3 px-4 align-top border-r border-gray-100">
                                                             <div className="font-bold text-gray-800 cursor-pointer hover:text-blue-600 mb-1" onClick={() => handleSelectOne(order.id)}>
@@ -892,7 +1012,7 @@ export default function OrderReport() {
                                                         </td>
                                                     )}
 
-                                                    {/* Cột 9 (Tùy chọn): Nhân viên (Đã fix lỗi hiển thị ...) */}
+                                                    {/* Cột 9 (Tùy chọn): Nhân viên */}
                                                     {index === 0 && visibleCols.includes('creator') && (
                                                         <td rowSpan={rowCount} className="py-3 px-4 align-top text-center border-l border-gray-100">
                                                             <div className="inline-flex items-center gap-1.5 text-gray-600 bg-gray-50 px-2 py-1 rounded text-xs">
