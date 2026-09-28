@@ -12,6 +12,15 @@ export default function WebhookRetrier() {
   // Hàm tạo độ trễ
   const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  // Hàm chia mảng thành các cục nhỏ (chunk)
+  const chunkArray = (array, chunkSize) => {
+    const chunks = [];
+    for (let i = 0; i < array.length; i += chunkSize) {
+      chunks.push(array.slice(i, i + chunkSize));
+    }
+    return chunks;
+  };
+
   const handleStart = async () => {
     // Tách các ID từ textarea
     const rawIds = inputText
@@ -29,7 +38,6 @@ export default function WebhookRetrier() {
     // 1. GỌI EDGE FUNCTION QUA SUPABASE CLIENT ĐỂ LỌC DATABASE
     if (filterNoTracking) {
       try {
-        // Dùng invoke thay cho fetch thuần
         const { data, error } = await supabase.functions.invoke('smart-service', {
           body: { ids: rawIds }
         });
@@ -53,33 +61,43 @@ export default function WebhookRetrier() {
 
     setProgress({ current: 0, total: idsToProcess.length });
 
-    // 2. CHẠY VÒNG LẶP WEBHOOK CHO CÁC ID ĐÃ ĐƯỢC LỌC
-    for (let i = 0; i < idsToProcess.length; i++) {
-      const orderId = idsToProcess[i];
-      const targetUrl = `https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`;
+    // 2. CHIA NHỎ ID THÀNH CÁC CỤC 10 ID VÀ CHẠY SONG SONG
+    const chunks = chunkArray(idsToProcess, 10);
 
-      try {
-        await fetch(targetUrl, {
-          method: 'GET',
-          mode: 'no-cors',
-        });
+    // Hàm xử lý cho từng cục
+    const processChunk = async (chunk) => {
+      for (let i = 0; i < chunk.length; i++) {
+        const orderId = chunk[i];
+        const targetUrl = `https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`;
 
-        setResults((prev) => [
-          ...prev,
-          { id: orderId, status: 'success' }
-        ]);
-      } catch (error) {
-        setResults((prev) => [
-          ...prev,
-          { id: orderId, status: 'error', message: error.message }
-        ]);
+        try {
+          await fetch(targetUrl, {
+            method: 'GET',
+            mode: 'no-cors',
+          });
+
+          // Cập nhật kết quả an toàn khi chạy song song
+          setResults((prev) => [
+            ...prev,
+            { id: orderId, status: 'success' }
+          ]);
+        } catch (error) {
+          setResults((prev) => [
+            ...prev,
+            { id: orderId, status: 'error', message: error.message }
+          ]);
+        }
+
+        // Cập nhật tiến độ an toàn dựa trên state cũ
+        setProgress((prev) => ({ ...prev, current: prev.current + 1 }));
+        
+        // Delay 200ms trước khi bắn ID tiếp theo trong cùng 1 cục
+        await delay(200);
       }
+    };
 
-      setProgress({ current: i + 1, total: idsToProcess.length });
-      
-      // Delay 200ms trước khi bắn ID tiếp theo
-      await delay(200);
-    }
+    // Dùng Promise.all để chạy tất cả các cục cùng một lúc
+    await Promise.all(chunks.map(chunk => processChunk(chunk)));
 
     setIsProcessing(false);
   };
