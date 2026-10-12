@@ -141,6 +141,7 @@ export default function OrderReport() {
     const [selectedOrders, setSelectedOrders] = useState([]);
     const [sortOrder, setSortOrder] = useState('');
     const [agingFilter, setAgingFilter] = useState(false);
+    const [missingCarrierFilter, setMissingCarrierFilter] = useState(false);
     
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -150,6 +151,8 @@ export default function OrderReport() {
     const [isUpdatingWebhooks, setIsUpdatingWebhooks] = useState(false);
     const [updatingSelected, setUpdatingSelected] = useState(false);
     const [updateProgress, setUpdateProgress] = useState(0);
+    const [isUpdatingMissingCarrier, setIsUpdatingMissingCarrier] = useState(false);
+    const [missingCarrierProgress, setMissingCarrierProgress] = useState(0);
     const [copyMessage, setCopyMessage] = useState('');
     const [sendingOrder, setSendingOrder] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
@@ -197,7 +200,7 @@ export default function OrderReport() {
         setShowActionMenu(false);
         setShowCopyMenu(false);
         setCurrentPage(1);
-    }, [activeTab, searchId, searchProduct, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, searchNote, sortOrder, pageSize, agingFilter, printedFilter]);
+    }, [activeTab, searchId, searchProduct, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, searchNote, sortOrder, pageSize, agingFilter, printedFilter, missingCarrierFilter]);
 
     const fetchSystemData = async (email) => {
         const { data: stData } = await supabase.from('order_statuses').select('*');
@@ -333,6 +336,11 @@ export default function OrderReport() {
                 if (!isToday) return false;
             }
 
+            // Lọc đơn chưa có Mã vận đơn
+            if (missingCarrierFilter && order.carrier_code && String(order.carrier_code).trim() !== '') {
+                return false;
+            }
+
             // Aging Filter
             if (agingFilter && activeTab === 'printable') {
                 const days = order.printable_date
@@ -367,6 +375,7 @@ export default function OrderReport() {
     
     const allRawOrders = [...(data.printable || []), ...(data.holding || []), ...(data.outOfStock || [])];
     const missedWebhookOrders = allRawOrders.filter(order => !order.order_products || order.order_products.length === 0);
+    const missingCarrierOrders = allRawOrders.filter(order => !order.carrier_code || String(order.carrier_code).trim() === '');
 
     // HÀM CHIA NHỎ MẢNG (CHUNK) ĐỂ CHẠY SONG SONG
     const chunkArray = (array, chunkSize) => {
@@ -394,7 +403,7 @@ export default function OrderReport() {
         setShowMissedModal(false);
     };
 
-    // NÂNG CẤP: Chạy song song từng cục 5 ID
+    // NÂNG CẤP: Chạy song song từng cục 5 ID cho các đơn được chọn
     const handleUpdateSelectedWebhooks = async () => {
         if (selectedOrders.length === 0) return;
         setUpdatingSelected(true);
@@ -423,6 +432,45 @@ export default function OrderReport() {
         setUpdatingSelected(false);
         setCopyMessage(`✅ Đã gửi lệnh cập nhật webhook xong.`);
         setSelectedOrders([]);
+        setTimeout(() => setCopyMessage(''), 5000);
+    };
+
+    // TÍNH NĂNG MỚI: Cập nhật lại toàn bộ đơn đang thiếu Mã vận đơn (Chạy đa luồng song song)
+    const handleUpdateMissingCarrierWebhooks = async () => {
+        if (missingCarrierOrders.length === 0) {
+            setCopyMessage('⚠️ Không có đơn hàng nào đang thiếu Mã vận đơn.');
+            setTimeout(() => setCopyMessage(''), 3000);
+            return;
+        }
+
+        setIsUpdatingMissingCarrier(true);
+        setMissingCarrierProgress(0);
+        setCopyMessage(`Đang cập nhật lại webhook cho ${missingCarrierOrders.length} đơn thiếu Mã vận đơn...`);
+
+        const orderIds = missingCarrierOrders.map(o => o.id);
+        const chunks = chunkArray(orderIds, 5);
+        let completed = 0;
+
+        const processChunk = async (chunk) => {
+            for (let i = 0; i < chunk.length; i++) {
+                const orderId = chunk[i];
+                try {
+                    await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
+                } catch (err) {
+                    console.error(`Lỗi kích hoạt webhook đơn ${orderId}:`, err);
+                }
+                completed += 1;
+                setMissingCarrierProgress(completed);
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+        };
+
+        await Promise.all(chunks.map(chunk => processChunk(chunk)));
+
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await fetchAllocation(statusDict);
+        setIsUpdatingMissingCarrier(false);
+        setCopyMessage(`✅ Đã cập nhật lại webhook cho ${orderIds.length} đơn miss Mã vận đơn.`);
         setTimeout(() => setCopyMessage(''), 5000);
     };
 
@@ -463,7 +511,7 @@ export default function OrderReport() {
         setShowCopyMenu(false);
     };
 
-    // TÍNH NĂNG MỚI: XUẤT EXCEL
+    // TÍNH NĂNG: XUẤT EXCEL
     const handleExportExcel = async () => {
         if (targetOrdersAction.length === 0) {
             setCopyMessage('⚠️ Không có dữ liệu để xuất.');
@@ -616,19 +664,31 @@ export default function OrderReport() {
             <div className="max-w-[1400px] mx-auto space-y-6">
                 
                 {/* Header Area */}
-                <div className="flex justify-between items-center bg-white border border-gray-200 rounded-xl px-6 py-5 shadow-sm">
+                <div className="flex flex-wrap justify-between items-center gap-4 bg-white border border-gray-200 rounded-xl px-6 py-5 shadow-sm">
                     <div>
                         <h2 className="text-xl font-bold text-gray-800">Quản lý kho & Đơn hàng</h2>
                         <p className="text-gray-500 text-sm mt-1">Phân bổ tự động dựa trên tồn kho thực tế</p>
                     </div>
-                    <button
-                        onClick={() => fetchAllocation(statusDict)}
-                        disabled={loading}
-                        className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 focus:ring-2 focus:ring-blue-100 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
-                    >
-                        <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-                        Làm mới dữ liệu
-                    </button>
+                    <div className="flex flex-wrap items-center gap-3">
+                        <button
+                            onClick={handleUpdateMissingCarrierWebhooks}
+                            disabled={loading || isUpdatingMissingCarrier || missingCarrierOrders.length === 0}
+                            className="bg-purple-600 border border-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 focus:ring-2 focus:ring-purple-100 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <RefreshCw size={16} className={isUpdatingMissingCarrier ? "animate-spin" : ""} />
+                            {isUpdatingMissingCarrier
+                                ? `Đang cập nhật (${missingCarrierProgress}/${missingCarrierOrders.length})...`
+                                : `Cập nhật lại đơn miss Mã vận đơn (${missingCarrierOrders.length})`}
+                        </button>
+                        <button
+                            onClick={() => fetchAllocation(statusDict)}
+                            disabled={loading || isUpdatingMissingCarrier}
+                            className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 focus:ring-2 focus:ring-blue-100 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+                        >
+                            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+                            Làm mới dữ liệu
+                        </button>
+                    </div>
                 </div>
 
                 {/* Dashboard Tabs */}
@@ -832,6 +892,15 @@ export default function OrderReport() {
                             <option value="printed">Đã có ngày in</option>
                             <option value="today">Đã in hôm nay</option>
                         </select>
+                        <label className="flex items-center gap-2 cursor-pointer ml-2">
+                            <input
+                                type="checkbox"
+                                checked={missingCarrierFilter}
+                                onChange={(e) => setMissingCarrierFilter(e.target.checked)}
+                                className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Chưa có Mã vận đơn</span>
+                        </label>
                         {activeTab === 'printable' && (
                             <label className="flex items-center gap-2 cursor-pointer ml-2">
                                 <input type="checkbox" checked={agingFilter} onChange={(e) => setAgingFilter(e.target.checked)} className="w-4 h-4 text-red-600 rounded border-gray-300 focus:ring-red-500" />
