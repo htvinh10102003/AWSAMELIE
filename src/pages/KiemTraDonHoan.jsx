@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
   ScanBarcode, FileSpreadsheet, UploadCloud, AlertCircle, CheckCircle2, 
   Download, RotateCcw, XCircle, Package, Loader2, Volume2, VolumeX, Camera, CameraOff,
-  Save, History, ChevronRight, Trash2, ArrowLeft, Eye
+  Save, History, ChevronRight, Trash2, ArrowLeft, Eye, GitCompare
 } from 'lucide-react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
@@ -27,9 +27,14 @@ export default function KiemTraDonHoan() {
   const [hasMoreLogs, setHasMoreLogs] = useState(true);
   const [loadingHistory, setLoadingHistory] = useState(false);
   
-  // --- STATES MỚI: XEM CHI TIẾT & POPUP XÁC NHẬN ---
-  const [selectedLog, setSelectedLog] = useState(null); // Lưu log đang được xem chi tiết
+  // --- STATES XEM CHI TIẾT & POPUP XÁC NHẬN ---
+  const [selectedLog, setSelectedLog] = useState(null);
   const [confirmPopup, setConfirmPopup] = useState({ isOpen: false, title: '', message: '', onConfirm: null, isDestructive: false });
+
+  // --- STATES MỚI: ĐỐI SOÁT LẠI (LƯỢT 2) & POPUP SO SÁNH ---
+  const [reAuditOriginalLog, setReAuditOriginalLog] = useState(null); // Lưu bản gốc lượt 1 khi đang quét đối soát lại
+  const [showComparePopup, setShowComparePopup] = useState(false); // Bật/tắt popup so sánh 2 lượt
+  const [compareFilterDiffOnly, setCompareFilterDiffOnly] = useState(false); // Lọc chỉ xem các mã có sai lệch giữa 2 lượt
 
   // ROLE GIẢ ĐỊNH (Thay đổi theo hệ thống của bạn)
   const [userRole, setUserRole] = useState('owner'); // 'user', 'admin', 'owner'
@@ -48,10 +53,10 @@ export default function KiemTraDonHoan() {
   useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
 
   useEffect(() => {
-    if (checklist.length > 0 && inputRef.current && !isScanningCam && !showHistory && !confirmPopup.isOpen) {
+    if (checklist.length > 0 && inputRef.current && !isScanningCam && !showHistory && !confirmPopup.isOpen && !showComparePopup) {
       inputRef.current.focus();
     }
-  }, [checklist, scannedSurplus, alertMessage, isScanningCam, showHistory, confirmPopup.isOpen]);
+  }, [checklist, scannedSurplus, alertMessage, isScanningCam, showHistory, confirmPopup.isOpen, showComparePopup]);
 
   useEffect(() => {
     const fetchAllInventories = async () => {
@@ -143,9 +148,8 @@ export default function KiemTraDonHoan() {
     try {
       const { error } = await supabase.from('return_audit_logs').delete().eq('id', id);
       if (error) throw error;
-      // Cập nhật lại danh sách sau khi xóa
       setHistoryLogs(prev => prev.filter(log => log.id !== id));
-      if (selectedLog?.id === id) setSelectedLog(null); // Nếu đang xem chi tiết cái bị xóa thì quay ra ngoài
+      if (selectedLog?.id === id) setSelectedLog(null);
       setAlertMessage({ type: 'success', text: '✅ Đã xóa biên bản thành công.' });
     } catch (err) {
       console.error("Lỗi khi xóa:", err);
@@ -156,7 +160,7 @@ export default function KiemTraDonHoan() {
   };
 
   const requestDeleteLog = (e, id) => {
-    e.stopPropagation(); // Ngăn click lan ra ngoài card (tránh mở detail view)
+    e.stopPropagation();
     setConfirmPopup({
       isOpen: true,
       title: 'Xóa biên bản này?',
@@ -196,7 +200,7 @@ export default function KiemTraDonHoan() {
   };
 
   const requestSaveAudit = () => {
-    if (checklist.length === 0) return;
+    if (checklist.length === 0 || reAuditOriginalLog) return;
     setConfirmPopup({
       isOpen: true,
       title: 'Chốt biên bản kiểm hàng?',
@@ -207,17 +211,90 @@ export default function KiemTraDonHoan() {
   };
 
   const executeReset = () => {
-    setChecklist([]); setScannedSurplus([]); setFileName(''); setAlertMessage(null); setIsScanningCam(false);
+    if (reAuditOriginalLog) {
+      // Nếu đang trong chế độ đối soát lại, làm mới là reset số lượng quét lượt 2 về 0
+      const resetList = (reAuditOriginalLog.checklist_data || []).map(item => ({
+        ...item,
+        scannedQty: 0
+      }));
+      setChecklist(resetList);
+      setScannedSurplus([]);
+      setAlertMessage({ type: 'warning', text: '🔄 Đã làm mới số liệu quét Lượt 2 về 0.' });
+      setIsScanningCam(false);
+    } else {
+      setChecklist([]);
+      setScannedSurplus([]);
+      setFileName('');
+      setAlertMessage(null);
+      setIsScanningCam(false);
+    }
     closeConfirm();
   };
 
   const requestResetAudit = () => {
     setConfirmPopup({
       isOpen: true,
-      title: 'Làm mới dữ liệu?',
-      message: 'Toàn bộ tiến trình quét hiện tại sẽ bị xóa. Bạn có chắc chắn muốn bắt đầu lại?',
+      title: reAuditOriginalLog ? 'Quét lại Lượt 2 từ đầu?' : 'Làm mới dữ liệu?',
+      message: reAuditOriginalLog 
+        ? 'Toàn bộ số lượng vừa quét ở Lượt 2 sẽ về 0 để bạn bắn lại. Bản gốc Lượt 1 vẫn giữ nguyên.'
+        : 'Toàn bộ tiến trình quét hiện tại sẽ bị xóa. Bạn có chắc chắn muốn bắt đầu lại?',
       isDestructive: true,
       onConfirm: executeReset
+    });
+  };
+
+  // --- CÁC HÀM ĐỐI SOÁT LẠI (LƯỢT 2) ---
+  const startReAuditSession = (log) => {
+    const initialSecondChecklist = (log.checklist_data || []).map(item => ({
+      ...item,
+      scannedQty: 0
+    }));
+    setReAuditOriginalLog(log);
+    setChecklist(initialSecondChecklist);
+    setScannedSurplus([]);
+    setFileName(`${log.file_name} (Đối soát Lần 2)`);
+    setShowHistory(false);
+    setSelectedLog(null);
+    setShowComparePopup(false);
+    setAlertMessage({
+      type: 'warning',
+      text: `🔄 Đang trong chế độ ĐỐI SOÁT LẠI (Lượt 2) cho phiên "${log.file_name}". Hãy bắn lại toàn bộ sản phẩm rồi bấm "So sánh 2 lượt".`
+    });
+  };
+
+  const handleRequestStartReAudit = (log) => {
+    if (checklist.length > 0) {
+      setConfirmPopup({
+        isOpen: true,
+        title: 'Bắt đầu đối soát lại?',
+        message: 'Phiên làm việc hiện tại trên màn hình chính sẽ bị thay thế bởi phiên đối soát lại này. Bạn có muốn tiếp tục?',
+        isDestructive: false,
+        onConfirm: () => {
+          closeConfirm();
+          startReAuditSession(log);
+        }
+      });
+    } else {
+      startReAuditSession(log);
+    }
+  };
+
+  const requestExitReAudit = () => {
+    setConfirmPopup({
+      isOpen: true,
+      title: 'Thoát chế độ Đối soát lại?',
+      message: 'Dữ liệu quét Lượt 2 hiện tại sẽ bị hủy (dữ liệu Lượt 1 trong lịch sử vẫn giữ nguyên).',
+      isDestructive: true,
+      onConfirm: () => {
+        setReAuditOriginalLog(null);
+        setChecklist([]);
+        setScannedSurplus([]);
+        setFileName('');
+        setAlertMessage(null);
+        setIsScanningCam(false);
+        setShowComparePopup(false);
+        closeConfirm();
+      }
     });
   };
 
@@ -225,7 +302,7 @@ export default function KiemTraDonHoan() {
   const generateMatchKey = (str) => {
     if (!str) return '';
     return String(str).normalize('NFC').toLowerCase()
-      .replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/[–—\-]/g, '').replace(/\s+/g, '');               
+      .replace(/[\u200B-\u200D\uFEFF]/g, '').replace(/[–—\-]/g, '').replace(/\s+/g, '');                
   };
 
   const playSound = (type, isEnabled = true) => {
@@ -329,6 +406,7 @@ export default function KiemTraDonHoan() {
     const file = e.target.files[0];
     if (!file) return;
     setFileName(file.name);
+    setReAuditOriginalLog(null);
     
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -385,12 +463,103 @@ export default function KiemTraDonHoan() {
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   };
 
+  // --- DỮ LIỆU TÍNH TOÁN CHO POPUP SO SÁNH 2 LƯỢT ---
+  const getComparisonData = () => {
+    if (!reAuditOriginalLog) return { mainComparison: [], surplusComparison: [] };
+
+    const round1Checklist = reAuditOriginalLog.checklist_data || [];
+    const mainComparison = checklist.map((item2, idx) => {
+      // Tìm sản phẩm tương ứng ở Lượt 1
+      const item1 = round1Checklist[idx] || round1Checklist.find(
+        r1 => (r1.matchKey && r1.matchKey === item2.matchKey) || (r1.name === item2.name && r1.code === item2.code)
+      );
+      const qty1 = item1 ? item1.scannedQty : 0;
+      const qty2 = item2.scannedQty;
+      const diff2vs1 = qty2 - qty1;
+      return {
+        ...item2,
+        qty1,
+        qty2,
+        diff2vs1
+      };
+    });
+
+    // Gộp danh sách hàng lạ / dư của cả 2 lượt để đối chiếu
+    const surplusMap = new Map();
+    (reAuditOriginalLog.surplus_data || []).forEach(s1 => {
+      surplusMap.set(s1.code, {
+        code: s1.code,
+        name: s1.name,
+        qty1: s1.scannedQty,
+        qty2: 0
+      });
+    });
+    scannedSurplus.forEach(s2 => {
+      if (surplusMap.has(s2.code)) {
+        const existing = surplusMap.get(s2.code);
+        existing.qty2 = s2.scannedQty;
+      } else {
+        surplusMap.set(s2.code, {
+          code: s2.code,
+          name: s2.name,
+          qty1: 0,
+          qty2: s2.scannedQty
+        });
+      }
+    });
+
+    const surplusComparison = Array.from(surplusMap.values()).map(s => ({
+      ...s,
+      diff2vs1: s.qty2 - s.qty1
+    }));
+
+    return { mainComparison, surplusComparison };
+  };
+
+  const exportComparisonCSV = () => {
+    if (!reAuditOriginalLog) return;
+    const { mainComparison, surplusComparison } = getComparisonData();
+    let csvContent = "\uFEFFMã Sản Phẩm,Tên Sản Phẩm,Báo Cáo Gốc,Quét Lần 1 (Lịch sử),Quét Lần 2 (Đối soát),Chênh Lệch (Lần 2 - Lần 1),Đánh Giá\n";
+
+    mainComparison.forEach(item => {
+      const status = item.diff2vs1 === 0 ? 'Khớp 2 lượt' : (item.diff2vs1 > 0 ? `Lần 2 nhiều hơn +${item.diff2vs1}` : `Lần 2 ít hơn ${item.diff2vs1}`);
+      csvContent += `"${item.code || item.id}","${item.name}","${item.expectedQty}","${item.qty1}","${item.qty2}","${item.diff2vs1}","${status}"\n`;
+    });
+
+    if (surplusComparison.length > 0) {
+      csvContent += "\n--- SO SÁNH HÀNG LẠ / NGOÀI DANH SÁCH ---\n";
+      surplusComparison.forEach(item => {
+        const status = item.diff2vs1 === 0 ? 'Khớp 2 lượt' : (item.diff2vs1 > 0 ? `Lần 2 nhiều hơn +${item.diff2vs1}` : `Lần 2 ít hơn ${item.diff2vs1}`);
+        csvContent += `"${item.code}","${item.name}","0","${item.qty1}","${item.qty2}","${item.diff2vs1}","${status}"\n`;
+      });
+    }
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `So_Sanh_2_Luot_${reAuditOriginalLog.file_name}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const { mainComparison, surplusComparison } = getComparisonData();
+  const filteredMainComparison = compareFilterDiffOnly 
+    ? mainComparison.filter(item => item.diff2vs1 !== 0 || item.qty2 !== item.expectedQty || item.qty1 !== item.expectedQty)
+    : mainComparison;
+  const filteredSurplusComparison = compareFilterDiffOnly
+    ? surplusComparison.filter(item => item.diff2vs1 !== 0)
+    : surplusComparison;
+
+  const totalDiffCount = mainComparison.filter(i => i.diff2vs1 !== 0).length + surplusComparison.filter(i => i.diff2vs1 !== 0).length;
+
   return (
     <div className="space-y-6 pb-12 font-sans text-slate-800 animate-in fade-in duration-300">
       
       {/* POPUP XÁC NHẬN CHUNG (Tùy chỉnh) */}
       {confirmPopup.isOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all animate-in zoom-in-95 duration-200">
             <h3 className={`text-lg font-black mb-2 flex items-center gap-2 ${confirmPopup.isDestructive ? 'text-red-600' : 'text-slate-900'}`}>
               {confirmPopup.isDestructive ? <AlertCircle size={22} /> : <AlertCircle size={22} className="text-blue-500" />}
@@ -409,6 +578,44 @@ export default function KiemTraDonHoan() {
                 Xác nhận
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* BANNER CHẾ ĐỘ ĐỐI SOÁT LẠI (LƯỢT 2) */}
+      {reAuditOriginalLog && (
+        <div className="p-4 bg-indigo-600 text-white rounded-2xl shadow-md flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-white/15 rounded-xl">
+              <GitCompare size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest bg-amber-400 text-slate-900 px-2 py-0.5 rounded-md">
+                  Chế độ Đối soát lại (Lượt 2)
+                </span>
+                <span className="text-xs text-indigo-200 font-semibold">
+                  • Không ghi đè lịch sử gốc
+                </span>
+              </div>
+              <p className="text-sm font-bold mt-1">
+                Đang quét đối chiếu với phiên: <span className="underline">{reAuditOriginalLog.file_name}</span> ({new Date(reAuditOriginalLog.created_at).toLocaleString('vi-VN')})
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+            <button
+              onClick={() => setShowComparePopup(true)}
+              className="px-4 py-2 bg-white text-indigo-700 hover:bg-indigo-50 text-xs font-black rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <GitCompare size={15} /> So sánh 2 lượt ngay
+            </button>
+            <button
+              onClick={requestExitReAudit}
+              className="px-3 py-2 bg-indigo-700 hover:bg-indigo-800 text-indigo-100 text-xs font-bold rounded-xl transition flex items-center gap-1 cursor-pointer"
+            >
+              <XCircle size={15} /> Thoát đối soát
+            </button>
           </div>
         </div>
       )}
@@ -446,10 +653,20 @@ export default function KiemTraDonHoan() {
               <button onClick={() => exportFinalReport(checklist, scannedSurplus)} className="px-4 py-2 bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer">
                 <Download size={14} /> Tải CSV
               </button>
-              <button disabled={isSaving} onClick={requestSaveAudit} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer">
-                {isSaving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14} />} 
-                Lưu & Chốt
-              </button>
+
+              {reAuditOriginalLog ? (
+                <button
+                  onClick={() => setShowComparePopup(true)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                >
+                  <GitCompare size={14} /> Xem kết quả So sánh
+                </button>
+              ) : (
+                <button disabled={isSaving} onClick={requestSaveAudit} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                  {isSaving ? <Loader2 size={14} className="animate-spin"/> : <Save size={14} />} 
+                  Lưu & Chốt
+                </button>
+              )}
             </>
           )}
         </div>
@@ -489,7 +706,9 @@ export default function KiemTraDonHoan() {
             
             <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm space-y-4">
               <div className="flex justify-between items-center">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Súng quét Barcode / SKU</label>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">
+                  {reAuditOriginalLog ? 'Quét Barcode Đối Soát (Lượt 2)' : 'Súng quét Barcode / SKU'}
+                </label>
                 <button 
                     onClick={() => setIsScanningCam(!isScanningCam)}
                     type="button"
@@ -525,14 +744,26 @@ export default function KiemTraDonHoan() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-center text-center">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Số sản phẩm đúng</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  {reAuditOriginalLog ? 'Đã quét Lượt 2' : 'Số sản phẩm đúng'}
+                </span>
                 <div className="text-2xl font-black text-slate-800 mt-1">
                   <span className="text-blue-600">{totalScannedValid}</span> <span className="text-sm text-slate-300">/ {totalExpected}</span>
                 </div>
+                {reAuditOriginalLog && (
+                  <span className="text-[10px] font-bold text-indigo-500 mt-1">
+                    Lượt 1 đã quét: {reAuditOriginalLog.total_scanned_valid}
+                  </span>
+                )}
               </div>
               <div className="bg-white p-4 border border-red-200 bg-red-50/20 rounded-2xl shadow-sm flex flex-col justify-center text-center">
                 <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Mã sai / Dư thừa</span>
                 <span className="text-2xl font-black text-red-600 mt-1">{totalSurplus}</span>
+                {reAuditOriginalLog && (
+                  <span className="text-[10px] font-bold text-red-400 mt-1">
+                    Lượt 1 dư: {reAuditOriginalLog.total_surplus}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -550,9 +781,16 @@ export default function KiemTraDonHoan() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col">
-              <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-                <Package size={16} className="text-blue-600" />
-                <h3 className="text-xs font-black text-slate-700 uppercase tracking-wide">Sản phẩm đối soát ({checklist.length} sản phẩm)</h3>
+              <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Package size={16} className="text-blue-600" />
+                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-wide">Sản phẩm đối soát ({checklist.length} sản phẩm)</h3>
+                </div>
+                {reAuditOriginalLog && (
+                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
+                    Đang ghi nhận số liệu Lượt 2
+                  </span>
+                )}
               </div>
               <div className="flex-1 overflow-y-auto max-h-[500px]">
                 <table className="w-full text-left text-xs font-semibold">
@@ -560,7 +798,8 @@ export default function KiemTraDonHoan() {
                     <tr className="border-b border-slate-100 text-[10px] text-slate-400 uppercase tracking-wider">
                       <th className="py-3 px-4">Sản phẩm / Barcode</th>
                       <th className="py-3 px-4 text-center">Theo báo cáo</th>
-                      <th className="py-3 px-4 text-center">Đã quét</th>
+                      {reAuditOriginalLog && <th className="py-3 px-4 text-center text-indigo-500">Lượt 1</th>}
+                      <th className="py-3 px-4 text-center">{reAuditOriginalLog ? 'Lượt 2 (Hiện tại)' : 'Đã quét'}</th>
                       <th className="py-3 px-4 text-right">Trạng thái</th>
                     </tr>
                   </thead>
@@ -569,6 +808,7 @@ export default function KiemTraDonHoan() {
                       const isComplete = item.scannedQty === item.expectedQty;
                       const isOver = item.scannedQty > item.expectedQty;
                       const isPending = item.scannedQty === 0;
+                      const round1Qty = reAuditOriginalLog?.checklist_data?.[idx]?.scannedQty ?? 0;
 
                       return (
                         <tr key={idx} className={`transition-colors ${isComplete ? 'bg-emerald-50/40' : isOver ? 'bg-amber-50/40' : 'hover:bg-slate-50/50'}`}>
@@ -577,6 +817,9 @@ export default function KiemTraDonHoan() {
                             <div className={`text-[10px] mt-0.5 tracking-wide font-medium ${item.code === 'N/A' ? 'text-red-500 font-bold' : 'text-slate-400'}`}>{item.code || item.id}</div>
                           </td>
                           <td className="py-3 px-4 text-center font-black text-slate-500">{item.expectedQty}</td>
+                          {reAuditOriginalLog && (
+                            <td className="py-3 px-4 text-center font-bold text-indigo-600">{round1Qty}</td>
+                          )}
                           <td className="py-3 px-4 text-center">
                             <span className={`px-2 py-1 rounded-md font-black text-[11px] ${
                               isComplete ? 'bg-emerald-100 text-emerald-700' : 
@@ -648,14 +891,22 @@ export default function KiemTraDonHoan() {
                 </h3>
               </div>
               
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
                 {selectedLog && (
-                  <button 
-                    onClick={() => exportFinalReport(selectedLog.checklist_data, selectedLog.surplus_data)} 
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 font-bold text-xs rounded-lg transition"
-                  >
-                    <Download size={14}/> Tải lại CSV
-                  </button>
+                  <>
+                    <button 
+                      onClick={() => handleRequestStartReAudit(selectedLog)} 
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white hover:bg-indigo-700 font-bold text-xs rounded-lg shadow-sm transition cursor-pointer"
+                    >
+                      <GitCompare size={14}/> Đối soát lại (Quét lần 2)
+                    </button>
+                    <button 
+                      onClick={() => exportFinalReport(selectedLog.checklist_data, selectedLog.surplus_data)} 
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-700 hover:bg-blue-200 font-bold text-xs rounded-lg transition cursor-pointer"
+                    >
+                      <Download size={14}/> Tải lại CSV
+                    </button>
+                  </>
                 )}
                 <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition">
                   <XCircle size={20} />
@@ -688,7 +939,7 @@ export default function KiemTraDonHoan() {
                           </div>
                         </div>
                         
-                        <div className="flex items-center gap-4 w-full md:w-auto">
+                        <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
                           <div className="flex gap-4 text-xs font-bold bg-slate-50 p-2 rounded-lg border border-slate-100">
                             <div className="text-center px-2">
                               <span className="text-slate-400 block mb-1">Báo cáo</span>
@@ -703,6 +954,18 @@ export default function KiemTraDonHoan() {
                               <span className="text-red-600">{log.total_surplus}</span>
                             </div>
                           </div>
+
+                          {/* NÚT ĐỐI SOÁT NHANH NGOÀI CARD */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRequestStartReAudit(log);
+                            }}
+                            className="px-3 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5"
+                            title="Quét đối soát lại phiên này"
+                          >
+                            <GitCompare size={14} /> Đối soát
+                          </button>
                           
                           {/* NÚT XÓA CHO OWNER */}
                           {userRole === 'owner' && (
@@ -802,6 +1065,242 @@ export default function KiemTraDonHoan() {
                   </div>
                 </div>
               )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* POPUP SO SÁNH 2 LƯỢT QUÉT */}
+      {showComparePopup && reAuditOriginalLog && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden">
+            
+            {/* HEADER POPUP SO SÁNH */}
+            <div className="p-5 border-b border-slate-200 bg-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="p-2 bg-indigo-100 text-indigo-700 rounded-xl">
+                    <GitCompare size={20} />
+                  </span>
+                  <div>
+                    <h3 className="font-black text-slate-900 text-base">
+                      Bảng So Sánh Đối Soát 2 Lượt Quét
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium">
+                      Phiên gốc: <strong className="text-slate-700">{reAuditOriginalLog.file_name}</strong> ({new Date(reAuditOriginalLog.created_at).toLocaleString('vi-VN')})
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => setCompareFilterDiffOnly(!compareFilterDiffOnly)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                    compareFilterDiffOnly 
+                      ? 'bg-amber-100 border-amber-300 text-amber-800' 
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {compareFilterDiffOnly ? 'Đang lọc: Chỉ hiện mã lệch' : 'Hiển thị: Tất cả mã'}
+                </button>
+
+                <button
+                  onClick={exportComparisonCSV}
+                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                >
+                  <Download size={14} /> Xuất CSV So sánh
+                </button>
+
+                <button
+                  onClick={() => setShowComparePopup(false)}
+                  className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition cursor-pointer"
+                >
+                  <XCircle size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* THỐNG KÊ TỔNG QUAN 2 LƯỢT */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-white border-b border-slate-100">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-center">
+                <span className="text-[10px] font-bold text-slate-400 uppercase block">Tổng theo Báo cáo</span>
+                <span className="text-lg font-black text-slate-800">{totalExpected}</span>
+              </div>
+              <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100 text-center">
+                <span className="text-[10px] font-bold text-indigo-500 uppercase block">Lượt 1 (Hợp lệ / Lạ)</span>
+                <span className="text-lg font-black text-indigo-700">
+                  {reAuditOriginalLog.total_scanned_valid} <span className="text-xs text-red-500 font-bold">(+{reAuditOriginalLog.total_surplus} lạ)</span>
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 text-center">
+                <span className="text-[10px] font-bold text-blue-500 uppercase block">Lượt 2 (Hợp lệ / Lạ)</span>
+                <span className="text-lg font-black text-blue-700">
+                  {totalScannedValid} <span className="text-xs text-red-500 font-bold">(+{totalSurplus} lạ)</span>
+                </span>
+              </div>
+              <div className={`p-3 rounded-xl border text-center ${totalDiffCount === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+                <span className={`text-[10px] font-bold uppercase block ${totalDiffCount === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                  Độ khớp giữa 2 lượt
+                </span>
+                <span className={`text-lg font-black ${totalDiffCount === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                  {totalDiffCount === 0 ? 'Khớp 100%' : `Lệch ${totalDiffCount} mã`}
+                </span>
+              </div>
+            </div>
+
+            {/* NỘI DUNG BẢNG SO SÁNH CHI TIẾT */}
+            <div className="p-5 overflow-y-auto flex-1 bg-slate-50/40 space-y-6">
+              
+              {/* BẢNG 1: SẢN PHẨM TRONG DANH SÁCH */}
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+                <div className="p-3.5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                  <h4 className="text-xs font-black text-slate-700 uppercase">
+                    1. Đối chiếu sản phẩm trong danh sách hoàn ({filteredMainComparison.length} mã)
+                  </h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs font-semibold">
+                    <thead className="bg-slate-50/80 border-b border-slate-100 text-[10px] text-slate-400 uppercase">
+                      <tr>
+                        <th className="py-3 px-4">Sản phẩm / Mã</th>
+                        <th className="py-3 px-4 text-center">Báo cáo</th>
+                        <th className="py-3 px-4 text-center text-indigo-600">Quét Lần 1</th>
+                        <th className="py-3 px-4 text-center text-blue-600">Quét Lần 2</th>
+                        <th className="py-3 px-4 text-center">Lệch (Lần 2 - Lần 1)</th>
+                        <th className="py-3 px-4 text-right">Đánh giá đối soát</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredMainComparison.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-8 text-center text-slate-400 font-bold">
+                            Không có sản phẩm nào sai lệch theo bộ lọc hiện tại.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredMainComparison.map((item, idx) => {
+                          const isSameScan = item.diff2vs1 === 0;
+                          const isBothEnough = item.qty1 === item.expectedQty && item.qty2 === item.expectedQty;
+
+                          return (
+                            <tr key={idx} className={!isSameScan ? 'bg-amber-50/40' : isBothEnough ? 'bg-emerald-50/20' : ''}>
+                              <td className="py-3 px-4">
+                                <div className="font-bold text-slate-800">{item.name}</div>
+                                <div className="text-[10px] text-slate-400">{item.code || item.id}</div>
+                              </td>
+                              <td className="py-3 px-4 text-center font-black text-slate-500">{item.expectedQty}</td>
+                              <td className="py-3 px-4 text-center">
+                                <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-black">
+                                  {item.qty1}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-black">
+                                  {item.qty2}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-center">
+                                {item.diff2vs1 === 0 ? (
+                                  <span className="text-slate-400 font-bold">0</span>
+                                ) : (
+                                  <span className={`px-2 py-0.5 rounded font-black ${
+                                    item.diff2vs1 > 0 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-700'
+                                  }`}>
+                                    {item.diff2vs1 > 0 ? `+${item.diff2vs1}` : item.diff2vs1}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-3 px-4 text-right">
+                                {isSameScan ? (
+                                  isBothEnough ? (
+                                    <span className="text-[10px] font-bold text-emerald-600 uppercase inline-flex items-center gap-1">
+                                      <CheckCircle2 size={12} /> Khớp & Đủ hàng
+                                    </span>
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-blue-600 uppercase">
+                                      Khớp 2 lượt (Lệch báo cáo: {item.qty2 - item.expectedQty})
+                                    </span>
+                                  )
+                                ) : (
+                                  <span className="text-[10px] font-bold text-amber-600 uppercase inline-flex items-center gap-1">
+                                    <AlertCircle size={12} /> Lần 2 {item.diff2vs1 > 0 ? `nhiều hơn ${item.diff2vs1}` : `ít hơn ${Math.abs(item.diff2vs1)}`}
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* BẢNG 2: SẢN PHẨM LẠ / NGOÀI DANH SÁCH */}
+              {(surplusComparison.length > 0) && (
+                <div className="bg-white border border-red-200 rounded-2xl shadow-sm overflow-hidden">
+                  <div className="p-3.5 border-b border-red-100 bg-red-50/70">
+                    <h4 className="text-xs font-black text-red-700 uppercase">
+                      2. Đối chiếu Hàng lạ / Ngoài danh sách ({filteredSurplusComparison.length} mã)
+                    </h4>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs font-semibold">
+                      <thead className="bg-red-50/30 border-b border-red-100 text-[10px] text-red-400 uppercase">
+                        <tr>
+                          <th className="py-2.5 px-4">Sản phẩm lạ / Mã quét</th>
+                          <th className="py-2.5 px-4 text-center">Quét Lần 1</th>
+                          <th className="py-2.5 px-4 text-center">Quét Lần 2</th>
+                          <th className="py-2.5 px-4 text-center">Chênh lệch (Lần 2 - Lần 1)</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-red-50">
+                        {filteredSurplusComparison.map((item, idx) => (
+                          <tr key={idx}>
+                            <td className="py-2.5 px-4">
+                              <div className="font-bold text-red-800">{item.name}</div>
+                              <div className="text-[10px] text-slate-400">{item.code}</div>
+                            </td>
+                            <td className="py-2.5 px-4 text-center font-black text-indigo-600">{item.qty1}</td>
+                            <td className="py-2.5 px-4 text-center font-black text-blue-600">{item.qty2}</td>
+                            <td className="py-2.5 px-4 text-center font-black">
+                              {item.diff2vs1 === 0 ? (
+                                <span className="text-emerald-600">Khớp (0)</span>
+                              ) : (
+                                <span className="text-red-600">{item.diff2vs1 > 0 ? `+${item.diff2vs1}` : item.diff2vs1}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* FOOTER POPUP SO SÁNH */}
+            <div className="p-4 border-t border-slate-200 bg-white flex justify-between items-center">
+              <span className="text-xs text-slate-400 font-medium">
+                * Lưu ý: Kết quả quét đối soát Lượt 2 chỉ phục vụ kiểm tra chéo, không lưu đè vào lịch sử hệ thống.
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowComparePopup(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  Tiếp tục quét Lượt 2
+                </button>
+                <button
+                  onClick={requestExitReAudit}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  Kết thúc & Thoát đối soát
+                </button>
+              </div>
             </div>
 
           </div>
