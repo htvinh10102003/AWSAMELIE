@@ -34,7 +34,8 @@ const SHIPPING_STATUS_NAMES = [
 // Nhóm "Trạng thái cuối"
 const FINAL_STATUS_NAMES = [
   'thành công',
-  'đã hoàn'
+  'đã hoàn',
+  'đã chuyển hoàn'
 ];
 
 export default function StatusTransitionTracker() {
