@@ -4,7 +4,7 @@ import {
   ScanBarcode, Calendar, Trash2, PackagePlus, PackageMinus, AlertCircle, 
   CheckCircle2, XCircle, CheckCircle, Download, Camera, CameraOff, 
   RefreshCw, List, Plus, ChevronLeft, Clock, Search, Filter, Info,
-  Store // Icon thêm cho Kênh bán
+  Store, Eye
 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 
@@ -22,7 +22,6 @@ const CANCELED_STATUS_CODES = [58, 63, 64];
 
 // ==========================================
 // MAPPING KÊNH BÁN (SALE CHANNELS)
-// Tùy chỉnh ID (1, 2, 3...) cho khớp với database của bạn
 // ==========================================
 const SALE_CHANNEL_MAP = {
   1: { name: 'Admin', style: 'bg-slate-100 text-slate-700 border-slate-300' },
@@ -39,6 +38,9 @@ const getChannelBadge = (channelId) => {
     </span>
   );
 };
+
+// Hàm chuẩn hóa để tương thích cả dữ liệu mới (lưu chuỗi ID) và dữ liệu cũ (lưu object)
+const extractOrderId = (item) => (typeof item === 'object' && item !== null ? item.id : item);
 
 export default function OrderReconciliation() {
   const getTodayStr = () => new Date().toISOString().split('T')[0];
@@ -92,6 +94,11 @@ export default function OrderReconciliation() {
   const [loading, setLoading] = useState(false);
   const [alertBanner, setAlertBanner] = useState(null);
 
+  // LAZY LOAD DETAILS STATE (Cho biên bản đã chốt)
+  const [isDetailsVisible, setIsDetailsVisible] = useState(false);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
+  const [detailedOrdersMap, setDetailedOrdersMap] = useState({});
+
   // CAMERA & POPUP STATE
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraErrorMsg, setCameraErrorMsg] = useState(''); 
@@ -128,9 +135,10 @@ export default function OrderReconciliation() {
       const from = (currentPage - 1) * LIMIT;
       const to = from + LIMIT - 1;
 
+      // Chỉ lấy các trường meta & số lượng, không tải các cột JSONB nặng ở danh sách
       const { data, error, count } = await supabase
         .from('reconciliation_sessions')
-        .select('*', { count: 'exact' })
+        .select('id, session_name, audit_date, status, created_at, completed_at, total_printed, total_expected, total_canceled, total_scanned, total_missing, total_surplus', { count: 'exact' })
         .gte('audit_date', filterStartDate)
         .lte('audit_date', filterEndDate)
         .order('created_at', { ascending: false })
@@ -193,12 +201,115 @@ export default function OrderReconciliation() {
     );
   };
 
-  const handleOpenSession = (sessionData) => {
-    setCurrentSession(sessionData);
-    setScannedCodes(sessionData.scanned_codes || []);
-    setSurplusOrders(sessionData.surplus_orders || []);
-    setIsConfirmed(sessionData.status === 'completed');
+  const handleOpenSession = async (sessionSummary) => {
     setView('audit');
+    setIsDetailsVisible(false);
+    setDetailedOrdersMap({});
+    setAlertBanner(null);
+
+    const isCompleted = sessionSummary.status === 'completed';
+    setIsConfirmed(isCompleted);
+    setCurrentSession(sessionSummary);
+
+    if (!isCompleted) {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('reconciliation_sessions')
+          .select('*')
+          .eq('id', sessionSummary.id)
+          .single();
+
+        if (error) throw error;
+        setCurrentSession(data);
+        setScannedCodes(data.scanned_codes || []);
+
+        // Nếu biên bản nháp đang có đơn thừa chỉ lưu ID, truy vấn lại thông tin từ bảng orders
+        const rawSurplus = data.surplus_orders || [];
+        if (rawSurplus.length > 0 && typeof rawSurplus[0] === 'string') {
+          const { data: surplusData } = await supabase
+            .from('orders')
+            .select('id, carrier_code, status, sale_channel, order_products (product_code, product_name, quantity)')
+            .in('id', rawSurplus);
+          
+          const foundMap = {};
+          (surplusData || []).forEach(o => { foundMap[o.id] = o; });
+          setSurplusOrders(rawSurplus.map(id => foundMap[id] || { id, carrier_code: 'Không rõ', status: 'Mã vạch lạ hoắc', sale_channel: null, order_products: [] }));
+        } else {
+          setSurplusOrders(rawSurplus);
+        }
+      } catch (err) {
+        console.error("Lỗi tải chi tiết phiên nháp:", err.message);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Biên bản đã chốt: Chỉ hiển thị số lượng trước, chưa tải danh sách ID hay chi tiết đơn
+      setScannedCodes([]);
+      setSurplusOrders([]);
+    }
+  };
+
+  // ==========================================
+  // HÀM TẢI DỮ LIỆU CHI TIẾT KHI BẤM NÚT XEM
+  // ==========================================
+  const handleLoadConfirmedDetails = async () => {
+    if (!currentSession) return null;
+    setIsLoadingDetails(true);
+    try {
+      let sessionData = currentSession;
+      // Nếu chưa có mảng ID từ database thì mới tải về
+      if (!sessionData.expected_correct || !sessionData.scanned_codes) {
+        const { data, error } = await supabase
+          .from('reconciliation_sessions')
+          .select('scanned_codes, surplus_orders, expected_correct, expected_canceled, missing_orders')
+          .eq('id', currentSession.id)
+          .single();
+
+        if (error) throw error;
+        sessionData = { ...currentSession, ...data };
+        setCurrentSession(sessionData);
+      }
+
+      setScannedCodes(sessionData.scanned_codes || []);
+
+      const correctIds = (sessionData.expected_correct || []).map(extractOrderId).filter(Boolean);
+      const canceledIds = (sessionData.expected_canceled || []).map(extractOrderId).filter(Boolean);
+      const missingIds = (sessionData.missing_orders || []).map(extractOrderId).filter(Boolean);
+      const surplusIds = (sessionData.surplus_orders || []).map(extractOrderId).filter(Boolean);
+
+      const allOrderIds = Array.from(new Set([...correctIds, ...canceledIds, ...missingIds, ...surplusIds]));
+
+      const ordersMap = {};
+      if (allOrderIds.length > 0) {
+        // Chia nhỏ batch 200 ID để đảm bảo an toàn với giới hạn URL của Supabase
+        const chunkSize = 200;
+        for (let i = 0; i < allOrderIds.length; i += chunkSize) {
+          const chunk = allOrderIds.slice(i, i + chunkSize);
+          const { data: ordersData, error: ordersError } = await supabase
+            .from('orders')
+            .select(`
+              id, created_at, carrier_code, status, printed_at, packed_at, carrier_date, sale_channel,
+              order_products (product_code, product_name, quantity)
+            `)
+            .in('id', chunk);
+
+          if (ordersError) throw ordersError;
+          (ordersData || []).forEach(order => {
+            ordersMap[order.id] = order;
+          });
+        }
+      }
+
+      setDetailedOrdersMap(ordersMap);
+      setIsDetailsVisible(true);
+      return { sessionData, ordersMap };
+    } catch (err) {
+      showDialog('alert', 'Lỗi tải chi tiết', 'Không thể tải dữ liệu chi tiết: ' + err.message);
+      return null;
+    } finally {
+      setIsLoadingDetails(false);
+    }
   };
 
   const handleBackToList = () => {
@@ -206,13 +317,15 @@ export default function OrderReconciliation() {
     setView('list');
     setCurrentSession(null);
     setAlertBanner(null);
+    setIsDetailsVisible(false);
+    setDetailedOrdersMap({});
   };
 
   // ==========================================
   // LOGIC ĐỐI SOÁT
   // ==========================================
   const fetchTodayOrders = async () => {
-    if (!currentSession) return;
+    if (!currentSession || currentSession.status === 'completed') return;
     setLoading(true);
     try {
       const startOfDay = new Date(`${currentSession.audit_date}T00:00:00`).toISOString();
@@ -237,31 +350,63 @@ export default function OrderReconciliation() {
   };
 
   useEffect(() => {
-    if (view === 'audit' && currentSession?.status !== 'completed') {
+    if (view === 'audit' && currentSession?.id && currentSession?.status !== 'completed') {
       fetchTodayOrders();
     }
-  }, [view, currentSession?.status]);
+  }, [view, currentSession?.id, currentSession?.status]);
 
   useEffect(() => {
-    if (inputRef.current && !isCameraOpen && view === 'audit' && !dialogConfig.isOpen) {
+    if (inputRef.current && !isCameraOpen && view === 'audit' && !isConfirmed && !dialogConfig.isOpen) {
       inputRef.current.focus();
     }
-  }, [scannedCodes, inputCode, alertBanner, isCameraOpen, view, dialogConfig.isOpen]);
+  }, [scannedCodes, inputCode, alertBanner, isCameraOpen, view, isConfirmed, dialogConfig.isOpen]);
 
-  const isScanned = (order) => scannedCodes.includes(order.id) || (order.carrier_code && scannedCodes.includes(order.carrier_code));
+  const isScanned = (order) => {
+    if (!order) return false;
+    return scannedCodes.includes(order.id) || (order.carrier_code && scannedCodes.includes(order.carrier_code));
+  };
+
+  // Map từ ID sang thông tin chi tiết đơn hàng trong Database
+  const resolveOrderFromMap = (item, mapSource = detailedOrdersMap) => {
+    const id = extractOrderId(item);
+    if (mapSource[id]) return mapSource[id];
+    if (typeof item === 'object' && item !== null) return item;
+    return { id, carrier_code: '---', status: 'Không tìm thấy trong CSDL', sale_channel: null, order_products: [] };
+  };
 
   const expectedCorrect = isConfirmed 
-      ? (currentSession?.expected_correct || []) 
-      : todayOrders.filter(o => !EXCLUDED_STATUS_CODES.includes(Number(o.status)) && !CANCELED_STATUS_CODES.includes(Number(o.status)));
+    ? (isDetailsVisible ? (currentSession?.expected_correct || []).map(item => resolveOrderFromMap(item)) : [])
+    : todayOrders.filter(o => !EXCLUDED_STATUS_CODES.includes(Number(o.status)) && !CANCELED_STATUS_CODES.includes(Number(o.status)));
       
   const expectedCanceled = isConfirmed 
-      ? (currentSession?.expected_canceled || []) 
-      : todayOrders.filter(o => CANCELED_STATUS_CODES.includes(Number(o.status)));
+    ? (isDetailsVisible ? (currentSession?.expected_canceled || []).map(item => resolveOrderFromMap(item)) : [])
+    : todayOrders.filter(o => CANCELED_STATUS_CODES.includes(Number(o.status)));
 
   const missingCorrect = expectedCorrect.filter(o => !isScanned(o));
   const missingCanceled = expectedCanceled.filter(o => !isScanned(o));
-  const allMissing = isConfirmed ? (currentSession?.missing_orders || []) : [...missingCorrect, ...missingCanceled];
-  const totalPrintedCount = isConfirmed ? currentSession?.total_printed : todayOrders.length;
+
+  const allMissing = isConfirmed 
+    ? (isDetailsVisible ? (currentSession?.missing_orders || []).map(item => resolveOrderFromMap(item)) : [])
+    : [...missingCorrect, ...missingCanceled];
+
+  const resolvedSurplusOrders = isConfirmed
+    ? (isDetailsVisible ? (currentSession?.surplus_orders || []).map(item => resolveOrderFromMap(item)) : [])
+    : surplusOrders;
+
+  // Số liệu thống kê hiển thị trên 5 thẻ (Hỗ trợ hiển thị ngay lập tức khi mở biên bản đã chốt mà không cần tải chi tiết)
+  const totalPrintedCount = isConfirmed ? (currentSession?.total_printed ?? 0) : todayOrders.length;
+  const totalExpectedCount = isConfirmed ? (currentSession?.total_expected ?? 0) : expectedCorrect.length;
+  const totalCanceledCount = isConfirmed ? (currentSession?.total_canceled ?? 0) : expectedCanceled.length;
+  const totalSurplusCount = isConfirmed ? (currentSession?.total_surplus ?? 0) : surplusOrders.length;
+  const totalMissingCount = isConfirmed ? (currentSession?.total_missing ?? 0) : allMissing.length;
+
+  const scannedCorrectCount = isConfirmed && !isDetailsVisible
+    ? Math.max(0, totalExpectedCount + totalCanceledCount - totalMissingCount)
+    : expectedCorrect.filter(o => isScanned(o)).length;
+
+  const scannedCanceledCount = isConfirmed && !isDetailsVisible
+    ? null
+    : expectedCanceled.filter(o => isScanned(o)).length;
 
   const playSound = (type) => {
     try {
@@ -308,7 +453,11 @@ export default function OrderReconciliation() {
       }
       setScannedCodes(prev => [...prev, code]);
     } else {
-      const { data } = await supabase.from('orders').select(`id, carrier_code, status, sale_channel, order_products (product_code, product_name, quantity)`).or(`id.eq.${code},carrier_code.eq.${code}`).maybeSingle();
+      const { data } = await supabase
+        .from('orders')
+        .select(`id, carrier_code, status, sale_channel, order_products (product_code, product_name, quantity)`)
+        .or(`id.eq.${code},carrier_code.eq.${code}`)
+        .maybeSingle();
 
       if (data) {
         setSurplusOrders(prev => [...prev, data]);
@@ -345,49 +494,46 @@ export default function OrderReconciliation() {
   };
 
   // ==========================================
-  // LƯU LOG PHIÊN & EXPORT EXCEL
+  // LƯU LOG PHIÊN (CHỈ LƯU SỐ LƯỢNG + MẢNG ID ĐƠN)
   // ==========================================
   const handleConfirmSession = async () => {
-    setIsConfirmed(true);
     setLoading(true);
     try {
-      // Bổ sung sale_channel vào Payload để lưu trữ
-      const optimizedExpectedCorrect = expectedCorrect.map(o => ({
-        id: o.id,
-        carrier_code: o.carrier_code,
-        sale_channel: o.sale_channel,
-        order_products: o.order_products?.map(p => ({
-          product_code: p.product_code,
-          product_name: p.product_name,
-          quantity: p.quantity
-        })) || []
-      }));
-
-      const optimizedExpectedCanceled = expectedCanceled.map(o => ({ id: o.id, sale_channel: o.sale_channel, carrier_code: o.carrier_code }));
-      const optimizedMissing = allMissing.map(o => ({ id: o.id, sale_channel: o.sale_channel }));
-      const optimizedSurplus = surplusOrders.map(o => ({ id: o.id, status: o.status, sale_channel: o.sale_channel }));
+      // Chỉ lưu mảng ID đơn hàng thay vì lưu toàn bộ thông tin sàn, sản phẩm...
+      const expectedCorrectIds = expectedCorrect.map(o => o.id);
+      const expectedCanceledIds = expectedCanceled.map(o => o.id);
+      const missingOrderIds = allMissing.map(o => o.id);
+      const surplusOrderIds = surplusOrders.map(o => o.id);
 
       const updates = {
         status: 'completed', 
         completed_at: new Date().toISOString(),
         total_printed: totalPrintedCount, 
-        total_expected: expectedCorrect.length,
-        total_canceled: expectedCanceled.length, 
+        total_expected: expectedCorrectIds.length,
+        total_canceled: expectedCanceledIds.length, 
         total_scanned: scannedCodes.length,
-        total_missing: allMissing.length, 
-        total_surplus: surplusOrders.length,
+        total_missing: missingOrderIds.length, 
+        total_surplus: surplusOrderIds.length,
         scanned_codes: scannedCodes, 
-        surplus_orders: optimizedSurplus,
-        expected_correct: optimizedExpectedCorrect, 
-        expected_canceled: optimizedExpectedCanceled, 
-        missing_orders: optimizedMissing
+        surplus_orders: surplusOrderIds,
+        expected_correct: expectedCorrectIds, 
+        expected_canceled: expectedCanceledIds, 
+        missing_orders: missingOrderIds
       };
 
       const { error } = await supabase.from('reconciliation_sessions').update(updates).eq('id', currentSession.id);
       if (error) throw error;
+
+      // Chuyển dữ liệu đang có sẵn trên RAM vào map để nếu bấm "Xem chi tiết" ngay thì không cần tải lại
+      const currentMemoryMap = {};
+      todayOrders.forEach(o => { currentMemoryMap[o.id] = o; });
+      surplusOrders.forEach(o => { currentMemoryMap[o.id] = o; });
+      setDetailedOrdersMap(currentMemoryMap);
       
-      setCurrentSession(prev => ({...prev, ...updates}));
-      setAlertBanner({ type: 'success', message: '🎉 Đã chốt và lưu cứng dữ liệu đối soát thành công!' });
+      setIsConfirmed(true);
+      setIsDetailsVisible(false); // Ẩn chi tiết sau khi chốt, chỉ hiện số lượng và nút "Xem dữ liệu chi tiết"
+      setCurrentSession(prev => ({ ...prev, ...updates }));
+      setAlertBanner({ type: 'success', message: '🎉 Đã chốt và lưu gọn lịch sử đối soát (Số lượng + ID đơn) thành công!' });
     } catch (err) {
       showDialog('alert', 'Lỗi', "Lỗi khi chốt biên bản: " + err.message);
       setIsConfirmed(false);
@@ -403,32 +549,48 @@ export default function OrderReconciliation() {
       'Xác nhận quét lại từ đầu? Lịch sử quét và biên bản hiện tại sẽ bị xóa sạch.',
       async () => {
         setScannedCodes([]); setSurplusOrders([]); setIsConfirmed(false);
+        setIsDetailsVisible(false); setDetailedOrdersMap({});
         setAlertBanner(null); setShowDuplicatePopup(false);
         if (isCameraOpen) stopCamera();
         
         const resetData = {
           status: 'draft', scanned_codes: [], surplus_orders: [], completed_at: null,
-          expected_correct: null, expected_canceled: null, missing_orders: null
+          expected_correct: [], expected_canceled: [], missing_orders: []
         };
 
         await supabase.from('reconciliation_sessions').update(resetData).eq('id', currentSession.id);
-        setCurrentSession(prev => ({...prev, ...resetData}));
+        setCurrentSession(prev => ({ ...prev, ...resetData }));
       }
     );
   };
 
-  const handleExportExcel = () => {
-    const allExpected = [...expectedCorrect, ...expectedCanceled];
-    if (allExpected.length === 0) {
+  const handleExportExcel = async () => {
+    let ordersToExport = [...expectedCorrect, ...expectedCanceled];
+    let activeScannedCodes = scannedCodes;
+
+    // Nếu biên bản đã chốt nhưng người dùng chưa bấm "Xem dữ liệu chi tiết", tự động tải dữ liệu trước khi xuất Excel
+    if (isConfirmed && !isDetailsVisible) {
+      const loaded = await handleLoadConfirmedDetails();
+      if (!loaded) return;
+      const { sessionData, ordersMap } = loaded;
+      activeScannedCodes = sessionData.scanned_codes || [];
+      const correctList = (sessionData.expected_correct || []).map(item => resolveOrderFromMap(item, ordersMap));
+      const canceledList = (sessionData.expected_canceled || []).map(item => resolveOrderFromMap(item, ordersMap));
+      ordersToExport = [...correctList, ...canceledList];
+    }
+
+    if (ordersToExport.length === 0) {
       showDialog('alert', 'Trống', 'Không có đơn nào để xuất Excel!');
       return;
     }
 
+    const checkScannedForExport = (order) => activeScannedCodes.includes(order.id) || (order.carrier_code && activeScannedCodes.includes(order.carrier_code));
+
     let csvContent = "\uFEFFMã Đơn Hàng (ID),Kênh Bán,Mã Vận Đơn,Trạng Thái Sàn,Đã Trả/Chưa Trả,Mã Sản Phẩm,Tên Sản Phẩm,Số Lượng\n";
-    allExpected.forEach(order => {
+    ordersToExport.forEach(order => {
       const carrierCode = order.carrier_code || '---';
       const statusText = STATUS_MAP[order.status] || (order.status ? String(order.status) : '---');
-      const scannedStatus = isScanned(order) ? "Đã trả lại" : "Chưa trả lại";
+      const scannedStatus = checkScannedForExport(order) ? "Đã trả lại" : "Chưa trả lại";
       const channelName = order.sale_channel ? (SALE_CHANNEL_MAP[order.sale_channel]?.name || `Kênh ${order.sale_channel}`) : '---';
 
       if (order.order_products && order.order_products.length > 0) {
@@ -657,9 +819,12 @@ export default function OrderReconciliation() {
 
       <div className="bg-white p-4 sm:p-6 border border-slate-200 rounded-2xl shadow-sm text-center max-w-xl mx-auto space-y-4">
         {isConfirmed ? (
-          <div className="py-4">
-             <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3"><CheckCircle2 size={32} /></div>
-             <h3 className="text-lg font-black text-emerald-700">BIÊN BẢN ĐÃ CHỐT</h3>
+          <div className="py-4 space-y-2">
+            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-2"><CheckCircle2 size={32} /></div>
+            <h3 className="text-lg font-black text-emerald-700">BIÊN BẢN ĐÃ CHỐT</h3>
+            <p className="text-xs text-slate-500 font-medium">
+              Tổng số lần quét: <span className="font-black text-slate-700">{currentSession?.total_scanned ?? scannedCodes.length}</span> mã
+            </p>
           </div>
         ) : (
           <>
@@ -712,6 +877,7 @@ export default function OrderReconciliation() {
         )}
       </div>
 
+      {/* 5 Ô THỐNG KÊ SỐ LƯỢNG */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl text-center">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tổng đơn in</span>
@@ -719,159 +885,192 @@ export default function OrderReconciliation() {
         </div>
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl text-center">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Đơn cần trả</span>
-          <span className="text-base sm:text-lg font-black text-emerald-600 block mt-0.5">{expectedCorrect.filter(o=>isScanned(o)).length} / {expectedCorrect.length}</span>
+          <span className="text-base sm:text-lg font-black text-emerald-600 block mt-0.5">
+            {isConfirmed && !isDetailsVisible ? totalExpectedCount : `${scannedCorrectCount} / ${totalExpectedCount}`}
+          </span>
         </div>
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl text-center">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Đơn bị hủy</span>
-          <span className="text-base sm:text-lg font-black text-red-600 block mt-0.5">{expectedCanceled.filter(o=>isScanned(o)).length} / {expectedCanceled.length}</span>
+          <span className="text-base sm:text-lg font-black text-red-600 block mt-0.5">
+            {isConfirmed && !isDetailsVisible ? totalCanceledCount : `${scannedCanceledCount} / ${totalCanceledCount}`}
+          </span>
         </div>
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl text-center">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Đơn thừa</span>
-          <span className="text-base sm:text-lg font-black text-slate-500 block mt-0.5">{surplusOrders.length}</span>
+          <span className="text-base sm:text-lg font-black text-slate-500 block mt-0.5">{totalSurplusCount}</span>
         </div>
         <div className="p-3 sm:p-4 bg-amber-50 border border-amber-200 rounded-xl text-center">
           <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Đơn thiếu</span>
-          <span className="text-base sm:text-lg font-black text-amber-700 block mt-0.5">{isConfirmed ? allMissing.length : '?'}</span>
+          <span className="text-base sm:text-lg font-black text-amber-700 block mt-0.5">{isConfirmed ? totalMissingCount : '?'}</span>
         </div>
       </div>
 
       <div className="flex justify-end">
-        <button onClick={handleExportExcel} disabled={expectedCorrect.length === 0 && expectedCanceled.length === 0} 
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold rounded-xl shadow-md transition cursor-pointer text-sm">
-          <Download size={16} /> Xuất Báo Cáo Excel
+        <button 
+          onClick={handleExportExcel} 
+          disabled={isLoadingDetails || (totalExpectedCount === 0 && totalCanceledCount === 0)} 
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold rounded-xl shadow-md transition cursor-pointer text-sm"
+        >
+          <Download size={16} /> {isLoadingDetails ? 'Đang tải dữ liệu...' : 'Xuất Báo Cáo Excel'}
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-        {/* Đơn đúng cần trả */}
-        <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
-          <h3 className="text-xs sm:text-sm font-bold text-emerald-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <span className="p-1 bg-emerald-50 rounded-md"><CheckCircle size={14} /></span> Đơn tồn ({expectedCorrect.length})
-          </h3>
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[450px]">
-            {expectedCorrect.length === 0 ? (
-              <div className="text-center text-slate-400 text-xs py-10">Tất cả đơn in đã được bàn giao!</div>
+      {/* NẾU ĐÃ CHỐT MÀ CHƯA BẤM XEM CHI TIẾT: HIỂN THỊ NÚT "XEM DỮ LIỆU CHI TIẾT" */}
+      {isConfirmed && !isDetailsVisible ? (
+        <div className="p-8 bg-white border border-slate-200 rounded-2xl shadow-sm text-center space-y-4">
+          <p className="text-sm text-slate-500 font-medium">
+            Dữ liệu chi tiết (kênh bán, sản phẩm, trạng thái từng đơn) đang được ẩn để giảm tải.
+          </p>
+          <button
+            onClick={handleLoadConfirmedDetails}
+            disabled={isLoadingDetails}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold text-sm rounded-xl shadow-md transition inline-flex items-center gap-2"
+          >
+            {isLoadingDetails ? (
+              <>
+                <RefreshCw size={18} className="animate-spin" />
+                Đang tải dữ liệu chi tiết từ Database...
+              </>
             ) : (
-              expectedCorrect.map((order, idx) => {
-                const scanned = isScanned(order);
-                return (
-                  <div key={order.id + idx} className={`p-3 border rounded-xl transition-all duration-300 ${scanned ? 'bg-emerald-50/60 border-emerald-300' : 'bg-white border-slate-200 shadow-sm'}`}>
-                    <div className="flex justify-between items-start text-xs font-bold mb-2">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <span className={scanned ? 'text-emerald-700' : 'text-slate-800'}>ID: {order.id}</span>
-                          {getChannelBadge(order.sale_channel)}
+              <>
+                <Eye size={18} />
+                Xem dữ liệu chi tiết
+              </>
+            )}
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          {/* Đơn đúng cần trả */}
+          <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
+            <h3 className="text-xs sm:text-sm font-bold text-emerald-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <span className="p-1 bg-emerald-50 rounded-md"><CheckCircle size={14} /></span> Đơn tồn ({expectedCorrect.length})
+            </h3>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[450px]">
+              {expectedCorrect.length === 0 ? (
+                <div className="text-center text-slate-400 text-xs py-10">Tất cả đơn in đã được bàn giao!</div>
+              ) : (
+                expectedCorrect.map((order, idx) => {
+                  const scanned = isScanned(order);
+                  return (
+                    <div key={order.id + idx} className={`p-3 border rounded-xl transition-all duration-300 ${scanned ? 'bg-emerald-50/60 border-emerald-300' : 'bg-white border-slate-200 shadow-sm'}`}>
+                      <div className="flex justify-between items-start text-xs font-bold mb-2">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className={scanned ? 'text-emerald-700' : 'text-slate-800'}>ID: {order.id}</span>
+                            {getChannelBadge(order.sale_channel)}
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
                         </div>
-                        <span className="text-[10px] text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
+                        {scanned ? <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-black">ĐÃ TRẢ LẠI</span> 
+                                 : <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded font-black">CHƯA THẤY</span>}
                       </div>
-                      {scanned ? <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-black">ĐÃ TRẢ LẠI</span> 
-                               : <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded font-black">CHƯA THẤY</span>}
-                    </div>
-                    {/* Danh sách SP */}
-                    <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
-                      {order.order_products?.length > 0 ? order.order_products.map((p, i) => (
-                        <div key={i} className="text-[11px] text-slate-600 flex justify-between">
-                          <span className="truncate pr-2">• {p.product_name}</span>
-                          <span className="font-bold whitespace-nowrap">x{p.quantity}</span>
-                        </div>
-                      )) : <span className="text-[10px] text-slate-400 italic">Không có dữ liệu SP</span>}
-                    </div>
-                  </div>
-                )
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Đơn hủy */}
-        <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
-          <h3 className="text-xs sm:text-sm font-bold text-red-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <span className="p-1 bg-red-50 rounded-md"><XCircle size={14} /></span> Đơn bị hủy ({expectedCanceled.length})
-          </h3>
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[450px]">
-            {expectedCanceled.length === 0 ? (
-              <div className="text-center text-slate-400 text-xs py-10">Không có đơn nào bị hủy!</div>
-            ) : (
-              expectedCanceled.map((order, idx) => {
-                const scanned = isScanned(order);
-                return (
-                  <div key={order.id + idx} className={`p-3 border rounded-xl transition-all duration-300 ${scanned ? 'bg-red-50 border-red-300' : 'bg-white border-red-200 shadow-sm'}`}>
-                    <div className="flex justify-between items-start gap-2 text-xs font-bold mb-2">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <span className={scanned ? 'text-red-800' : 'text-red-600'}>ID: {order.id}</span>
-                          {getChannelBadge(order.sale_channel)}
-                        </div>
-                        <span className="text-[10px] text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
+                      {/* Danh sách SP */}
+                      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
+                        {order.order_products?.length > 0 ? order.order_products.map((p, i) => (
+                          <div key={i} className="text-[11px] text-slate-600 flex justify-between">
+                            <span className="truncate pr-2">• {p.product_name}</span>
+                            <span className="font-bold whitespace-nowrap">x{p.quantity}</span>
+                          </div>
+                        )) : <span className="text-[10px] text-slate-400 italic">Không có dữ liệu SP</span>}
                       </div>
-                      {scanned ? <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-black">ĐÃ LẤY RA</span> 
-                               : <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded font-black animate-pulse text-red-500">CẦN TÌM GẤP</span>}
                     </div>
-                    <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
-                      {order.order_products?.length > 0 ? order.order_products.map((p, i) => (
-                        <div key={i} className="text-[11px] text-slate-600 flex justify-between">
-                          <span className="truncate pr-2">• {p.product_name}</span>
-                          <span className="font-bold whitespace-nowrap">x{p.quantity}</span>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Đơn hủy */}
+          <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
+            <h3 className="text-xs sm:text-sm font-bold text-red-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <span className="p-1 bg-red-50 rounded-md"><XCircle size={14} /></span> Đơn bị hủy ({expectedCanceled.length})
+            </h3>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[450px]">
+              {expectedCanceled.length === 0 ? (
+                <div className="text-center text-slate-400 text-xs py-10">Không có đơn nào bị hủy!</div>
+              ) : (
+                expectedCanceled.map((order, idx) => {
+                  const scanned = isScanned(order);
+                  return (
+                    <div key={order.id + idx} className={`p-3 border rounded-xl transition-all duration-300 ${scanned ? 'bg-red-50 border-red-300' : 'bg-white border-red-200 shadow-sm'}`}>
+                      <div className="flex justify-between items-start gap-2 text-xs font-bold mb-2">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-2">
+                            <span className={scanned ? 'text-red-800' : 'text-red-600'}>ID: {order.id}</span>
+                            {getChannelBadge(order.sale_channel)}
+                          </div>
+                          <span className="text-[10px] text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
                         </div>
-                      )) : <span className="text-[10px] text-slate-400 italic">ID bị huỷ (Đã tối ưu lưu trữ)</span>}
+                        {scanned ? <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-black">ĐÃ LẤY RA</span> 
+                                 : <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded font-black animate-pulse text-red-500">CẦN TÌM GẤP</span>}
+                      </div>
+                      <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
+                        {order.order_products?.length > 0 ? order.order_products.map((p, i) => (
+                          <div key={i} className="text-[11px] text-slate-600 flex justify-between">
+                            <span className="truncate pr-2">• {p.product_name}</span>
+                            <span className="font-bold whitespace-nowrap">x{p.quantity}</span>
+                          </div>
+                        )) : <span className="text-[10px] text-slate-400 italic">Không có dữ liệu SP</span>}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Hàng thừa */}
+          <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
+            <h3 className="text-xs sm:text-sm font-bold text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <span className="p-1 bg-slate-50 rounded-md"><PackagePlus size={14} /></span> Hàng thừa ({resolvedSurplusOrders.length})
+            </h3>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[350px]">
+              {resolvedSurplusOrders.length === 0 ? (
+                <div className="text-center text-slate-400 text-xs py-10">Chưa quét trúng mã hàng lạc nào.</div>
+              ) : (
+                resolvedSurplusOrders.map((order, idx) => (
+                  <div key={order.id + idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex flex-col gap-1 text-xs font-bold">
+                      <div className="flex items-center gap-2">
+                        <span className="text-slate-700">ID: {order.id}</span>
+                        {getChannelBadge(order.sale_channel)}
+                      </div>
+                      <span className="text-slate-500 text-[10px] font-medium">Trạng thái: {STATUS_MAP[order.status] || order.status}</span>
                     </div>
                   </div>
-                )
-              })
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Hàng thừa */}
-        <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
-          <h3 className="text-xs sm:text-sm font-bold text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <span className="p-1 bg-slate-50 rounded-md"><PackagePlus size={14} /></span> Hàng thừa ({surplusOrders.length})
-          </h3>
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[350px]">
-            {surplusOrders.length === 0 ? (
-              <div className="text-center text-slate-400 text-xs py-10">Chưa quét trúng mã hàng lạc nào.</div>
-            ) : (
-              surplusOrders.map((order, idx) => (
-                <div key={order.id + idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <div className="flex flex-col gap-1 text-xs font-bold">
-                    <div className="flex items-center gap-2">
-                      <span className="text-slate-700">ID: {order.id}</span>
-                      {getChannelBadge(order.sale_channel)}
-                    </div>
-                    <span className="text-slate-500 text-[10px] font-medium">Trạng thái: {STATUS_MAP[order.status] || order.status}</span>
+          {/* Hàng thiếu */}
+          <div className="p-4 sm:p-6 bg-amber-50/50 border border-amber-200/50 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
+            <h3 className="text-xs sm:text-sm font-bold text-amber-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <span className="p-1 bg-amber-100 rounded-md"><PackageMinus size={14} /></span> Hàng thiếu ({isConfirmed ? allMissing.length : '?'})
+            </h3>
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[350px]">
+              {!isConfirmed ? (
+                <div className="text-center text-amber-500 text-xs py-10 flex flex-col items-center justify-center gap-2 font-medium">
+                  <AlertCircle size={28} className="text-amber-300" />
+                  <span>Bấm nút "Chốt biên bản" ở trên để xem số hàng thiếu.</span>
+                </div>
+              ) : allMissing.length === 0 ? (
+                <div className="text-center text-emerald-600 font-bold text-xs py-10 flex flex-col items-center justify-center gap-1.5">
+                  <CheckCircle2 size={32} className="text-emerald-500" /><span>Đã nhận đủ đơn!</span>
+                </div>
+              ) : (
+                allMissing.map((order, idx) => (
+                  <div key={order.id + idx} className="p-3 bg-white border border-amber-200 rounded-xl flex items-center justify-between">
+                    <div className="text-xs font-bold text-amber-800">ID: {order.id}</div>
+                    {getChannelBadge(order.sale_channel)}
                   </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
-
-        {/* Hàng thiếu */}
-        <div className="p-4 sm:p-6 bg-amber-50/50 border border-amber-200/50 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
-          <h3 className="text-xs sm:text-sm font-bold text-amber-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-            <span className="p-1 bg-amber-100 rounded-md"><PackageMinus size={14} /></span> Hàng thiếu ({isConfirmed ? allMissing.length : '?'})
-          </h3>
-          <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[350px]">
-            {!isConfirmed ? (
-              <div className="text-center text-amber-500 text-xs py-10 flex flex-col items-center justify-center gap-2 font-medium">
-                <AlertCircle size={28} className="text-amber-300" />
-                <span>Bấm nút "Chốt biên bản" ở trên để xem số hàng thiếu.</span>
-              </div>
-            ) : allMissing.length === 0 ? (
-              <div className="text-center text-emerald-600 font-bold text-xs py-10 flex flex-col items-center justify-center gap-1.5">
-                <CheckCircle2 size={32} className="text-emerald-500" /><span>Đã nhận đủ đơn!</span>
-              </div>
-            ) : (
-              allMissing.map(order => (
-                <div key={order.id} className="p-3 bg-white border border-amber-200 rounded-xl flex items-center justify-between">
-                  <div className="text-xs font-bold text-amber-800">ID: {order.id}</div>
-                  {getChannelBadge(order.sale_channel)}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
