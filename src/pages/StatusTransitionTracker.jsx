@@ -6,16 +6,24 @@ import {
   ChevronLeft, ChevronRight, CheckSquare, Square, AlertTriangle
 } from 'lucide-react';
 
-const WAREHOUSE_STATUS_NAMES = [
+// Các trạng thái đứng trước bước "Đã đóng gói" tại kho
+const PRE_PACKED_WAREHOUSE_NAMES = [
   'mới',
-  'đang đóng gói',
-  'đã đóng gói',
-  'chờ thu gom',
+  'đơn mới',
   'chờ xác nhận',
   'chờ khách xác nhận',
-  'đã xác nhận'
+  'đã xác nhận',
+  'đang đóng gói'
 ];
 
+// Toàn bộ các trạng thái thuộc nhóm "Ở kho"
+const WAREHOUSE_STATUS_NAMES = [
+  ...PRE_PACKED_WAREHOUSE_NAMES,
+  'đã đóng gói',
+  'chờ thu gom'
+];
+
+// Nhóm trạng thái "Đang chuyển"
 const SHIPPING_STATUS_NAMES = [
   'đang chuyển',
   'thất bại',
@@ -23,6 +31,7 @@ const SHIPPING_STATUS_NAMES = [
   'đang hoàn'
 ];
 
+// Nhóm "Trạng thái cuối"
 const FINAL_STATUS_NAMES = [
   'thành công',
   'đã hoàn'
@@ -95,11 +104,16 @@ export default function StatusTransitionTracker() {
     }
   };
 
+  // Lấy tên chuẩn hóa (chữ thường, cắt khoảng trắng) của trạng thái theo ID
+  const getNormalizedStatusName = (statusId) => {
+    const st = statuses.find(s => Number(s.id) === Number(statusId));
+    return st && st.name ? st.name.trim().toLowerCase() : '';
+  };
+
   // Phân loại nhóm trạng thái dựa trên tên
   const getStatusGroup = (statusId) => {
-    const st = statuses.find(s => Number(s.id) === Number(statusId));
-    if (!st || !st.name) return 'OTHER';
-    const normalizedName = st.name.trim().toLowerCase();
+    const normalizedName = getNormalizedStatusName(statusId);
+    if (!normalizedName) return 'OTHER';
 
     if (FINAL_STATUS_NAMES.includes(normalizedName)) return 'FINAL';
     if (SHIPPING_STATUS_NAMES.includes(normalizedName)) return 'SHIPPING';
@@ -110,13 +124,31 @@ export default function StatusTransitionTracker() {
   // Kiểm tra 1 dòng lịch sử có phải luân chuyển ngược chiều (có vấn đề) hay không
   const isAbnormalTransition = (statusOld, statusNew) => {
     if (Number(statusOld) === Number(statusNew)) return false;
+
+    const oldName = getNormalizedStatusName(statusOld);
+    const newName = getNormalizedStatusName(statusNew);
     const oldGroup = getStatusGroup(statusOld);
     const newGroup = getStatusGroup(statusNew);
 
-    // 1. Từ trạng thái cuối (Thành công, Đã hoàn) chuyển sang trạng thái khác
-    if (oldGroup === 'FINAL') return true;
-    // 2. Từ Đang chuyển quay ngược về Ở kho
-    if (oldGroup === 'SHIPPING' && newGroup === 'WAREHOUSE') return true;
+    // 1. Loại trừ: Thành công -> Đã hoàn (Hợp lệ, không tính là lỗi)
+    if (oldName === 'thành công' && newName === 'đã hoàn') {
+      return false;
+    }
+
+    // 2. Từ Trạng thái cuối (Thành công, Đã hoàn) chuyển sang trạng thái khác -> Lỗi
+    if (oldGroup === 'FINAL') {
+      return true;
+    }
+
+    // 3. Từ Đang chuyển quay ngược về Ở kho -> Lỗi
+    if (oldGroup === 'SHIPPING' && newGroup === 'WAREHOUSE') {
+      return true;
+    }
+
+    // 4. Cùng ở kho nhưng từ "Đã đóng gói" lùi về Mới / Đang đóng gói / Chờ xác nhận / Đã xác nhận -> Lỗi
+    if (oldName === 'đã đóng gói' && PRE_PACKED_WAREHOUSE_NAMES.includes(newName)) {
+      return true;
+    }
 
     return false;
   };
@@ -124,29 +156,52 @@ export default function StatusTransitionTracker() {
   // Tạo chuỗi điều kiện .or() cho Supabase khi bật lọc đơn có vấn đề
   const buildAbnormalOrFilter = () => {
     const warehouseIds = [];
+    const prePackedWarehouseIds = [];
+    const packedIds = [];
     const shippingIds = [];
-    const finalIds = [];
+    const successIds = [];
+    const returnedIds = [];
 
     statuses.forEach(st => {
+      const name = st.name ? st.name.trim().toLowerCase() : '';
       const group = getStatusGroup(st.id);
+
       if (group === 'WAREHOUSE') warehouseIds.push(st.id);
+      if (PRE_PACKED_WAREHOUSE_NAMES.includes(name)) prePackedWarehouseIds.push(st.id);
+      if (name === 'đã đóng gói') packedIds.push(st.id);
       if (group === 'SHIPPING') shippingIds.push(st.id);
-      if (group === 'FINAL') finalIds.push(st.id);
+      if (name === 'thành công') successIds.push(st.id);
+      if (name === 'đã hoàn') returnedIds.push(st.id);
     });
 
     const orConditions = [];
 
-    // Đang chuyển -> Ở kho
+    // TH1: Đang chuyển -> Ở kho
     if (shippingIds.length > 0 && warehouseIds.length > 0) {
       orConditions.push(
         `and(status_old.in.(${shippingIds.join(',')}),status_new.in.(${warehouseIds.join(',')}))`
       );
     }
 
-    // Trạng thái cuối -> Bất kỳ trạng thái nào khác chính nó
-    finalIds.forEach(finalId => {
+    // TH2: Đã đóng gói -> Mới, Đang đóng gói, Chờ xác nhận, Chờ khách xác nhận, Đã xác nhận
+    if (packedIds.length > 0 && prePackedWarehouseIds.length > 0) {
       orConditions.push(
-        `and(status_old.eq.${finalId},status_new.neq.${finalId})`
+        `and(status_old.in.(${packedIds.join(',')}),status_new.in.(${prePackedWarehouseIds.join(',')}))`
+      );
+    }
+
+    // TH3: Thành công -> Bất kỳ trạng thái nào khác (trừ chính nó và trừ "Đã hoàn")
+    successIds.forEach(sId => {
+      const excludedTargetIds = [sId, ...returnedIds];
+      orConditions.push(
+        `and(status_old.eq.${sId},status_new.not.in.(${excludedTargetIds.join(',')}))`
+      );
+    });
+
+    // TH4: Đã hoàn -> Bất kỳ trạng thái nào khác chính nó
+    returnedIds.forEach(rId => {
+      orConditions.push(
+        `and(status_old.eq.${rId},status_new.neq.${rId})`
       );
     });
 
@@ -191,7 +246,7 @@ export default function StatusTransitionTracker() {
         .lte('created_at', `${filters.endDate}T23:59:59.999Z`)
         .order('created_at', { ascending: false });
 
-      // Lọc theo trạng thái bất thường hoặc theo trạng thái người dùng chọn
+      // Lọc theo trạng thái bất thường
       if (isAbnormalOnly) {
         const abnormalOrFilter = buildAbnormalOrFilter();
         if (abnormalOrFilter) {
@@ -199,6 +254,7 @@ export default function StatusTransitionTracker() {
         }
       }
 
+      // Lọc theo trạng thái người dùng chọn (nếu có chọn)
       if (selectedFromStatuses.length > 0) {
         query = query.in('status_old', selectedFromStatuses);
       }
@@ -470,7 +526,7 @@ export default function StatusTransitionTracker() {
           </div>
 
           <div className="text-xs text-slate-400">
-            Quy chuẩn: <span className="font-semibold text-slate-600">Ở kho → Đang chuyển → Trạng thái cuối (Thành công / Đã hoàn)</span>
+            Loại trừ: <span className="font-semibold text-slate-600">Thành công → Đã hoàn</span> | Bắt lỗi: <span className="font-semibold text-slate-600">Đã đóng gói → Mới/Đang đóng/Xác nhận, Đang chuyển → Kho, Cuối → Khác</span>
           </div>
         </div>
 
