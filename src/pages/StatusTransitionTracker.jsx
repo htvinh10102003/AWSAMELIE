@@ -526,9 +526,7 @@ export default function StatusTransitionTracker() {
             <span>Chỉ lọc các đơn có trạng thái vấn đề (Luân chuyển ngược chiều)</span>
           </div>
 
-          <div className="text-xs text-slate-400">
-            Loại trừ: <span className="font-semibold text-slate-600">Thành công → Đã hoàn</span> | Bắt lỗi: <span className="font-semibold text-slate-600">Đã đóng gói → Mới/Đang đóng/Xác nhận, Đang chuyển → Kho, Cuối → Khác</span>
-          </div>
+          
         </div>
 
         <button
