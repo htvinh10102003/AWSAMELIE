@@ -53,7 +53,7 @@ export default function Login() {
     setMessage('');
 
     if (TURNSTILE_SITE_KEY && !captchaToken) {
-      setError('Vui lòng hoàn tất xác minh chống bot trước khi đăng nhập.');
+      setError('Vui lòng hoàn tất xác minh trước khi đăng nhập.');
       setLoading(false);
       return;
     }
@@ -84,7 +84,7 @@ export default function Login() {
     setMessage('');
 
     if (TURNSTILE_SITE_KEY && !captchaToken) {
-      setError('Vui lòng hoàn tất xác minh chống bot trước khi gửi yêu cầu.');
+      setError('Vui lòng hoàn tất xác minh trước khi gửi yêu cầu.');
       setLoading(false);
       return;
     }
@@ -278,18 +278,9 @@ export default function Login() {
                     </label>
                   </div>
 
-                  <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600">
-                      Xác minh chống bot
-                    </label>
-                    {TURNSTILE_SITE_KEY ? (
-                      <TurnstileWidget onToken={setCaptchaToken} onExpire={() => setCaptchaToken(null)} />
-                    ) : (
-                      <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
-                        Chưa cấu hình mã xác minh chống bot (VITE_TURNSTILE_SITE_KEY). Hãy cấu hình trước khi bật cho toàn hệ thống.
-                      </p>
-                    )}
-                  </div>
+                  {TURNSTILE_SITE_KEY ? (
+                    <TurnstileWidget onToken={setCaptchaToken} onExpire={() => setCaptchaToken(null)} />
+                  ) : null}
 
                   <button
                     type="submit"
@@ -371,18 +362,9 @@ export default function Login() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600">
-                      Xác minh chống bot
-                    </label>
-                    {TURNSTILE_SITE_KEY ? (
-                      <TurnstileWidget onToken={setCaptchaToken} onExpire={() => setCaptchaToken(null)} />
-                    ) : (
-                      <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
-                        Chưa cấu hình mã xác minh chống bot (VITE_TURNSTILE_SITE_KEY).
-                      </p>
-                    )}
-                  </div>
+                  {TURNSTILE_SITE_KEY ? (
+                    <TurnstileWidget onToken={setCaptchaToken} onExpire={() => setCaptchaToken(null)} />
+                  ) : null}
 
                   <button
                     type="submit"
