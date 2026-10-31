@@ -216,7 +216,7 @@ export default function FeatureLockManager() {
   if (!hasPermission) return (
     <div className="h-[80vh] flex flex-col items-center justify-center animate-fade-in">
       <div className="w-20 h-20 bg-red-100 text-red-500 rounded-full flex items-center justify-center mb-6"><AlertTriangle size={40} /></div>
-      <h2 className="text-3xl font-black text-slate-800 mb-2">Truy cập bị từ chối</h2>
+      <h2 className="text-3xl font-bold text-slate-800 mb-2">Truy cập bị từ chối</h2>
       <p className="text-slate-500 font-medium mb-6">Chỉ Chủ sở hữu (Owner) mới có quyền truy cập và chỉnh sửa phân hệ này.</p>
       <button onClick={() => navigate('/')} className="px-6 py-3 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 transition-colors">Quay lại trang chủ</button>
     </div>
@@ -228,7 +228,7 @@ export default function FeatureLockManager() {
         <div className="flex items-center gap-3">
           <div className="p-3 bg-red-100 text-red-600 rounded-2xl shadow-inner"><ShieldAlert size={28} strokeWidth={2.5} /></div>
           <div>
-            <h2 className="text-2xl font-black text-slate-800 tracking-tight">Khóa giới hạn tính năng</h2>
+            <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Khóa giới hạn tính năng</h2>
             <p className="text-sm text-slate-500 font-medium mt-1">Quyền Owner: Tùy chỉnh chi tiết thông báo cho từng phân hệ con.</p>
           </div>
         </div>

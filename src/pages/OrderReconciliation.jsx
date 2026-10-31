@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
+import { isAdminRole } from '../lib/roles';
 import { 
   ScanBarcode, Calendar, Trash2, PackagePlus, PackageMinus, AlertCircle, 
   CheckCircle2, XCircle, CheckCircle, Download, Camera, CameraOff, 
@@ -33,7 +34,7 @@ const getChannelBadge = (channelId) => {
   if (channelId === null || channelId === undefined) return null;
   const channel = SALE_CHANNEL_MAP[channelId] || { name: `Kênh ${channelId}`, style: 'bg-gray-100 text-gray-600 border-gray-200' };
   return (
-    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold border ${channel.style} flex items-center gap-1 w-fit`}>
+    <span className={`px-1.5 py-0.5 rounded text-xs font-bold border ${channel.style} flex items-center gap-1 w-fit`}>
       <Store size={10} /> {channel.name}
     </span>
   );
@@ -123,7 +124,7 @@ export default function OrderReconciliation() {
     loadUser();
   }, []);
 
-  const isAdminOrOwner = currentUserMeta.is_owner === true || currentUserMeta.role === 'admin';
+  const isAdminOrOwner = currentUserMeta.is_owner === true || isAdminRole(currentUserMeta.role);
 
   // ==========================================
   // QUẢN LÝ PHIÊN (SESSIONS) VỚI PHÂN TRANG
@@ -343,7 +344,7 @@ export default function OrderReconciliation() {
       if (error) throw error;
       setTodayOrders(data || []);
     } catch (err) {
-      console.error("❌ Lỗi tải đơn hàng đối soát:", err.message);
+      console.error(" Lỗi tải đơn hàng đối soát:", err.message);
     } finally {
       setLoading(false);
     }
@@ -446,10 +447,10 @@ export default function OrderReconciliation() {
     if (matchedOrder) {
       const statusCode = Number(matchedOrder.status);
       if (CANCELED_STATUS_CODES.includes(statusCode)) {
-        setAlertBanner({ type: 'danger', message: `🚨 ĐƠN HÀNG HỦY! Mã ${matchedOrder.id} đã bị [${STATUS_MAP[statusCode]}]. Lọc ra rã hàng ngay!` });
+        setAlertBanner({ type: 'danger', message: ` ĐƠN HÀNG HỦY! Mã ${matchedOrder.id} đã bị [${STATUS_MAP[statusCode]}]. Lọc ra rã hàng ngay!` });
       } else if (EXCLUDED_STATUS_CODES.includes(statusCode)) {
         setSurplusOrders(prev => [...prev, matchedOrder]);
-        setAlertBanner({ type: 'warning', message: `⚠️ ĐƠN ĐÃ ĐÓNG GÓI RỒI! Mã ${matchedOrder.id} bị in nhầm.` });
+        setAlertBanner({ type: 'warning', message: `️ ĐƠN ĐÃ ĐÓNG GÓI RỒI! Mã ${matchedOrder.id} bị in nhầm.` });
       }
       setScannedCodes(prev => [...prev, code]);
     } else {
@@ -462,7 +463,7 @@ export default function OrderReconciliation() {
       if (data) {
         setSurplusOrders(prev => [...prev, data]);
         if (CANCELED_STATUS_CODES.includes(Number(data.status))) {
-          setAlertBanner({ type: 'danger', message: `🚨 ĐƠN HỦY LẠC NGÀY KHÁC! Mã ${data.id} báo hủy. Thu hồi ngay!` });
+          setAlertBanner({ type: 'danger', message: ` ĐƠN HỦY LẠC NGÀY KHÁC! Mã ${data.id} báo hủy. Thu hồi ngay!` });
         }
       } else {
         setSurplusOrders(prev => [...prev, { id: code, carrier_code: 'Không rõ', status: 'Mã vạch lạ hoắc', sale_channel: null, order_products: [] }]);
@@ -533,7 +534,7 @@ export default function OrderReconciliation() {
       setIsConfirmed(true);
       setIsDetailsVisible(false); // Ẩn chi tiết sau khi chốt, chỉ hiện số lượng và nút "Xem dữ liệu chi tiết"
       setCurrentSession(prev => ({ ...prev, ...updates }));
-      setAlertBanner({ type: 'success', message: '🎉 Đã chốt và lưu gọn lịch sử đối soát (Số lượng + ID đơn) thành công!' });
+      setAlertBanner({ type: 'success', message: ' Đã chốt và lưu gọn lịch sử đối soát (Số lượng + ID đơn) thành công!' });
     } catch (err) {
       showDialog('alert', 'Lỗi', "Lỗi khi chốt biên bản: " + err.message);
       setIsConfirmed(false);
@@ -651,7 +652,7 @@ export default function OrderReconciliation() {
             <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full space-y-5 animate-in fade-in zoom-in duration-200">
               <div className="flex items-center gap-3 text-slate-800">
                 {dialogConfig.type === 'confirm' ? <AlertCircle className="text-blue-500" size={24}/> : <Info className="text-amber-500" size={24}/>}
-                <h3 className="text-lg font-black">{dialogConfig.title}</h3>
+                <h3 className="text-lg font-bold">{dialogConfig.title}</h3>
               </div>
               <p className="text-sm font-medium text-slate-600 leading-relaxed">{dialogConfig.message}</p>
               <div className="flex justify-end gap-3 pt-2">
@@ -673,7 +674,7 @@ export default function OrderReconciliation() {
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
           <div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><List size={20} /></span>
               QUẢN LÝ BIÊN BẢN ĐỐI SOÁT
             </h2>
@@ -761,7 +762,7 @@ export default function OrderReconciliation() {
           <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full space-y-5 animate-in fade-in zoom-in duration-200">
             <div className="flex items-center gap-3 text-slate-800">
               {dialogConfig.type === 'confirm' ? <AlertCircle className="text-blue-500" size={24}/> : <Info className="text-amber-500" size={24}/>}
-              <h3 className="text-lg font-black">{dialogConfig.title}</h3>
+              <h3 className="text-lg font-bold">{dialogConfig.title}</h3>
             </div>
             <p className="text-sm font-medium text-slate-600 leading-relaxed">{dialogConfig.message}</p>
             <div className="flex justify-end gap-3 pt-2">
@@ -787,7 +788,7 @@ export default function OrderReconciliation() {
             <ChevronLeft size={20} />
           </button>
           <div>
-            <h2 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
               <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><ScanBarcode size={18} /></span>
               ĐỐI SOÁT PHIẾU IN
             </h2>
@@ -800,7 +801,7 @@ export default function OrderReconciliation() {
       </div>
 
       {alertBanner && (
-        <div className={`p-3 sm:p-4 font-black text-xs sm:text-sm rounded-2xl shadow-lg flex items-center gap-3 animate-bounce ${alertBanner.type === 'success' ? 'bg-emerald-600' : alertBanner.type === 'danger' ? 'bg-red-600' : 'bg-amber-500'} text-white`}>
+        <div className={`p-3 sm:p-4 font-bold text-xs sm:text-sm rounded-2xl shadow-lg flex items-center gap-3 animate-bounce ${alertBanner.type === 'success' ? 'bg-emerald-600' : alertBanner.type === 'danger' ? 'bg-red-600' : 'bg-amber-500'} text-white`}>
           {alertBanner.type === 'success' ? <CheckCircle2 size={20} className="flex-shrink-0" /> : <XCircle size={20} className="flex-shrink-0" />}
           <span>{alertBanner.message}</span>
         </div>
@@ -809,9 +810,9 @@ export default function OrderReconciliation() {
       {showDuplicatePopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm p-4">
           <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-xs w-full text-center space-y-4 animate-in zoom-in duration-200">
-            <div className="text-4xl">⚠️</div>
-            <h3 className="text-lg font-black text-red-600">Mã đã quét rồi!</h3>
-            <p className="text-sm text-slate-600 font-medium">Mã <span className="font-black text-slate-800">{duplicateCode}</span> đã được quét trước đó.</p>
+            <div className="text-4xl">️</div>
+            <h3 className="text-lg font-bold text-red-600">Mã đã quét rồi!</h3>
+            <p className="text-sm text-slate-600 font-medium">Mã <span className="font-bold text-slate-800">{duplicateCode}</span> đã được quét trước đó.</p>
             <button onClick={closeDuplicatePopup} className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition w-full">Đã hiểu</button>
           </div>
         </div>
@@ -821,14 +822,14 @@ export default function OrderReconciliation() {
         {isConfirmed ? (
           <div className="py-4 space-y-2">
             <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-2"><CheckCircle2 size={32} /></div>
-            <h3 className="text-lg font-black text-emerald-700">BIÊN BẢN ĐÃ CHỐT</h3>
+            <h3 className="text-lg font-bold text-emerald-700">BIÊN BẢN ĐÃ CHỐT</h3>
             <p className="text-xs text-slate-500 font-medium">
-              Tổng số lần quét: <span className="font-black text-slate-700">{currentSession?.total_scanned ?? scannedCodes.length}</span> mã
+              Tổng số lần quét: <span className="font-bold text-slate-700">{currentSession?.total_scanned ?? scannedCodes.length}</span> mã
             </p>
           </div>
         ) : (
           <>
-            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Quét mã bằng Súng Bắn Mã Vạch</label>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">Quét mã bằng Súng Bắn Mã Vạch</label>
             <form onSubmit={handleBarcodeSubmit} className="relative max-w-md mx-auto flex items-center gap-2">
               <input 
                 ref={inputRef} type="text" placeholder="Bắn mã vạch đơn trả về ..." value={inputCode} 
@@ -848,7 +849,7 @@ export default function OrderReconciliation() {
                 <span className="hidden sm:inline">{isCameraOpen ? 'Tắt' : 'Camera'}</span>
               </button>
             </form>
-            <p className="text-[10px] text-amber-600 font-medium italic mt-1">*Hệ thống chỉ nhận mã từ thiết bị quét chuyên dụng (Không hỗ trợ Copy/Dán hoặc gõ tay).</p>
+            <p className="text-xs text-amber-600 font-medium italic mt-1">*Hệ thống chỉ nhận mã từ thiết bị quét chuyên dụng (Không hỗ trợ Copy/Dán hoặc gõ tay).</p>
 
             {cameraErrorMsg && (
               <div className="mt-2 text-red-600 text-xs font-medium flex flex-col items-center gap-1">
@@ -867,7 +868,7 @@ export default function OrderReconciliation() {
             <div className="flex justify-center gap-2 sm:gap-3 pt-4 flex-wrap border-t border-slate-100 mt-4">
               <button onClick={handleConfirmSession} disabled={loading}
                 className="px-4 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition disabled:opacity-50">
-                {loading ? 'Đang lưu...' : '✓ Chốt biên bản & Lưu Log'}
+                {loading ? 'Đang lưu...' : ' Chốt biên bản & Lưu Log'}
               </button>
               <button onClick={handleResetAudit} className="px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition flex items-center gap-1.5">
                 <Trash2 size={13} /> Quét lại
@@ -880,28 +881,28 @@ export default function OrderReconciliation() {
       {/* 5 Ô THỐNG KÊ SỐ LƯỢNG */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl text-center">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tổng đơn in</span>
-          <span className="text-base sm:text-lg font-black text-slate-900 block mt-0.5">{loading ? "..." : totalPrintedCount}</span>
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Tổng đơn in</span>
+          <span className="text-base sm:text-lg font-bold text-slate-900 block mt-0.5">{loading ? "..." : totalPrintedCount}</span>
         </div>
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl text-center">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Đơn cần trả</span>
-          <span className="text-base sm:text-lg font-black text-emerald-600 block mt-0.5">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Đơn cần trả</span>
+          <span className="text-base sm:text-lg font-bold text-emerald-600 block mt-0.5">
             {isConfirmed && !isDetailsVisible ? totalExpectedCount : `${scannedCorrectCount} / ${totalExpectedCount}`}
           </span>
         </div>
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl text-center">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Đơn bị hủy</span>
-          <span className="text-base sm:text-lg font-black text-red-600 block mt-0.5">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Đơn bị hủy</span>
+          <span className="text-base sm:text-lg font-bold text-red-600 block mt-0.5">
             {isConfirmed && !isDetailsVisible ? totalCanceledCount : `${scannedCanceledCount} / ${totalCanceledCount}`}
           </span>
         </div>
         <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl text-center">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Đơn thừa</span>
-          <span className="text-base sm:text-lg font-black text-slate-500 block mt-0.5">{totalSurplusCount}</span>
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Đơn thừa</span>
+          <span className="text-base sm:text-lg font-bold text-slate-500 block mt-0.5">{totalSurplusCount}</span>
         </div>
         <div className="p-3 sm:p-4 bg-amber-50 border border-amber-200 rounded-xl text-center">
-          <span className="text-[10px] font-bold text-amber-600 uppercase tracking-wider block">Đơn thiếu</span>
-          <span className="text-base sm:text-lg font-black text-amber-700 block mt-0.5">{isConfirmed ? totalMissingCount : '?'}</span>
+          <span className="text-xs font-bold text-amber-600 uppercase tracking-wider block">Đơn thiếu</span>
+          <span className="text-base sm:text-lg font-bold text-amber-700 block mt-0.5">{isConfirmed ? totalMissingCount : '?'}</span>
         </div>
       </div>
 
@@ -960,10 +961,10 @@ export default function OrderReconciliation() {
                             <span className={scanned ? 'text-emerald-700' : 'text-slate-800'}>ID: {order.id}</span>
                             {getChannelBadge(order.sale_channel)}
                           </div>
-                          <span className="text-[10px] text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
+                          <span className="text-xs text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
                         </div>
-                        {scanned ? <span className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-black">ĐÃ TRẢ LẠI</span> 
-                                 : <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded font-black">CHƯA THẤY</span>}
+                        {scanned ? <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold">ĐÃ TRẢ LẠI</span> 
+                                 : <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs rounded font-bold">CHƯA THẤY</span>}
                       </div>
                       {/* Danh sách SP */}
                       <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
@@ -972,7 +973,7 @@ export default function OrderReconciliation() {
                             <span className="truncate pr-2">• {p.product_name}</span>
                             <span className="font-bold whitespace-nowrap">x{p.quantity}</span>
                           </div>
-                        )) : <span className="text-[10px] text-slate-400 italic">Không có dữ liệu SP</span>}
+                        )) : <span className="text-xs text-slate-400 italic">Không có dữ liệu SP</span>}
                       </div>
                     </div>
                   );
@@ -1000,10 +1001,10 @@ export default function OrderReconciliation() {
                             <span className={scanned ? 'text-red-800' : 'text-red-600'}>ID: {order.id}</span>
                             {getChannelBadge(order.sale_channel)}
                           </div>
-                          <span className="text-[10px] text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
+                          <span className="text-xs text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
                         </div>
-                        {scanned ? <span className="text-[10px] bg-red-100 text-red-700 px-2 py-0.5 rounded font-black">ĐÃ LẤY RA</span> 
-                                 : <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-[10px] rounded font-black animate-pulse text-red-500">CẦN TÌM GẤP</span>}
+                        {scanned ? <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">ĐÃ LẤY RA</span> 
+                                 : <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs rounded font-bold animate-pulse text-red-500">CẦN TÌM GẤP</span>}
                       </div>
                       <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
                         {order.order_products?.length > 0 ? order.order_products.map((p, i) => (
@@ -1011,7 +1012,7 @@ export default function OrderReconciliation() {
                             <span className="truncate pr-2">• {p.product_name}</span>
                             <span className="font-bold whitespace-nowrap">x{p.quantity}</span>
                           </div>
-                        )) : <span className="text-[10px] text-slate-400 italic">Không có dữ liệu SP</span>}
+                        )) : <span className="text-xs text-slate-400 italic">Không có dữ liệu SP</span>}
                       </div>
                     </div>
                   );
@@ -1036,7 +1037,7 @@ export default function OrderReconciliation() {
                         <span className="text-slate-700">ID: {order.id}</span>
                         {getChannelBadge(order.sale_channel)}
                       </div>
-                      <span className="text-slate-500 text-[10px] font-medium">Trạng thái: {STATUS_MAP[order.status] || order.status}</span>
+                      <span className="text-slate-500 text-xs font-medium">Trạng thái: {STATUS_MAP[order.status] || order.status}</span>
                     </div>
                   </div>
                 ))

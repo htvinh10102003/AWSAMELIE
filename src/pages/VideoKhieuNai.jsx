@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { isAdminRole } from '../lib/roles';
 import { 
   Search, Video, Package, Calendar, Loader2, ExternalLink, PlaySquare, 
   AlertCircle, MoreVertical, Trash2, Edit, Filter, CheckCircle2, Clock, XCircle, FileText
@@ -30,7 +31,7 @@ export default function VideoKhieuNai() {
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      setIsAdmin(user?.user_metadata?.role === 'admin' || user?.user_metadata?.is_owner === true);
+      setIsAdmin(isAdminRole(user?.user_metadata?.role) || user?.user_metadata?.is_owner === true);
       fetchData();
     };
     init();
@@ -116,13 +117,13 @@ export default function VideoKhieuNai() {
   const getStatusBadge = (status) => {
     switch (status) {
       case 'Đã hoàn tiền':
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-200"><CheckCircle2 size={14}/> {status}</span>;
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-200"><CheckCircle2 size={14}/> {status}</span>;
       case 'Khiếu nại thất bại':
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200"><XCircle size={14}/> {status}</span>;
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200"><XCircle size={14}/> {status}</span>;
       case 'Đang khiếu nại':
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-200"><Clock size={14}/> {status}</span>;
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-200"><Clock size={14}/> {status}</span>;
       default:
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200"><FileText size={14}/> {status}</span>;
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200"><FileText size={14}/> {status}</span>;
     }
   };
 
@@ -135,7 +136,7 @@ export default function VideoKhieuNai() {
           <PlaySquare size={26} strokeWidth={2.5} />
         </div>
         <div>
-          <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">Tra cứu & Quản lý Khiếu nại</h2>
+          <h2 className="text-xl font-bold text-slate-800 uppercase tracking-wide">Tra cứu & Quản lý Khiếu nại</h2>
           <p className="text-xs text-slate-500 font-medium mt-1">Tìm kiếm video đóng hàng, theo dõi tiến độ và xử lý bồi thường</p>
         </div>
       </div>
@@ -251,14 +252,14 @@ export default function VideoKhieuNai() {
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
                     {item.nhanh_id && (
                       <div className="flex flex-col">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">ID Nhanh</span>
-                        <span className="text-lg font-black text-slate-800">{item.nhanh_id}</span>
+                        <span className="text-xs uppercase font-bold text-slate-400 mb-0.5">ID Nhanh</span>
+                        <span className="text-lg font-bold text-slate-800">{item.nhanh_id}</span>
                       </div>
                     )}
                     {item.hvc_code && (
                       <div className="flex flex-col">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Mã HVC</span>
-                        <span className="text-lg font-black text-blue-600">{item.hvc_code}</span>
+                        <span className="text-xs uppercase font-bold text-slate-400 mb-0.5">Mã HVC</span>
+                        <span className="text-lg font-bold text-blue-600">{item.hvc_code}</span>
                       </div>
                     )}
                   </div>
@@ -289,15 +290,15 @@ export default function VideoKhieuNai() {
                 {/* FOOTER: SẢN PHẨM */}
                 {item.products && item.products.length > 0 && (
                   <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
-                    <h4 className="text-[10px] uppercase font-bold text-slate-400 mb-3 flex items-center gap-1.5"><Package size={14}/> Chi tiết sản phẩm khiếu nại</h4>
+                    <h4 className="text-xs uppercase font-bold text-slate-400 mb-3 flex items-center gap-1.5"><Package size={14}/> Chi tiết sản phẩm khiếu nại</h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {item.products.map((prod, idx) => (
                         <div key={idx} className="bg-white border border-slate-200 p-2.5 rounded-lg flex items-start gap-3 shadow-sm">
                           <div className="flex-1 pr-2">
                             <p className="text-xs font-bold text-slate-800 line-clamp-1 mb-1">{prod.product_name || 'Sản phẩm không tên'}</p>
-                            <p className="text-[10px] font-mono text-slate-500 bg-slate-100 px-1 py-0.5 rounded inline-block">{prod.product_code || 'N/A'}</p>
+                            <p className="text-xs font-mono text-slate-500 bg-slate-100 px-1 py-0.5 rounded inline-block">{prod.product_code || 'N/A'}</p>
                           </div>
-                          <div className="shrink-0 bg-red-50 text-red-600 text-xs font-black px-2 py-1 rounded">
+                          <div className="shrink-0 bg-red-50 text-red-600 text-xs font-bold px-2 py-1 rounded">
                             x{prod.quantity || 1}
                           </div>
                         </div>
@@ -314,8 +315,8 @@ export default function VideoKhieuNai() {
       {/* MODAL ĐỔI TRẠNG THÁI */}
       {statusModal.isOpen && statusModal.item && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-black text-slate-800 mb-1">Cập nhật trạng thái</h3>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-800 mb-1">Cập nhật trạng thái</h3>
             <p className="text-sm text-slate-500 font-medium mb-6">Đơn: <span className="font-bold text-slate-700">{statusModal.item.nhanh_id || statusModal.item.hvc_code}</span></p>
             
             <div className="space-y-2 mb-8">

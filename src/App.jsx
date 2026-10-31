@@ -1,49 +1,46 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import Layout from './components/Layout';
-import Dashboard from './pages/Dashboard';
-import Admin from './pages/Admin';
-import OrderReport from './pages/OrderReport';
-import PackingSpeed from './pages/PackingSpeed';
-import Login from './pages/Login';
 import ProtectedRoute from './components/ProtectedRoute';
-import UnderDevelopment from './pages/UnderDevelopment'; 
-import DeclaredFeeReport from './pages/DeclaredFeeReport';
-import InventoryReport from './pages/InventoryReport';
-import OrderReconciliation from './pages/OrderReconciliation';
-import UpdateSchedule from './pages/UpdateSchedule';
-import KiemTraDonHoan from './pages/KiemTraDonHoan';
-import UpdatePacker from './pages/UpdatePacker';
-import UpdateProduct from './pages/UpdateProduct';
-import ReturnProcessing from './pages/ReturnProcessing';
-import PrintedOrdersToday from './pages/PrintedOrdersToday';
-import UpdateWarehouseMap from './pages/UpdateWarehouseMap';
-import ProductLocation from './pages/ProductLocation';
-import KPI_Management from './pages/KPI_Management';
-import KPI_DataEntry from './pages/KPI_DataEntry'; 
-import KPI_Report from './pages/KPI_Report';
-import SetupZone from './pages/SetupZone';
-import FilterByZone from './pages/FilterByZone';
-import WebhookRetrier from './pages/WebhookRetrier';
-import DashboardDonHoan from './pages/DashboardDonHoan';
-import AWBProcessor from './pages/AWBProcessor';
-
-// Các Import Mới Thêm
-import SpxPrinter from './pages/SpxPrinter'; 
-import StatusTransitionTracker from './pages/StatusTransitionTracker';
 import FeatureGuard from './components/FeatureGuard';
-import FeatureLockManager from './pages/FeatureLockManager';
 
-// 🚀 IMPORT TRANG 404 VÀO ĐÂY
-import NotFound from './pages/NotFound';
-
-// === CÁC COMPONENT KHIẾU NẠI MỚI THÊM ===
-import UploadVideoHoan from './pages/UploadVideoHoan';
-import VideoKhieuNai from './pages/VideoKhieuNai';
-import TongHopKhieuNai from './pages/TongHopKhieuNai';
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Admin = lazy(() => import('./pages/Admin'));
+const OrderReport = lazy(() => import('./pages/OrderReport'));
+const PackingSpeed = lazy(() => import('./pages/PackingSpeed'));
+const Login = lazy(() => import('./pages/Login'));
+const UnderDevelopment = lazy(() => import('./pages/UnderDevelopment'));
+const DeclaredFeeReport = lazy(() => import('./pages/DeclaredFeeReport'));
+const InventoryReport = lazy(() => import('./pages/InventoryReport'));
+const OrderReconciliation = lazy(() => import('./pages/OrderReconciliation'));
+const UpdateSchedule = lazy(() => import('./pages/UpdateSchedule'));
+const KiemTraDonHoan = lazy(() => import('./pages/KiemTraDonHoan'));
+const UpdatePacker = lazy(() => import('./pages/UpdatePacker'));
+const UpdateProduct = lazy(() => import('./pages/UpdateProduct'));
+const ReturnProcessing = lazy(() => import('./pages/ReturnProcessing'));
+const PrintedOrdersToday = lazy(() => import('./pages/PrintedOrdersToday'));
+const UpdateWarehouseMap = lazy(() => import('./pages/UpdateWarehouseMap'));
+const ProductLocation = lazy(() => import('./pages/ProductLocation'));
+const KPI_Management = lazy(() => import('./pages/KPI_Management'));
+const KPI_DataEntry = lazy(() => import('./pages/KPI_DataEntry'));
+const KPI_Report = lazy(() => import('./pages/KPI_Report'));
+const SetupZone = lazy(() => import('./pages/SetupZone'));
+const FilterByZone = lazy(() => import('./pages/FilterByZone'));
+const WebhookRetrier = lazy(() => import('./pages/WebhookRetrier'));
+const DashboardDonHoan = lazy(() => import('./pages/DashboardDonHoan'));
+const AWBProcessor = lazy(() => import('./pages/AWBProcessor'));
+const SpxPrinter = lazy(() => import('./pages/SpxPrinter'));
+const StatusTransitionTracker = lazy(() => import('./pages/StatusTransitionTracker'));
+const FeatureLockManager = lazy(() => import('./pages/FeatureLockManager'));
+const NotFound = lazy(() => import('./pages/NotFound'));
+const UploadVideoHoan = lazy(() => import('./pages/UploadVideoHoan'));
+const VideoKhieuNai = lazy(() => import('./pages/VideoKhieuNai'));
+const TongHopKhieuNai = lazy(() => import('./pages/TongHopKhieuNai'));
 
 export default function App() {
   return (
     <BrowserRouter>
+      <Suspense fallback={<div className="h-screen flex items-center justify-center font-sans text-slate-500 font-semibold animate-pulse">Đang tải trang...</div>}>
       <Routes>
         <Route path="/login" element={<Login />} />
 
@@ -200,6 +197,7 @@ export default function App() {
 
         </Route>
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

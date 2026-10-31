@@ -41,7 +41,7 @@ export default function DeclaredFeeReport() {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
 
-  // ⚡️ STATES KHỞI TẠO BỘ LỌC NÂNG CAO MỚI BỔ SUNG
+  // ️ STATES KHỞI TẠO BỘ LỌC NÂNG CAO MỚI BỔ SUNG
   const [selectedChannel, setSelectedChannel] = useState('all'); // all, 1, 2
   const [selectedCarrier, setSelectedCarrier] = useState('all'); // all, Viettel Post, SPX Express
   const [selectedStatus, setSelectedStatus] = useState('all');   // all, hoặc các mã số trạng thái
@@ -65,19 +65,19 @@ export default function DeclaredFeeReport() {
         .gte('created_at', `${startDate}T00:00:00Z`)
         .lte('created_at', `${endDate}T23:59:59Z`);
 
-      // ⚡️ 1. XỬ LÝ LỌC KÊNH BÁN ĐỘNG
+      // ️ 1. XỬ LÝ LỌC KÊNH BÁN ĐỘNG
       if (selectedChannel === 'all') {
         query = query.in('sale_channel', [1, 2]);
       } else {
         query = query.eq('sale_channel', Number(selectedChannel));
       }
 
-      // ⚡️ 2. XỬ LÝ LỌC NHÀ VẬN CHUYỂN ĐỘNG
+      // ️ 2. XỬ LÝ LỌC NHÀ VẬN CHUYỂN ĐỘNG
       if (selectedCarrier !== 'all') {
         query = query.eq('carrier_name', selectedCarrier);
       }
 
-      // ⚡️ 3. XỬ LÝ LỌC TRẠNG THÁI ĐƠN ĐỘNG
+      // ️ 3. XỬ LÝ LỌC TRẠNG THÁI ĐƠN ĐỘNG
       if (selectedStatus !== 'all') {
         query = query.eq('status', Number(selectedStatus));
       }
@@ -101,7 +101,7 @@ export default function DeclaredFeeReport() {
       setOrders(data || []);
       setTotalCount(count || 0);
     } catch (err) {
-      console.error("❌ Lỗi tải danh sách đơn không khai giá:", err.message);
+      console.error(" Lỗi tải danh sách đơn không khai giá:", err.message);
     } finally {
       setLoading(false);
     }
@@ -126,7 +126,7 @@ export default function DeclaredFeeReport() {
       {/* 1. HEADER TIÊU ĐỀ THẨM MỸ */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <span className="p-1.5 bg-red-50 text-red-500 rounded-lg"><AlertTriangle size={18} /></span>
             Đơn hàng Không Khai Giá
           </h2>
@@ -159,7 +159,7 @@ export default function DeclaredFeeReport() {
           </button>
         </form>
 
-        {/* ⚡️ KHỐI BỘ LỌC DROPDOWN NÂNG CAO ĐA CHIỀU */}
+        {/* ️ KHỐI BỘ LỌC DROPDOWN NÂNG CAO ĐA CHIỀU */}
         <div className="flex flex-wrap gap-2 w-full lg:w-auto items-center justify-start lg:justify-end">
           <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
             <Filter size={12} /> Lọc nhanh:
@@ -200,7 +200,7 @@ export default function DeclaredFeeReport() {
           </select>
 
           <div className="text-xs font-bold text-slate-600 bg-red-50 border border-red-100 px-3 py-2 rounded-xl ml-auto lg:ml-2">
-            Phát hiện: <span className="text-red-600 font-black text-sm">{totalCount}</span> đơn rủi ro
+            Phát hiện: <span className="text-red-600 font-bold text-sm">{totalCount}</span> đơn rủi ro
           </div>
         </div>
       </div>
@@ -212,7 +212,7 @@ export default function DeclaredFeeReport() {
             <thead>
               <tr className="bg-slate-50/70 text-slate-400 font-bold uppercase border-b border-slate-200/80">
                 <th className="p-4 w-28">ID Đơn Nhanh</th>
-                {/* ⚡️ CỘT NHÀ VẬN CHUYỂN MỚI THÊM VÀO THEO YÊU CẦU */}
+                {/* ️ CỘT NHÀ VẬN CHUYỂN MỚI THÊM VÀO THEO YÊU CẦU */}
                 <th className="p-4 w-36">ĐVVC</th>
                 <th className="p-4 w-44">Mã vận đơn</th>
                 <th className="p-4 w-36">Ngày tạo đơn</th>
@@ -235,9 +235,9 @@ export default function DeclaredFeeReport() {
 
                   return (
                     <tr key={order.id} className="hover:bg-slate-50/50 transition">
-                      <td className="p-4 font-black text-blue-600 tracking-wide">{order.id}</td>
+                      <td className="p-4 font-bold text-blue-600 tracking-wide">{order.id}</td>
                       
-                      {/* ⚡️ RENDER CHI TIẾT TÊN NHÀ XE CÓ ICON ĐẸP MẮT */}
+                      {/* ️ RENDER CHI TIẾT TÊN NHÀ XE CÓ ICON ĐẸP MẮT */}
                       <td className="p-4">
                         <div className="flex items-center gap-1.5 text-slate-900 font-bold">
                           <Truck size={13} className="text-slate-400" />
@@ -248,13 +248,13 @@ export default function DeclaredFeeReport() {
                       <td className="p-4 text-slate-900 font-bold">{order.carrier_code || <span className="text-slate-300 font-normal">Chưa có mã</span>}</td>
                       <td className="p-4 text-slate-400 font-medium">{formattedDate}</td>
                       <td className="p-4">
-                        <div className="flex items-center gap-1.5 text-slate-800 font-black">
+                        <div className="flex items-center gap-1.5 text-slate-800 font-bold">
                           <User size={12} className="text-slate-400" />
                           <span>{order.created_by_name || <span className="text-slate-300 font-normal">Hệ thống</span>}</span>
                         </div>
                       </td>
                       <td className="p-4">
-                        <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 rounded font-bold text-[10px]">
+                        <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-600 rounded font-bold text-xs">
                           {statusText}
                         </span>
                       </td>
@@ -262,7 +262,7 @@ export default function DeclaredFeeReport() {
                         {order.order_products && order.order_products.length > 0 ? (
                           order.order_products.map(p => `${p.product_name} (x${p.quantity})`).join(', ')
                         ) : (
-                          <span className="text-slate-300 font-normal text-[10px]">Trống sản phẩm</span>
+                          <span className="text-slate-300 font-normal text-xs">Trống sản phẩm</span>
                         )}
                       </td>
                     </tr>

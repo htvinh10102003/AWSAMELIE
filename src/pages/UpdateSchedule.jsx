@@ -100,11 +100,11 @@ export default function UpdateSchedule() {
         .insert([{ full_name: newStaffName.trim(), role: newStaffRole }]);
 
       if (error) throw error;
-      setMessage('✅ Thêm nhân viên thành công!');
+      setMessage(' Thêm nhân viên thành công!');
       setNewStaffName('');
       await loadStaffData();
     } catch (err) {
-      setMessage(`❌ Lỗi: ${err.message}`);
+      setMessage(` Lỗi: ${err.message}`);
     } finally { setLoading(false); }
   };
 
@@ -123,10 +123,10 @@ export default function UpdateSchedule() {
         .upsert(records, { onConflict: 'staff_id,work_date' });
 
       if (error) throw error;
-      setMessage('✅ Lưu lịch làm việc hôm nay thành công!');
+      setMessage(' Lưu lịch làm việc hôm nay thành công!');
       await generate7DaysStats();
     } catch (err) {
-      setMessage(`❌ Lỗi lưu lịch: ${err.message}`);
+      setMessage(` Lỗi lưu lịch: ${err.message}`);
     } finally { setLoading(false); }
   };
 
@@ -185,9 +185,9 @@ export default function UpdateSchedule() {
       link.click();
       document.body.removeChild(link);
 
-      setMessage(`✅ Xuất lịch tháng ${month}/${year} thành công!`);
+      setMessage(` Xuất lịch tháng ${month}/${year} thành công!`);
     } catch (err) {
-      setMessage(`❌ Lỗi xuất file: ${err.message}`);
+      setMessage(` Lỗi xuất file: ${err.message}`);
     } finally {
       setIsExporting(false);
     }
@@ -293,11 +293,11 @@ export default function UpdateSchedule() {
         {/* THÔNG BÁO */}
         {message && (
           <div className={`p-4 rounded-xl border flex items-center gap-3 text-sm font-medium animate-fadeIn ${
-            message.includes('✅') 
+            message.includes('') 
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
               : 'bg-red-50 border-red-200 text-red-800'
           }`}>
-            {message.includes('✅') ? <CheckCircle2 size={18} className="text-emerald-500" /> : <AlertCircle size={18} className="text-red-500" />}
+            {message.includes('') ? <CheckCircle2 size={18} className="text-emerald-500" /> : <AlertCircle size={18} className="text-red-500" />}
             {message}
           </div>
         )}

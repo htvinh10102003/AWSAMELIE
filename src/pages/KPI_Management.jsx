@@ -11,7 +11,7 @@ const DEPARTMENTS = ['Đóng hàng', 'Vận đơn', 'Lead kho'];
 const VAR_SOURCES = [
   { id: 'daily_manual', name: 'Nhập tay hàng ngày' },
   { id: 'monthly_manual', name: 'Nhập tay cuối tháng' },
-  { id: 'sum_monthly', name: '✨ Tổng cộng một Biến khác (Cả tháng)' },
+  { id: 'sum_monthly', name: ' Tổng cộng một Biến khác (Cả tháng)' },
   { id: 'auto_packed_day', name: 'Auto: Đơn đã đóng / Ngày' },
   { id: 'auto_printed_day', name: 'Auto: Đơn đã in / Ngày' },
   { id: 'auto_shipped_day', name: 'Auto: Đơn đã đi / Ngày' },
@@ -98,7 +98,7 @@ export default function KPI_Management() {
       if (editingCriteria.id) await supabase.from('kpi_criteria').update(editingCriteria).eq('id', editingCriteria.id);
       else await supabase.from('kpi_criteria').insert([editingCriteria]);
       
-      showMsg('✅ Đã lưu cấu hình Chỉ tiêu!');
+      showMsg(' Đã lưu cấu hình Chỉ tiêu!');
       setEditingCriteria(null);
       fetchData();
     } catch (err) { alert(err.message); }
@@ -106,7 +106,7 @@ export default function KPI_Management() {
   };
 
   const handleDeleteCriteria = async (id) => {
-    if(!confirm('🚨 Xóa chỉ tiêu này?')) return;
+    if(!confirm(' Xóa chỉ tiêu này?')) return;
     await supabase.from('kpi_criteria').delete().eq('id', id);
     fetchData();
   };
@@ -116,7 +116,7 @@ export default function KPI_Management() {
   const removeRule = (id) => setEditingCriteria(prev => ({ ...prev, scoring_rules: prev.scoring_rules.filter(r => r.id !== id) }));
   const insertToFormula = (str) => setEditingCriteria(prev => ({ ...prev, formula: (prev.formula || '') + str }));
 
-  // ⚡️ BỘ QUÉT BIẾN SỐ (Đã hỗ trợ bắt dấu gạch ngang của UUID)
+  // ️ BỘ QUÉT BIẾN SỐ (Đã hỗ trợ bắt dấu gạch ngang của UUID)
   const extractTokens = (formula) => {
     if (!formula) return [];
     const matches = formula.match(/\[[A-Za-z0-9_\-]+\]/g);
@@ -141,7 +141,7 @@ export default function KPI_Management() {
       mathStr = mathStr.split(token).join(val);
     });
     
-    // ⚡️ ÉP TẤT CẢ BIẾN CHƯA ĐIỀN THÀNH 0 ĐỂ TRÁNH LỖI INVALID TOKEN
+    // ️ ÉP TẤT CẢ BIẾN CHƯA ĐIỀN THÀNH 0 ĐỂ TRÁNH LỖI INVALID TOKEN
     mathStr = mathStr.replace(/\[[A-Za-z0-9_\-]+\]/g, '0');
 
     try {
@@ -181,7 +181,7 @@ export default function KPI_Management() {
         });
       }
 
-      // ⚡️ LOGIC CHUẨN: Cứ có luật trừ là Thang điểm gốc bắt đầu từ 100
+      // ️ LOGIC CHUẨN: Cứ có luật trừ là Thang điểm gốc bắt đầu từ 100
       let finalKpiScore = 0;
       if (!hasRules) {
           finalKpiScore = finalRaw;
@@ -233,7 +233,7 @@ export default function KPI_Management() {
     try {
       if (errorForm.id) await supabase.from('kpi_errors').update({ name: errorForm.name, apply_to: errorForm.apply_to }).eq('id', errorForm.id);
       else await supabase.from('kpi_errors').insert([{ department: selectedDept, name: errorForm.name, apply_to: errorForm.apply_to }]);
-      showMsg(errorForm.id ? '✅ Cập nhật Lỗi thành công!' : '✅ Thêm Lỗi mới thành công!');
+      showMsg(errorForm.id ? ' Cập nhật Lỗi thành công!' : ' Thêm Lỗi mới thành công!');
       handleCancelEditError();
       fetchData();
     } catch (err) { alert("Lỗi khi lưu: " + err.message); }
@@ -241,7 +241,7 @@ export default function KPI_Management() {
   };
 
   const handleDeleteError = async (id) => {
-    if(!confirm('🚨 Bạn có chắc muốn xóa lỗi này?')) return;
+    if(!confirm(' Bạn có chắc muốn xóa lỗi này?')) return;
     await supabase.from('kpi_errors').delete().eq('id', id);
     fetchData();
   };
@@ -272,10 +272,10 @@ export default function KPI_Management() {
     try {
       if (varForm.id) {
         await supabase.from('kpi_global_variables').update(payload).eq('id', varForm.id);
-        showMsg('✅ Đã cập nhật thông tin Biến!');
+        showMsg(' Đã cập nhật thông tin Biến!');
       } else {
         await supabase.from('kpi_global_variables').insert([payload]);
-        showMsg('✅ Đã khởi tạo Biến số chung mới!');
+        showMsg(' Đã khởi tạo Biến số chung mới!');
       }
       handleCancelEditVariable();
       fetchData();
@@ -284,7 +284,7 @@ export default function KPI_Management() {
   };
 
   const handleDeleteVariable = async (id) => {
-    if(!confirm('🚨 Xóa biến này sẽ xóa luôn dữ liệu nhập liệu cũ. Chắc chắn xóa?')) return;
+    if(!confirm(' Xóa biến này sẽ xóa luôn dữ liệu nhập liệu cũ. Chắc chắn xóa?')) return;
     await supabase.from('kpi_global_variables').delete().eq('id', id);
     fetchData();
   };
@@ -299,10 +299,10 @@ export default function KPI_Management() {
     await supabase.from('warehouse_staff').insert([staffForm]);
     setStaffForm({ ...staffForm, full_name: '' });
     fetchData();
-    showMsg('✅ Thêm nhân sự thành công!');
+    showMsg(' Thêm nhân sự thành công!');
   };
   const handleDeleteStaff = async (id) => {
-    if(!confirm('🚨 Xóa nhân sự này?')) return;
+    if(!confirm(' Xóa nhân sự này?')) return;
     await supabase.from('warehouse_staff').delete().eq('id', id);
     fetchData();
   };
@@ -311,11 +311,11 @@ export default function KPI_Management() {
     <div className="max-w-6xl mx-auto space-y-6 pb-12 mt-4 p-4 animate-in fade-in duration-300">
 
       {/* HEADER & TABS */}
-      <div className="bg-white p-6 border border-slate-200 rounded-3xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl"><Target size={24} strokeWidth={2.5}/></div>
           <div>
-            <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Cấu trúc KPI & Lỗi</h2>
+            <h2 className="text-xl font-bold text-slate-800 uppercase tracking-tight">Cấu trúc KPI & Lỗi</h2>
             <p className="text-xs font-medium text-slate-500 mt-1">Hệ thống Biến số, Chỉ tiêu và Nhân sự</p>
           </div>
         </div>
@@ -359,18 +359,18 @@ export default function KPI_Management() {
         <>
           {!editingCriteria ? (
             <div className="space-y-6 animate-in fade-in">
-              <div className={`p-6 rounded-3xl border shadow-sm flex items-center justify-between ${totalWeight === 100 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
+              <div className={`p-6 rounded-2xl border shadow-sm flex items-center justify-between ${totalWeight === 100 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
                 <div>
                   <h3 className={`text-sm font-bold uppercase tracking-wider ${totalWeight === 100 ? 'text-emerald-700' : 'text-amber-700'}`}>Tổng tỉ trọng KPI ({selectedDept})</h3>
                   <p className="text-xs font-medium text-slate-600 mt-1">Tổng các chỉ tiêu bắt buộc phải đạt 100%.</p>
                 </div>
                 <div className="flex items-center gap-4">
-                  <div className="text-3xl font-black tracking-tight" style={{color: totalWeight === 100 ? '#059669' : '#d97706'}}>{totalWeight}%</div>
+                  <div className="text-3xl font-bold tracking-tight" style={{color: totalWeight === 100 ? '#059669' : '#d97706'}}>{totalWeight}%</div>
                   {totalWeight !== 100 && <AlertTriangle size={24} className="text-amber-500 animate-pulse" />}
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+              <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
                   <h3 className="font-bold text-slate-800 text-lg">Phân bổ Chỉ tiêu</h3>
                   <button onClick={handleCreateNewCriteria} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl shadow-md hover:bg-blue-700 transition">
@@ -383,13 +383,13 @@ export default function KPI_Management() {
                     <div key={crit.id} className="flex flex-col md:flex-row justify-between items-start md:items-center p-5 bg-slate-50 border border-slate-200 rounded-2xl gap-4 hover:border-blue-300 transition">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-1">
-                          <span className="px-3 py-1 bg-blue-100 text-blue-700 font-black rounded-lg text-xs">{crit.weight}%</span>
+                          <span className="px-3 py-1 bg-blue-100 text-blue-700 font-bold rounded-lg text-xs">{crit.weight}%</span>
                           <h4 className="font-bold text-slate-800 text-base">{crit.name}</h4>
-                          <span className="px-2 py-0.5 bg-slate-200 text-slate-600 font-bold rounded text-[10px] uppercase">
+                          <span className="px-2 py-0.5 bg-slate-200 text-slate-600 font-bold rounded text-xs uppercase">
                             {crit.eval_mode === 'daily_average' ? 'TB Ngày' : 'Cộng Dồn'}
                           </span>
                           {(!crit.scoring_rules || crit.scoring_rules.length === 0) && (
-                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-bold rounded text-[10px] uppercase">
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 font-bold rounded text-xs uppercase">
                               Lấy trực tiếp điểm CT
                             </span>
                           )}
@@ -411,10 +411,10 @@ export default function KPI_Management() {
             </div>
           ) : (
             // BỘ BUILDER CHỈ TIÊU (FORM)
-            <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl space-y-8 animate-in slide-in-from-bottom-4">
+            <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-xl space-y-8 animate-in slide-in-from-bottom-4">
               <div className="flex justify-between border-b border-slate-100 pb-4">
                 <button onClick={() => setEditingCriteria(null)} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold"><ChevronLeft size={20}/> Quay lại</button>
-                <h3 className="text-lg font-black text-slate-800 uppercase">{editingCriteria.id ? 'Hiệu chỉnh Chỉ Tiêu' : 'Tạo mới Chỉ Tiêu'}</h3>
+                <h3 className="text-lg font-bold text-slate-800 uppercase">{editingCriteria.id ? 'Hiệu chỉnh Chỉ Tiêu' : 'Tạo mới Chỉ Tiêu'}</h3>
               </div>
 
               {/* 1. Basic Info */}
@@ -455,26 +455,26 @@ export default function KPI_Management() {
                   
                   <div className="flex flex-wrap gap-2 items-center">
                     <span className="text-[11px] font-bold text-slate-500 uppercase w-full sm:w-auto mr-2">1. Chèn Biến:</span>
-                    <button type="button" onClick={()=>insertToFormula('[TONG_LOI]')} className="text-[10px] font-black bg-white border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded shadow-sm hover:bg-indigo-50 transition">LỖI BỘ PHẬN</button>
+                    <button type="button" onClick={()=>insertToFormula('[TONG_LOI]')} className="text-xs font-bold bg-white border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded shadow-sm hover:bg-indigo-50 transition">LỖI BỘ PHẬN</button>
                     {errorList.map(e => (
-                       <button key={e.id} type="button" onClick={()=>insertToFormula(`[LOI_${e.id}]`)} className="text-[10px] font-black bg-red-50 border border-red-200 text-red-700 px-3 py-1.5 rounded shadow-sm hover:bg-red-100 transition">LỖI: {e.name}</button>
+                       <button key={e.id} type="button" onClick={()=>insertToFormula(`[LOI_${e.id}]`)} className="text-xs font-bold bg-red-50 border border-red-200 text-red-700 px-3 py-1.5 rounded shadow-sm hover:bg-red-100 transition">LỖI: {e.name}</button>
                     ))}
                     {globalVars.map(v => (
-                       <button key={v.id} type="button" onClick={()=>insertToFormula(`[${v.code}]`)} className="text-[10px] font-black bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded shadow-sm hover:bg-blue-50 transition">BIẾN: {v.name}</button>
+                       <button key={v.id} type="button" onClick={()=>insertToFormula(`[${v.code}]`)} className="text-xs font-bold bg-white border border-blue-200 text-blue-700 px-3 py-1.5 rounded shadow-sm hover:bg-blue-50 transition">BIẾN: {v.name}</button>
                     ))}
                   </div>
 
                   <div className="flex flex-wrap gap-2 items-center pt-3 border-t border-indigo-100/50">
                     <span className="text-[11px] font-bold text-slate-500 uppercase w-full sm:w-auto mr-2">2. Hàm & Phép so sánh:</span>
-                    <button type="button" onClick={()=>insertToFormula(' IF(điều_kiện, đúng, sai) ')} className="text-[10px] font-black bg-blue-600 text-white px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 transition">✨ Hàm IF( ĐK, Đúng, Sai )</button>
-                    <button type="button" onClick={()=>insertToFormula(' < ')} className="text-[10px] font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&lt;</button>
-                    <button type="button" onClick={()=>insertToFormula(' <= ')} className="text-[10px] font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&le;</button>
-                    <button type="button" onClick={()=>insertToFormula(' > ')} className="text-[10px] font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&gt;</button>
-                    <button type="button" onClick={()=>insertToFormula(' >= ')} className="text-[10px] font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&ge;</button>
-                    <button type="button" onClick={()=>insertToFormula(' == ')} className="text-[10px] font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">Bằng (==)</button>
-                    <button type="button" onClick={()=>insertToFormula(' != ')} className="text-[10px] font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">Khác (!=)</button>
-                    <button type="button" onClick={()=>insertToFormula(' ABS( ) ')} className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1.5 rounded hover:bg-emerald-200 transition border border-emerald-300">ABS()</button>
-                    <button type="button" onClick={()=>insertToFormula(' MAX( , ) ')} className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1.5 rounded hover:bg-emerald-200 transition border border-emerald-300">MAX()</button>
+                    <button type="button" onClick={()=>insertToFormula(' IF(điều_kiện, đúng, sai) ')} className="text-xs font-bold bg-blue-600 text-white px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 transition"> Hàm IF( ĐK, Đúng, Sai )</button>
+                    <button type="button" onClick={()=>insertToFormula(' < ')} className="text-xs font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&lt;</button>
+                    <button type="button" onClick={()=>insertToFormula(' <= ')} className="text-xs font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&le;</button>
+                    <button type="button" onClick={()=>insertToFormula(' > ')} className="text-xs font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&gt;</button>
+                    <button type="button" onClick={()=>insertToFormula(' >= ')} className="text-xs font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&ge;</button>
+                    <button type="button" onClick={()=>insertToFormula(' == ')} className="text-xs font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">Bằng (==)</button>
+                    <button type="button" onClick={()=>insertToFormula(' != ')} className="text-xs font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">Khác (!=)</button>
+                    <button type="button" onClick={()=>insertToFormula(' ABS( ) ')} className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1.5 rounded hover:bg-emerald-200 transition border border-emerald-300">ABS()</button>
+                    <button type="button" onClick={()=>insertToFormula(' MAX( , ) ')} className="text-xs font-bold bg-emerald-100 text-emerald-800 px-2.5 py-1.5 rounded hover:bg-emerald-200 transition border border-emerald-300">MAX()</button>
                   </div>
 
                   <textarea 
@@ -485,10 +485,10 @@ export default function KPI_Management() {
                     className="w-full p-4 bg-white border border-indigo-200 rounded-xl font-mono text-indigo-900 font-bold outline-none shadow-inner"
                   ></textarea>
 
-                  {/* ⚡️ BẢN DỊCH CÔNG THỨC */}
+                  {/* ️ BẢN DỊCH CÔNG THỨC */}
                   {editingCriteria.formula && (
                     <div className="mt-2 p-3 bg-white/70 border border-indigo-200/60 rounded-xl shadow-sm">
-                      <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                      <p className="text-xs font-bold text-indigo-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
                         <BookOpen size={12}/> Diễn giải công thức
                       </p>
                       <div className="text-sm font-medium text-slate-700 leading-relaxed italic">
@@ -497,10 +497,10 @@ export default function KPI_Management() {
                     </div>
                   )}
 
-                  {/* 🧪 BẢNG KIỂM TRA & TẠM TÍNH THỬ NGHIỆM */}
+                  {/*  BẢNG KIỂM TRA & TẠM TÍNH THỬ NGHIỆM */}
                   <div className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-sm mt-4">
                     <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2 text-indigo-950 font-black text-xs uppercase tracking-wider">
+                      <div className="flex items-center gap-2 text-indigo-950 font-bold text-xs uppercase tracking-wider">
                         <FlaskConical size={16} className="text-indigo-600" /> Tạm tính & Kiểm tra công thức
                       </div>
                       <button 
@@ -516,7 +516,7 @@ export default function KPI_Management() {
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
                         {extractTokens(editingCriteria.formula).map(token => (
                           <div key={token} className="bg-slate-50 p-2 rounded-xl border border-slate-200">
-                            <label className="block text-[10px] font-mono font-bold text-slate-500 truncate">{token}</label>
+                            <label className="block text-xs font-mono font-bold text-slate-500 truncate">{token}</label>
                             <input 
                               type="number" 
                               value={testInputs[token] !== undefined ? testInputs[token] : ''} 
@@ -533,23 +533,23 @@ export default function KPI_Management() {
 
                     {testError && (
                       <div className="p-2.5 bg-red-50 text-red-700 border border-red-200 rounded-xl text-xs font-bold animate-in fade-in">
-                        ❌ {testError}
+                         {testError}
                       </div>
                     )}
 
                     {testResult && (
                       <div className="p-3 bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-xl text-xs flex flex-wrap items-center justify-between gap-2 animate-in fade-in">
                         <div>
-                          <strong>Kết quả đo lường:</strong> <span className="font-black text-sm text-emerald-700">{testResult.raw} {editingCriteria.calc_type === 'ratio' ? '%' : 'lượt'}</span>
+                          <strong>Kết quả đo lường:</strong> <span className="font-bold text-sm text-emerald-700">{testResult.raw} {editingCriteria.calc_type === 'ratio' ? '%' : 'lượt'}</span>
                         </div>
                         <div>
-                          <strong>Trừ điểm:</strong> <span className="font-black text-red-600">-{testResult.penalty}</span>
+                          <strong>Trừ điểm:</strong> <span className="font-bold text-red-600">-{testResult.penalty}</span>
                         </div>
                         <div>
-                          <strong>Điểm (Thang 100):</strong> <span className="font-black text-emerald-700">{testResult.finalKpiScore}</span>
+                          <strong>Điểm (Thang 100):</strong> <span className="font-bold text-emerald-700">{testResult.finalKpiScore}</span>
                         </div>
-                        <div className="bg-white px-3 py-1 rounded-lg border border-emerald-200 font-black text-sm text-emerald-800">
-                          Điểm Tỉ trọng ({editingCriteria.weight}%): {testResult.weightedScore} {testResult.mode === 'direct' && <span className="text-[10px] text-slate-400 font-normal">(Lấy trực tiếp)</span>}
+                        <div className="bg-white px-3 py-1 rounded-lg border border-emerald-200 font-bold text-sm text-emerald-800">
+                          Điểm Tỉ trọng ({editingCriteria.weight}%): {testResult.weightedScore} {testResult.mode === 'direct' && <span className="text-xs text-slate-400 font-normal">(Lấy trực tiếp)</span>}
                         </div>
                       </div>
                     )}
@@ -577,31 +577,31 @@ export default function KPI_Management() {
                       <button onClick={()=>removeRule(rule.id)} className="absolute top-4 right-4 text-slate-300 hover:text-red-500"><Trash2 size={16}/></button>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Loại Luật Phạt</label>
+                          <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Loại Luật Phạt</label>
                           <select value={rule.type} onChange={e=>updateRule(rule.id, 'type', e.target.value)} className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700">
                             {RULE_TYPES.map(rt => <option key={rt.id} value={rt.id}>{rt.name}</option>)}
                           </select>
                         </div>
                         
                         {rule.type === 'no_penalty' && (
-                           <div className="flex-1"><label className="block text-[10px] font-bold text-emerald-500 uppercase mb-1">Ngưỡng an toàn &lt;=</label><input type="number" step="0.01" value={rule.max} onChange={e=>updateRule(rule.id, 'max', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-emerald-50 border-emerald-200 text-emerald-700"/></div>
+                           <div className="flex-1"><label className="block text-xs font-bold text-emerald-500 uppercase mb-1">Ngưỡng an toàn &lt;=</label><input type="number" step="0.01" value={rule.max} onChange={e=>updateRule(rule.id, 'max', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-emerald-50 border-emerald-200 text-emerald-700"/></div>
                         )}
                         {rule.type === 'fixed_penalty' && (
                           <div className="grid grid-cols-3 gap-2">
-                             <div><label className="block text-[10px] font-bold text-amber-500 uppercase mb-1">Từ &gt;</label><input type="number" step="0.01" value={rule.min} onChange={e=>updateRule(rule.id, 'min', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200"/></div>
-                             <div><label className="block text-[10px] font-bold text-amber-500 uppercase mb-1">Đến &lt;=</label><input type="number" step="0.01" value={rule.max} onChange={e=>updateRule(rule.id, 'max', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200"/></div>
-                             <div><label className="block text-[10px] font-bold text-red-500 uppercase mb-1">Trừ Điểm</label><input type="number" step="0.1" value={rule.penalty} onChange={e=>updateRule(rule.id, 'penalty', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-black bg-red-50 border-red-200 text-red-600"/></div>
+                             <div><label className="block text-xs font-bold text-amber-500 uppercase mb-1">Từ &gt;</label><input type="number" step="0.01" value={rule.min} onChange={e=>updateRule(rule.id, 'min', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200"/></div>
+                             <div><label className="block text-xs font-bold text-amber-500 uppercase mb-1">Đến &lt;=</label><input type="number" step="0.01" value={rule.max} onChange={e=>updateRule(rule.id, 'max', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200"/></div>
+                             <div><label className="block text-xs font-bold text-red-500 uppercase mb-1">Trừ Điểm</label><input type="number" step="0.1" value={rule.penalty} onChange={e=>updateRule(rule.id, 'penalty', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-red-50 border-red-200 text-red-600"/></div>
                           </div>
                         )}
                         {rule.type === 'linear_penalty' && (
                           <div className="grid grid-cols-3 gap-2">
-                             <div><label className="block text-[10px] font-bold text-amber-500 uppercase mb-1">Bắt đầu &gt;</label><input type="number" step="0.01" value={rule.min} onChange={e=>updateRule(rule.id, 'min', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200"/></div>
-                             <div><label className="block text-[10px] font-bold text-amber-500 uppercase mb-1">Mỗi bước vượt</label><input type="number" step="0.01" value={rule.step} onChange={e=>updateRule(rule.id, 'step', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200 text-amber-700"/></div>
-                             <div><label className="block text-[10px] font-bold text-red-500 uppercase mb-1">Phạt thêm</label><input type="number" step="0.1" value={rule.penalty} onChange={e=>updateRule(rule.id, 'penalty', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-black bg-red-50 border-red-200 text-red-600"/></div>
+                             <div><label className="block text-xs font-bold text-amber-500 uppercase mb-1">Bắt đầu &gt;</label><input type="number" step="0.01" value={rule.min} onChange={e=>updateRule(rule.id, 'min', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200"/></div>
+                             <div><label className="block text-xs font-bold text-amber-500 uppercase mb-1">Mỗi bước vượt</label><input type="number" step="0.01" value={rule.step} onChange={e=>updateRule(rule.id, 'step', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-amber-50 border-amber-200 text-amber-700"/></div>
+                             <div><label className="block text-xs font-bold text-red-500 uppercase mb-1">Phạt thêm</label><input type="number" step="0.1" value={rule.penalty} onChange={e=>updateRule(rule.id, 'penalty', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-red-50 border-red-200 text-red-600"/></div>
                           </div>
                         )}
                         {rule.type === 'per_error' && (
-                           <div className="flex-1"><label className="block text-[10px] font-bold text-red-500 uppercase mb-1">Mỗi lỗi trừ (Điểm)</label><input type="number" step="0.1" value={rule.penalty} onChange={e=>updateRule(rule.id, 'penalty', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-black bg-red-50 border-red-200 text-red-600"/></div>
+                           <div className="flex-1"><label className="block text-xs font-bold text-red-500 uppercase mb-1">Mỗi lỗi trừ (Điểm)</label><input type="number" step="0.1" value={rule.penalty} onChange={e=>updateRule(rule.id, 'penalty', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-xs font-bold bg-red-50 border-red-200 text-red-600"/></div>
                         )}
                       </div>
                     </div>
@@ -624,8 +624,8 @@ export default function KPI_Management() {
       {/* ========================================================================= */}
       {activeTab === 'errors' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm h-fit">
-            <h3 className="font-black text-slate-800 uppercase text-sm mb-5 pb-3 border-b flex items-center gap-2">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-fit">
+            <h3 className="font-bold text-slate-800 uppercase text-sm mb-5 pb-3 border-b flex items-center gap-2">
               {errorForm.id ? <Edit size={18} className="text-amber-600"/> : <Plus size={18} className="text-emerald-600"/>} 
               {errorForm.id ? 'Cập nhật Lỗi' : 'Thêm Lỗi Mới'}
             </h3>
@@ -660,14 +660,14 @@ export default function KPI_Management() {
             </form>
           </div>
 
-          <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+          <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b">Danh sách lỗi ({errorList.length})</h4>
             <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
               {errorList.map(err => (
                 <div key={err.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100 hover:border-blue-300 transition">
                   <div>
                     <span className="font-bold text-sm text-slate-700">{err.name}</span>
-                    <span className={`ml-3 px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                    <span className={`ml-3 px-2 py-0.5 rounded text-xs font-bold uppercase ${
                       err.apply_to === 'individual' ? 'bg-amber-100 text-amber-700' : 
                       err.apply_to === 'warehouse' ? 'bg-purple-100 text-purple-700' : 
                       'bg-blue-100 text-blue-700'
@@ -691,8 +691,8 @@ export default function KPI_Management() {
       {/* ========================================================================= */}
       {activeTab === 'variables' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm h-fit">
-            <h3 className="font-black text-slate-800 uppercase text-sm mb-5 pb-3 border-b flex items-center gap-2">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-fit">
+            <h3 className="font-bold text-slate-800 uppercase text-sm mb-5 pb-3 border-b flex items-center gap-2">
               {varForm.id ? <Edit size={18} className="text-amber-600"/> : <Plus size={18} className="text-blue-600"/>} 
               {varForm.id ? 'Cập nhật Biến' : 'Khai báo Biến dùng chung'}
             </h3>
@@ -730,13 +730,13 @@ export default function KPI_Management() {
             </form>
           </div>
 
-          <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+          <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b">Kho Biến Số Hệ Thống</h4>
             <div className="space-y-3">
               {globalVars.map(v => (
                 <div key={v.id} className="flex justify-between items-center p-4 bg-white border border-slate-200 shadow-sm rounded-xl hover:border-blue-300 transition">
                   <div>
-                    <span className="font-mono text-xs bg-slate-800 text-white px-2 py-1 rounded font-black mr-3">[{v.code}]</span>
+                    <span className="font-mono text-xs bg-slate-800 text-white px-2 py-1 rounded font-bold mr-3">[{v.code}]</span>
                     <span className="font-bold text-sm text-slate-800">{v.name}</span>
                     <p className="text-xs text-slate-500 mt-1">
                        Nguồn: <span className="font-bold">{VAR_SOURCES.find(s => s.id === v.source)?.name}</span> 
@@ -760,8 +760,8 @@ export default function KPI_Management() {
       {/* ========================================================================= */}
       {activeTab === 'staff' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in">
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm h-fit">
-            <h3 className="font-black text-slate-800 uppercase text-sm mb-5 pb-3 border-b flex items-center gap-2"><UserPlus size={18} className="text-indigo-600"/> Thêm Nhân sự</h3>
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-fit">
+            <h3 className="font-bold text-slate-800 uppercase text-sm mb-5 pb-3 border-b flex items-center gap-2"><UserPlus size={18} className="text-indigo-600"/> Thêm Nhân sự</h3>
             <form onSubmit={handleAddStaff} className="space-y-4 text-sm font-bold text-slate-600">
               <div><label className="block mb-1">Họ và tên</label><input required value={staffForm.full_name} onChange={e=>setStaffForm({...staffForm, full_name: e.target.value})} className="w-full px-4 py-2.5 border rounded-xl" /></div>
               <div>
@@ -774,14 +774,14 @@ export default function KPI_Management() {
             </form>
           </div>
 
-          <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+          <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
             <h4 className="font-bold text-slate-800 mb-4 pb-2 border-b">Danh sách Nhân sự vận hành</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {staffList.map(s => (
                 <div key={s.id} className="flex justify-between items-center p-3 bg-slate-50 border border-slate-100 rounded-xl">
                   <div>
                     <div className="font-bold text-sm text-slate-800">{s.full_name}</div>
-                    <div className="text-[10px] text-indigo-600 font-black uppercase mt-0.5">{s.role}</div>
+                    <div className="text-xs text-indigo-600 font-bold uppercase mt-0.5">{s.role}</div>
                   </div>
                   <button onClick={() => handleDeleteStaff(s.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={16}/></button>
                 </div>

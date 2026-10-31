@@ -203,14 +203,14 @@ export default function OrderReport() {
     }, [activeTab, searchId, searchProduct, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, searchNote, sortOrder, pageSize, agingFilter, printedFilter, missingCarrierFilter]);
 
     const fetchSystemData = async (email) => {
-        const { data: stData } = await supabase.from('order_statuses').select('*');
+        const { data: stData } = await supabase.from('order_statuses').select('id,name');
         const dict = {};
         stData?.forEach(s => dict[s.id] = s.name);
         setStatusDict(dict);
 
         const [confRes, userConfRes] = await Promise.all([
-            supabase.from('system_configs').select('*').eq('key', 'nhanh_business_id').maybeSingle(),
-            supabase.from('system_configs').select('*').eq('key', `order_cols_pref_${email}`).maybeSingle()
+            supabase.from('system_configs').select('key,value').eq('key', 'nhanh_business_id').maybeSingle(),
+            supabase.from('system_configs').select('key,value').eq('key', `order_cols_pref_${email}`).maybeSingle()
         ]);
 
         if (confRes.data) setBusinessId(confRes.data.value);
@@ -239,11 +239,11 @@ export default function OrderReport() {
                 value: JSON.stringify(visibleCols),
                 description: `Column visibility preferences for user ${userEmail}`
             });
-            setCopyMessage('✅ Đã lưu cấu hình hiển thị cột');
+            setCopyMessage(' Đã lưu cấu hình hiển thị cột');
             setTimeout(() => setCopyMessage(''), 3000);
             setShowColSettings(false);
         } catch (error) {
-            setCopyMessage('⚠️ Đã xảy ra lỗi khi lưu cấu hình');
+            setCopyMessage('️ Đã xảy ra lỗi khi lưu cấu hình');
             setTimeout(() => setCopyMessage(''), 3000);
         } finally {
             setIsSavingCols(false);
@@ -430,7 +430,7 @@ export default function OrderReport() {
         await new Promise(resolve => setTimeout(resolve, 1500));
         await fetchAllocation(statusDict);
         setUpdatingSelected(false);
-        setCopyMessage(`✅ Đã gửi lệnh cập nhật webhook xong.`);
+        setCopyMessage(` Đã gửi lệnh cập nhật webhook xong.`);
         setSelectedOrders([]);
         setTimeout(() => setCopyMessage(''), 5000);
     };
@@ -438,7 +438,7 @@ export default function OrderReport() {
     // TÍNH NĂNG MỚI: Cập nhật lại toàn bộ đơn đang thiếu Mã vận đơn (Chạy đa luồng song song)
     const handleUpdateMissingCarrierWebhooks = async () => {
         if (missingCarrierOrders.length === 0) {
-            setCopyMessage('⚠️ Không có đơn hàng nào đang thiếu Mã vận đơn.');
+            setCopyMessage('️ Không có đơn hàng nào đang thiếu Mã vận đơn.');
             setTimeout(() => setCopyMessage(''), 3000);
             return;
         }
@@ -470,7 +470,7 @@ export default function OrderReport() {
         await new Promise(resolve => setTimeout(resolve, 1500));
         await fetchAllocation(statusDict);
         setIsUpdatingMissingCarrier(false);
-        setCopyMessage(`✅ Đã cập nhật lại webhook cho ${orderIds.length} đơn miss Mã vận đơn.`);
+        setCopyMessage(` Đã cập nhật lại webhook cho ${orderIds.length} đơn miss Mã vận đơn.`);
         setTimeout(() => setCopyMessage(''), 5000);
     };
 
@@ -494,7 +494,7 @@ export default function OrderReport() {
         }
 
         if (!textToCopy) {
-            setCopyMessage('⚠️ Không có mã nào hợp lệ để copy.');
+            setCopyMessage('️ Không có mã nào hợp lệ để copy.');
             setTimeout(() => setCopyMessage(''), 3000);
             setShowCopyMenu(false);
             return;
@@ -502,9 +502,9 @@ export default function OrderReport() {
 
         try {
             await navigator.clipboard.writeText(textToCopy);
-            setCopyMessage(`✅ Đã copy ${count} mã ${type === 'ecom' ? 'đơn sàn' : type === 'carrier' ? 'vận đơn' : 'hệ thống'}.`);
+            setCopyMessage(` Đã copy ${count} mã ${type === 'ecom' ? 'đơn sàn' : type === 'carrier' ? 'vận đơn' : 'hệ thống'}.`);
         } catch (err) {
-            setCopyMessage('⚠️ Copy thất bại, vui lòng thử lại.');
+            setCopyMessage('️ Copy thất bại, vui lòng thử lại.');
         }
         
         setTimeout(() => setCopyMessage(''), 3000);
@@ -514,7 +514,7 @@ export default function OrderReport() {
     // TÍNH NĂNG: XUẤT EXCEL
     const handleExportExcel = async () => {
         if (targetOrdersAction.length === 0) {
-            setCopyMessage('⚠️ Không có dữ liệu để xuất.');
+            setCopyMessage('️ Không có dữ liệu để xuất.');
             setTimeout(() => setCopyMessage(''), 3000);
             return;
         }
@@ -590,10 +590,10 @@ export default function OrderReport() {
             // Tự động tải file
             XLSX.writeFile(workbook, `Bao_cao_don_hang_${new Date().getTime()}.xlsx`);
 
-            setCopyMessage('✅ Đã xuất file Excel thành công.');
+            setCopyMessage(' Đã xuất file Excel thành công.');
         } catch (error) {
             console.error("Lỗi xuất Excel:", error);
-            setCopyMessage('⚠️ Lỗi: Chưa cài đặt thư viện xlsx (vui lòng chạy npm install xlsx)');
+            setCopyMessage('️ Lỗi: Chưa cài đặt thư viện xlsx (vui lòng chạy npm install xlsx)');
         } finally {
             setIsExporting(false);
             setTimeout(() => setCopyMessage(''), 5000);
@@ -612,7 +612,7 @@ export default function OrderReport() {
     const isAllSelected = paginatedOrders.length > 0 && paginatedOrders.every(o => selectedOrders.includes(o.id));
 
     const executePrint = (printSize) => {
-        if (!businessId) { alert("⚠️ Chưa cấu hình Business ID!"); return; }
+        if (!businessId) { alert("️ Chưa cấu hình Business ID!"); return; }
         let printUrl = "";
         const idString = selectedOrders.join(',');
         if (selectedOrders.length === 1) {
@@ -636,14 +636,14 @@ export default function OrderReport() {
             });
             const result = await response.json();
             if (result.success) {
-                setCopyMessage(`✅ Đã gửi ${selectedOrders.length} đơn sang hãng vận chuyển.`);
+                setCopyMessage(` Đã gửi ${selectedOrders.length} đơn sang hãng vận chuyển.`);
                 setSelectedOrders([]);
                 fetchAllocation(statusDict); 
             } else {
-                setCopyMessage(`⚠️ Lỗi gửi đơn: ${result.message}`);
+                setCopyMessage(`️ Lỗi gửi đơn: ${result.message}`);
             }
         } catch (error) {
-            setCopyMessage('⚠️ Đã xảy ra lỗi hệ thống.');
+            setCopyMessage('️ Đã xảy ra lỗi hệ thống.');
         } finally {
             setSendingOrder(false);
             setTimeout(() => setCopyMessage(''), 5000);
@@ -912,7 +912,7 @@ export default function OrderReport() {
 
                 {/* Notifications */}
                 {copyMessage && (
-                    <div className={`px-4 py-2 text-sm font-medium rounded-lg border flex items-center ${copyMessage.includes('✅') ? 'bg-green-50 text-green-700 border-green-200' : copyMessage.includes('Đang') ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                    <div className={`px-4 py-2 text-sm font-medium rounded-lg border flex items-center ${copyMessage.includes('') ? 'bg-green-50 text-green-700 border-green-200' : copyMessage.includes('Đang') ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                         {copyMessage}
                     </div>
                 )}
@@ -992,13 +992,13 @@ export default function OrderReport() {
                                                                     <span className="text-purple-600 font-semibold">{order.carrier_code}</span>
                                                                 </div>
                                                             )}
-                                                            <div className="text-[10px] text-gray-400 mt-1">
+                                                            <div className="text-xs text-gray-400 mt-1">
                                                                 {new Date(order.created_at).toLocaleString('vi-VN')}
                                                             </div>
                                                             
                                                             {/* Thông tin Ngày in cuối */}
                                                             {visibleCols.includes('printed_at') && (
-                                                                <div className="text-[10px] text-gray-500 mt-1">
+                                                                <div className="text-xs text-gray-500 mt-1">
                                                                     Ngày in cuối: <span className="font-medium text-gray-700">{order.printed_at ? new Date(order.printed_at).toLocaleDateString('vi-VN') : 'Chưa in'}</span>
                                                                 </div>
                                                             )}

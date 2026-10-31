@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import TurnstileWidget, { TURNSTILE_SITE_KEY } from '../components/TurnstileWidget';
 import {
   Lock,
   Mail,
@@ -14,7 +15,7 @@ import {
   Box
 } from 'lucide-react';
 
-// ✨ COMPONENT ITEM TÍNH NĂNG
+//  COMPONENT ITEM TÍNH NĂNG
 function FeatureItem({ text }) {
   return (
     <div className="flex items-start gap-3">
@@ -38,19 +39,29 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [captchaToken, setCaptchaToken] = useState(null);
+  const [searchParams] = useSearchParams();
+  const sessionExpired = searchParams.get('session_expired') === '1';
 
   const navigate = useNavigate();
 
-  // ⚡️ XỬ LÝ ĐĂNG NHẬP
+  // ️ XỬ LÝ ĐĂNG NHẬP
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setMessage('');
 
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      setError('Vui lòng hoàn tất xác minh chống bot trước khi đăng nhập.');
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
+      ...(captchaToken ? { options: { captchaToken } } : {}),
     });
 
     if (error) {
@@ -65,21 +76,28 @@ export default function Login() {
     setLoading(false);
   };
 
-  // ⚡️ XỬ LÝ QUÊN MẬT KHẨU
+  // ️ XỬ LÝ QUÊN MẬT KHẨU
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setMessage('');
 
+    if (TURNSTILE_SITE_KEY && !captchaToken) {
+      setError('Vui lòng hoàn tất xác minh chống bot trước khi gửi yêu cầu.');
+      setLoading(false);
+      return;
+    }
+
     const { error } = await supabase.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/admin`,
+      ...(captchaToken ? { captchaToken } : {}),
     });
 
     if (error) {
       setError(`Lỗi gửi mail: ${error.message}`);
     } else {
-      setMessage('✅ Đã gửi link đặt lại mật khẩu!');
+      setMessage(' Đã gửi link đặt lại mật khẩu!');
     }
     setLoading(false);
   };
@@ -105,10 +123,10 @@ export default function Login() {
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-lg shadow-orange-500/30">
               <PackageCheck size={24} className="text-white" />
             </div>
-            <span className="text-2xl font-black text-white tracking-wider">AMELIE WMS</span>
+            <span className="text-2xl font-bold text-white tracking-wider">AMELIE WMS</span>
           </div>
 
-          <h1 className="text-4xl xl:text-5xl font-black text-white leading-tight tracking-tight mb-6">
+          <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight tracking-tight mb-6">
             Kiểm soát kho vận <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-300">
               Toàn diện & Chính xác
@@ -146,7 +164,7 @@ export default function Login() {
         {/* Card Đăng nhập */}
         <div className="relative z-10 w-full max-w-[420px]">
           
-          <div className="bg-white/80 backdrop-blur-xl rounded-3xl p-8 sm:p-10 shadow-2xl shadow-slate-200/50 border border-white transition-all lg:shadow-xl lg:shadow-slate-300/40">
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-10 shadow-2xl shadow-slate-200/50 border border-white transition-all lg:shadow-xl lg:shadow-slate-300/40">
             
             {mode === 'login' ? (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -154,7 +172,7 @@ export default function Login() {
                   <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-orange-600 mb-4 lg:hidden">
                     <Box size={24} />
                   </div>
-                  <h2 className="text-2xl font-black tracking-tight text-slate-900">
+                  <h2 className="text-2xl font-bold tracking-tight text-slate-900">
                     Chào mừng trở lại!
                   </h2>
                   <p className="mt-2 text-sm font-medium text-slate-500">
@@ -162,9 +180,15 @@ export default function Login() {
                   </p>
                 </div>
 
+                {sessionExpired && (
+                  <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-3.5 text-sm font-semibold text-amber-800">
+                    Phiên làm việc đã hết hạn, vui lòng đăng nhập lại.
+                  </div>
+                )}
+
                 {error && (
                   <div className="mb-6 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm font-semibold text-red-600 animate-shake">
-                    ⚠️ {error}
+                    ️ {error}
                   </div>
                 )}
 
@@ -254,6 +278,19 @@ export default function Login() {
                     </label>
                   </div>
 
+                  <div>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600">
+                      Xác minh chống bot
+                    </label>
+                    {TURNSTILE_SITE_KEY ? (
+                      <TurnstileWidget onToken={setCaptchaToken} onExpire={() => setCaptchaToken(null)} />
+                    ) : (
+                      <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                        Chưa cấu hình mã xác minh chống bot (VITE_TURNSTILE_SITE_KEY). Hãy cấu hình trước khi bật cho toàn hệ thống.
+                      </p>
+                    )}
+                  </div>
+
                   <button
                     type="submit"
                     disabled={loading}
@@ -291,7 +328,7 @@ export default function Login() {
                   <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/30">
                     <ShieldCheck size={28} className="text-white" />
                   </div>
-                  <h2 className="text-2xl font-black tracking-tight text-slate-900">
+                  <h2 className="text-2xl font-bold tracking-tight text-slate-900">
                     Khôi phục truy cập
                   </h2>
                   <p className="mt-2 text-sm font-medium text-slate-500 px-4">
@@ -301,7 +338,7 @@ export default function Login() {
 
                 {error && (
                   <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-3.5 text-sm font-semibold text-red-600">
-                    ⚠️ {error}
+                    ️ {error}
                   </div>
                 )}
                 {message && (
@@ -332,6 +369,19 @@ export default function Login() {
                         className="absolute left-4 top-3.5 text-slate-400"
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-600">
+                      Xác minh chống bot
+                    </label>
+                    {TURNSTILE_SITE_KEY ? (
+                      <TurnstileWidget onToken={setCaptchaToken} onExpire={() => setCaptchaToken(null)} />
+                    ) : (
+                      <p className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                        Chưa cấu hình mã xác minh chống bot (VITE_TURNSTILE_SITE_KEY).
+                      </p>
+                    )}
                   </div>
 
                   <button

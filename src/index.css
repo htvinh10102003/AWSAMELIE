@@ -1,1 +1,54 @@
 @import "tailwindcss";
+
+:root {
+  --wms-bg: #f1f5f9;
+  --wms-surface: #ffffff;
+  --wms-text: #0f172a;
+  --wms-muted: #64748b;
+  --wms-border: #e2e8f0;
+  --wms-primary: #2563eb;
+  --wms-danger: #dc2626;
+}
+
+html, body {
+  background: var(--wms-bg);
+  color: var(--wms-text);
+  font-family: ui-sans-system, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+a, button, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button, input, select, textarea { font: inherit; }
+:focus-visible { outline: 2px solid var(--wms-primary); outline-offset: 2px; border-radius: 6px; }
+
+/* Scrollbar gon, khong gay chu y */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Card / nut / input chuan dung chung cho cac trang moi va trang da refactor */
+.ui-card {
+  background: var(--wms-surface);
+  border: 1px solid var(--wms-border);
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+.ui-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 16px; border-radius: 12px; font-size: 14px; font-weight: 700;
+  border: 1px solid transparent; cursor: pointer; transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.ui-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.ui-btn-primary { background: var(--wms-primary); color: #fff; }
+.ui-btn-primary:hover { background: #1d4ed8; }
+.ui-btn-secondary { background: #fff; color: #334155; border-color: var(--wms-border); }
+.ui-btn-secondary:hover { background: #f8fafc; }
+.ui-btn-danger { background: var(--wms-danger); color: #fff; }
+.ui-btn-danger:hover { background: #b91c1c; }
+.ui-input {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--wms-border); border-radius: 12px;
+  background: #fff; color: var(--wms-text); font-size: 14px;
+}
+.ui-input:focus { outline: 2px solid #bfdbfe; border-color: var(--wms-primary); }
+.ui-label { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--wms-muted); margin-bottom: 6px; }

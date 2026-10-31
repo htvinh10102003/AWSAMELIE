@@ -90,24 +90,24 @@ export default function UpdateProduct() {
 
       if (error) throw error;
 
-      showMessage('success', '✅ Đã cập nhật thông tin sản phẩm thành công!');
+      showMessage('success', ' Đã cập nhật thông tin sản phẩm thành công!');
       setEditingProduct(null);
       fetchProducts(page, searchQuery); 
     } catch (err) {
-      showMessage('danger', '❌ Lỗi: ' + err.message);
+      showMessage('danger', ' Lỗi: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ⚡️ VÁ LỖI CHÍ MẠNG: Dùng normalize('NFC') để gộp bảng mã Unicode tiếng Việt
+  // ️ VÁ LỖI CHÍ MẠNG: Dùng normalize('NFC') để gộp bảng mã Unicode tiếng Việt
   const normalizeString = (str) => {
     if (!str) return '';
     return String(str).normalize('NFC').replace(/\s+/g, ' ').trim().toUpperCase();
   };
 
   // ==========================================
-  // ⚡️ LUỒNG XỬ LÝ FILE MỚI: TẠO CHECKBOX ĐỂ CHỌN
+  // ️ LUỒNG XỬ LÝ FILE MỚI: TẠO CHECKBOX ĐỂ CHỌN
   // ==========================================
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
@@ -199,7 +199,7 @@ export default function UpdateProduct() {
 
         setDiffList(differences);
       } catch (err) {
-        showMessage('danger', '❌ Lỗi phân tích file: ' + err.message);
+        showMessage('danger', ' Lỗi phân tích file: ' + err.message);
       } finally {
         setBulkLoading(false);
       }
@@ -208,7 +208,7 @@ export default function UpdateProduct() {
     reader.readAsArrayBuffer(file);
   };
 
-  // ⚡️ XỬ LÝ TICK CHỌN CHECKBOX
+  // ️ XỬ LÝ TICK CHỌN CHECKBOX
   const handleToggleSelect = (uid) => {
     setDiffList(prev => prev.map(item => {
       if (item.uid === uid && item.type !== 'NOT_FOUND') {
@@ -227,7 +227,7 @@ export default function UpdateProduct() {
   };
 
   const executeBulkUpdate = async () => {
-    // ⚡️ Chỉ lấy những sản phẩm đã được Tick chọn
+    // ️ Chỉ lấy những sản phẩm đã được Tick chọn
     const validUpdates = diffList.filter(item => item.product_id && item.type !== 'NOT_FOUND' && item.selected);
     
     if (validUpdates.length === 0) {
@@ -250,11 +250,11 @@ export default function UpdateProduct() {
 
       await Promise.all(promises);
 
-      showMessage('success', `🎉 Đại thành công! Đã chuẩn hóa ${validUpdates.length} sản phẩm.`);
+      showMessage('success', ` Đại thành công! Đã chuẩn hóa ${validUpdates.length} sản phẩm.`);
       setDiffList([]);
       setFileName('');
     } catch (err) {
-      showMessage('danger', '❌ Cập nhật thất bại: ' + err.message);
+      showMessage('danger', ' Cập nhật thất bại: ' + err.message);
     } finally {
       setBulkLoading(false);
     }
@@ -274,7 +274,7 @@ export default function UpdateProduct() {
       {/* HEADER & TABS */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <span className="p-2 bg-blue-50 text-blue-600 rounded-xl"><PackageSearch size={22} /></span>
             Hiệu chỉnh Sản phẩm (Master Data)
           </h2>
@@ -283,16 +283,16 @@ export default function UpdateProduct() {
 
         <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200/60">
           <button onClick={() => { setActiveTab('manual'); setDiffList([]); }} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'manual' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 cursor-pointer'}`}>
-            ✏️ Chỉnh sửa Thủ công
+            ️ Chỉnh sửa Thủ công
           </button>
           <button onClick={() => setActiveTab('bulk')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'bulk' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800 cursor-pointer'}`}>
-            ⚡️ Cập nhật Hàng loạt
+            ️ Cập nhật Hàng loạt
           </button>
         </div>
       </div>
 
       {message && (
-        <div className={`p-4 font-black text-sm rounded-2xl shadow-md flex items-center gap-3 animate-in slide-in-from-top-2 ${message.type === 'danger' ? 'bg-red-600 text-white' : 'bg-emerald-500 text-white'}`}>
+        <div className={`p-4 font-bold text-sm rounded-2xl shadow-md flex items-center gap-3 animate-in slide-in-from-top-2 ${message.type === 'danger' ? 'bg-red-600 text-white' : 'bg-emerald-500 text-white'}`}>
           {message.type === 'danger' ? <AlertCircle size={20} /> : <CheckCircle2 size={20} />}
           <span>{message.text}</span>
         </div>
@@ -305,7 +305,7 @@ export default function UpdateProduct() {
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[600px]">
           
           <div className="p-4 border-b border-slate-100 bg-slate-50 flex flex-wrap justify-between items-center gap-4">
-            <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
               Tổng quan: <span className="text-blue-600">{totalCount}</span> sản phẩm
             </span>
             
@@ -329,7 +329,7 @@ export default function UpdateProduct() {
             ) : (
               <table className="w-full text-left text-xs font-semibold">
                 <thead className="sticky top-0 bg-white shadow-sm z-10">
-                  <tr className="border-b border-slate-100 text-[10px] text-slate-400 uppercase tracking-wider bg-slate-50">
+                  <tr className="border-b border-slate-100 text-xs text-slate-400 uppercase tracking-wider bg-slate-50">
                     <th className="py-3 px-6">Tên sản phẩm</th>
                     <th className="py-3 px-4">Mã Vạch (Barcode)</th>
                     <th className="py-3 px-6 text-right">Thao tác</th>
@@ -342,7 +342,7 @@ export default function UpdateProduct() {
                     products.map(prod => (
                       <tr key={prod.product_id} className="hover:bg-blue-50/40 transition-colors">
                         <td className="py-3 px-6 font-bold text-slate-800">{prod.product_name}</td>
-                        <td className="py-3 px-4 font-black tracking-widest text-blue-600">{prod.product_code || '---'}</td>
+                        <td className="py-3 px-4 font-bold tracking-widest text-blue-600">{prod.product_code || '---'}</td>
                         <td className="py-3 px-6 text-right">
                           <button onClick={() => handleOpenEdit(prod)} className="px-3 py-1.5 bg-white border border-slate-200 text-blue-600 rounded-lg shadow-sm hover:bg-blue-50 transition cursor-pointer flex items-center gap-1.5 ml-auto">
                             <Pencil size={12}/> Sửa
@@ -371,13 +371,13 @@ export default function UpdateProduct() {
       {/* ========================================== */}
       {activeTab === 'bulk' && (
         <div className="space-y-6">
-          <div className="bg-white p-8 md:p-10 border border-slate-200 border-dashed rounded-3xl text-center shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
+          <div className="bg-white p-8 md:p-10 border border-slate-200 border-dashed rounded-2xl text-center shadow-sm flex flex-col items-center justify-center relative overflow-hidden">
             {bulkLoading && <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-blue-600 font-bold gap-2"><Loader2 size={32} className="animate-spin" /> Đang phân tích so sánh 2 chiều...</div>}
             
             <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4 border-4 border-white shadow-lg">
               <FileSpreadsheet size={28} className="text-blue-500" />
             </div>
-            <h3 className="text-lg font-black text-slate-800 uppercase tracking-wide">Tải File Excel (.xlsx) / CSV</h3>
+            <h3 className="text-lg font-bold text-slate-800 uppercase tracking-wide">Tải File Excel (.xlsx) / CSV</h3>
             <p className="text-xs text-slate-500 font-medium mt-2 max-w-md mx-auto leading-relaxed">
               Cấu trúc file chuẩn: Cột 1 là <strong className="text-slate-800">Mã Vạch</strong>, Cột 2 là <strong className="text-blue-600">Tên Sản Phẩm</strong>. Hệ thống sẽ quét chéo để cập nhật Tên bị lệch hoặc Barcode bị sai.
             </p>
@@ -394,10 +394,10 @@ export default function UpdateProduct() {
             <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col animate-in slide-in-from-bottom-4">
               <div className="p-4 border-b border-amber-100 bg-amber-50/50 flex justify-between items-center">
                 <div>
-                  <h3 className="text-xs font-black text-amber-800 uppercase tracking-wide flex items-center gap-2">
+                  <h3 className="text-xs font-bold text-amber-800 uppercase tracking-wide flex items-center gap-2">
                     <AlertCircle size={16}/> Phát hiện {diffList.length} sản phẩm bị lệch Dữ liệu gốc
                   </h3>
-                  <p className="text-[10px] text-amber-600/70 font-medium mt-0.5">Tick chọn các ô bên dưới để đồng bộ dữ liệu vào hệ thống.</p>
+                  <p className="text-xs text-amber-600/70 font-medium mt-0.5">Tick chọn các ô bên dưới để đồng bộ dữ liệu vào hệ thống.</p>
                 </div>
                 <button onClick={executeBulkUpdate} disabled={bulkLoading || selectedCount === 0} className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white disabled:bg-slate-300 text-xs font-bold rounded-xl shadow-md transition cursor-pointer flex items-center gap-2">
                   <Save size={14}/> Xác nhận Cập nhật ({selectedCount} SP)
@@ -407,13 +407,13 @@ export default function UpdateProduct() {
               <div className="max-h-[500px] overflow-y-auto">
                 <table className="w-full text-left text-xs font-semibold">
                   <thead className="sticky top-0 bg-white shadow-sm z-10">
-                    <tr className="border-b border-slate-100 text-[10px] text-slate-400 uppercase tracking-wider bg-slate-50">
+                    <tr className="border-b border-slate-100 text-xs text-slate-400 uppercase tracking-wider bg-slate-50">
                       <th className="py-3 px-4 w-10 text-center">
                         <input type="checkbox" className="w-4 h-4 cursor-pointer" checked={isAllSelected} onChange={handleToggleSelectAll} />
                       </th>
                       <th className="py-3 px-4 w-24 text-center">Hành động</th>
                       <th className="py-3 px-4">Thông tin Sản phẩm</th>
-                      <th className="py-3 px-4">Thay đổi (Cũ ➜ Mới)</th>
+                      <th className="py-3 px-4">Thay đổi (Cũ  Mới)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -430,16 +430,16 @@ export default function UpdateProduct() {
                         </td>
                         
                         <td className="py-3 px-4 text-center">
-                          {item.type === 'NOT_FOUND' && <span className="text-[10px] px-2 py-0.5 bg-red-100 text-red-700 rounded font-black uppercase">Mã lạ</span>}
-                          {item.type === 'UPDATE_NAME' && <span className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-black uppercase border border-blue-200">Sửa Tên</span>}
-                          {item.type === 'UPDATE_BARCODE' && <span className="text-[10px] px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded font-black uppercase border border-emerald-200">Sửa Mã</span>}
+                          {item.type === 'NOT_FOUND' && <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded font-bold uppercase">Mã lạ</span>}
+                          {item.type === 'UPDATE_NAME' && <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-bold uppercase border border-blue-200">Sửa Tên</span>}
+                          {item.type === 'UPDATE_BARCODE' && <span className="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded font-bold uppercase border border-emerald-200">Sửa Mã</span>}
                         </td>
 
                         <td className="py-3 px-4">
                           {item.type === 'UPDATE_BARCODE' ? (
                             <div className="font-bold text-slate-800">{item.name}</div>
                           ) : (
-                            <div className="font-black tracking-widest text-slate-800">{item.barcode}</div>
+                            <div className="font-bold tracking-widest text-slate-800">{item.barcode}</div>
                           )}
                         </td>
 
@@ -448,8 +448,8 @@ export default function UpdateProduct() {
                             <div className="text-slate-500 font-medium">Lấy từ file: <span className="text-slate-800 font-bold">{item.name}</span></div>
                           ) : (
                             <>
-                              <div className="text-[10px] text-red-400 line-through truncate max-w-sm">{item.old_val}</div>
-                              <div className="text-emerald-600 font-bold truncate max-w-sm mt-0.5">➜ {item.new_val}</div>
+                              <div className="text-xs text-red-400 line-through truncate max-w-sm">{item.old_val}</div>
+                              <div className="text-emerald-600 font-bold truncate max-w-sm mt-0.5"> {item.new_val}</div>
                             </>
                           )}
                         </td>
@@ -465,16 +465,16 @@ export default function UpdateProduct() {
       )}
 
       {/* ========================================== */}
-      {/* ⚡️ MODAL SỬA THÔNG TIN THỦ CÔNG */}
+      {/* ️ MODAL SỬA THÔNG TIN THỦ CÔNG */}
       {/* ========================================== */}
       {editingProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-md p-6 transform transition-all animate-in zoom-in-95 duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-md p-6 transform transition-all animate-in zoom-in-95 duration-200">
             
             <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
               <div className="flex items-center gap-2">
                 <div className="p-1.5 bg-blue-50 text-blue-600 rounded-xl"><Pencil size={16}/></div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">Chỉnh sửa Sản Phẩm</h3>
+                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Chỉnh sửa Sản Phẩm</h3>
               </div>
               <button onClick={() => setEditingProduct(null)} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition cursor-pointer"><X size={16} /></button>
             </div>
@@ -486,7 +486,7 @@ export default function UpdateProduct() {
                   type="text" 
                   value={editForm.product_code} 
                   onChange={e => setEditForm({...editForm, product_code: e.target.value})}
-                  className="w-full px-4 py-2 border border-blue-200 rounded-xl bg-blue-50/30 outline-none focus:bg-white focus:border-blue-500 font-black text-slate-800 tracking-wider" 
+                  className="w-full px-4 py-2 border border-blue-200 rounded-xl bg-blue-50/30 outline-none focus:bg-white focus:border-blue-500 font-bold text-slate-800 tracking-wider" 
                 />
               </div>
               <div>

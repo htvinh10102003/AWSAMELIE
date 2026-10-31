@@ -69,7 +69,7 @@ export default function StatusTransitionTracker() {
     const fetchStatuses = async () => {
       const { data, error } = await supabase
         .from('order_statuses')
-        .select('*')
+        .select('id,name')
         .order('id', { ascending: true });
       
       if (!error && data) {
@@ -322,7 +322,7 @@ export default function StatusTransitionTracker() {
           <Clock size={24} strokeWidth={2.5} />
         </div>
         <div>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight">Tra cứu luân chuyển trạng thái</h2>
+          <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Tra cứu luân chuyển trạng thái</h2>
           <p className="text-sm text-slate-500 font-medium mt-0.5">Lọc lịch sử thao tác đơn hàng theo thời gian, mã đơn và sản phẩm</p>
         </div>
       </div>
@@ -618,7 +618,7 @@ export default function StatusTransitionTracker() {
                                   {product.product_name}
                                 </p>
                                 <div className="flex justify-between items-center mt-1">
-                                  <span className="text-slate-400 font-mono text-[10px]">{product.product_code}</span>
+                                  <span className="text-slate-400 font-mono text-xs">{product.product_code}</span>
                                   <span className="font-bold text-orange-600 bg-orange-100 px-1.5 rounded">
                                     SL: {product.quantity}
                                   </span>

@@ -197,11 +197,11 @@ export default function KPI_DataEntry() {
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12 mt-4 p-4 animate-in fade-in duration-300">
 
-      <div className="bg-white p-6 border border-slate-200 rounded-3xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl"><FileEdit size={24} strokeWidth={2.5}/></div>
           <div>
-            <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight">Nhập liệu KPI Hàng ngày</h2>
+            <h2 className="text-xl font-bold text-slate-800 uppercase tracking-tight">Nhập liệu KPI Hàng ngày</h2>
             <p className="text-xs font-medium text-slate-500 mt-1">Ghi nhận lỗi vi phạm cá nhân/tập thể và số liệu dùng chung</p>
           </div>
         </div>
@@ -215,7 +215,7 @@ export default function KPI_DataEntry() {
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-3 w-full sm:w-auto">
           {activeTab === 'errors' ? (
             <>
@@ -230,7 +230,7 @@ export default function KPI_DataEntry() {
             </>
           ) : (
             <span className="text-sm font-bold text-amber-600 uppercase tracking-wider bg-amber-50 px-4 py-2.5 rounded-xl border border-amber-200">
-              💡 Biến số áp dụng chung cho toàn hệ thống
+               Biến số áp dụng chung cho toàn hệ thống
             </span>
           )}
         </div>
@@ -248,8 +248,8 @@ export default function KPI_DataEntry() {
 
       {activeTab === 'errors' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm h-fit">
-            <h3 className="font-black text-slate-800 uppercase text-sm mb-5 pb-3 border-b border-slate-100 flex items-center gap-2">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm h-fit">
+            <h3 className="font-bold text-slate-800 uppercase text-sm mb-5 pb-3 border-b border-slate-100 flex items-center gap-2">
               <Plus size={18} className="text-red-500"/> Kê khai vi phạm
             </h3>
             
@@ -282,14 +282,14 @@ export default function KPI_DataEntry() {
                 <textarea rows="3" value={errorForm.note} onChange={e=>setErrorForm({...errorForm, note: e.target.value})} placeholder="Nhập chi tiết hoặc dán link ảnh..." className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-500 shadow-sm font-medium"></textarea>
               </div>
 
-              <button disabled={loading} className="w-full py-3.5 bg-slate-900 text-white font-black rounded-xl shadow-lg hover:bg-black transition flex items-center justify-center gap-2 disabled:opacity-50">
+              <button disabled={loading} className="w-full py-3.5 bg-slate-900 text-white font-bold rounded-xl shadow-lg hover:bg-black transition flex items-center justify-center gap-2 disabled:opacity-50">
                 {loading ? <Loader2 size={18} className="animate-spin" /> : <BookOpen size={18} />} GHI VÀO SỔ
               </button>
             </form>
           </div>
 
           <div className="lg:col-span-2 space-y-4">
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
               <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
                 <h4 className="font-bold text-slate-800 flex items-center gap-2">
                   Lịch sử vi phạm ngày <span className="px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-lg text-sm">{selectedDate.split('-').reverse().join('/')}</span>
@@ -318,16 +318,16 @@ export default function KPI_DataEntry() {
                             {log.kpi_errors?.name || 'Lỗi không xác định'}
                           </h5>
                           {isIndividual ? (
-                            <p className="text-xs font-bold text-amber-700 bg-amber-100 inline-block px-2.5 py-0.5 rounded-md mb-2">👤 Cá nhân: {log.warehouse_staff?.full_name || 'Không xác định'}</p>
+                            <p className="text-xs font-bold text-amber-700 bg-amber-100 inline-block px-2.5 py-0.5 rounded-md mb-2"> Cá nhân: {log.warehouse_staff?.full_name || 'Không xác định'}</p>
                           ) : isWarehouse ? (
-                            <p className="text-xs font-bold text-purple-700 bg-purple-100 inline-block px-2.5 py-0.5 rounded-md mb-2">🏢 Lỗi toàn kho (Phạt tất cả)</p>
+                            <p className="text-xs font-bold text-purple-700 bg-purple-100 inline-block px-2.5 py-0.5 rounded-md mb-2"> Lỗi toàn kho (Phạt tất cả)</p>
                           ) : (
-                            <p className="text-xs font-bold text-blue-700 bg-blue-100 inline-block px-2.5 py-0.5 rounded-md mb-2">👥 Lỗi tập thể bộ phận</p>
+                            <p className="text-xs font-bold text-blue-700 bg-blue-100 inline-block px-2.5 py-0.5 rounded-md mb-2"> Lỗi tập thể bộ phận</p>
                           )}
                           <br/>
                           {log.tracking_code && <p className="text-xs font-bold text-indigo-600 bg-white inline-block px-2 py-0.5 rounded border border-indigo-100 mb-1">Mã: {log.tracking_code}</p>}
                           {log.note && <p className="text-xs text-slate-500 font-medium italic mt-1">Ghi chú: {log.note}</p>}
-                          <p className="text-[10px] text-slate-400 font-bold mt-3">Ghi nhận lúc: {new Date(log.created_at).toLocaleTimeString('vi-VN')}</p>
+                          <p className="text-xs text-slate-400 font-bold mt-3">Ghi nhận lúc: {new Date(log.created_at).toLocaleTimeString('vi-VN')}</p>
                         </div>
                       </div>
                     )
@@ -340,9 +340,9 @@ export default function KPI_DataEntry() {
       )}
 
       {activeTab === 'variables' && (
-        <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm max-w-4xl mx-auto relative">
+        <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm max-w-4xl mx-auto relative">
           <div className="mb-6 pb-4 border-b border-slate-100">
-             <h3 className="font-black text-slate-800 uppercase text-base flex items-center gap-2 mb-1">
+             <h3 className="font-bold text-slate-800 uppercase text-base flex items-center gap-2 mb-1">
                <FileEdit size={20} className="text-indigo-600"/> Nhập số liệu Thủ công
              </h3>
              <p className="text-sm text-slate-500 font-medium">Các biến số dưới đây áp dụng chung cho <b className="text-slate-700">TOÀN HỆ THỐNG</b>. Những ô có viền cam là <b className="text-amber-600">chưa được lưu</b>.</p>
@@ -361,7 +361,7 @@ export default function KPI_DataEntry() {
               {/* PHẦN 1: BIẾN HÀNG NGÀY */}
               {globalVars.filter(v => v.source === 'daily_manual').length > 0 && (
                 <div>
-                  <h4 className="text-sm font-black text-blue-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-blue-800 uppercase tracking-widest mb-4 flex items-center gap-2">
                     <CalendarDays size={16}/> Nhập liệu Hàng ngày
                   </h4>
                   <div className="space-y-3">
@@ -372,9 +372,9 @@ export default function KPI_DataEntry() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <p className="text-sm font-bold text-slate-800">{v.name}</p>
-                              {isDirty && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black rounded-md uppercase animate-pulse">⚠️ Chưa lưu</span>}
+                              {isDirty && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-md uppercase animate-pulse">️ Chưa lưu</span>}
                             </div>
-                            <p className="text-[10px] font-mono font-bold text-slate-400 mt-1 uppercase">Mã: {v.code}</p>
+                            <p className="text-xs font-mono font-bold text-slate-400 mt-1 uppercase">Mã: {v.code}</p>
                           </div>
                           <div className="flex items-center gap-2 w-full sm:w-auto">
                             <input 
@@ -382,7 +382,7 @@ export default function KPI_DataEntry() {
                               value={variableValues[v.code] !== undefined ? variableValues[v.code] : ''} 
                               onChange={e => setVariableValues({...variableValues, [v.code]: e.target.value})}
                               placeholder="0" 
-                              className={`w-full sm:w-32 px-4 py-2.5 bg-white border-2 rounded-xl text-lg font-black outline-none focus:ring-4 text-center shadow-inner transition-colors ${isDirty ? 'border-amber-400 text-amber-700 focus:border-amber-500 focus:ring-amber-50' : 'border-slate-200 text-indigo-700 focus:border-indigo-500 focus:ring-indigo-50'}`} 
+                              className={`w-full sm:w-32 px-4 py-2.5 bg-white border-2 rounded-xl text-lg font-bold outline-none focus:ring-4 text-center shadow-inner transition-colors ${isDirty ? 'border-amber-400 text-amber-700 focus:border-amber-500 focus:ring-amber-50' : 'border-slate-200 text-indigo-700 focus:border-indigo-500 focus:ring-indigo-50'}`} 
                             />
                             <button 
                               onClick={() => handleSaveSingleVariable(v.code)} 
@@ -407,7 +407,7 @@ export default function KPI_DataEntry() {
               {/* PHẦN 2: BIẾN HÀNG THÁNG */}
               {globalVars.filter(v => v.source === 'monthly_manual').length > 0 && (
                 <div>
-                  <h4 className="text-sm font-black text-emerald-800 uppercase tracking-widest mb-2 flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-emerald-800 uppercase tracking-widest mb-2 flex items-center gap-2">
                     <Target size={16}/> Nhập liệu Cuối tháng
                   </h4>
                   <p className="text-[11px] text-emerald-600 font-medium mb-4">Lưu ý: Chỉ cần nhập 1 lần vào ngày cuối cùng của tháng (nhớ chọn đúng ngày ở ô chọn ngày phía trên).</p>
@@ -420,9 +420,9 @@ export default function KPI_DataEntry() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <p className="text-sm font-bold text-slate-800">{v.name}</p>
-                              {isDirty && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-black rounded-md uppercase animate-pulse">⚠️ Chưa lưu</span>}
+                              {isDirty && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-md uppercase animate-pulse">️ Chưa lưu</span>}
                             </div>
-                            <p className="text-[10px] font-mono font-bold text-slate-400 mt-1 uppercase">Mã: {v.code}</p>
+                            <p className="text-xs font-mono font-bold text-slate-400 mt-1 uppercase">Mã: {v.code}</p>
                           </div>
                           <div className="flex items-center gap-2 w-full sm:w-auto">
                             <input 
@@ -430,7 +430,7 @@ export default function KPI_DataEntry() {
                               value={variableValues[v.code] !== undefined ? variableValues[v.code] : ''} 
                               onChange={e => setVariableValues({...variableValues, [v.code]: e.target.value})}
                               placeholder="0" 
-                              className={`w-full sm:w-32 px-4 py-2.5 bg-white border-2 rounded-xl text-lg font-black outline-none focus:ring-4 text-center shadow-inner transition-colors ${isDirty ? 'border-amber-400 text-amber-700 focus:border-amber-500 focus:ring-amber-50' : 'border-slate-200 text-emerald-700 focus:border-emerald-500 focus:ring-emerald-50'}`} 
+                              className={`w-full sm:w-32 px-4 py-2.5 bg-white border-2 rounded-xl text-lg font-bold outline-none focus:ring-4 text-center shadow-inner transition-colors ${isDirty ? 'border-amber-400 text-amber-700 focus:border-amber-500 focus:ring-amber-50' : 'border-slate-200 text-emerald-700 focus:border-emerald-500 focus:ring-emerald-50'}`} 
                             />
                             <button 
                               onClick={() => handleSaveSingleVariable(v.code)} 
@@ -455,7 +455,7 @@ export default function KPI_DataEntry() {
                     <span className="text-sm font-bold text-amber-700 flex items-center gap-2">
                       <AlertCircle size={18}/> Có thay đổi chưa lưu!
                     </span>
-                    <button onClick={handleSaveAllDirtyVariables} disabled={loading} className="px-8 py-3.5 bg-amber-500 text-white font-black rounded-xl shadow-lg hover:bg-amber-600 transition-all disabled:opacity-50 flex items-center gap-2">
+                    <button onClick={handleSaveAllDirtyVariables} disabled={loading} className="px-8 py-3.5 bg-amber-500 text-white font-bold rounded-xl shadow-lg hover:bg-amber-600 transition-all disabled:opacity-50 flex items-center gap-2">
                       {loading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
                       LƯU TẤT CẢ THAY ĐỔI
                     </button>

@@ -71,6 +71,7 @@ export default function KiemTraDonHoan() {
           const { data, error } = await supabase
             .from('product_inventories')
             .select('product_id, product_code, product_name')
+            .order('product_code', { ascending: true })
             .range(from, from + step - 1);
 
           if (error) throw error;
@@ -150,10 +151,10 @@ export default function KiemTraDonHoan() {
       if (error) throw error;
       setHistoryLogs(prev => prev.filter(log => log.id !== id));
       if (selectedLog?.id === id) setSelectedLog(null);
-      setAlertMessage({ type: 'success', text: '✅ Đã xóa biên bản thành công.' });
+      setAlertMessage({ type: 'success', text: ' Đã xóa biên bản thành công.' });
     } catch (err) {
       console.error("Lỗi khi xóa:", err);
-      setAlertMessage({ type: 'danger', text: '🚨 Lỗi khi xóa biên bản.' });
+      setAlertMessage({ type: 'danger', text: ' Lỗi khi xóa biên bản.' });
     } finally {
       closeConfirm();
     }
@@ -186,14 +187,14 @@ export default function KiemTraDonHoan() {
       const { error } = await supabase.from('return_audit_logs').insert([payload]);
       if (error) throw error;
 
-      setAlertMessage({ type: 'success', text: '✅ Đã chốt và lưu biên bản kiểm hoàn thành công!' });
+      setAlertMessage({ type: 'success', text: ' Đã chốt và lưu biên bản kiểm hoàn thành công!' });
       setChecklist([]);
       setScannedSurplus([]);
       setFileName('');
       setIsScanningCam(false);
     } catch (err) {
       console.error("Lỗi khi lưu:", err);
-      setAlertMessage({ type: 'danger', text: '🚨 Đã xảy ra lỗi khi lưu biên bản vào hệ thống.' });
+      setAlertMessage({ type: 'danger', text: ' Đã xảy ra lỗi khi lưu biên bản vào hệ thống.' });
     } finally {
       setIsSaving(false);
     }
@@ -219,7 +220,7 @@ export default function KiemTraDonHoan() {
       }));
       setChecklist(resetList);
       setScannedSurplus([]);
-      setAlertMessage({ type: 'warning', text: '🔄 Đã làm mới số liệu quét Lượt 2 về 0.' });
+      setAlertMessage({ type: 'warning', text: ' Đã làm mới số liệu quét Lượt 2 về 0.' });
       setIsScanningCam(false);
     } else {
       setChecklist([]);
@@ -258,7 +259,7 @@ export default function KiemTraDonHoan() {
     setShowComparePopup(false);
     setAlertMessage({
       type: 'warning',
-      text: `🔄 Đang trong chế độ ĐỐI SOÁT LẠI (Lượt 2) cho phiên "${log.file_name}". Hãy bắn lại toàn bộ sản phẩm rồi bấm "So sánh 2 lượt".`
+      text: ` Đang trong chế độ ĐỐI SOÁT LẠI (Lượt 2) cho phiên "${log.file_name}". Hãy bắn lại toàn bộ sản phẩm rồi bấm "So sánh 2 lượt".`
     });
   };
 
@@ -370,10 +371,10 @@ export default function KiemTraDonHoan() {
 
       if (targetItem.scannedQty > targetItem.expectedQty) {
         playSound('warning', soundEnabledRef.current); 
-        setAlertMessage({ type: 'warning', text: `⚠️ CHÚ Ý: Mã [${targetItem.name}] quét DƯ (Lên ${targetItem.scannedQty}/${targetItem.expectedQty}).` });
+        setAlertMessage({ type: 'warning', text: `️ CHÚ Ý: Mã [${targetItem.name}] quét DƯ (Lên ${targetItem.scannedQty}/${targetItem.expectedQty}).` });
       } else {
         playSound('success', soundEnabledRef.current); 
-        if (targetItem.scannedQty === targetItem.expectedQty) { setAlertMessage({ type: 'success', text: `✅ Mã [${targetItem.name}] đã ĐỦ SỐ LƯỢNG!` }); }
+        if (targetItem.scannedQty === targetItem.expectedQty) { setAlertMessage({ type: 'success', text: ` Mã [${targetItem.name}] đã ĐỦ SỐ LƯỢNG!` }); }
       }
       setChecklist(updatedChecklist);
     } else {
@@ -388,7 +389,7 @@ export default function KiemTraDonHoan() {
       } else {
         setScannedSurplus([...currentSurplus, { code: actualCodeToMatch !== code ? actualCodeToMatch : code, name: dbMatch ? dbMatch.product_name : 'Mã vạch lạ không rõ trên hệ thống', scannedQty: 1 }]);
       }
-      setAlertMessage({ type: 'danger', text: `🚨 BÁO ĐỘNG ĐỎ: Quét trúng mã lạ hoặc dư thừa ngoài danh sách!` });
+      setAlertMessage({ type: 'danger', text: ` BÁO ĐỘNG ĐỎ: Quét trúng mã lạ hoặc dư thừa ngoài danh sách!` });
     }
     setInputCode(''); 
   };
@@ -561,7 +562,7 @@ export default function KiemTraDonHoan() {
       {confirmPopup.isOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all animate-in zoom-in-95 duration-200">
-            <h3 className={`text-lg font-black mb-2 flex items-center gap-2 ${confirmPopup.isDestructive ? 'text-red-600' : 'text-slate-900'}`}>
+            <h3 className={`text-lg font-bold mb-2 flex items-center gap-2 ${confirmPopup.isDestructive ? 'text-red-600' : 'text-slate-900'}`}>
               {confirmPopup.isDestructive ? <AlertCircle size={22} /> : <AlertCircle size={22} className="text-blue-500" />}
               {confirmPopup.title}
             </h3>
@@ -591,7 +592,7 @@ export default function KiemTraDonHoan() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black uppercase tracking-widest bg-amber-400 text-slate-900 px-2 py-0.5 rounded-md">
+                <span className="text-xs font-bold uppercase tracking-widest bg-amber-400 text-slate-900 px-2 py-0.5 rounded-md">
                   Chế độ Đối soát lại (Lượt 2)
                 </span>
                 <span className="text-xs text-indigo-200 font-semibold">
@@ -606,7 +607,7 @@ export default function KiemTraDonHoan() {
           <div className="flex items-center gap-2 w-full md:w-auto justify-end">
             <button
               onClick={() => setShowComparePopup(true)}
-              className="px-4 py-2 bg-white text-indigo-700 hover:bg-indigo-50 text-xs font-black rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 bg-white text-indigo-700 hover:bg-indigo-50 text-xs font-bold rounded-xl shadow-sm transition flex items-center gap-1.5 cursor-pointer"
             >
               <GitCompare size={15} /> So sánh 2 lượt ngay
             </button>
@@ -623,7 +624,7 @@ export default function KiemTraDonHoan() {
       {/* HEADER BẢNG ĐIỀU KHIỂN */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <span className="p-2 bg-blue-50 text-blue-600 rounded-xl"><ScanBarcode size={22} /></span>
             Kiểm tra và Chốt số lượng Hoàn
           </h2>
@@ -680,11 +681,11 @@ export default function KiemTraDonHoan() {
 
       {/* GIAO DIỆN CHÍNH KHI CHƯA UPLOAD FILE */}
       {checklist.length === 0 ? (
-        <div className="bg-white p-8 md:p-14 border border-slate-200 border-dashed rounded-3xl text-center shadow-sm flex flex-col items-center justify-center">
+        <div className="bg-white p-8 md:p-14 border border-slate-200 border-dashed rounded-2xl text-center shadow-sm flex flex-col items-center justify-center">
           <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mb-4 border-4 border-white shadow-lg">
             <FileSpreadsheet size={32} className="text-blue-500" />
           </div>
-          <h3 className="text-lg font-black text-slate-800 uppercase tracking-wide">Tải lên File Danh sách Hoàn</h3>
+          <h3 className="text-lg font-bold text-slate-800 uppercase tracking-wide">Tải lên File Danh sách Hoàn</h3>
           <p className="text-xs text-slate-500 font-medium mt-2 max-w-md mx-auto leading-relaxed">
             Hệ thống chỉ cần 2 cột: <strong className="text-slate-800">Tên sản phẩm</strong> và <strong className="text-slate-800">Số lượng</strong>.
           </p>
@@ -706,7 +707,7 @@ export default function KiemTraDonHoan() {
             
             <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm space-y-4">
               <div className="flex justify-between items-center">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">
                   {reAuditOriginalLog ? 'Quét Barcode Đối Soát (Lượt 2)' : 'Súng quét Barcode / SKU'}
                 </label>
                 <button 
@@ -723,7 +724,7 @@ export default function KiemTraDonHoan() {
               {isScanningCam && (
                 <div className="mb-2 overflow-hidden rounded-xl border-2 border-blue-300 shadow-inner bg-black">
                   <div id="reader-kiemtra" className="w-full"></div>
-                  <div className="bg-blue-50 p-2 text-center text-[10px] text-blue-600 font-medium border-t border-blue-200">
+                  <div className="bg-blue-50 p-2 text-center text-xs text-blue-600 font-medium border-t border-blue-200">
                     Đưa mã vạch (Code 128) vào khung hình chữ nhật
                   </div>
                 </div>
@@ -739,28 +740,28 @@ export default function KiemTraDonHoan() {
                   className="w-full text-center text-sm font-bold tracking-widest py-3 px-4 bg-slate-50 border-2 border-slate-300 rounded-xl outline-none focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition"
                 />
               </form>
-              <div className="text-[10px] text-slate-400 text-center font-bold">Đang xử lý file: <span className="text-blue-500">{fileName}</span></div>
+              <div className="text-xs text-slate-400 text-center font-bold">Đang xử lý file: <span className="text-blue-500">{fileName}</span></div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white p-4 border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-center text-center">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                   {reAuditOriginalLog ? 'Đã quét Lượt 2' : 'Số sản phẩm đúng'}
                 </span>
-                <div className="text-2xl font-black text-slate-800 mt-1">
+                <div className="text-2xl font-bold text-slate-800 mt-1">
                   <span className="text-blue-600">{totalScannedValid}</span> <span className="text-sm text-slate-300">/ {totalExpected}</span>
                 </div>
                 {reAuditOriginalLog && (
-                  <span className="text-[10px] font-bold text-indigo-500 mt-1">
+                  <span className="text-xs font-bold text-indigo-500 mt-1">
                     Lượt 1 đã quét: {reAuditOriginalLog.total_scanned_valid}
                   </span>
                 )}
               </div>
               <div className="bg-white p-4 border border-red-200 bg-red-50/20 rounded-2xl shadow-sm flex flex-col justify-center text-center">
-                <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Mã sai / Dư thừa</span>
-                <span className="text-2xl font-black text-red-600 mt-1">{totalSurplus}</span>
+                <span className="text-xs font-bold text-red-400 uppercase tracking-wider">Mã sai / Dư thừa</span>
+                <span className="text-2xl font-bold text-red-600 mt-1">{totalSurplus}</span>
                 {reAuditOriginalLog && (
-                  <span className="text-[10px] font-bold text-red-400 mt-1">
+                  <span className="text-xs font-bold text-red-400 mt-1">
                     Lượt 1 dư: {reAuditOriginalLog.total_surplus}
                   </span>
                 )}
@@ -769,7 +770,7 @@ export default function KiemTraDonHoan() {
           </div>
 
           {alertMessage && (
-            <div className={`p-4 font-black text-sm rounded-2xl shadow-md flex items-center gap-3 animate-in slide-in-from-bottom-2 ${
+            <div className={`p-4 font-bold text-sm rounded-2xl shadow-md flex items-center gap-3 animate-in slide-in-from-bottom-2 ${
               alertMessage.type === 'danger' ? 'bg-red-600 text-white animate-bounce' : 
               alertMessage.type === 'warning' ? 'bg-amber-400 text-white' : 
               'bg-emerald-500 text-white'
@@ -784,10 +785,10 @@ export default function KiemTraDonHoan() {
               <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Package size={16} className="text-blue-600" />
-                  <h3 className="text-xs font-black text-slate-700 uppercase tracking-wide">Sản phẩm đối soát ({checklist.length} sản phẩm)</h3>
+                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wide">Sản phẩm đối soát ({checklist.length} sản phẩm)</h3>
                 </div>
                 {reAuditOriginalLog && (
-                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
+                  <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg">
                     Đang ghi nhận số liệu Lượt 2
                   </span>
                 )}
@@ -795,7 +796,7 @@ export default function KiemTraDonHoan() {
               <div className="flex-1 overflow-y-auto max-h-[500px]">
                 <table className="w-full text-left text-xs font-semibold">
                   <thead className="sticky top-0 bg-white shadow-sm">
-                    <tr className="border-b border-slate-100 text-[10px] text-slate-400 uppercase tracking-wider">
+                    <tr className="border-b border-slate-100 text-xs text-slate-400 uppercase tracking-wider">
                       <th className="py-3 px-4">Sản phẩm / Barcode</th>
                       <th className="py-3 px-4 text-center">Theo báo cáo</th>
                       {reAuditOriginalLog && <th className="py-3 px-4 text-center text-indigo-500">Lượt 1</th>}
@@ -814,14 +815,14 @@ export default function KiemTraDonHoan() {
                         <tr key={idx} className={`transition-colors ${isComplete ? 'bg-emerald-50/40' : isOver ? 'bg-amber-50/40' : 'hover:bg-slate-50/50'}`}>
                           <td className="py-3 px-4">
                             <div className={`font-bold ${isComplete ? 'text-emerald-800' : 'text-slate-800'}`}>{item.name}</div>
-                            <div className={`text-[10px] mt-0.5 tracking-wide font-medium ${item.code === 'N/A' ? 'text-red-500 font-bold' : 'text-slate-400'}`}>{item.code || item.id}</div>
+                            <div className={`text-xs mt-0.5 tracking-wide font-medium ${item.code === 'N/A' ? 'text-red-500 font-bold' : 'text-slate-400'}`}>{item.code || item.id}</div>
                           </td>
-                          <td className="py-3 px-4 text-center font-black text-slate-500">{item.expectedQty}</td>
+                          <td className="py-3 px-4 text-center font-bold text-slate-500">{item.expectedQty}</td>
                           {reAuditOriginalLog && (
                             <td className="py-3 px-4 text-center font-bold text-indigo-600">{round1Qty}</td>
                           )}
                           <td className="py-3 px-4 text-center">
-                            <span className={`px-2 py-1 rounded-md font-black text-[11px] ${
+                            <span className={`px-2 py-1 rounded-md font-bold text-[11px] ${
                               isComplete ? 'bg-emerald-100 text-emerald-700' : 
                               isOver ? 'bg-amber-200 text-amber-800' : 
                               isPending ? 'bg-slate-100 text-slate-500' : 'bg-blue-100 text-blue-700'
@@ -830,9 +831,9 @@ export default function KiemTraDonHoan() {
                             </span>
                           </td>
                           <td className="py-3 px-4 text-right">
-                            {isComplete ? <span className="text-[10px] font-bold text-emerald-600 uppercase flex items-center justify-end gap-1"><CheckCircle2 size={12}/> Đủ hàng</span> : 
-                             isOver ? <span className="text-[10px] font-bold text-amber-600 uppercase flex items-center justify-end gap-1"><AlertCircle size={12}/> Dư {item.scannedQty - item.expectedQty}</span> : 
-                             <span className="text-[10px] font-bold text-slate-400 uppercase">Đang chờ...</span>}
+                            {isComplete ? <span className="text-xs font-bold text-emerald-600 uppercase flex items-center justify-end gap-1"><CheckCircle2 size={12}/> Đủ hàng</span> : 
+                             isOver ? <span className="text-xs font-bold text-amber-600 uppercase flex items-center justify-end gap-1"><AlertCircle size={12}/> Dư {item.scannedQty - item.expectedQty}</span> : 
+                             <span className="text-xs font-bold text-slate-400 uppercase">Đang chờ...</span>}
                           </td>
                         </tr>
                       )
@@ -845,7 +846,7 @@ export default function KiemTraDonHoan() {
             <div className="bg-red-50/50 border border-red-200/60 rounded-2xl shadow-sm flex flex-col overflow-hidden">
               <div className="p-4 border-b border-red-100 bg-red-100/50 flex items-center gap-2">
                 <AlertCircle size={16} className="text-red-600" />
-                <h3 className="text-xs font-black text-red-700 uppercase tracking-wide">Lạ / Dư ({scannedSurplus.length})</h3>
+                <h3 className="text-xs font-bold text-red-700 uppercase tracking-wide">Lạ / Dư ({scannedSurplus.length})</h3>
               </div>
               <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[500px]">
                 {scannedSurplus.length === 0 ? (
@@ -856,10 +857,10 @@ export default function KiemTraDonHoan() {
                   scannedSurplus.map((item, idx) => (
                     <div key={idx} className="p-3 bg-white border border-red-200 rounded-xl shadow-sm space-y-1">
                       <div className="flex justify-between items-start gap-2">
-                        <span className="text-xs font-black text-red-800 truncate">{item.name}</span>
-                        <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-black whitespace-nowrap">x{item.scannedQty}</span>
+                        <span className="text-xs font-bold text-red-800 truncate">{item.name}</span>
+                        <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-bold whitespace-nowrap">x{item.scannedQty}</span>
                       </div>
-                      <div className="text-[10px] text-slate-500 font-medium">Mã quét: <span className="text-slate-800 font-bold tracking-wider">{item.code}</span></div>
+                      <div className="text-xs text-slate-500 font-medium">Mã quét: <span className="text-slate-800 font-bold tracking-wider">{item.code}</span></div>
                     </div>
                   ))
                 )}
@@ -882,7 +883,7 @@ export default function KiemTraDonHoan() {
                     <ArrowLeft size={18} />
                   </button>
                 )}
-                <h3 className="font-black text-slate-800 flex items-center gap-2">
+                <h3 className="font-bold text-slate-800 flex items-center gap-2">
                   {selectedLog ? (
                     <><Eye className="text-blue-600" size={20}/> Chi tiết phiên: {selectedLog.file_name}</>
                   ) : (
@@ -932,9 +933,9 @@ export default function KiemTraDonHoan() {
                         <div className="flex-1">
                           <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-2">
                             {new Date(log.created_at).toLocaleString('vi-VN')}
-                            <span className="text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded text-[9px] uppercase">ID: {log.id.slice(0,8)}</span>
+                            <span className="text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded text-xs uppercase">ID: {log.id.slice(0,8)}</span>
                           </div>
-                          <div className="font-black text-slate-800 text-sm flex items-center gap-2">
+                          <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
                             <FileSpreadsheet size={16} className="text-slate-400"/> {log.file_name}
                           </div>
                         </div>
@@ -995,7 +996,7 @@ export default function KiemTraDonHoan() {
                   )}
                   
                   {!hasMoreLogs && historyLogs.length > 0 && (
-                    <div className="text-center text-[10px] font-bold text-slate-400 pt-4 uppercase tracking-widest">
+                    <div className="text-center text-xs font-bold text-slate-400 pt-4 uppercase tracking-widest">
                       {userRole !== 'owner' ? 'Hiển thị tối đa 5 phiên gần nhất' : 'Đã hết dữ liệu lịch sử'}
                     </div>
                   )}
@@ -1007,12 +1008,12 @@ export default function KiemTraDonHoan() {
                   {/* BẢNG CHÍNH */}
                   <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col h-full max-h-[60vh]">
                     <div className="p-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-                      <h3 className="text-xs font-black text-slate-700 uppercase">Sản phẩm có trong danh sách ({selectedLog.checklist_data.length})</h3>
+                      <h3 className="text-xs font-bold text-slate-700 uppercase">Sản phẩm có trong danh sách ({selectedLog.checklist_data.length})</h3>
                     </div>
                     <div className="flex-1 overflow-y-auto">
                       <table className="w-full text-left text-xs font-semibold">
                         <thead className="sticky top-0 bg-white shadow-sm">
-                          <tr className="border-b border-slate-100 text-[10px] text-slate-400 uppercase">
+                          <tr className="border-b border-slate-100 text-xs text-slate-400 uppercase">
                             <th className="py-2 px-3">Sản phẩm</th>
                             <th className="py-2 px-3 text-center">Báo cáo</th>
                             <th className="py-2 px-3 text-center">Thực tế</th>
@@ -1026,11 +1027,11 @@ export default function KiemTraDonHoan() {
                               <tr key={idx} className={isComplete ? 'bg-emerald-50/30' : isOver ? 'bg-amber-50/30' : ''}>
                                 <td className="py-2 px-3">
                                   <div className="font-bold text-slate-700">{item.name}</div>
-                                  <div className="text-[10px] text-slate-400">{item.code || item.id}</div>
+                                  <div className="text-xs text-slate-400">{item.code || item.id}</div>
                                 </td>
                                 <td className="py-2 px-3 text-center text-slate-500">{item.expectedQty}</td>
                                 <td className="py-2 px-3 text-center">
-                                  <span className={`px-1.5 py-0.5 rounded text-[10px] ${isComplete ? 'bg-emerald-100 text-emerald-700' : isOver ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
+                                  <span className={`px-1.5 py-0.5 rounded text-xs ${isComplete ? 'bg-emerald-100 text-emerald-700' : isOver ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
                                     {item.scannedQty}
                                   </span>
                                 </td>
@@ -1045,7 +1046,7 @@ export default function KiemTraDonHoan() {
                   {/* BẢNG HÀNG LẠ */}
                   <div className="bg-red-50/50 border border-red-200/60 rounded-2xl shadow-sm flex flex-col h-full max-h-[60vh] overflow-hidden">
                     <div className="p-3 border-b border-red-100 bg-red-100/50">
-                      <h3 className="text-xs font-black text-red-700 uppercase">Hàng lạ / Dư thừa ({selectedLog.surplus_data.length})</h3>
+                      <h3 className="text-xs font-bold text-red-700 uppercase">Hàng lạ / Dư thừa ({selectedLog.surplus_data.length})</h3>
                     </div>
                     <div className="flex-1 overflow-y-auto p-3 space-y-2">
                       {selectedLog.surplus_data.length === 0 ? (
@@ -1055,9 +1056,9 @@ export default function KiemTraDonHoan() {
                           <div key={idx} className="p-2 bg-white border border-red-100 rounded-lg">
                             <div className="flex justify-between items-start gap-2 mb-1">
                               <span className="text-[11px] font-bold text-red-700 leading-tight">{item.name}</span>
-                              <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[10px] font-black">x{item.scannedQty}</span>
+                              <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-bold">x{item.scannedQty}</span>
                             </div>
-                            <div className="text-[9px] text-slate-400">{item.code}</div>
+                            <div className="text-xs text-slate-400">{item.code}</div>
                           </div>
                         ))
                       )}
@@ -1084,7 +1085,7 @@ export default function KiemTraDonHoan() {
                     <GitCompare size={20} />
                   </span>
                   <div>
-                    <h3 className="font-black text-slate-900 text-base">
+                    <h3 className="font-bold text-slate-900 text-base">
                       Bảng So Sánh Đối Soát 2 Lượt Quét
                     </h3>
                     <p className="text-xs text-slate-500 font-medium">
@@ -1125,26 +1126,26 @@ export default function KiemTraDonHoan() {
             {/* THỐNG KÊ TỔNG QUAN 2 LƯỢT */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-white border-b border-slate-100">
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-center">
-                <span className="text-[10px] font-bold text-slate-400 uppercase block">Tổng theo Báo cáo</span>
-                <span className="text-lg font-black text-slate-800">{totalExpected}</span>
+                <span className="text-xs font-bold text-slate-400 uppercase block">Tổng theo Báo cáo</span>
+                <span className="text-lg font-bold text-slate-800">{totalExpected}</span>
               </div>
               <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100 text-center">
-                <span className="text-[10px] font-bold text-indigo-500 uppercase block">Lượt 1 (Hợp lệ / Lạ)</span>
-                <span className="text-lg font-black text-indigo-700">
+                <span className="text-xs font-bold text-indigo-500 uppercase block">Lượt 1 (Hợp lệ / Lạ)</span>
+                <span className="text-lg font-bold text-indigo-700">
                   {reAuditOriginalLog.total_scanned_valid} <span className="text-xs text-red-500 font-bold">(+{reAuditOriginalLog.total_surplus} lạ)</span>
                 </span>
               </div>
               <div className="p-3 rounded-xl bg-blue-50/60 border border-blue-100 text-center">
-                <span className="text-[10px] font-bold text-blue-500 uppercase block">Lượt 2 (Hợp lệ / Lạ)</span>
-                <span className="text-lg font-black text-blue-700">
+                <span className="text-xs font-bold text-blue-500 uppercase block">Lượt 2 (Hợp lệ / Lạ)</span>
+                <span className="text-lg font-bold text-blue-700">
                   {totalScannedValid} <span className="text-xs text-red-500 font-bold">(+{totalSurplus} lạ)</span>
                 </span>
               </div>
               <div className={`p-3 rounded-xl border text-center ${totalDiffCount === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'}`}>
-                <span className={`text-[10px] font-bold uppercase block ${totalDiffCount === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                <span className={`text-xs font-bold uppercase block ${totalDiffCount === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
                   Độ khớp giữa 2 lượt
                 </span>
-                <span className={`text-lg font-black ${totalDiffCount === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
+                <span className={`text-lg font-bold ${totalDiffCount === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>
                   {totalDiffCount === 0 ? 'Khớp 100%' : `Lệch ${totalDiffCount} mã`}
                 </span>
               </div>
@@ -1156,13 +1157,13 @@ export default function KiemTraDonHoan() {
               {/* BẢNG 1: SẢN PHẨM TRONG DANH SÁCH */}
               <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
                 <div className="p-3.5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                  <h4 className="text-xs font-black text-slate-700 uppercase">
+                  <h4 className="text-xs font-bold text-slate-700 uppercase">
                     1. Đối chiếu sản phẩm trong danh sách hoàn ({filteredMainComparison.length} mã)
                   </h4>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs font-semibold">
-                    <thead className="bg-slate-50/80 border-b border-slate-100 text-[10px] text-slate-400 uppercase">
+                    <thead className="bg-slate-50/80 border-b border-slate-100 text-xs text-slate-400 uppercase">
                       <tr>
                         <th className="py-3 px-4">Sản phẩm / Mã</th>
                         <th className="py-3 px-4 text-center">Báo cáo</th>
@@ -1188,16 +1189,16 @@ export default function KiemTraDonHoan() {
                             <tr key={idx} className={!isSameScan ? 'bg-amber-50/40' : isBothEnough ? 'bg-emerald-50/20' : ''}>
                               <td className="py-3 px-4">
                                 <div className="font-bold text-slate-800">{item.name}</div>
-                                <div className="text-[10px] text-slate-400">{item.code || item.id}</div>
+                                <div className="text-xs text-slate-400">{item.code || item.id}</div>
                               </td>
-                              <td className="py-3 px-4 text-center font-black text-slate-500">{item.expectedQty}</td>
+                              <td className="py-3 px-4 text-center font-bold text-slate-500">{item.expectedQty}</td>
                               <td className="py-3 px-4 text-center">
-                                <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-black">
+                                <span className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold">
                                   {item.qty1}
                                 </span>
                               </td>
                               <td className="py-3 px-4 text-center">
-                                <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-black">
+                                <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 font-bold">
                                   {item.qty2}
                                 </span>
                               </td>
@@ -1205,7 +1206,7 @@ export default function KiemTraDonHoan() {
                                 {item.diff2vs1 === 0 ? (
                                   <span className="text-slate-400 font-bold">0</span>
                                 ) : (
-                                  <span className={`px-2 py-0.5 rounded font-black ${
+                                  <span className={`px-2 py-0.5 rounded font-bold ${
                                     item.diff2vs1 > 0 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-700'
                                   }`}>
                                     {item.diff2vs1 > 0 ? `+${item.diff2vs1}` : item.diff2vs1}
@@ -1215,16 +1216,16 @@ export default function KiemTraDonHoan() {
                               <td className="py-3 px-4 text-right">
                                 {isSameScan ? (
                                   isBothEnough ? (
-                                    <span className="text-[10px] font-bold text-emerald-600 uppercase inline-flex items-center gap-1">
+                                    <span className="text-xs font-bold text-emerald-600 uppercase inline-flex items-center gap-1">
                                       <CheckCircle2 size={12} /> Khớp & Đủ hàng
                                     </span>
                                   ) : (
-                                    <span className="text-[10px] font-bold text-blue-600 uppercase">
+                                    <span className="text-xs font-bold text-blue-600 uppercase">
                                       Khớp 2 lượt (Lệch báo cáo: {item.qty2 - item.expectedQty})
                                     </span>
                                   )
                                 ) : (
-                                  <span className="text-[10px] font-bold text-amber-600 uppercase inline-flex items-center gap-1">
+                                  <span className="text-xs font-bold text-amber-600 uppercase inline-flex items-center gap-1">
                                     <AlertCircle size={12} /> Lần 2 {item.diff2vs1 > 0 ? `nhiều hơn ${item.diff2vs1}` : `ít hơn ${Math.abs(item.diff2vs1)}`}
                                   </span>
                                 )}
@@ -1242,13 +1243,13 @@ export default function KiemTraDonHoan() {
               {(surplusComparison.length > 0) && (
                 <div className="bg-white border border-red-200 rounded-2xl shadow-sm overflow-hidden">
                   <div className="p-3.5 border-b border-red-100 bg-red-50/70">
-                    <h4 className="text-xs font-black text-red-700 uppercase">
+                    <h4 className="text-xs font-bold text-red-700 uppercase">
                       2. Đối chiếu Hàng lạ / Ngoài danh sách ({filteredSurplusComparison.length} mã)
                     </h4>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs font-semibold">
-                      <thead className="bg-red-50/30 border-b border-red-100 text-[10px] text-red-400 uppercase">
+                      <thead className="bg-red-50/30 border-b border-red-100 text-xs text-red-400 uppercase">
                         <tr>
                           <th className="py-2.5 px-4">Sản phẩm lạ / Mã quét</th>
                           <th className="py-2.5 px-4 text-center">Quét Lần 1</th>
@@ -1261,11 +1262,11 @@ export default function KiemTraDonHoan() {
                           <tr key={idx}>
                             <td className="py-2.5 px-4">
                               <div className="font-bold text-red-800">{item.name}</div>
-                              <div className="text-[10px] text-slate-400">{item.code}</div>
+                              <div className="text-xs text-slate-400">{item.code}</div>
                             </td>
-                            <td className="py-2.5 px-4 text-center font-black text-indigo-600">{item.qty1}</td>
-                            <td className="py-2.5 px-4 text-center font-black text-blue-600">{item.qty2}</td>
-                            <td className="py-2.5 px-4 text-center font-black">
+                            <td className="py-2.5 px-4 text-center font-bold text-indigo-600">{item.qty1}</td>
+                            <td className="py-2.5 px-4 text-center font-bold text-blue-600">{item.qty2}</td>
+                            <td className="py-2.5 px-4 text-center font-bold">
                               {item.diff2vs1 === 0 ? (
                                 <span className="text-emerald-600">Khớp (0)</span>
                               ) : (

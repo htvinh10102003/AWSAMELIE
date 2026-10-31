@@ -24,7 +24,7 @@ export default function UpdateWarehouseMap() {
   const [manualMessage, setManualMessage] = useState({ text: '', type: '' });
   const [updateAllSizes, setUpdateAllSizes] = useState(false);
 
-  // ⚡️ STATE MỚI: Danh sách sản phẩm chưa có kệ
+  // ️ STATE MỚI: Danh sách sản phẩm chưa có kệ
   const [unassignedProducts, setUnassignedProducts] = useState([]);
   const [isFetchingUnassigned, setIsFetchingUnassigned] = useState(false);
 
@@ -46,7 +46,7 @@ export default function UpdateWarehouseMap() {
     }
   };
 
-  // ⚡️ HÀM MỚI: Lấy danh sách sản phẩm có tồn nhưng chưa có vị trí
+  // ️ HÀM MỚI: Lấy danh sách sản phẩm có tồn nhưng chưa có vị trí
   const fetchUnassignedProducts = async () => {
     setIsFetchingUnassigned(true);
     try {
@@ -108,9 +108,9 @@ export default function UpdateWarehouseMap() {
     try {
       const { error } = await supabase.from('system_configs').upsert({ key: 'warehouse_layout_map', value: JSON.stringify(racks) }, { onConflict: 'key' });
       if (error) throw error;
-      setMapMessage('✅ Đã lưu cấu hình bản đồ thành công!');
+      setMapMessage(' Đã lưu cấu hình bản đồ thành công!');
       setTimeout(() => setMapMessage(''), 3000);
-    } catch (err) { setMapMessage('❌ Lỗi: ' + err.message); } 
+    } catch (err) { setMapMessage(' Lỗi: ' + err.message); } 
     finally { setIsSavingMap(false); }
   };
 
@@ -159,16 +159,16 @@ export default function UpdateWarehouseMap() {
 
             setIsUploadingCsv(false);
             if (successCount > 0) {
-                setLocationMessage({ text: `🎉 Hoàn tất! Đã lưu vị trí cho ${successCount} tên sản phẩm. (Bỏ qua/Sai tên: ${errorCount} dòng).`, type: 'success' });
+                setLocationMessage({ text: ` Hoàn tất! Đã lưu vị trí cho ${successCount} tên sản phẩm. (Bỏ qua/Sai tên: ${errorCount} dòng).`, type: 'success' });
             } else {
-                setLocationMessage({ text: '❌ Lỗi: Không tìm thấy bất kỳ Tên Sản Phẩm nào khớp trong Database. (Kiểm tra lại dữ liệu file).', type: 'error' });
+                setLocationMessage({ text: ' Lỗi: Không tìm thấy bất kỳ Tên Sản Phẩm nào khớp trong Database. (Kiểm tra lại dữ liệu file).', type: 'error' });
             }
             setCsvFile(null);
             if (fileInputRef.current) fileInputRef.current.value = "";
         },
         error: (error) => {
             setIsUploadingCsv(false);
-            setLocationMessage({ text: `❌ Lỗi đọc file: ${error.message}`, type: 'error' });
+            setLocationMessage({ text: ` Lỗi đọc file: ${error.message}`, type: 'error' });
         }
     });
   };
@@ -191,7 +191,7 @@ export default function UpdateWarehouseMap() {
     setIsSearchingProduct(false);
 
     if (error || !data || data.length === 0) {
-        setManualMessage({ text: '❌ Không tìm thấy sản phẩm nào có Tên/Mã khớp với từ khóa!', type: 'error' });
+        setManualMessage({ text: ' Không tìm thấy sản phẩm nào có Tên/Mã khớp với từ khóa!', type: 'error' });
     } else {
         setSearchProductResult(data[0]);
         setManualLocation(data[0].location_code || '');
@@ -232,11 +232,11 @@ export default function UpdateWarehouseMap() {
         }
 
         if (!updatedProducts || updatedProducts.length === 0) {
-            setManualMessage({ text: `❌ Lỗi ảo: Database từ chối ghi dữ liệu!`, type: 'error' });
+            setManualMessage({ text: ` Lỗi ảo: Database từ chối ghi dữ liệu!`, type: 'error' });
         } else {
             const count = updatedProducts.length;
             setManualMessage({ 
-                text: `✅ Đã lưu mã "${newLoc}" cho ${count} sản phẩm: ${updatedProducts.map(p => p.product_name).join(', ')}!`, 
+                text: ` Đã lưu mã "${newLoc}" cho ${count} sản phẩm: ${updatedProducts.map(p => p.product_name).join(', ')}!`, 
                 type: 'success' 
             });
             setSearchProductResult({...searchProductResult, location_code: newLoc});
@@ -245,7 +245,7 @@ export default function UpdateWarehouseMap() {
             fetchUnassignedProducts();
         }
     } catch (error) {
-        setManualMessage({ text: `❌ Lỗi hệ thống: ${error.message}`, type: 'error' });
+        setManualMessage({ text: ` Lỗi hệ thống: ${error.message}`, type: 'error' });
     } finally {
         setIsUpdatingManual(false);
     }
@@ -272,7 +272,7 @@ export default function UpdateWarehouseMap() {
             <MapPin size={24} strokeWidth={2.5} />
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-800 tracking-tight">Sơ đồ & Vị trí Kho</h2>
+            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Sơ đồ & Vị trí Kho</h2>
             <p className="text-xs text-slate-500 font-medium mt-1">Dựng sơ đồ thực tế hoặc nạp vị trí sản phẩm hàng loạt</p>
           </div>
         </div>
@@ -312,7 +312,7 @@ export default function UpdateWarehouseMap() {
             </div>
 
             {mapMessage && (
-                <div className={`p-3 rounded-xl text-xs font-bold border ${mapMessage.includes('✅') ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                <div className={`p-3 rounded-xl text-xs font-bold border ${mapMessage.includes('') ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
                     {mapMessage}
                 </div>
             )}
@@ -350,7 +350,7 @@ export default function UpdateWarehouseMap() {
                         value={rack.name}
                         onChange={(e) => handleUpdateRackName(rack.id, e.target.value)}
                         onMouseDown={(e) => e.stopPropagation()} 
-                        className="w-[90%] text-center text-sm font-black text-slate-700 bg-transparent outline-none border-b border-transparent focus:border-blue-400"
+                        className="w-[90%] text-center text-sm font-bold text-slate-700 bg-transparent outline-none border-b border-transparent focus:border-blue-400"
                     />
                 </div>
                 ))}
@@ -456,7 +456,7 @@ export default function UpdateWarehouseMap() {
                     <div className="p-6 bg-slate-50 border border-slate-200 rounded-2xl space-y-5 animate-in slide-in-from-top-2 duration-300">
                         <div className="flex flex-col gap-1 pb-4 border-b border-slate-200/60">
                             <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Sản phẩm đang chọn</span>
-                            <h3 className="text-lg font-black text-slate-800 leading-tight mt-1">{searchProductResult.product_name || 'Đang cập nhật tên...'}</h3>
+                            <h3 className="text-lg font-bold text-slate-800 leading-tight mt-1">{searchProductResult.product_name || 'Đang cập nhật tên...'}</h3>
                             <div className="flex flex-wrap items-center gap-2 mt-2">
                                 <span className="px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-600">
                                     Mã: {searchProductResult.product_code || searchProductResult.product_id}

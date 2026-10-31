@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
+import { isAdminRole, isSuperAdminRole, roleLabel } from '../lib/roles';
+import { sessionRevokedKey } from '../lib/session';
 import { 
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
   Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert,
@@ -87,6 +89,7 @@ export default function Admin() {
   // --- DB CLEANUP & STORAGE ---
   const [cleanDays, setCleanDays] = useState('180');
   const [isCleaning, setIsCleaning] = useState(false);
+  const [cleanProgress, setCleanProgress] = useState(null);
   const [cleanMessage, setCleanMessage] = useState({ text: '', type: '' });
   const [confirmCleanStep, setConfirmCleanStep] = useState(false);
   const [dbUsage, setDbUsage] = useState({ used: 0, total: 500 * 1024 * 1024 });
@@ -110,8 +113,8 @@ export default function Admin() {
   const [bannerMessage, setBannerMessage] = useState('');
 
   // --- ENV CONSTANTS ---
-  const projectUrl = "https://infljrayvhidhfimksfp.supabase.co";
-  const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluZmxqcmF5dmhpZGhmaW1rc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzAyNjksImV4cCI6MjA5NjkwNjI2OX0.ap1UnciJ5OccAvC-l5sm-JGqObTkEC038Kjf2L_IFr0";
+  const projectUrl = SUPABASE_URL;
+  const anonKey = SUPABASE_ANON_KEY;
   const SUPER_OWNER_EMAIL = "contact.hotavinh@gmail.com";
 
   useEffect(() => {
@@ -163,14 +166,14 @@ export default function Admin() {
   const getDynamicPriorityOptions = () => {
     const options = filterConfigs.allowed_statuses.map(statusId => {
       const st = statusList.find(s => String(s.id) === String(statusId));
-      return { id: `STATUS_${statusId}`, label: `⭐ Ưu tiên: Đơn ${st ? st.name : 'Mã ' + statusId} (${statusId})` };
+      return { id: `STATUS_${statusId}`, label: ` Ưu tiên: Đơn ${st ? st.name : 'Mã ' + statusId} (${statusId})` };
     });
-    options.push({ id: 'DATE_ASC', label: '🕒 Ưu tiên Thời gian: Đơn tạo cũ nhất xếp trước' });
+    options.push({ id: 'DATE_ASC', label: ' Ưu tiên Thời gian: Đơn tạo cũ nhất xếp trước' });
     return options;
   };
 
   const fetchData = async () => {
-    const { data: statuses } = await supabase.from('order_statuses').select('*').order('id');
+    const { data: statuses } = await supabase.from('order_statuses').select('id,name').order('id');
     if (statuses) setStatusList(statuses);
 
     const { data: configs } = await supabase.from('system_configs').select('*');
@@ -196,7 +199,7 @@ export default function Admin() {
         if (remain < 15 && !hasWarnedNhanh.current) {
           hasWarnedNhanh.current = true;
           setTimeout(() => {
-            showCustomDialog('alert', '⚠️ Cảnh báo kết nối Nhanh.vn', `Kết nối Nhanh.vn còn ${remain} ngày nữa hết hạn (Hạn mức 365 ngày). Vui lòng cập nhật Access Code mới để tránh gián đoạn hệ thống.`);
+            showCustomDialog('alert', '️ Cảnh báo kết nối Nhanh.vn', `Kết nối Nhanh.vn còn ${remain} ngày nữa hết hạn (Hạn mức 365 ngày). Vui lòng cập nhật Access Code mới để tránh gián đoạn hệ thống.`);
           }, 800);
         }
       }
@@ -213,9 +216,9 @@ export default function Admin() {
       const dynamicOptions = [
         ...savedStatuses.map(id => {
             const st = statuses?.find(s => String(s.id) === String(id));
-            return { id: `STATUS_${id}`, label: `⭐ Ưu tiên: Đơn ${st ? st.name : id} (${id})` };
+            return { id: `STATUS_${id}`, label: ` Ưu tiên: Đơn ${st ? st.name : id} (${id})` };
         }),
-        { id: 'DATE_ASC', label: '🕒 Ưu tiên Thời gian: Đơn tạo cũ nhất xếp trước' }
+        { id: 'DATE_ASC', label: ' Ưu tiên Thời gian: Đơn tạo cũ nhất xếp trước' }
       ];
 
       if (configMap['print_priority_mode']) {
@@ -252,19 +255,27 @@ export default function Admin() {
     return data;
   };
 
+  // Ghi dau thu hoi phien cho tai khoan bi xoa/doi quyen. Neu ghi that bai thi bo qua -
+  // Layout van da ra bang kiem tra dinh ky (getUser that bai neu bi xoa, role moi neu bi doi quyen).
+  const notifySessionRevoked = async (targetUserId) => {
+    try {
+      await supabase.from('system_configs').upsert({ key: sessionRevokedKey(targetUserId), value: new Date().toISOString() }, { onConflict: 'key' });
+    } catch (e) { console.warn('Khong ghi duoc session_revoked:', e?.message); }
+  };
+
   const fetchSystemUsers = async () => {
     setLoading(true); setUserMessage('');
     try {
       const data = await callUserManagementApi({ action: 'list' });
       setUsers(data.users || []);
     } catch (err) {
-      setUserMessage(`❌ Lỗi tải thành viên: ${err.message}`);
+      setUserMessage(` Lỗi tải thành viên: ${err.message}`);
     } finally { setLoading(false); }
   };
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
-    if (!profileName.trim()) { setProfileMessage('❌ Tên hiển thị không được để trống.'); return; }
+    if (!profileName.trim()) { setProfileMessage(' Tên hiển thị không được để trống.'); return; }
     setProfileLoading(true);
     try {
       const updates = { data: { full_name: profileName } };
@@ -277,10 +288,10 @@ export default function Admin() {
       }
       const { error } = await supabase.auth.updateUser(updates);
       if (error) throw error;
-      setProfileMessage('✅ Đã cập nhật hồ sơ cá nhân thành công!');
+      setProfileMessage(' Đã cập nhật hồ sơ cá nhân thành công!');
       setProfilePassword(''); setCurrentPassword('');
       await loadCurrentUserData();
-    } catch (err) { setProfileMessage(`❌ Lỗi: ${err.message}`); } finally { setProfileLoading(false); }
+    } catch (err) { setProfileMessage(` Lỗi: ${err.message}`); } finally { setProfileLoading(false); }
   };
 
   const handleCreateUser = async (e) => {
@@ -292,10 +303,10 @@ export default function Admin() {
     setLoading(true); setUserMessage('');
     try {
       await callUserManagementApi({ action: 'create', ...userForm });
-      setUserMessage(`✅ Đã khởi tạo thành công tài khoản cho [${userForm.fullName}]`);
+      setUserMessage(` Đã khởi tạo thành công tài khoản cho [${userForm.fullName}]`);
       setUserForm({ email: '', password: '', fullName: '', role: 'user' });
       await fetchSystemUsers();
-    } catch (err) { setUserMessage(`❌ Lỗi tạo tài khoản: ${err.message}`); } finally { setLoading(false); }
+    } catch (err) { setUserMessage(` Lỗi tạo tài khoản: ${err.message}`); } finally { setLoading(false); }
   };
 
   const handleOpenEditModal = (targetUser) => {
@@ -312,11 +323,13 @@ export default function Admin() {
     }
     setLoading(true);
     try {
+      const oldRole = editingUser.user_metadata?.role || 'user';
       await callUserManagementApi({ action: 'update_info', userId: editingUser.id, fullName: editForm.fullName, role: isOwner ? editForm.role : undefined });
-      setUserMessage(`✅ Đã cập nhật thông tin thành công.`);
+      if (isOwner && editForm.role && editForm.role !== oldRole) await notifySessionRevoked(editingUser.id);
+      setUserMessage(` Đã cập nhật thông tin thành công.`);
       setEditingUser(null); await fetchSystemUsers();
     } catch (err) { 
-      await showCustomDialog('alert', 'Lỗi thao tác', `❌ Lỗi lưu thông tin: ${err.message}`);
+      await showCustomDialog('alert', 'Lỗi thao tác', ` Lỗi lưu thông tin: ${err.message}`);
     } finally { setLoading(false); }
   };
 
@@ -338,11 +351,12 @@ export default function Admin() {
         isOwner: makeOwner 
       });
       
-      setUserMessage(makeOwner ? `🎉 Đã cấp quyền Owner cho [${editingUser.email}]` : `✅ Đã gỡ quyền Owner của [${editingUser.email}]`);
+      await notifySessionRevoked(editingUser.id);
+      setUserMessage(makeOwner ? ` Đã cấp quyền Owner cho [${editingUser.email}]` : ` Đã gỡ quyền Owner của [${editingUser.email}]`);
       setEditingUser(null); 
       await fetchSystemUsers();
     } catch (err) { 
-      await showCustomDialog('alert', 'Lỗi phân quyền', `❌ Lỗi thao tác: ${err.message}`); 
+      await showCustomDialog('alert', 'Lỗi phân quyền', ` Lỗi thao tác: ${err.message}`); 
     } finally { setLoading(false); }
   };
 
@@ -351,15 +365,16 @@ export default function Admin() {
       await showCustomDialog('alert', 'Từ chối', 'Không thể xóa tài khoản Super Owner!');
       return; 
     }
-    const confirmed = await showCustomDialog('confirm', 'Xác nhận vô hiệu hóa', `🚨 XÓA VĨNH VIỄN tài khoản [${targetUser.user_metadata?.full_name || targetUser.email}]? Dữ liệu không thể phục hồi.`);
+    const confirmed = await showCustomDialog('confirm', 'Xác nhận vô hiệu hóa', ` XÓA VĨNH VIỄN tài khoản [${targetUser.user_metadata?.full_name || targetUser.email}]? Dữ liệu không thể phục hồi.`);
     if (!confirmed) return;
 
     setActionLoadingId(targetUser.id);
     try {
       await callUserManagementApi({ action: 'delete', userId: targetUser.id });
-      setUserMessage(`✅ Đã xóa sổ tài khoản khỏi hệ thống.`);
+      await notifySessionRevoked(targetUser.id);
+      setUserMessage(` Đã xóa sổ tài khoản khỏi hệ thống.`);
       await fetchSystemUsers();
-    } catch (err) { setUserMessage(`❌ Không thể xóa: ${err.message}`); } finally { setActionLoadingId(null); }
+    } catch (err) { setUserMessage(` Không thể xóa: ${err.message}`); } finally { setActionLoadingId(null); }
   };
 
   const handleApiChange = (e) => setApiConfigs({ ...apiConfigs, [e.target.name]: e.target.value });
@@ -376,10 +391,10 @@ export default function Admin() {
         { key: 'nhanh_token_updated_at', value: nowIso }
       ], { onConflict: 'key' });
 
-      setApiMessage('✅ Đã đổi Token thành công!'); 
+      setApiMessage(' Đã đổi Token thành công!'); 
       setApiConfigs(prev => ({ ...prev, nhanh_access_code: '' }));
       setNhanhDaysLeft(365);
-    } catch (error) { setApiMessage('❌ Lỗi: ' + error.message); } finally { setApiLoading(false); }
+    } catch (error) { setApiMessage(' Lỗi: ' + error.message); } finally { setApiLoading(false); }
   };
 
   const handleStatusToggle = (statusId) => {
@@ -423,8 +438,8 @@ export default function Admin() {
         { key: 'print_priority_mode', value: priorities.map(p => p.id).join(',') }
       ];
       await supabase.from('system_configs').upsert(updates, { onConflict: 'key' });
-      setFilterMessage('✅ Đã lưu cấu hình Lọc & Ưu tiên!');
-    } catch (error) { setFilterMessage('❌ Lỗi: ' + error.message); } finally { setFilterLoading(false); }
+      setFilterMessage(' Đã lưu cấu hình Lọc & Ưu tiên!');
+    } catch (error) { setFilterMessage(' Lỗi: ' + error.message); } finally { setFilterLoading(false); }
   };
 
   const handleSyncOrdersData = async () => {
@@ -440,9 +455,9 @@ export default function Admin() {
       try { data = JSON.parse(textData); } catch(e) { throw new Error(`Máy chủ sập: ${textData}`); }
       if (!res.ok) throw new Error(`[Lỗi Server] ${data.error || data.message || textData}`);
       if (data && data.success) {
-        setSyncOrderStatus('success'); setSyncOrderMessage(`🎉 Đồng bộ thành công ${data.totalSynced} đơn hàng.`);
+        setSyncOrderStatus('success'); setSyncOrderMessage(` Đồng bộ thành công ${data.totalSynced} đơn hàng.`);
       } else { throw new Error(data?.error || 'Lỗi logic Edge Function'); }
-    } catch (err) { setSyncOrderStatus('error'); setSyncOrderMessage(`❌ ${err.message}`); } finally { setIsSyncingOrder(false); }
+    } catch (err) { setSyncOrderStatus('error'); setSyncOrderMessage(` ${err.message}`); } finally { setIsSyncingOrder(false); }
   };
 
   const handleSyncInventoryOnly = async () => {
@@ -455,8 +470,8 @@ export default function Admin() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Lỗi server');
-      setSyncInventoryStatus('success'); setSyncProductMessage(`⚡️ Cập nhật Tồn Kho thành công cho ${data.totalSynced} sản phẩm.`);
-    } catch (err) { setSyncInventoryStatus('error'); setSyncProductMessage(`❌ ${err.message}`); } finally { setIsSyncingInventory(false); }
+      setSyncInventoryStatus('success'); setSyncProductMessage(`️ Cập nhật Tồn Kho thành công cho ${data.totalSynced} sản phẩm.`);
+    } catch (err) { setSyncInventoryStatus('error'); setSyncProductMessage(` ${err.message}`); } finally { setIsSyncingInventory(false); }
   };
 
   const handleSyncMasterData = async () => {
@@ -472,8 +487,8 @@ export default function Admin() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Lỗi server');
-      setSyncMasterStatus('success'); setSyncProductMessage(`🎉 Đã làm mới toàn bộ ${data.totalSynced} sản phẩm.`);
-    } catch (err) { setSyncMasterStatus('error'); setSyncProductMessage(`❌ ${err.message}`); } finally { setIsSyncingMaster(false); }
+      setSyncMasterStatus('success'); setSyncProductMessage(` Đã làm mới toàn bộ ${data.totalSynced} sản phẩm.`);
+    } catch (err) { setSyncMasterStatus('error'); setSyncProductMessage(` ${err.message}`); } finally { setIsSyncingMaster(false); }
   };
 
   const handleSaveConfig = async () => {
@@ -485,8 +500,8 @@ export default function Admin() {
       ];
       const { error } = await supabase.from('system_configs').upsert(updates, { onConflict: 'key' });
       if (error) throw error;
-      setSheetMessage('✅ Đã ghi đè link cấu hình mới thành công!');
-    } catch (err) { setSheetMessage('❌ Lỗi lưu cấu hình: ' + err.message); } finally { setSyncLoading(false); }
+      setSheetMessage(' Đã ghi đè link cấu hình mới thành công!');
+    } catch (err) { setSheetMessage(' Lỗi lưu cấu hình: ' + err.message); } finally { setSyncLoading(false); }
   };
 
   const handleTriggerSyncSheets = async () => {
@@ -494,8 +509,8 @@ export default function Admin() {
     try {
         const res = await fetch(`${projectUrl}/functions/v1/sync-sheets`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const data = await res.json();
-        if (data.success) setSheetMessage("🎉 " + data.message); else setSheetMessage("❌ Thất bại: " + data.error);
-    } catch (err) { setSheetMessage("❌ Lỗi kết nối: " + err.message); }
+        if (data.success) setSheetMessage(" " + data.message); else setSheetMessage(" Thất bại: " + data.error);
+    } catch (err) { setSheetMessage(" Lỗi kết nối: " + err.message); }
     setSyncLoading(false);
   };
 
@@ -522,9 +537,9 @@ export default function Admin() {
             if (data.hasMoreData) currentPage = data.nextPage; else hasMoreData = false;
         }
       }
-      if (hasError) setSyncReturnsMessage({ text: `⚠️ Đã cào được ${total} đơn, nhưng bị gián đoạn ở một vài trang.`, type: 'error' });
-      else setSyncReturnsMessage({ text: `🎉 Hoàn tất! Đã đồng bộ an toàn ${total} đơn trả hàng từ 3 sàn.`, type: 'success' });
-    } catch (err) { setSyncReturnsMessage({ text: `❌ Lỗi hệ thống: ${err.message}`, type: 'error' }); } finally { setIsSyncingReturns(false); }
+      if (hasError) setSyncReturnsMessage({ text: `️ Đã cào được ${total} đơn, nhưng bị gián đoạn ở một vài trang.`, type: 'error' });
+      else setSyncReturnsMessage({ text: ` Hoàn tất! Đã đồng bộ an toàn ${total} đơn trả hàng từ 3 sàn.`, type: 'success' });
+    } catch (err) { setSyncReturnsMessage({ text: ` Lỗi hệ thống: ${err.message}`, type: 'error' }); } finally { setIsSyncingReturns(false); }
   };
 
   const handleCleanData = async () => {
@@ -533,17 +548,39 @@ export default function Admin() {
         return;
     }
 
-    setIsCleaning(true); 
-    setCleanMessage({ text: 'Đang quét và xóa dữ liệu, vui lòng không tắt trang...', type: 'processing' });
+    setIsCleaning(true);
+    setCleanProgress(null);
+    setCleanMessage({ text: 'Đang xóa theo lô, vui lòng không tắt trang...', type: 'processing' });
     try {
-      const { error } = await supabase.rpc('request_cleanup', { days_old: parseInt(cleanDays) });
-      if (error) throw error;
-      setCleanMessage({ text: `🎉 Đã dọn dẹp sạch sẽ dữ liệu cũ hơn ${cleanDays} ngày!`, type: 'success' });
+      let totalDeleted = 0;
+      let rounds = 0;
+      let done = false;
+      let lastRemaining = null;
+      // Goi lap RPC theo lo 1000 dong/lan. Moi lan goi la 1 transaction rieng nen
+      // neu 1 lan bi timeout thi cac lo truoc van giu nguyen, co the goi tiep ma khong mat tien trinh.
+      while (!done && rounds < 200) {
+        rounds += 1;
+        const { data, error } = await supabase.rpc('request_cleanup_batched', { days_old: parseInt(cleanDays), batch_size: 1000 });
+        if (error) throw error;
+        const deleted = (data?.deleted && Object.values(data.deleted).reduce((a, b) => a + (b || 0), 0)) || 0;
+        totalDeleted += deleted;
+        lastRemaining = data?.remaining || null;
+        done = data?.done === true || deleted === 0;
+        setCleanProgress({ rounds, totalDeleted, remaining: lastRemaining, done });
+        setCleanMessage({ text: `Đang xóa theo lô ${rounds} — đã xóa ${totalDeleted} dòng. ${done ? 'Đã xong.' : 'Đang tiếp tục...'}`, type: 'processing' });
+        if (!done) await new Promise(r => setTimeout(r, 200));
+      }
+      setCleanMessage({ text: `Đã dọn dẹp xong dữ liệu cũ hơn ${cleanDays} ngày: ${totalDeleted} dòng đã xóa sau ${rounds} lô. Để dung lượng giảm ngay, hãy chạy file VACUUM trong SQL Editor (xem hướng dẫn trong zip) — autovacuum cũng sẽ dọn dần.`, type: 'success' });
       fetchDbSize();
-    } catch (err) { 
-      setCleanMessage({ text: `❌ Lỗi xóa dữ liệu: ${err.message}`, type: 'error' }); 
-    } finally { 
-      setIsCleaning(false); 
+    } catch (err) {
+      const msg = String(err.message || err);
+      if (/request_cleanup_batched|does not exist|PGRST202/i.test(msg)) {
+        setCleanMessage({ text: 'Chưa cài RPC xóa theo lô. Hãy chạy file supabase/20261030_cleanup_batched.sql trong SQL Editor một lần, rồi bấm dọn dẹp lại.', type: 'error' });
+      } else {
+        setCleanMessage({ text: `Lỗi xóa dữ liệu: ${msg}. Các lô đã xóa trước đó vẫn được giữ, có thể bấm lại để tiếp tục từ chỗ đã dừng.`, type: 'error' });
+      }
+    } finally {
+      setIsCleaning(false);
       setConfirmCleanStep(false);
     }
   };
@@ -559,9 +596,9 @@ export default function Admin() {
       ];
       const { error } = await supabase.from('system_configs').upsert(updates, { onConflict: 'key' });
       if (error) throw error;
-      setThemeMessage('✅ Đã lưu cấu hình giao diện thành công! Hệ thống tự cập nhật.');
+      setThemeMessage(' Đã lưu cấu hình giao diện thành công! Hệ thống tự cập nhật.');
     } catch(err) {
-      setThemeMessage('❌ Lỗi lưu giao diện: ' + err.message);
+      setThemeMessage(' Lỗi lưu giao diện: ' + err.message);
     } finally {
       setThemeLoading(false);
     }
@@ -581,10 +618,10 @@ export default function Admin() {
       ], { onConflict: 'key' });
       
       if (error) throw error;
-      setNotifMessage('✅ Đã lưu và phát thông báo Popup toàn hệ thống!');
+      setNotifMessage(' Đã lưu và phát thông báo Popup toàn hệ thống!');
       setGlobalNotif(payload);
     } catch(err) {
-      setNotifMessage('❌ Lỗi: ' + err.message);
+      setNotifMessage(' Lỗi: ' + err.message);
     } finally {
       setNotifLoading(false);
     }
@@ -600,9 +637,9 @@ export default function Admin() {
       ], { onConflict: 'key' });
       
       if (error) throw error;
-      setBannerMessage('✅ Đã lưu và cập nhật dải thông báo chạy chữ!');
+      setBannerMessage(' Đã lưu và cập nhật dải thông báo chạy chữ!');
     } catch(err) {
-      setBannerMessage('❌ Lỗi: ' + err.message);
+      setBannerMessage(' Lỗi: ' + err.message);
     } finally {
       setBannerLoading(false);
     }
@@ -640,16 +677,20 @@ export default function Admin() {
   }
 
   const isOwner = currentUserMeta.is_owner === true || currentUserEmail === SUPER_OWNER_EMAIL;
-  const isAdminOrOwner = isOwner || currentUserMeta.role === 'admin';
+  const isSuperAdmin = isSuperAdminRole(currentUserMeta.role);
+  const isAdminOrOwner = isOwner || isAdminRole(currentUserMeta.role);
+  // Super admin = admin + 3 quyen rieng: Nhanh.vn, Google Sheet don in/don di, nen giao dien.
+  // Khong bao gom cac quyen owner khac (don dep DB, cap/xoa tai khoan, thong bao global).
+  const canEditSensitiveConfig = isOwner || isSuperAdmin;
 
   if (!isAdminOrOwner) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] p-4">
-        <div className="max-w-md w-full bg-white p-8 border border-red-200 rounded-3xl shadow-xl flex flex-col items-center text-center gap-4 animate-in zoom-in-95 duration-300">
+        <div className="max-w-md w-full bg-white p-8 border border-red-200 rounded-2xl shadow-xl flex flex-col items-center text-center gap-4 animate-in zoom-in-95 duration-300">
           <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mb-2">
             <ShieldAlert size={40} className="text-red-500" />
           </div>
-          <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Truy cập bị từ chối</h2>
+          <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-tight">Truy cập bị từ chối</h2>
           <p className="text-sm font-medium text-slate-500 leading-relaxed">
             Bạn không có quyền truy cập trang quản trị này. Vui lòng liên hệ Owner để được cấp quyền.
           </p>
@@ -664,13 +705,13 @@ export default function Admin() {
     <div className="max-w-6xl mx-auto space-y-8 pb-12 mt-8 px-4 sm:px-6 relative">
       
       {/* HEADER & TABS */}
-      <div className="bg-white p-4 sm:p-6 border border-slate-200 rounded-3xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 sticky top-4 z-40 backdrop-blur-xl bg-white/90">
+      <div className="bg-white p-4 sm:p-6 border border-slate-200 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 sticky top-4 z-40 backdrop-blur-xl bg-white/90">
         <div className="flex items-center gap-4">
           <div className="p-3.5 bg-gradient-to-br from-blue-50 to-indigo-50 text-blue-600 rounded-2xl shadow-inner border border-blue-100/50">
             <Settings size={26} strokeWidth={2.5} />
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-800 tracking-tight">Quản trị Hệ thống</h2>
+            <h2 className="text-xl font-bold text-slate-800 tracking-tight">Quản trị Hệ thống</h2>
             <p className="text-sm text-slate-500 font-medium mt-0.5">Thiết lập kết nối, giao diện & nhân sự</p>
           </div>
         </div>
@@ -697,7 +738,7 @@ export default function Admin() {
       </div>
 
       {userMessage && !['profile', 'themes', 'notifications'].includes(activeTab) && (
-        <div className={`p-4 rounded-2xl border text-sm font-bold flex items-center gap-3 shadow-sm animate-in slide-in-from-top-2 ${userMessage.includes('✅') || userMessage.includes('🎉') ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+        <div className={`p-4 rounded-2xl border text-sm font-bold flex items-center gap-3 shadow-sm animate-in slide-in-from-top-2 ${userMessage.includes('') || userMessage.includes('') ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
           <CheckCircle2 size={20} className="flex-shrink-0"/> {userMessage}
         </div>
       )}
@@ -709,21 +750,21 @@ export default function Admin() {
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           
           {/* BANNER THÔNG BÁO (Dải chạy chữ ngang) */}
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
-            <h2 className="text-xl font-black mb-2 text-slate-800 flex items-center gap-2">
+          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-200/80">
+            <h2 className="text-xl font-bold mb-2 text-slate-800 flex items-center gap-2">
               <MonitorPlay size={22} className="text-orange-500"/> Dải thông báo chạy ngang (Marquee)
             </h2>
             <p className="text-sm text-slate-500 mb-8 font-medium">
               Chèn một dải thông báo chạy liên tục ngay trên cùng màn hình của hệ thống. Phù hợp để tuyên dương, cảnh báo hoặc push sale.
             </p>
 
-            {bannerMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${bannerMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {bannerMessage}</div>}
+            {bannerMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${bannerMessage.includes('') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {bannerMessage}</div>}
 
             <form onSubmit={handleSaveBanner} className="space-y-6">
               
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-orange-50/50 border border-orange-200/50 rounded-2xl gap-4">
                 <div>
-                  <h3 className="text-sm font-black text-orange-900">Kích hoạt Dải chữ chạy</h3>
+                  <h3 className="text-sm font-bold text-orange-900">Kích hoạt Dải chữ chạy</h3>
                   <p className="text-[11px] text-orange-700 font-medium mt-1">Bật để hiển thị. Nội dung sẽ được cập nhật trực tiếp tới toàn bộ nhân viên kho.</p>
                 </div>
                 <ToggleSwitch checked={bannerNotif.enabled} onChange={(c) => setBannerNotif({...bannerNotif, enabled: c})} color="bg-orange-500" />
@@ -755,7 +796,7 @@ export default function Admin() {
                       className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" 
                       required={bannerNotif.enabled}
                     />
-                    <p className="text-[10px] text-slate-400 mt-1">Gợi ý: Dưới 10 là nhanh, 15 là vừa, trên 20 là chậm.</p>
+                    <p className="text-xs text-slate-400 mt-1">Gợi ý: Dưới 10 là nhanh, 15 là vừa, trên 20 là chậm.</p>
                   </div>
                 </div>
 
@@ -765,7 +806,7 @@ export default function Admin() {
                     type="text"
                     value={bannerNotif.content} 
                     onChange={(e) => setBannerNotif({...bannerNotif, content: e.target.value})} 
-                    placeholder="VD: 🎉 Xin chúc mừng bộ phận Kho xuất sắc đạt 200% KPI ngày!..." 
+                    placeholder="VD:  Xin chúc mừng bộ phận Kho xuất sắc đạt 200% KPI ngày!..." 
                     className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-orange-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" 
                     required={bannerNotif.enabled}
                   />
@@ -781,21 +822,21 @@ export default function Admin() {
           </div>
 
           {/* THÔNG BÁO POPUP CŨ (Nằm giữa màn hình) */}
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
-            <h2 className="text-xl font-black mb-2 text-slate-800 flex items-center gap-2">
+          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-200/80">
+            <h2 className="text-xl font-bold mb-2 text-slate-800 flex items-center gap-2">
               <Megaphone size={22} className="text-blue-600"/> Phát thông báo dạng Popup
             </h2>
             <p className="text-sm text-slate-500 mb-8 font-medium">
               Gửi thông báo bật lên chính giữa màn hình. Nhân viên phải bấm "Đã hiểu" hoặc "Tắt thông báo" để thu gọn.
             </p>
 
-            {notifMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${notifMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {notifMessage}</div>}
+            {notifMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${notifMessage.includes('') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {notifMessage}</div>}
 
             <form onSubmit={handleSaveNotification} className="space-y-6">
               
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-slate-50 border border-slate-200 rounded-2xl gap-4">
                 <div>
-                  <h3 className="text-sm font-black text-slate-800">Kích hoạt thông báo Popup</h3>
+                  <h3 className="text-sm font-bold text-slate-800">Kích hoạt thông báo Popup</h3>
                   <p className="text-[11px] text-slate-500 font-medium mt-1">Bật để hiển thị thông báo. Tắt để ẩn thông báo với tất cả mọi người.</p>
                 </div>
                 <ToggleSwitch checked={globalNotif.enabled} onChange={(c) => setGlobalNotif({...globalNotif, enabled: c})} color="bg-blue-600" />
@@ -866,8 +907,8 @@ export default function Admin() {
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           
           {/* SECTION 1: KẾT NỐI API */}
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
-            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6"><Settings size={20} className="text-blue-600"/> Cài đặt kết nối Nhanh.vn</h2>
+          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-200/80">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-6"><Settings size={20} className="text-blue-600"/> Cài đặt kết nối Nhanh.vn</h2>
             
             {/* THÔNG BÁO THỜI GIAN TOKEN */}
             {nhanhDaysLeft !== null && (
@@ -877,9 +918,9 @@ export default function Admin() {
               </div>
             )}
 
-            {apiMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${apiMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {apiMessage}</div>}
+            {apiMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${apiMessage.includes('') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {apiMessage}</div>}
             
-            {isOwner ? (
+            {canEditSensitiveConfig ? (
               <form onSubmit={handleSaveApi} className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
@@ -898,7 +939,7 @@ export default function Admin() {
                 
                 <div className="bg-amber-50/50 p-5 sm:p-6 border border-amber-200/60 rounded-2xl flex flex-col md:flex-row md:items-end gap-4">
                   <div className="flex-1">
-                    <label className="text-xs font-black text-amber-800 uppercase tracking-wider mb-2 block flex items-center gap-1.5"><KeyRound size={14}/> Mã Access Code mới (Hạn 15p)</label>
+                    <label className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2 block flex items-center gap-1.5"><KeyRound size={14}/> Mã Access Code mới (Hạn 15p)</label>
                     <input type="text" name="nhanh_access_code" value={apiConfigs.nhanh_access_code} onChange={handleApiChange} className="w-full px-4 py-3 border border-amber-300/60 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium transition placeholder:text-amber-300" placeholder="Paste access code lấy từ Nhanh.vn vào đây..." />
                   </div>
                   <button type="submit" disabled={apiLoading} className="w-full md:w-auto px-8 py-3 bg-slate-900 text-white font-bold rounded-xl shadow-md hover:bg-blue-600 transition-all cursor-pointer text-sm disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap">
@@ -907,14 +948,14 @@ export default function Admin() {
                 </div>
               </form>
             ) : (
-              <LockedFeature msg="Chỉ Chủ sở hữu (Owner) mới được quyền thay đổi cấu hình kết nối API." />
+              <LockedFeature msg="Chỉ Chủ sở hữu (Owner) hoặc Super Admin mới được quyền thay đổi cấu hình kết nối Nhanh.vn." />
             )}
           </div>
 
           {/* SECTION 2: GOOGLE SHEETS */}
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
+          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-200/80">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
-              <h2 className="text-lg font-black text-slate-800 flex items-center gap-2"><Database size={20} className="text-indigo-600"/> Liên kết Google Sheets</h2>
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Database size={20} className="text-indigo-600"/> Liên kết Google Sheets</h2>
               {isAdminOrOwner && (
                 <button onClick={handleTriggerSyncSheets} disabled={syncLoading} className="px-5 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer">
                   {syncLoading ? <Loader2 size={16} className="animate-spin"/> : <RefreshCcw size={16}/>} Bấm Quét Dữ Liệu
@@ -922,9 +963,9 @@ export default function Admin() {
               )}
             </div>
             
-            {sheetMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${sheetMessage.includes('✅') || sheetMessage.includes('🎉') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}><CheckCircle2 size={18}/> {sheetMessage}</div>}
+            {sheetMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${sheetMessage.includes('') || sheetMessage.includes('') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}><CheckCircle2 size={18}/> {sheetMessage}</div>}
             
-            {isOwner ? (
+            {canEditSensitiveConfig ? (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-5 bg-slate-50 p-5 rounded-2xl border border-slate-100">
                     <div className="md:col-span-3">
@@ -955,13 +996,13 @@ export default function Admin() {
                 </div>
               </div>
             ) : (
-              <LockedFeature msg="Chỉ Chủ sở hữu (Owner) mới được quyền cấu hình file hệ thống Google Sheets." />
+              <LockedFeature msg="Chỉ Chủ sở hữu (Owner) hoặc Super Admin mới được quyền thay đổi link Google Sheet đơn in / đơn đi." />
             )}
           </div>
 
           {/* SECTION 3: ĐỒNG BỘ CỤC BỘ (MANUAL SYNC) */}
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
-            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-2">
+          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-200/80">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-2">
               <DownloadCloud size={20} className="text-blue-600"/> Đồng bộ dữ liệu thủ công
             </h2>
             <p className="text-sm text-slate-500 mb-6 font-medium">Sử dụng khi Webhook bị lỗi hoặc cần ép hệ thống cập nhật tức thì (Force Sync).</p>
@@ -1011,7 +1052,14 @@ export default function Admin() {
                   <p className="text-xs text-indigo-700/70">Kéo danh sách hoàn hàng từ Shopee, TikTok, Lazada về hệ thống.</p>
                   {syncReturnsMessage.text && <p className={`mt-2 text-xs font-bold ${syncReturnsMessage.type === 'error' ? 'text-red-500' : 'text-indigo-600'}`}>{syncReturnsMessage.text}</p>}
                 </div>
-                {isOwner ? (
+                {cleanProgress && (
+                <div className="p-4 mb-6 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700">
+                  Đã xóa: <strong>{cleanProgress.totalDeleted} dòng</strong> · Số lô: {cleanProgress.rounds}
+                  {cleanProgress.remaining && (<span> · Còn lại: đơn hàng {cleanProgress.remaining.orders ?? '?'}, lịch sử {cleanProgress.remaining.order_histories ?? '?'}</span>)}
+                </div>
+              )}
+
+              {isOwner ? (
                   <button onClick={handleSyncReturns} disabled={isSyncingReturns} className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer flex justify-center items-center gap-2 whitespace-nowrap">
                     {isSyncingReturns ? <Loader2 size={16} className="animate-spin"/> : <DownloadCloud size={16}/>} Kéo Hoàn Hàng
                   </button>
@@ -1023,8 +1071,8 @@ export default function Admin() {
           </div>
 
           {/* SECTION 4: FILTER & PRIORITY */}
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
-            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6"><Settings size={20} className="text-slate-600"/> Cấu hình Lọc & Ưu tiên Đơn In</h2>
+          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-200/80">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-6"><Settings size={20} className="text-slate-600"/> Cấu hình Lọc & Ưu tiên Đơn In</h2>
             {filterMessage && <div className="p-4 mb-6 rounded-xl font-bold text-sm bg-slate-50 text-slate-700 border border-slate-200 flex gap-2"><CheckCircle2 size={18}/>{filterMessage}</div>}
             
             <form onSubmit={handleSaveFilter} className="space-y-8">
@@ -1065,7 +1113,7 @@ export default function Admin() {
                       <div className="flex items-center gap-3">
                         <div className="text-slate-300">⋮⋮</div>
                         <span className="font-bold text-sm text-slate-700 flex items-center gap-3">
-                          <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-black w-6 text-center">{index + 1}</span>
+                          <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-xs font-bold w-6 text-center">{index + 1}</span>
                           {item.label}
                         </span>
                       </div>
@@ -1082,15 +1130,15 @@ export default function Admin() {
           </div>
 
           {/* SECTION 6: GIAO DIỆN LỄ HỘI (FESTIVE THEMES) */}
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
-            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-2">
+          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-200/80">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-2">
               <Palette size={20} className="text-indigo-600"/> Giao diện Lễ hội (Festive Themes)
             </h2>
             <p className="text-sm text-slate-500 mb-6 font-medium">Thay đổi không khí vận hành hệ thống. Bật/tắt ảnh nền giao diện tĩnh toàn màn hình (Chỉ được chọn 1).</p>
 
-            {themeMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${themeMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {themeMessage}</div>}
+            {themeMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${themeMessage.includes('') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {themeMessage}</div>}
 
-            {isOwner ? (
+            {canEditSensitiveConfig ? (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {/* Quốc Khánh */}
@@ -1130,21 +1178,19 @@ export default function Admin() {
                 </div>
               </div>
             ) : (
-              <LockedFeature msg="Chỉ Chủ sở hữu (Owner) mới được quyền thay đổi giao diện nền lễ hội toàn hệ thống." />
+              <LockedFeature msg="Chỉ Chủ sở hữu (Owner) hoặc Super Admin mới được quyền thay đổi nền giao diện." />
             )}
           </div>
 
           {/* SECTION 7: DANGER ZONE (DB CLEANUP) */}
-          <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border-2 border-red-100 mt-8 relative overflow-hidden">
+          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border-2 border-red-100 mt-8 relative overflow-hidden">
             {/* Background warning pattern */}
-            <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none"><Trash2 size={200} /></div>
-            
-            <div className="relative z-10">
-              <h2 className="text-lg font-black mb-1 text-red-600 flex items-center gap-2">
+                        <div className="relative z-10">
+              <h2 className="text-lg font-bold mb-1 text-red-600 flex items-center gap-2">
                 <AlertCircle size={22} /> Danger Zone: Dọn dẹp Database
               </h2>
               <p className="text-sm text-slate-500 mb-6 font-medium max-w-3xl leading-relaxed">
-                Hành động này sẽ <strong className="text-red-500 font-black">XÓA VĨNH VIỄN</strong> toàn bộ Dữ liệu giao dịch (Đơn hàng, Lịch sử, Hoàn hàng...) cũ hơn thời gian chọn để tiết kiệm dung lượng. Master Data (SP) không bị ảnh hưởng.
+                Hành động này sẽ <strong className="text-red-500 font-bold">XÓA VĨNH VIỄN</strong> toàn bộ Dữ liệu giao dịch (Đơn hàng, Lịch sử, Hoàn hàng...) cũ hơn thời gian chọn để tiết kiệm dung lượng. Master Data (SP) không bị ảnh hưởng.
               </p>
               
               {/* Progress Bar Storage */}
@@ -1153,7 +1199,7 @@ export default function Admin() {
                   <div className="flex items-center gap-2 font-bold text-sm text-slate-700">
                     <HardDrive size={16} className="text-slate-400"/> Dung lượng Database
                   </div>
-                  <div className="text-xs font-black text-slate-500 tracking-wide">
+                  <div className="text-xs font-bold text-slate-500 tracking-wide">
                     {formatBytes(dbUsage.used)} / {formatBytes(dbUsage.total, 0)} ({dbUsagePercent}%)
                   </div>
                 </div>
@@ -1228,8 +1274,8 @@ export default function Admin() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
           
           {/* Cấp tài khoản mới */}
-          <div className="bg-white p-6 sm:p-8 border border-slate-200/80 rounded-3xl shadow-sm h-fit">
-            <h3 className="text-base font-black text-slate-800 flex items-center gap-2 mb-6"><UserPlus size={20} className="text-blue-600" /> Cấp tài khoản mới</h3>
+          <div className="bg-white p-6 sm:p-8 border border-slate-200/80 rounded-2xl shadow-sm h-fit">
+            <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 mb-6"><UserPlus size={20} className="text-blue-600" /> Cấp tài khoản mới</h3>
             {isOwner ? (
               <form onSubmit={handleCreateUser} className="space-y-4">
                 <div>
@@ -1254,6 +1300,7 @@ export default function Admin() {
                   <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 text-sm font-bold cursor-pointer transition focus:bg-white">
                     <option value="user">Nhân viên (User)</option>
                     <option value="admin">Quản trị (Admin)</option>
+                    <option value="super_admin">Super Admin (Admin + Nhanh / Sheet / Giao diện)</option>
                   </select>
                 </div>
                 <button type="submit" disabled={loading} className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition cursor-pointer mt-2 flex items-center justify-center gap-2 disabled:opacity-50 text-sm">
@@ -1266,9 +1313,9 @@ export default function Admin() {
           </div>
 
           {/* Bảng Danh Sách */}
-          <div className="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden lg:col-span-2 flex flex-col h-full min-h-[500px]">
+          <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden lg:col-span-2 flex flex-col h-full min-h-[500px]">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-              <span className="text-base font-black text-slate-800 flex items-center gap-2">
+              <span className="text-base font-bold text-slate-800 flex items-center gap-2">
                 <Users size={20} className="text-blue-600"/> Danh sách Nhân sự <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">{users.length}</span>
               </span>
               <button onClick={fetchSystemUsers} className="text-sm font-bold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-1.5 transition">
@@ -1284,7 +1331,7 @@ export default function Admin() {
               <div className="overflow-x-auto flex-1 p-2">
                 <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="text-[11px] font-black text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
                       <th className="py-3 px-4">Họ tên & Email</th>
                       <th className="py-3 px-4 text-center">Phân quyền</th>
                       <th className="py-3 px-4 text-right">Tác vụ</th>
@@ -1301,13 +1348,13 @@ export default function Admin() {
                         <tr key={u.id} className="hover:bg-blue-50/30 transition-colors group rounded-xl">
                           <td className="py-3 px-4 rounded-l-xl">
                             <div className="font-bold text-slate-800 flex items-center gap-2">
-                              {uName} {isMe && <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-black uppercase tracking-widest">(Bạn)</span>}
+                              {uName} {isMe && <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-widest">(Bạn)</span>}
                             </div>
                             <div className="text-xs text-slate-500 font-medium">{u.email}</div>
                           </td>
                           <td className="py-3 px-4 text-center">
-                            <span className={`px-3 py-1 border rounded-lg text-[10px] font-black uppercase tracking-widest inline-block ${isTargetOwner ? 'bg-amber-50 text-amber-700 border-amber-200' : uRole === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                              {isTargetOwner ? 'Owner' : uRole === 'admin' ? 'Admin' : 'User'}
+                            <span className={`px-3 py-1 border rounded-lg text-xs font-bold uppercase tracking-widest inline-block ${isTargetOwner ? 'bg-amber-50 text-amber-700 border-amber-200' : uRole === 'super_admin' ? 'bg-rose-50 text-rose-700 border-rose-200' : uRole === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                              {isTargetOwner ? 'Owner' : roleLabel(uRole)}
                             </span>
                           </td>
                           <td className="py-3 px-4 rounded-r-xl text-right">
@@ -1342,25 +1389,25 @@ export default function Admin() {
       {/* ============================================================== */}
       {activeTab === 'profile' && (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-2xl mx-auto">
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200/80">
+          <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200/80">
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 border-b border-slate-100 pb-8 mb-8">
               <div className="w-24 h-24 bg-gradient-to-tr from-blue-100 to-indigo-50 border-4 border-white shadow-lg text-blue-600 rounded-full flex items-center justify-center relative">
                 <User size={40} />
                 {isOwner && <div className="absolute -bottom-2 -right-2 bg-amber-500 text-white p-1.5 rounded-full border-2 border-white"><ShieldAlert size={14}/></div>}
               </div>
               <div className="text-center sm:text-left flex-1">
-                <h2 className="text-2xl font-black text-slate-800">{currentUserMeta.full_name || 'Chưa cập nhật tên'}</h2>
+                <h2 className="text-2xl font-bold text-slate-800">{currentUserMeta.full_name || 'Chưa cập nhật tên'}</h2>
                 <p className="text-sm font-medium text-slate-500 mt-1">{currentUserEmail}</p>
                 <div className="mt-3 flex flex-wrap justify-center sm:justify-start gap-2">
-                  <span className={`px-3 py-1 border rounded-lg text-[10px] font-black uppercase tracking-widest ${currentUserMeta.role === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                    {currentUserMeta.role === 'admin' ? 'Quyền: Admin' : 'Quyền: Nhân viên'}
+                  <span className={`px-3 py-1 border rounded-lg text-xs font-bold uppercase tracking-widest ${currentUserMeta.role === 'super_admin' ? 'bg-rose-50 text-rose-700 border-rose-200' : currentUserMeta.role === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                    {`Quyền: ${roleLabel(currentUserMeta.role)}`}
                   </span>
-                  {isOwner && <span className="px-3 py-1 border rounded-lg text-[10px] font-black uppercase tracking-widest bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1 shadow-sm"><ShieldAlert size={12} /> Cấp cao nhất (Owner)</span>}
+                  {isOwner && <span className="px-3 py-1 border rounded-lg text-xs font-bold uppercase tracking-widest bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1 shadow-sm"><ShieldAlert size={12} /> Cấp cao nhất (Owner)</span>}
                 </div>
               </div>
             </div>
 
-            {profileMessage && <div className={`p-4 mb-8 rounded-xl font-bold text-sm flex gap-2 shadow-sm ${profileMessage.includes('✅') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}><CheckCircle2 size={18} className="flex-shrink-0"/> {profileMessage}</div>}
+            {profileMessage && <div className={`p-4 mb-8 rounded-xl font-bold text-sm flex gap-2 shadow-sm ${profileMessage.includes('') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}><CheckCircle2 size={18} className="flex-shrink-0"/> {profileMessage}</div>}
 
             <form onSubmit={handleUpdateProfile} className="space-y-6">
               <div>
@@ -1369,7 +1416,7 @@ export default function Admin() {
               </div>
               
               <div className="pt-6 border-t border-slate-100 space-y-6">
-                  <h3 className="text-sm font-black text-slate-800 flex items-center gap-2"><KeyRound size={16} className="text-slate-400"/> Đổi mật khẩu</h3>
+                  <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2"><KeyRound size={16} className="text-slate-400"/> Đổi mật khẩu</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mật khẩu hiện tại</label>
@@ -1407,13 +1454,13 @@ export default function Admin() {
       {/* ============================================================== */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
             
             <div className="p-6 sm:p-8">
               <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-3">
                   <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl"><Pencil size={18}/></div>
-                  <h3 className="text-lg font-black text-slate-800">Hiệu chỉnh User</h3>
+                  <h3 className="text-lg font-bold text-slate-800">Hiệu chỉnh User</h3>
                 </div>
                 <button onClick={() => setEditingUser(null)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition cursor-pointer"><X size={20} /></button>
               </div>
@@ -1445,19 +1492,20 @@ export default function Admin() {
                   >
                     <option value="user">Nhân viên (User)</option>
                     <option value="admin">Quản trị (Admin)</option>
+                    <option value="super_admin">Super Admin (Admin + Nhanh / Sheet / Giao diện)</option>
                   </select>
                 </div>
                 
                 {/* VÙNG NÂNG CẤP/HẠ CẤP OWNER */}
                 {isOwner && editingUser.email !== SUPER_OWNER_EMAIL && (() => {
                   const isTargetOwner = editingUser.user_metadata?.is_owner === true;
-                  if (editForm.role !== 'admin' && !isTargetOwner) return null;
+                  if (editForm.role !== 'admin' && editForm.role !== 'super_admin' && !isTargetOwner) return null;
 
                   return (
                     <div className={`mt-6 p-5 rounded-2xl space-y-4 border ${isTargetOwner ? 'border-red-200 bg-red-50/50' : 'border-amber-200 bg-amber-50/50'}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div>
-                          <h4 className={`text-sm font-black flex items-center gap-1.5 ${isTargetOwner ? 'text-red-800' : 'text-amber-800'}`}>
+                          <h4 className={`text-sm font-bold flex items-center gap-1.5 ${isTargetOwner ? 'text-red-800' : 'text-amber-800'}`}>
                             <ShieldAlert size={16}/> {isTargetOwner ? 'Hạ cấp Owner' : 'Nâng cấp Owner'}
                           </h4>
                           <p className={`text-[11px] font-medium mt-1 leading-relaxed ${isTargetOwner ? 'text-red-700/70' : 'text-amber-700/70'}`}>
@@ -1504,12 +1552,12 @@ export default function Admin() {
       {/* ============================================================== */}
       {dialogConfig && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
             <div className="p-6 text-center">
               <div className={`mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4 ${dialogConfig.type === 'confirm' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
                 {dialogConfig.type === 'confirm' ? <AlertTriangle size={32} /> : <Info size={32} />}
               </div>
-              <h3 className="text-xl font-black text-slate-800 mb-2">{dialogConfig.title}</h3>
+              <h3 className="text-xl font-bold text-slate-800 mb-2">{dialogConfig.title}</h3>
               <p className="text-sm font-medium text-slate-600 mb-6 px-2">{dialogConfig.message}</p>
               <div className="flex gap-3 justify-center">
                 {dialogConfig.type === 'confirm' && (
@@ -1540,7 +1588,7 @@ const LockedFeature = ({ msg }) => (
   <div className="p-5 sm:p-6 bg-slate-50/80 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-center gap-4 text-slate-500 text-center sm:text-left">
     <div className="p-3 bg-white rounded-full shadow-sm"><Lock size={24} className="text-slate-400" /></div>
     <div>
-      <p className="text-sm font-black text-slate-700">Tính năng giới hạn</p>
+      <p className="text-sm font-bold text-slate-700">Tính năng giới hạn</p>
       <p className="text-xs font-medium mt-1 leading-relaxed">{msg}</p>
     </div>
   </div>

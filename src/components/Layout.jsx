@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { isAdminRole, isSuperAdminRole } from '../lib/roles';
+import { sessionRevokedKey, isRevokedAfterLogin } from '../lib/session';
 import { 
   TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
@@ -63,6 +65,31 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const userRef = useRef(null);
+  const sessionSnapshotRef = useRef(null);
+  const kickingRef = useRef(false);
+
+  // Da nguoi dung ra man hinh dang nhap voi thong bao het phien (chi goi 1 lan).
+  const kickSession = async () => {
+    if (kickingRef.current) return;
+    kickingRef.current = true;
+    try { await supabase.auth.signOut(); } catch (e) {}
+    navigate('/login?session_expired=1', { replace: true });
+  };
+
+  // Kiem tra phien con hop le khong: tai khoan bi xoa, hoac role/is_owner bi doi, hoac co dong thu hoi moi hon lan dang nhap.
+  const checkSessionValid = async (currentUser) => {
+    const me = currentUser || userRef.current;
+    if (!me) return;
+    const { data: { user: fresh }, error } = await supabase.auth.getUser();
+    if (error || !fresh) { await kickSession(); return; }
+    const snap = sessionSnapshotRef.current;
+    if (snap && (fresh.user_metadata?.role !== snap.role || (fresh.user_metadata?.is_owner === true) !== snap.isOwner)) {
+      await kickSession(); return;
+    }
+    const { data: revoked } = await supabase.from('system_configs').select('value').eq('key', sessionRevokedKey(fresh.id)).maybeSingle();
+    if (revoked && isRevokedAfterLogin(revoked.value, fresh)) { await kickSession(); }
+  };
   const [isInitializing, setIsInitializing] = useState(true);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   
@@ -129,6 +156,13 @@ export default function Layout() {
     const fetchUserAndConfigs = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
+      userRef.current = user;
+      if (user) {
+        sessionSnapshotRef.current = { role: user.user_metadata?.role, isOwner: user.user_metadata?.is_owner === true };
+        // Neu tai khoan da bi thu hoi truoc khi vao trang (va chua dang nhap lai sau do) thi da ra ngay.
+        const { data: revoked } = await supabase.from('system_configs').select('value').eq('key', sessionRevokedKey(user.id)).maybeSingle();
+        if (revoked && isRevokedAfterLogin(revoked.value, user)) { await kickSession(); return; }
+      }
       
       if (user) {
         const userConfigKey = `layout_pref_${user.id}`;
@@ -181,15 +215,28 @@ export default function Layout() {
 
     fetchUserAndConfigs();
 
+    // Kiem tra dinh ky + khi quay lai tab, de tai khoan bi xoa/doi quyen bi da ra trong vong ~1 phut
+    // ngay ca khi realtime khong toi (vi du dang o tab khac).
+    const intervalId = setInterval(() => { checkSessionValid(); }, 60000);
+    const onFocus = () => { checkSessionValid(); };
+    window.addEventListener('focus', onFocus);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) navigate('/login');
-      else setUser(session.user);
+      else { setUser(session.user); userRef.current = session.user; if (!sessionSnapshotRef.current) sessionSnapshotRef.current = { role: session.user.user_metadata?.role, isOwner: session.user.user_metadata?.is_owner === true }; }
     });
 
     const channel = supabase.channel('system_configs_listener')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'system_configs' }, 
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_configs' }, 
         (payload) => {
           try {
+            if (payload.new.key && payload.new.key.startsWith('session_revoked_')) {
+              const me = userRef.current;
+              if (me && payload.new.key === sessionRevokedKey(me.id) && isRevokedAfterLogin(payload.new.value, me)) {
+                kickSession();
+              }
+              return;
+            }
             if (payload.new.key === 'theme_christmas') setXmasTheme(JSON.parse(payload.new.value));
             else if (payload.new.key === 'theme_tet') setTetTheme(JSON.parse(payload.new.value));
             else if (payload.new.key === 'theme_mid_autumn') setMidAutumnTheme(JSON.parse(payload.new.value));
@@ -220,6 +267,8 @@ export default function Layout() {
       ).subscribe();
 
     return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', onFocus);
       subscription.unsubscribe();
       supabase.removeChannel(channel);
     };
@@ -263,7 +312,8 @@ export default function Layout() {
   const userEmail = user?.email || '';
   const displayName = user?.user_metadata?.full_name || userEmail.split('@')[0] || '...';
   const avatarLetter = displayName.charAt(0).toUpperCase();
-  const isAdmin = user?.user_metadata?.role === 'admin';
+  const isAdmin = isAdminRole(user?.user_metadata?.role);
+  const isSuperAdmin = isSuperAdminRole(user?.user_metadata?.role);
   const isOwner = user?.user_metadata?.is_owner === true;
   
   const adminRoutes = ['/admin', '/quan-ly-kpi', '/nhap-lieu-kpi', '/cap-nhat-nguoi-dong-goi', '/cap-nhat-lich-lam-viec', '/cap-nhat-san-pham', '/cap-nhat-so-do-kho', '/cap-nhat-day-ke', '/cap-nhat-webhook', '/upload-video-hoan'];
@@ -496,28 +546,28 @@ export default function Layout() {
         return {
           gradient: 'bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-500',
           icon: PartyPopper,
-          badgeText: '🎉 SỰ KIỆN',
+          badgeText: ' SỰ KIỆN',
           shadow: 'shadow-[0_4px_20px_rgba(192,38,211,0.4)]'
         };
       case 'alert':
         return {
           gradient: 'bg-gradient-to-r from-rose-600 via-red-600 to-red-500',
           icon: Flame,
-          badgeText: '🔥 CẢNH BÁO',
+          badgeText: ' CẢNH BÁO',
           shadow: 'shadow-[0_4px_20px_rgba(225,29,72,0.45)]'
         };
       case 'warning':
         return {
           gradient: 'bg-gradient-to-r from-amber-500 via-orange-500 to-orange-400',
           icon: Zap,
-          badgeText: '⚡ LƯU Ý',
+          badgeText: ' LƯU Ý',
           shadow: 'shadow-[0_4px_20px_rgba(245,158,11,0.4)]'
         };
       default:
         return {
           gradient: 'bg-gradient-to-r from-blue-600 via-cyan-600 to-sky-500',
           icon: Megaphone,
-          badgeText: '📢 THÔNG BÁO',
+          badgeText: ' THÔNG BÁO',
           shadow: 'shadow-[0_4px_20px_rgba(59,130,246,0.4)]'
         };
     }
@@ -612,14 +662,14 @@ export default function Layout() {
           )}
 
           <div className="absolute left-2 top-1/2 -translate-y-1/2 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 shadow-inner pointer-events-none">
-            <span className="text-[10px] font-black tracking-wider text-white drop-shadow-sm">
+            <span className="text-xs font-bold tracking-wider text-white drop-shadow-sm">
               {bannerStyle.badgeText}
             </span>
             <bannerStyle.icon size={14} className="text-white animate-icon-bounce" strokeWidth={2.5} />
           </div>
 
-          <div className="whitespace-nowrap animate-marquee marquee-unselectable flex-1 h-full flex items-center pl-24 pr-8">
-            <span className="text-sm font-bold text-white tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)]">
+          <div className="flex-1 h-full flex items-center pl-24 pr-8 min-w-0">
+            <span className="text-sm font-bold text-white tracking-wide drop-shadow-[0_1px_2px_rgba(0,0,0,0.25)] truncate">
               {bannerNotif.content || bannerNotif.text}
             </span>
           </div>
@@ -651,7 +701,7 @@ export default function Layout() {
 
         {themeVars.bgImage !== 'none' && (
           <div className="fixed inset-0 z-0 bg-no-repeat bg-center pointer-events-none transition-all duration-700"
-               style={{ backgroundImage: themeVars.bgImage, backgroundSize: '100% 100%' }} />
+               style={{ backgroundImage: themeVars.bgImage, backgroundSize: 'cover' }} />
         )}
 
         <div
@@ -669,7 +719,7 @@ export default function Layout() {
                 <PackageSearch className={themeVars.logoIcon} size={24} strokeWidth={2.5}/>
               </div>
               <div className={`transition-opacity duration-300 ${sidebarExpanded || isTopLayout ? 'opacity-100' : 'opacity-0 hidden max-md:block'}`}>
-                <h1 className={`text-lg font-black tracking-tight flex items-center gap-1.5 leading-none whitespace-nowrap ${themeVars.textPrimary}`}>
+                <h1 className={`text-lg font-bold tracking-tight flex items-center gap-1.5 leading-none whitespace-nowrap ${themeVars.textPrimary}`}>
                   Amelie WMS
                 </h1>
               </div>
@@ -763,7 +813,7 @@ export default function Layout() {
                   <div className={`
                     ${!sidebarExpanded && isAdminGroup ? 'border-[1.5px] border-red-400 rounded-2xl mx-1.5 py-1.5 bg-red-50/20 shadow-inner' : ''}
                   `}>
-                    <div className={`px-5 mb-2 text-[11px] font-black uppercase tracking-widest transition-opacity duration-300 whitespace-nowrap ${themeVars.textMuted} ${sidebarExpanded ? 'opacity-100' : 'hidden'}`}>
+                    <div className={`px-5 mb-2 text-[11px] font-bold uppercase tracking-widest transition-opacity duration-300 whitespace-nowrap ${themeVars.textMuted} ${sidebarExpanded ? 'opacity-100' : 'hidden'}`}>
                       {group.groupLabel}
                     </div>
                     
@@ -855,13 +905,13 @@ export default function Layout() {
 
           <div className={`relative ${isTopLayout ? 'flex items-center pl-4 border-l' : 'p-4 border-t'} ${themeVars.headerBorder} flex items-center justify-between transition-all duration-300 ${!sidebarExpanded && !isTopLayout ? 'flex-col gap-3 py-4' : ''}`}>
             <div className={`flex items-center gap-3 overflow-hidden ${!sidebarExpanded && !isTopLayout ? 'justify-center' : ''}`}>
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center font-black text-sm shadow-sm shrink-0 relative ${themeVars.logoBg} ${themeVars.logoIcon}`}>
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shrink-0 relative ${themeVars.logoBg} ${themeVars.logoIcon}`}>
                 {avatarLetter}
               </div>
               <div className={`flex flex-col transition-all duration-300 overflow-hidden ${sidebarExpanded || isTopLayout ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>
                 <span className={`text-sm font-bold truncate leading-tight whitespace-nowrap max-w-[120px] ${themeVars.textPrimary}`}>{displayName}</span>
-                <span className={`text-[10px] font-bold uppercase tracking-widest mt-0.5 ${themeVars.textMuted}`}>
-  {isOwner ? 'Owner' : isAdmin ? 'Admin' : 'User'}
+                <span className={`text-xs font-bold uppercase tracking-widest mt-0.5 ${themeVars.textMuted}`}>
+  {isOwner ? 'Owner' : isSuperAdmin ? 'Super Admin' : isAdmin ? 'Admin' : 'User'}
 </span>
               </div>
             </div>
@@ -914,7 +964,7 @@ export default function Layout() {
                  <div className="w-24 h-24 bg-white/80 rounded-full flex items-center justify-center mb-6 border-[8px] border-white/40 shadow-inner">
                    <ShieldAlert size={40} className="text-red-600" />
                  </div>
-                 <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase tracking-tight bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-xl shadow-sm">Truy cập bị từ chối</h2>
+                 <h2 className="text-2xl font-bold text-slate-800 mb-2 uppercase tracking-tight bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-xl shadow-sm">Truy cập bị từ chối</h2>
                  <p className="text-slate-800 mb-8 text-sm leading-relaxed font-bold bg-white/90 backdrop-blur-md px-5 py-3 rounded-xl shadow-sm">Bạn không có quyền truy cập trang này. Vui lòng liên hệ Quản trị viên để được cấp quyền.</p>
                  <button onClick={() => navigate('/')} className="px-6 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 shadow-md transition-all flex items-center gap-2">
                    <Undo2 size={18} /> Quay lại trang chủ
@@ -925,7 +975,7 @@ export default function Layout() {
                  <div className="w-24 h-24 bg-red-50 rounded-full flex items-center justify-center mb-6 border-[8px] border-white/40 shadow-inner">
                    <Lock size={40} className="text-red-600" />
                  </div>
-                 <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase tracking-tight bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-xl shadow-sm">Bảo trì hệ thống</h2>
+                 <h2 className="text-2xl font-bold text-slate-800 mb-2 uppercase tracking-tight bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-xl shadow-sm">Bảo trì hệ thống</h2>
                  <p className="text-slate-800 mb-8 text-sm leading-relaxed font-bold bg-white/90 backdrop-blur-md px-5 py-3 rounded-xl shadow-sm">{lockMessage || 'Tính năng này hiện đang được khóa để bảo trì.'}</p>
                  <button onClick={() => navigate('/')} className="px-6 py-3 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 shadow-md transition-all flex items-center gap-2">
                    <Undo2 size={18} /> Quay về Trang chủ
@@ -954,13 +1004,13 @@ export default function Layout() {
 
         {showLogoutModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 sm:p-8 animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-8 animate-in zoom-in-95 duration-200">
               <div className="flex items-center gap-4 mb-6">
                 <div className="p-3 bg-red-50 rounded-2xl">
                   <LogOut size={24} className="text-red-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-slate-800 leading-tight">Đăng xuất</h3>
+                  <h3 className="text-lg font-bold text-slate-800 leading-tight">Đăng xuất</h3>
                   <p className="text-sm text-slate-500 font-medium">Kết thúc phiên làm việc</p>
                 </div>
               </div>
@@ -979,7 +1029,7 @@ export default function Layout() {
 
         {globalNotif && (
           <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-300 ${isNotifClosing ? 'pointer-events-none' : ''}`}>
-            <div className={`bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden ${isNotifClosing ? 'animate-notif-out' : 'animate-notif-in'}`}>
+            <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden ${isNotifClosing ? 'animate-notif-out' : 'animate-notif-in'}`}>
               <div className={`px-8 py-6 flex items-start justify-between border-b relative overflow-hidden
                 ${globalNotif.type === 'update' ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100' : 
                   globalNotif.type === 'celebrate' ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 border-amber-100' : 
@@ -1003,13 +1053,13 @@ export default function Layout() {
                     )}
                   </div>
                   <div>
-                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] block mb-1
+                    <span className={`text-xs font-bold uppercase tracking-[0.2em] block mb-1
                       ${globalNotif.type === 'update' ? 'text-blue-500' : 
                         globalNotif.type === 'celebrate' ? 'text-orange-500' : 'text-slate-400'}`}>
                       {globalNotif.type === 'update' ? 'Cập nhật hệ thống' : 
                        globalNotif.type === 'celebrate' ? 'Tin vui' : 'Thông báo'}
                     </span>
-                    <h3 className="text-2xl font-black text-slate-800 leading-tight">
+                    <h3 className="text-2xl font-bold text-slate-800 leading-tight">
                       {globalNotif.title || 'Thông báo mới'}
                     </h3>
                   </div>

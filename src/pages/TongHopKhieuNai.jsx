@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { isAdminRole } from '../lib/roles';
 import { 
   BarChart3, RefreshCw, Filter, FileText, CheckCircle2, 
   XCircle, Clock, Video, Loader2, MoreVertical, Edit, Trash2, Calendar
@@ -28,7 +29,7 @@ export default function TongHopKhieuNai() {
   useEffect(() => {
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      setIsAdmin(user?.user_metadata?.role === 'admin' || user?.user_metadata?.is_owner === true);
+      setIsAdmin(isAdminRole(user?.user_metadata?.role) || user?.user_metadata?.is_owner === true);
       fetchComplaints();
     };
     init();
@@ -97,13 +98,13 @@ export default function TongHopKhieuNai() {
   const getStatusBadge = (status) => {
     switch (status) {
       case 'Đã hoàn tiền':
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-200"><CheckCircle2 size={14}/> {status}</span>;
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-600 border border-emerald-200"><CheckCircle2 size={14}/> {status}</span>;
       case 'Khiếu nại thất bại':
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200"><XCircle size={14}/> {status}</span>;
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200"><XCircle size={14}/> {status}</span>;
       case 'Đang khiếu nại':
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-200"><Clock size={14}/> {status}</span>;
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-amber-50 text-amber-600 border border-amber-200"><Clock size={14}/> {status}</span>;
       default:
-        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200"><FileText size={14}/> {status}</span>;
+        return <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200"><FileText size={14}/> {status}</span>;
     }
   };
 
@@ -119,7 +120,7 @@ export default function TongHopKhieuNai() {
             <BarChart3 size={26} strokeWidth={2.5} />
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">Tổng hợp Đơn Khiếu Nại</h2>
+            <h2 className="text-xl font-bold text-slate-800 uppercase tracking-wide">Tổng hợp Đơn Khiếu Nại</h2>
             <p className="text-xs text-slate-500 font-medium mt-1">Theo dõi trạng thái và tiến độ xử lý hoàn tiền HVC</p>
           </div>
         </div>
@@ -171,7 +172,7 @@ export default function TongHopKhieuNai() {
         <div className="overflow-x-auto min-h-[300px]">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-black border-b border-slate-200">
+              <tr className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500 font-bold border-b border-slate-200">
                 <th className="p-5 whitespace-nowrap">Thời gian</th>
                 <th className="p-5 whitespace-nowrap">Thông tin Đơn</th>
                 <th className="p-5 min-w-[250px]">Sản phẩm khiếu nại</th>
@@ -207,8 +208,8 @@ export default function TongHopKhieuNai() {
 
                     {/* Thông tin mã */}
                     <td className="p-5 align-top space-y-1.5">
-                      {item.nhanh_id && <div className="text-xs"><span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">ID Nhanh:</span> <span className="font-black text-slate-800 block text-sm">{item.nhanh_id}</span></div>}
-                      {item.hvc_code && <div className="text-xs mt-2"><span className="text-slate-400 font-bold uppercase tracking-wider text-[10px]">Mã HVC:</span> <span className="font-black text-blue-600 block text-sm">{item.hvc_code}</span></div>}
+                      {item.nhanh_id && <div className="text-xs"><span className="text-slate-400 font-bold uppercase tracking-wider text-xs">ID Nhanh:</span> <span className="font-bold text-slate-800 block text-sm">{item.nhanh_id}</span></div>}
+                      {item.hvc_code && <div className="text-xs mt-2"><span className="text-slate-400 font-bold uppercase tracking-wider text-xs">Mã HVC:</span> <span className="font-bold text-blue-600 block text-sm">{item.hvc_code}</span></div>}
                     </td>
 
                     {/* Mảng JSON Sản phẩm */}
@@ -219,9 +220,9 @@ export default function TongHopKhieuNai() {
                             <div key={idx} className="bg-white border border-slate-200 p-2 rounded-lg flex items-center justify-between shadow-sm">
                               <div className="pr-2">
                                 <span className="font-bold text-slate-700 text-xs line-clamp-1">{p.product_name || p.product_code}</span>
-                                {p.product_code && <span className="text-[10px] font-mono text-slate-400">{p.product_code}</span>}
+                                {p.product_code && <span className="text-xs font-mono text-slate-400">{p.product_code}</span>}
                               </div>
-                              <span className="shrink-0 font-black text-rose-600 px-1.5 py-0.5 bg-rose-50 rounded text-xs">x{p.quantity || 1}</span>
+                              <span className="shrink-0 font-bold text-rose-600 px-1.5 py-0.5 bg-rose-50 rounded text-xs">x{p.quantity || 1}</span>
                             </div>
                           ))}
                         </div>
@@ -246,7 +247,7 @@ export default function TongHopKhieuNai() {
                     {/* Trạng thái hiện tại */}
                     <td className="p-5 align-top">
                       <div className="mb-2">{getStatusBadge(item.status)}</div>
-                      <div className="text-[10px] text-slate-400 font-medium">Cập nhật lúc: <br/>{new Date(item.updated_at).toLocaleString('vi-VN', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'})}</div>
+                      <div className="text-xs text-slate-400 font-medium">Cập nhật lúc: <br/>{new Date(item.updated_at).toLocaleString('vi-VN', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'})}</div>
                     </td>
 
                     {/* Action Select Box */}
@@ -290,8 +291,8 @@ export default function TongHopKhieuNai() {
       {/* MODAL ĐỔI TRẠNG THÁI */}
       {statusModal.isOpen && statusModal.item && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-black text-slate-800 mb-1">Cập nhật trạng thái</h3>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-slate-800 mb-1">Cập nhật trạng thái</h3>
             <p className="text-sm text-slate-500 font-medium mb-6">Đơn: <span className="font-bold text-slate-700">{statusModal.item.nhanh_id || statusModal.item.hvc_code}</span></p>
             
             <div className="space-y-2 mb-8">

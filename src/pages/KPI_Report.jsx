@@ -302,7 +302,7 @@ export default function KPI_Report() {
             });
           }
 
-          // ⚡️ LOGIC CHUẨN: Có luật trừ -> Điểm gốc bằng 100, không có -> Lấy kết quả công thức
+          // ️ LOGIC CHUẨN: Có luật trừ -> Điểm gốc bằng 100, không có -> Lấy kết quả công thức
           let finalKpiScore = 0;
           if (!hasRules) {
             finalKpiScore = finalRawValue;
@@ -448,13 +448,13 @@ export default function KPI_Report() {
   return (
     <div className="max-w-7xl mx-auto space-y-6 pb-12 p-4 md:p-6 lg:p-8 mt-4 animate-in fade-in duration-300">
       
-      <div className="bg-white p-5 md:p-8 border border-slate-200 rounded-3xl shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+      <div className="bg-white p-5 md:p-8 border border-slate-200 rounded-2xl shadow-sm flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div className="flex items-center gap-4">
           <div className="p-3.5 bg-indigo-50 text-indigo-600 rounded-2xl shadow-sm">
             <BarChart3 size={28} strokeWidth={2.5}/>
           </div>
           <div>
-            <h2 className="text-lg md:text-2xl font-black text-slate-800 tracking-tight">BẢNG THỐNG KÊ KPI NHÂN SỰ</h2>
+            <h2 className="text-lg md:text-2xl font-bold text-slate-800 tracking-tight">BẢNG THỐNG KÊ KPI NHÂN SỰ</h2>
             <p className="text-xs md:text-sm font-medium text-slate-500 mt-1">Đánh giá hiệu suất chi tiết tới từng cá nhân</p>
           </div>
         </div>
@@ -479,29 +479,29 @@ export default function KPI_Report() {
       </div>
 
       {loading ? (
-        <div className="py-32 flex flex-col items-center justify-center text-slate-400 font-bold bg-white rounded-3xl shadow-sm border border-slate-200">
+        <div className="py-32 flex flex-col items-center justify-center text-slate-400 font-bold bg-white rounded-2xl shadow-sm border border-slate-200">
           <Loader2 className="animate-spin mb-4 text-indigo-500" size={40}/>
           <p className="text-sm md:text-base text-center px-6">Hệ thống đang nội suy công thức và quy đổi điểm cho từng người...</p>
         </div>
       ) : activeDepartments.length === 0 ? (
-        <div className="py-32 flex flex-col items-center justify-center text-center bg-white rounded-3xl shadow-sm border border-slate-200">
+        <div className="py-32 flex flex-col items-center justify-center text-center bg-white rounded-2xl shadow-sm border border-slate-200">
           <Target size={56} className="text-slate-300 mb-4" />
-          <h3 className="text-xl font-black text-slate-700 mb-2">Hệ thống chưa thiết lập KPI</h3>
+          <h3 className="text-xl font-bold text-slate-700 mb-2">Hệ thống chưa thiết lập KPI</h3>
           <p className="text-sm font-medium text-slate-500 max-w-md px-6">Vui lòng chuyển sang mục <b className="text-indigo-600">Quản lý KPI & Lỗi</b> để cài đặt cấu trúc thưởng phạt.</p>
         </div>
       ) : (
         <>
           {missingDataDays.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 p-4 md:p-5 rounded-3xl flex items-start gap-3 shadow-sm animate-in slide-in-from-top-2">
+            <div className="bg-amber-50 border border-amber-200 p-4 md:p-5 rounded-2xl flex items-start gap-3 shadow-sm animate-in slide-in-from-top-2">
               <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={24} />
               <div>
-                <h4 className="text-sm md:text-base font-black text-amber-900 uppercase tracking-tight">Cảnh báo thiếu dữ liệu / Ngày nghỉ</h4>
+                <h4 className="text-sm md:text-base font-bold text-amber-900 uppercase tracking-tight">Cảnh báo thiếu dữ liệu / Ngày nghỉ</h4>
                 <p className="text-xs md:text-sm font-medium text-amber-700 mt-1">
                   Hệ thống không ghi nhận được số liệu hoạt động trong các ngày: <span className="font-bold ml-1">{missingDisplay}</span>.
                 </p>
                 <div className="mt-2 text-xs md:text-sm font-medium text-amber-800 bg-amber-100/50 inline-block px-3 py-1.5 rounded-lg border border-amber-200/50">
                   <span className="opacity-75">Hệ thống tính điểm TB: </span> 
-                  Điểm trung bình cộng hiện tại chỉ được chia cho <b className="text-amber-900 font-black">{activeDataDays} ngày</b> thực tế có dữ liệu.
+                  Điểm trung bình cộng hiện tại chỉ được chia cho <b className="text-amber-900 font-bold">{activeDataDays} ngày</b> thực tế có dữ liệu.
                 </div>
               </div>
             </div>
@@ -512,7 +512,7 @@ export default function KPI_Report() {
               <button 
                 key={dept} 
                 onClick={() => setReportDept(dept)} 
-                className={`px-4 md:px-6 py-2.5 md:py-3 rounded-2xl text-xs md:text-sm font-black whitespace-nowrap transition-all border shadow-sm ${
+                className={`px-4 md:px-6 py-2.5 md:py-3 rounded-2xl text-xs md:text-sm font-bold whitespace-nowrap transition-all border shadow-sm ${
                   reportDept === dept 
                     ? 'bg-indigo-600 text-white border-indigo-600 shadow-indigo-200' 
                     : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
@@ -524,35 +524,35 @@ export default function KPI_Report() {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-6">
-            <div className="bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
+            <div className="bg-white p-5 md:p-6 rounded-2xl md:rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
               <div className="absolute -right-4 -top-4 text-blue-50 opacity-50"><Users size={100}/></div>
               <p className="text-xs md:text-sm font-bold text-slate-500 uppercase tracking-wider mb-2 relative z-10">TỔNG NHÂN SỰ</p>
               <div className="flex items-baseline gap-2 relative z-10">
-                <span className="text-4xl md:text-5xl font-black tracking-tighter text-blue-600">{staffReports.length}</span>
+                <span className="text-4xl md:text-5xl font-bold tracking-tighter text-blue-600">{staffReports.length}</span>
                 <span className="text-base md:text-lg font-bold text-slate-400">người</span>
               </div>
             </div>
 
-            <div className="bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200 shadow-sm relative overflow-hidden">
+            <div className="bg-white p-5 md:p-6 rounded-2xl md:rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
               <div className="absolute -right-4 -top-4 text-emerald-50 opacity-50"><Activity size={100}/></div>
               <p className="text-xs md:text-sm font-bold text-slate-500 uppercase tracking-wider mb-2 relative z-10">ĐIỂM TB KHO</p>
               <div className="flex items-baseline gap-2 relative z-10">
-                <span className="text-4xl md:text-5xl font-black tracking-tighter text-emerald-600">{summary.avgScore}</span>
+                <span className="text-4xl md:text-5xl font-bold tracking-tighter text-emerald-600">{summary.avgScore}</span>
                 <span className="text-base md:text-lg font-bold text-slate-400">điểm</span>
               </div>
             </div>
 
-            <div className="bg-white p-5 md:p-6 rounded-2xl md:rounded-3xl border border-amber-200 bg-amber-50 shadow-sm relative overflow-hidden">
+            <div className="bg-white p-5 md:p-6 rounded-2xl md:rounded-2xl border border-amber-200 bg-amber-50 shadow-sm relative overflow-hidden">
               <div className="absolute -right-4 -top-4 text-amber-100 opacity-50"><Award size={100}/></div>
               <p className="text-xs md:text-sm font-bold text-amber-600 uppercase tracking-wider mb-2 relative z-10">XUẤT SẮC NHẤT</p>
-              <div className="text-xl md:text-2xl font-black text-amber-800 relative z-10 line-clamp-2 mt-2">{summary.topStaff || 'Chưa có'}</div>
+              <div className="text-xl md:text-2xl font-bold text-amber-800 relative z-10 line-clamp-2 mt-2">{summary.topStaff || 'Chưa có'}</div>
             </div>
           </div>
 
-          <div className="hidden md:block bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+          <div className="hidden md:block bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
               <div>
-                <h3 className="text-lg font-black text-slate-800">BẢNG ĐIỂM CHI TIẾT TỪNG NHÂN VIÊN</h3>
+                <h3 className="text-lg font-bold text-slate-800">BẢNG ĐIỂM CHI TIẾT TỪNG NHÂN VIÊN</h3>
                 <p className="text-xs font-medium text-slate-500 mt-1">Bấm vào tên nhân viên để xem bóc tách các lỗi và công thức trừ điểm.</p>
               </div>
             </div>
@@ -564,11 +564,11 @@ export default function KPI_Report() {
                 <table className="w-full text-left border-collapse min-w-[700px]">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200">
-                      <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider w-1/3">Nhân sự</th>
-                      <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Tỉ trọng<br/><span className="text-[10px] font-medium normal-case">(Base)</span></th>
-                      <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Tổng Phạt<br/><span className="text-[10px] font-medium normal-case">(Penalty)</span></th>
-                      <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-center">Điểm Đạt<br/><span className="text-[10px] font-medium normal-case">(Chốt)</span></th>
-                      <th className="py-4 px-6 text-xs font-black text-slate-500 uppercase tracking-wider text-right">Chi tiết</th>
+                      <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider w-1/3">Nhân sự</th>
+                      <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Tỉ trọng<br/><span className="text-xs font-medium normal-case">(Base)</span></th>
+                      <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Tổng Phạt<br/><span className="text-xs font-medium normal-case">(Penalty)</span></th>
+                      <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Điểm Đạt<br/><span className="text-xs font-medium normal-case">(Chốt)</span></th>
+                      <th className="py-4 px-6 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Chi tiết</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -584,7 +584,7 @@ export default function KPI_Report() {
                           >
                             <td className="py-5 px-6">
                               <div className="flex items-center gap-3">
-                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shadow-sm border ${
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm border ${
                                   idx === 0 ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'
                                 }`}>
                                   {idx === 0 ? <Award size={18}/> : staff.full_name.charAt(0)}
@@ -592,22 +592,22 @@ export default function KPI_Report() {
                                 <div>
                                   <div className="font-bold text-slate-800 text-sm flex items-center gap-2">
                                     {staff.full_name} 
-                                    {idx === 0 && <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded uppercase tracking-wider">Top 1</span>}
+                                    {idx === 0 && <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded uppercase tracking-wider">Top 1</span>}
                                   </div>
                                   <div className="text-[11px] text-slate-400 font-medium uppercase mt-0.5">{staff.role}</div>
                                 </div>
                               </div>
                             </td>
                             <td className="py-5 px-6 text-center">
-                              <span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-sm font-black">{staff.totalWeight}%</span>
+                              <span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-sm font-bold">{staff.totalWeight}%</span>
                             </td>
                             <td className="py-5 px-6 text-center">
                               {staff.totalPenalty > 0 
-                                ? <span className="inline-block px-2.5 py-1 bg-red-50 border border-red-100 text-red-600 rounded-md text-xs font-black">-{staff.totalPenalty}</span> 
+                                ? <span className="inline-block px-2.5 py-1 bg-red-50 border border-red-100 text-red-600 rounded-md text-xs font-bold">-{staff.totalPenalty}</span> 
                                 : <span className="text-slate-300 text-sm font-bold">-</span>}
                             </td>
                             <td className="py-5 px-6 text-center">
-                              <span className={`text-xl font-black ${scoreColor}`}>{staff.totalScore}</span>
+                              <span className={`text-xl font-bold ${scoreColor}`}>{staff.totalScore}</span>
                             </td>
                             <td className="py-5 px-6 text-right">
                               <button className={`p-2 rounded-full transition-colors ${isExpanded ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-400'}`}>
@@ -620,7 +620,7 @@ export default function KPI_Report() {
                             <tr className="bg-slate-50/80 border-b-2 border-indigo-100">
                               <td colSpan="5" className="p-0">
                                 <div className="p-6 pt-2 pb-8 animate-in slide-in-from-top-2 duration-300">
-                                  <h4 className="text-xs font-black text-indigo-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                  <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-widest mb-4 flex items-center gap-2">
                                     <FileWarning size={14}/> Bóc tách Chỉ tiêu của {staff.full_name}
                                   </h4>
                                   <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
@@ -645,11 +645,11 @@ export default function KPI_Report() {
                                                     <div>
                                                       <div className="font-bold text-slate-700">{crit.name}</div>
                                                       {crit.formula ? (
-                                                        <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center gap-1">
+                                                        <div className="text-xs font-mono text-slate-400 mt-1 flex items-center gap-1">
                                                           <HelpCircle size={10}/> {crit.formula}
                                                         </div>
                                                       ) : (
-                                                        <div className="text-[10px] text-slate-400 mt-1">Đếm lỗi vi phạm trực tiếp</div>
+                                                        <div className="text-xs text-slate-400 mt-1">Đếm lỗi vi phạm trực tiếp</div>
                                                       )}
                                                     </div>
                                                     <button 
@@ -662,11 +662,11 @@ export default function KPI_Report() {
                                                   </div>
                                                 </td>
                                                 <td className="py-4 px-5 text-center font-bold text-slate-600">
-                                                  {crit.rawValue} <span className="text-[10px] font-normal">{crit.calc_type === 'ratio' ? '%' : 'lượt'}</span>
+                                                  {crit.rawValue} <span className="text-xs font-normal">{crit.calc_type === 'ratio' ? '%' : 'lượt'}</span>
                                                 </td>
                                                 <td className="py-4 px-5 text-center">
                                                   {crit.isDirectScore ? (
-                                                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Trực tiếp</span>
+                                                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">Trực tiếp</span>
                                                   ) : crit.penalty > 0 ? (
                                                     <span className="text-red-500 font-bold bg-red-50 px-2 py-0.5 rounded">-{crit.penalty}</span> 
                                                   ) : (
@@ -677,8 +677,8 @@ export default function KPI_Report() {
                                                   <span className="font-bold text-slate-700">{crit.finalKpiScore}</span>
                                                 </td>
                                                 <td className="py-4 px-5 text-center">
-                                                  <span className={`font-black ${getScoreColor(crit.weightedScore, crit.weight)}`}>{crit.weightedScore}</span>
-                                                  <span className="text-[10px] text-slate-400 ml-1">/ {crit.weight}</span>
+                                                  <span className={`font-bold ${getScoreColor(crit.weightedScore, crit.weight)}`}>{crit.weightedScore}</span>
+                                                  <span className="text-xs text-slate-400 ml-1">/ {crit.weight}</span>
                                                 </td>
                                               </tr>
                                               
@@ -686,20 +686,20 @@ export default function KPI_Report() {
                                                 <tr>
                                                   <td colSpan="5" className="p-0 bg-indigo-50/40 border-b-2 border-indigo-100">
                                                     <div className="p-4 pl-6 animate-in slide-in-from-top-2 duration-200">
-                                                      <h5 className="text-[11px] font-black text-indigo-800 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                                                      <h5 className="text-[11px] font-bold text-indigo-800 uppercase tracking-widest mb-3 flex items-center gap-1.5">
                                                         <CalendarDays size={12}/> Chi tiết điểm đo lường theo từng ngày (Tháng {selectedMonth.split('-')[1]})
                                                       </h5>
                                                       <div className="flex flex-wrap gap-1.5">
                                                         {crit.dailyDetails.map(d => (
                                                           <div key={d.date} className={`flex flex-col items-center justify-center w-11 h-11 rounded-lg border ${d.isWorkingDay ? 'bg-white border-indigo-200 shadow-sm' : 'bg-slate-50 border-slate-200 opacity-60'}`} title={d.isWorkingDay ? `Kết quả: ${Math.round(d.value*100)/100}` : 'Ngày nghỉ / Không có dữ liệu'}>
-                                                            <span className="text-[9px] font-bold text-slate-400">{d.date.split('-')[2]}/{d.date.split('-')[1]}</span>
-                                                            <span className={`text-[11px] font-black ${d.isWorkingDay ? 'text-indigo-600' : 'text-slate-300'}`}>
+                                                            <span className="text-xs font-bold text-slate-400">{d.date.split('-')[2]}/{d.date.split('-')[1]}</span>
+                                                            <span className={`text-[11px] font-bold ${d.isWorkingDay ? 'text-indigo-600' : 'text-slate-300'}`}>
                                                               {d.isWorkingDay ? Math.round(d.value * 100) / 100 : '-'}
                                                             </span>
                                                           </div>
                                                         ))}
                                                       </div>
-                                                      <div className="mt-3 text-[10px] text-slate-500 font-medium">
+                                                      <div className="mt-3 text-xs text-slate-500 font-medium">
                                                         <strong>* Cách tính số cuối:</strong> {crit.eval_mode === 'daily_average' ? 'Trung bình cộng tất cả các ngày làm việc ở trên.' : 'Chỉ tiêu loại "Cộng dồn" được tính gộp cả tháng (số liệu ngày ở trên chỉ mang tính chất tham khảo sự biến động).'}
                                                       </div>
                                                     </div>
@@ -747,7 +747,7 @@ export default function KPI_Report() {
                       className="w-full p-4 flex items-center justify-between text-left"
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-sm shadow-sm border ${
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm border ${
                           idx === 0 ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200'
                         }`}>
                           {idx === 0 ? <Award size={18}/> : staff.full_name.charAt(0)}
@@ -755,15 +755,15 @@ export default function KPI_Report() {
                         <div>
                           <div className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
                             {staff.full_name}
-                            {idx === 0 && <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded uppercase tracking-wider">Top 1</span>}
+                            {idx === 0 && <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded uppercase tracking-wider">Top 1</span>}
                           </div>
                           <div className="text-[11px] text-slate-400 font-medium uppercase mt-0.5">{staff.role}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <div className={`text-lg font-black ${scoreColor}`}>{staff.totalScore}</div>
-                          <div className="text-[10px] text-slate-400 font-medium">/ {staff.totalWeight}%</div>
+                          <div className={`text-lg font-bold ${scoreColor}`}>{staff.totalScore}</div>
+                          <div className="text-xs text-slate-400 font-medium">/ {staff.totalWeight}%</div>
                         </div>
                         {isExpanded ? <ChevronUp size={18} className="text-slate-400"/> : <ChevronDown size={18} className="text-slate-400"/>}
                       </div>
@@ -771,7 +771,7 @@ export default function KPI_Report() {
 
                     {isExpanded && (
                       <div className="border-t border-slate-100 bg-slate-50/80 p-4 animate-in slide-in-from-top-2 duration-300">
-                        <h4 className="text-xs font-black text-indigo-800 uppercase tracking-widest mb-3 flex items-center gap-2">
+                        <h4 className="text-xs font-bold text-indigo-800 uppercase tracking-widest mb-3 flex items-center gap-2">
                           <FileWarning size={14}/> Bóc tách chỉ tiêu
                         </h4>
                         <div className="space-y-3">
@@ -783,7 +783,7 @@ export default function KPI_Report() {
                                   <div className="font-bold text-sm text-slate-700 leading-snug">{crit.name}</div>
                                   <div className="flex items-center gap-2 shrink-0">
                                     {crit.penalty > 0 && !crit.isDirectScore && (
-                                      <span className="text-red-500 font-bold text-[10px] bg-red-50 px-1.5 py-0.5 rounded">-{crit.penalty} phạt</span> 
+                                      <span className="text-red-500 font-bold text-xs bg-red-50 px-1.5 py-0.5 rounded">-{crit.penalty} phạt</span> 
                                     )}
                                     <button 
                                       onClick={(e) => { e.stopPropagation(); setExpandedCrit(isCritExp ? null : `${staff.id}_${crit.id}`); }} 
@@ -794,23 +794,23 @@ export default function KPI_Report() {
                                   </div>
                                 </div>
                                 {crit.formula ? (
-                                  <div className="text-[10px] font-mono text-slate-400 mt-1 flex items-center gap-1 truncate">
+                                  <div className="text-xs font-mono text-slate-400 mt-1 flex items-center gap-1 truncate">
                                     <HelpCircle size={10}/> {crit.formula}
                                   </div>
                                 ) : (
-                                  <div className="text-[10px] text-slate-400 mt-1">Đếm lỗi vi phạm trực tiếp</div>
+                                  <div className="text-xs text-slate-400 mt-1">Đếm lỗi vi phạm trực tiếp</div>
                                 )}
                                 
                                 {isCritExp && (
                                   <div className="mt-3 pt-3 border-t border-indigo-100 animate-in slide-in-from-top-2 duration-200">
-                                    <h5 className="text-[10px] font-black text-indigo-800 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+                                    <h5 className="text-xs font-bold text-indigo-800 uppercase tracking-widest mb-2 flex items-center gap-1.5">
                                       <CalendarDays size={12}/> Đo lường theo ngày
                                     </h5>
                                     <div className="flex flex-wrap gap-1.5">
                                       {crit.dailyDetails.map(d => (
                                         <div key={d.date} className={`flex flex-col items-center justify-center w-10 h-10 rounded-md border ${d.isWorkingDay ? 'bg-white border-indigo-200 shadow-sm' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
                                           <span className="text-[8px] font-bold text-slate-400">{d.date.split('-')[2]}/{d.date.split('-')[1]}</span>
-                                          <span className={`text-[10px] font-black ${d.isWorkingDay ? 'text-indigo-600' : 'text-slate-300'}`}>
+                                          <span className={`text-xs font-bold ${d.isWorkingDay ? 'text-indigo-600' : 'text-slate-300'}`}>
                                             {d.isWorkingDay ? Math.round(d.value * 100) / 100 : '-'}
                                           </span>
                                         </div>
@@ -830,7 +830,7 @@ export default function KPI_Report() {
                                   </span>
                                   <span className="text-slate-500 flex flex-col text-right">
                                     <span>Quy đổi ({crit.weight}%)</span>
-                                    <span className={`font-black text-sm ${getScoreColor(crit.weightedScore, crit.weight)}`}>{crit.weightedScore}</span>
+                                    <span className={`font-bold text-sm ${getScoreColor(crit.weightedScore, crit.weight)}`}>{crit.weightedScore}</span>
                                   </span>
                                 </div>
                               </div>

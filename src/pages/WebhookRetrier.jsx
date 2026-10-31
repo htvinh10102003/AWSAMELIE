@@ -104,7 +104,7 @@ export default function WebhookRetrier() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto font-sans animate-fade-in mt-8">
-      <h2 className="text-2xl font-black text-slate-800 uppercase tracking-wide mb-6">
+      <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-wide mb-6">
         Công cụ chạy lại Webhook (Nhanh.vn)
       </h2>
       

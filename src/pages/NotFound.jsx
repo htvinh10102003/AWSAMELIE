@@ -9,7 +9,7 @@ export default function NotFound() {
       <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mb-6 border-[8px] border-slate-50 shadow-inner">
         <SearchX size={40} className="text-slate-500" />
       </div>
-      <h1 className="text-4xl font-black text-slate-800 mb-2 uppercase tracking-tight">404</h1>
+      <h1 className="text-4xl font-bold text-slate-800 mb-2 uppercase tracking-tight">404</h1>
       <h2 className="text-xl font-bold text-slate-700 mb-3">Không tìm thấy trang</h2>
       <p className="text-slate-500 mb-8 text-sm leading-relaxed font-medium">
         Đường dẫn bạn đang cố truy cập không tồn tại, đã bị thay đổi hoặc bạn gõ sai địa chỉ. Vui lòng kiểm tra lại.

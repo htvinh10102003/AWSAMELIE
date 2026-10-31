@@ -112,13 +112,13 @@ export default function SetupZone() {
   const sortedLocations = Object.entries(locationZones).sort(([a], [b]) => a.localeCompare(b));
 
   return (
-    <div className="max-w-5xl mx-auto p-6 bg-white rounded-3xl shadow-sm border border-gray-100">
+    <div className="max-w-5xl mx-auto p-6 bg-white rounded-2xl shadow-sm border border-gray-100">
       
       {/* Header */}
       <div className="flex items-center gap-3 mb-8">
         <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl"><MapPin size={24} /></div>
         <div>
-          <h2 className="text-2xl font-black text-gray-900 tracking-tight">Quy định Dãy cho Kệ</h2>
+          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Quy định Dãy cho Kệ</h2>
           <p className="text-sm text-gray-500 font-medium">Quản lý danh sách các Dãy và phân bổ Vị trí kệ vào Dãy để tối ưu lấy hàng.</p>
         </div>
       </div>
@@ -133,7 +133,7 @@ export default function SetupZone() {
         
         {/* Cột trái: Quản lý danh sách Dãy */}
         <div className="lg:col-span-1 flex flex-col gap-4">
-          <div className="p-5 bg-slate-50 border border-slate-200 rounded-3xl sticky top-6">
+          <div className="p-5 bg-slate-50 border border-slate-200 rounded-2xl sticky top-6">
             <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
               <LayoutGrid size={18} className="text-blue-600"/> Quản lý Dãy (Zone)
             </h3>
@@ -172,7 +172,7 @@ export default function SetupZone() {
 
         {/* Cột phải: Danh sách Kệ (Vị trí) */}
         <div className="lg:col-span-2">
-          <div className="p-6 bg-white border border-gray-200 shadow-sm rounded-3xl">
+          <div className="p-6 bg-white border border-gray-200 shadow-sm rounded-2xl">
             <div className="flex justify-between items-center mb-6">
               <h3 className="font-bold text-gray-800 text-lg">Gán Dãy cho Vị trí hiện tại</h3>
               <button

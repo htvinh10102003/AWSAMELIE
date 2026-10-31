@@ -77,21 +77,21 @@ export default function FeatureGuard({ featureId, subFeatureId, children }) {
     );
   }
 
-  // 🚨 CHẶN TRUY CẬP: Tính năng BỊ KHÓA và người dùng KHÔNG PHẢI OWNER
+  //  CHẶN TRUY CẬP: Tính năng BỊ KHÓA và người dùng KHÔNG PHẢI OWNER
   if (isLocked && !isOwner) {
     return (
       <div className="w-full h-full min-h-[60vh] flex flex-col items-center justify-center animate-in fade-in zoom-in duration-300">
-        <div className="bg-white p-10 rounded-3xl border border-slate-200 shadow-sm text-center max-w-lg">
+        <div className="bg-white p-10 rounded-2xl border border-slate-200 shadow-sm text-center max-w-lg">
           <div className="w-20 h-20 bg-slate-50 text-slate-400 flex items-center justify-center rounded-full mx-auto mb-6 shadow-inner border border-slate-100">
             <Lock size={36} strokeWidth={2.5} />
           </div>
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight mb-2">Tính năng đang bảo trì</h2>
+          <h2 className="text-2xl font-bold text-slate-800 tracking-tight mb-2">Tính năng đang bảo trì</h2>
           <p className="text-slate-500 font-medium leading-relaxed mb-6">
             Tính năng này tạm thời bị khóa để nâng cấp hoặc xử lý sự cố. Vui lòng quay lại sau hoặc liên hệ Quản trị viên.
           </p>
           
           {/* NẾU LÀ ADMIN MÀ VẪN BỊ KHÓA, HIỆN LỖI ĐỂ CHECK */}
-          <div className="mt-6 text-left bg-slate-800 p-4 rounded-xl overflow-auto text-[10px] text-emerald-400 font-mono">
+          <div className="mt-6 text-left bg-slate-800 p-4 rounded-xl overflow-auto text-xs text-emerald-400 font-mono">
             <div className="flex items-center gap-1 mb-2 text-white"><Bug size={12}/> DEBUG INFO (Dành cho Admin):</div>
             <pre className="whitespace-pre-wrap">{debugInfo}</pre>
           </div>
@@ -100,12 +100,12 @@ export default function FeatureGuard({ featureId, subFeatureId, children }) {
     );
   }
 
-  // ✅ CHO PHÉP TRUY CẬP
+  //  CHO PHÉP TRUY CẬP
   return (
     <>
       {/* Cảnh báo cho Owner biết tính năng này đang khóa với người khác */}
       {isLocked && isOwner && (
-        <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 bg-amber-100 text-amber-800 text-xs font-black rounded-lg border border-amber-200 shadow-sm animate-in slide-in-from-top-2">
+        <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 bg-amber-100 text-amber-800 text-xs font-bold rounded-lg border border-amber-200 shadow-sm animate-in slide-in-from-top-2">
           <ShieldAlert size={14} /> CHẾ ĐỘ TEST (OWNER BYPASS): Tính năng này hiện đang bị khóa đối với Admin và User.
         </div>
       )}

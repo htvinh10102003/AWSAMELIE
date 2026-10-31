@@ -101,7 +101,7 @@ const isProcessingRef = useRef(false);
       }
     } else {
       setHighlightedRack(null);
-      setMapMessage({ text: '⚠️ Sản phẩm này chưa được gán vị trí nào!', type: 'warning' });
+      setMapMessage({ text: '️ Sản phẩm này chưa được gán vị trí nào!', type: 'warning' });
     }
   };
 
@@ -132,7 +132,7 @@ const isProcessingRef = useRef(false);
     if (data) {
       processSelectedProduct(data);
     } else {
-      setMapMessage({ text: '❌ Không tìm thấy sản phẩm!', type: 'error' });
+      setMapMessage({ text: ' Không tìm thấy sản phẩm!', type: 'error' });
     }
     setIsSearchingMap(false);
   };
@@ -186,7 +186,7 @@ const isProcessingRef = useRef(false);
         }
       ).catch((err) => {
         console.error("Lỗi khởi động camera:", err);
-        setMapMessage({ text: '❌ Lỗi mở camera. Vui lòng cấp quyền truy cập!', type: 'error' });
+        setMapMessage({ text: ' Lỗi mở camera. Vui lòng cấp quyền truy cập!', type: 'error' });
         setIsScanning(false);
       });
     }, 150);
@@ -289,7 +289,7 @@ const isProcessingRef = useRef(false);
             <MapPin size={22} strokeWidth={2.5} className="max-sm:w-5 max-sm:h-5" />
           </div>
           <div className="flex-1">
-            <h2 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">Tra cứu Vị trí</h2>
+            <h2 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">Tra cứu Vị trí</h2>
             <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">Dẫn đường nhặt hàng nhanh chóng</p>
           </div>
         </div>
@@ -393,14 +393,14 @@ const isProcessingRef = useRef(false);
                                 <Package size={36} />
                             </div>
                             <div className="min-w-0 flex-1">
-                                <h3 className="font-black text-slate-900 text-xl sm:text-2xl leading-tight break-words">{searchedProduct.product_name}</h3>
+                                <h3 className="font-bold text-slate-900 text-xl sm:text-2xl leading-tight break-words">{searchedProduct.product_name}</h3>
                                 <p className="text-sm font-bold text-slate-500 mt-2 uppercase bg-slate-100 inline-block px-3 py-1 rounded-lg">Mã: {searchedProduct.product_code}</p>
                             </div>
                         </div>
                         
                         <div className="w-full sm:w-auto bg-white border-4 border-red-50 sm:border-none p-5 sm:p-0 rounded-2xl text-center sm:text-right shrink-0 shadow-inner sm:shadow-none mt-2 sm:mt-0">
-                            <span className="text-sm text-slate-500 uppercase font-black tracking-widest block mb-2">Vị trí lấy hàng</span>
-                            <span className={`text-6xl sm:text-5xl font-black block leading-none tracking-tight ${searchedProduct.location_code ? 'text-red-600' : 'text-amber-500'}`}>
+                            <span className="text-sm text-slate-500 uppercase font-bold tracking-widest block mb-2">Vị trí lấy hàng</span>
+                            <span className={`text-6xl sm:text-5xl font-bold block leading-none tracking-tight ${searchedProduct.location_code ? 'text-red-600' : 'text-amber-500'}`}>
                                 {searchedProduct.location_code || 'CHƯA CÓ'}
                             </span>
                         </div>
@@ -444,10 +444,10 @@ const isProcessingRef = useRef(false);
                           }`}
                           style={{ left: rack.x, top: rack.y, width: rack.w, height: rack.h }}
                         >
-                          <span className="font-black text-xs sm:text-sm text-center px-1 break-words line-clamp-2">{rack.name}</span>
+                          <span className="font-bold text-xs sm:text-sm text-center px-1 break-words line-clamp-2">{rack.name}</span>
                           {isHighlight && (
-                            <div className="absolute -top-10 bg-gray-900 text-white text-[10px] font-bold px-2 py-1 rounded-md whitespace-nowrap animate-bounce z-10 shadow-lg">
-                              👇 LẤY HÀNG Ở ĐÂY
+                            <div className="absolute -top-10 bg-gray-900 text-white text-xs font-bold px-2 py-1 rounded-md whitespace-nowrap animate-bounce z-10 shadow-lg">
+                               LẤY HÀNG Ở ĐÂY
                             </div>
                           )}
                         </div>
@@ -509,7 +509,7 @@ const isProcessingRef = useRef(false);
                 ) : (
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-slate-50 text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-wider hidden sm:table-row">
+                            <tr className="bg-slate-50 text-xs sm:text-xs font-bold text-slate-400 uppercase tracking-wider hidden sm:table-row">
                                 <th className="p-4 border-b border-slate-100 w-2/3">Sản phẩm</th>
                                 <th className="p-4 border-b border-slate-100 text-right w-1/3">Vị trí Lưu trữ</th>
                             </tr>
@@ -518,11 +518,11 @@ const isProcessingRef = useRef(false);
                             {products.map(p => (
                                 <tr key={p.product_code} className="hover:bg-blue-50/30 transition flex flex-col sm:table-row p-3.5 sm:p-0 border-b border-slate-100 sm:border-b-0">
                                     <td className="p-1 sm:p-4">
-                                        <div className="font-black text-slate-900 text-sm sm:text-base leading-tight break-words">{p.product_name}</div>
+                                        <div className="font-bold text-slate-900 text-sm sm:text-base leading-tight break-words">{p.product_name}</div>
                                         <div className="text-[11px] font-medium text-slate-500 mt-1 uppercase tracking-wide">Mã: {p.product_code}</div>
                                     </td>
                                     <td className="p-1 sm:p-4 sm:text-right mt-2 sm:mt-0">
-                                        <span className={`inline-block px-3 py-1.5 border rounded-lg text-xs font-black tracking-wide ${p.location_code ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm' : 'bg-slate-100 border-slate-200 text-slate-400'}`}>
+                                        <span className={`inline-block px-3 py-1.5 border rounded-lg text-xs font-bold tracking-wide ${p.location_code ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm' : 'bg-slate-100 border-slate-200 text-slate-400'}`}>
                                             {p.location_code ? p.location_code : 'Chưa có vị trí'}
                                         </span>
                                     </td>

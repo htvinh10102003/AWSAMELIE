@@ -67,7 +67,7 @@ export default function InventoryReport() {
       setInventory(data || []);
       setTotalCount(count || 0);
     } catch (err) {
-      console.error("❌ Lỗi tải báo cáo tồn kho:", err.message);
+      console.error(" Lỗi tải báo cáo tồn kho:", err.message);
     } finally {
       setLoading(false);
     }
@@ -211,6 +211,7 @@ export default function InventoryReport() {
           const { data: chunk, error } = await supabase
             .from('product_inventories')
             .select('product_code, product_name')
+            .order('product_code', { ascending: true })
             .range(fetchPage * 1000, (fetchPage + 1) * 1000 - 1);
 
           if (error) throw error;
@@ -287,7 +288,7 @@ export default function InventoryReport() {
         });
 
       } catch (err) {
-        alert('❌ Lỗi đọc file: ' + err.message);
+        alert(' Lỗi đọc file: ' + err.message);
       } finally {
         setFileLoading(false);
         e.target.value = null; 
@@ -446,7 +447,7 @@ export default function InventoryReport() {
           `;
         }
 
-        // ⚡️ SỬ DỤNG transform: scale ĐỂ PHÓNG TO/THU NHỎ TOÀN BỘ CODE
+        // ️ SỬ DỤNG transform: scale ĐỂ PHÓNG TO/THU NHỎ TOÀN BỘ CODE
         htmlContent += `
           <div class="label">
             ${printConfig.showShopName ? `<div class="shop-name">${printConfig.shopName}</div>` : ''}
@@ -502,7 +503,7 @@ export default function InventoryReport() {
       {/* 1. HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
         <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><Boxes size={18} /></span>
             BÁO CÁO TỒN KHO
           </h2>
@@ -510,7 +511,7 @@ export default function InventoryReport() {
         </div>
 
         <div className="text-xs font-bold text-slate-500 bg-slate-100 border border-slate-200/60 px-4 py-2.5 rounded-xl shadow-inner">
-          Tổng số mặt hàng (SKU): <span className="text-blue-600 font-black text-sm">{totalCount}</span> mã
+          Tổng số mặt hàng (SKU): <span className="text-blue-600 font-bold text-sm">{totalCount}</span> mã
         </div>
       </div>
 
@@ -571,7 +572,7 @@ export default function InventoryReport() {
               ) : (
                 inventory.map(item => (
                   <tr key={item.product_code} className="hover:bg-slate-50/50 transition">
-                    <td className="p-4 font-black text-slate-900 tracking-wide font-mono text-[11px]">{item.product_code}</td>
+                    <td className="p-4 font-bold text-slate-900 tracking-wide font-mono text-[11px]">{item.product_code}</td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-slate-100 text-slate-500 rounded-md"><Package size={12} /></div>
@@ -579,17 +580,17 @@ export default function InventoryReport() {
                       </div>
                     </td>
                     <td className="p-4 text-center">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-black min-w-[56px] justify-center">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-bold min-w-[56px] justify-center">
                         {item.remain}
                       </span>
                     </td>
                     <td className="p-4 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-black min-w-[56px] justify-center border ${Number(item.shipping) > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-slate-50 border-slate-100 text-slate-400 font-medium'}`}>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold min-w-[56px] justify-center border ${Number(item.shipping) > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-slate-50 border-slate-100 text-slate-400 font-medium'}`}>
                         {Number(item.shipping) > 0 && <Truck size={10} />} {item.shipping}
                       </span>
                     </td>
                     <td className="p-4 text-center">
-                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-black min-w-[64px] justify-center border ${Number(item.on_hand) > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600 text-sm' : 'bg-red-50 border-red-100 text-red-500'}`}>
+                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold min-w-[64px] justify-center border ${Number(item.on_hand) > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600 text-sm' : 'bg-red-50 border-red-100 text-red-500'}`}>
                         {Number(item.on_hand) > 0 && <Home size={10} />} {item.on_hand}
                       </span>
                     </td>
@@ -612,19 +613,19 @@ export default function InventoryReport() {
       </div>
 
       {/* ========================================== */}
-      {/* ⚡️ MODAL IN MÃ VẠCH */}
+      {/* ️ MODAL IN MÃ VẠCH */}
       {/* ========================================== */}
       {showPrintModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white border border-slate-200 rounded-3xl shadow-2xl w-full max-w-7xl flex flex-col h-[90vh] overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-7xl flex flex-col h-[90vh] overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
             
             {/* Header Modal */}
             <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 text-blue-700 rounded-xl"><Printer size={20}/></div>
                 <div>
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-wide">In mã vạch / QR sản phẩm</h3>
-                  <p className="text-[10px] text-slate-500 font-medium">Khổ giấy cuộn: 105x22mm (3 tem/hàng)</p>
+                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">In mã vạch / QR sản phẩm</h3>
+                  <p className="text-xs text-slate-500 font-medium">Khổ giấy cuộn: 105x22mm (3 tem/hàng)</p>
                 </div>
               </div>
               <button onClick={() => setShowPrintModal(false)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition cursor-pointer"><X size={18} /></button>
@@ -640,7 +641,7 @@ export default function InventoryReport() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   {/* Cục Tìm tay */}
                   <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
-                    <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2">1. Tìm và Thêm thủ công</label>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">1. Tìm và Thêm thủ công</label>
                     <form onSubmit={searchProductForPrint} className="relative flex gap-2">
                       
                       <div className="relative flex-1">
@@ -675,7 +676,7 @@ export default function InventoryReport() {
                   {/* Cục Upload */}
                   <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative">
                     {fileLoading && <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-blue-600 font-bold gap-2 text-xs rounded-2xl"><RefreshCw size={20} className="animate-spin" /> Xử lý...</div>}
-                    <label className="block text-[11px] font-black text-slate-500 uppercase tracking-wider mb-2">2. Upload Excel / CSV (Pivot tự động)</label>
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">2. Upload Excel / CSV (Pivot tự động)</label>
                     <div className="flex gap-2 h-8">
                       <button onClick={downloadPrintTemplate} type="button" className="flex-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-[11px] font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1">
                         <Download size={12} /> File Mẫu
@@ -691,8 +692,8 @@ export default function InventoryReport() {
                 {/* Dòng 2: Danh sách in */}
                 <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col overflow-hidden">
                   <div className="p-3 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                    <span className="font-black text-xs text-slate-700 uppercase tracking-wide">Danh sách chờ in ({printItems.length} mã)</span>
-                    {printItems.length > 0 && <button onClick={() => setPrintItems([])} className="text-[10px] font-bold text-red-500 hover:text-red-700 cursor-pointer flex items-center gap-1"><Trash2 size={12}/> Xóa tất cả</button>}
+                    <span className="font-bold text-xs text-slate-700 uppercase tracking-wide">Danh sách chờ in ({printItems.length} mã)</span>
+                    {printItems.length > 0 && <button onClick={() => setPrintItems([])} className="text-xs font-bold text-red-500 hover:text-red-700 cursor-pointer flex items-center gap-1"><Trash2 size={12}/> Xóa tất cả</button>}
                   </div>
                   
                   <div className="flex-1 overflow-y-auto p-3 space-y-2 bg-slate-50/50">
@@ -706,12 +707,12 @@ export default function InventoryReport() {
                         <div key={idx} className={`p-3 rounded-xl flex items-center gap-3 border transition ${item.status === 'error' ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200 shadow-sm hover:border-blue-300'}`}>
                           <div className="flex-1 overflow-hidden">
                             <div className={`text-xs font-bold truncate ${item.status === 'error' ? 'text-red-800 line-through' : 'text-slate-800'}`} title={item.name}>{item.name}</div>
-                            <div className={`text-[10px] font-mono tracking-widest mt-0.5 ${item.status === 'error' ? 'text-red-600 font-bold' : 'text-slate-500'}`}>{item.barcode}</div>
+                            <div className={`text-xs font-mono tracking-widest mt-0.5 ${item.status === 'error' ? 'text-red-600 font-bold' : 'text-slate-500'}`}>{item.barcode}</div>
                           </div>
                           
                           {item.status === 'ok' ? (
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase">SL:</span>
+                              <span className="text-xs font-bold text-slate-400 uppercase">SL:</span>
                               <input 
                                 type="number" min="1" value={item.qty} 
                                 onChange={(e) => updatePrintQty(idx, e.target.value)}
@@ -720,7 +721,7 @@ export default function InventoryReport() {
                               <button onClick={() => removePrintItem(idx)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition cursor-pointer"><X size={14}/></button>
                             </div>
                           ) : (
-                            <button onClick={() => removePrintItem(idx)} className="px-2 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition cursor-pointer text-[10px] font-black uppercase flex-shrink-0">
+                            <button onClick={() => removePrintItem(idx)} className="px-2 py-1 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition cursor-pointer text-xs font-bold uppercase flex-shrink-0">
                               Xóa lỗi
                             </button>
                           )}
@@ -738,7 +739,7 @@ export default function InventoryReport() {
                 <div className="space-y-6">
                   <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
                     <Settings2 size={18} className="text-slate-700" />
-                    <h3 className="font-black text-sm text-slate-800 uppercase tracking-wide">Cài đặt in ấn</h3>
+                    <h3 className="font-bold text-sm text-slate-800 uppercase tracking-wide">Cài đặt in ấn</h3>
                   </div>
 
                   {/* CHỌN LOẠI MÃ */}
@@ -847,7 +848,7 @@ export default function InventoryReport() {
                   <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-100">
                     <div className="flex flex-col">
                       <span className="text-xs font-bold text-slate-700">Ghi chú Ngày in lô</span>
-                      <span className="text-[9px] text-slate-400 mt-0.5">Hiển thị nhỏ ở góc phải tem</span>
+                      <span className="text-xs text-slate-400 mt-0.5">Hiển thị nhỏ ở góc phải tem</span>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" checked={printConfig.showPrintDate} onChange={() => setPrintConfig({...printConfig, showPrintDate: !printConfig.showPrintDate})} className="sr-only peer" />
@@ -860,11 +861,11 @@ export default function InventoryReport() {
                   <button 
                     onClick={generatePrintJob}
                     disabled={printItems.filter(i => i.status === 'ok' && i.qty > 0).length === 0}
-                    className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-black shadow-lg shadow-blue-500/30 transition cursor-pointer flex items-center justify-center gap-2 hover:-translate-y-0.5 disabled:translate-y-0 disabled:shadow-none"
+                    className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold shadow-lg shadow-blue-500/30 transition cursor-pointer flex items-center justify-center gap-2 hover:-translate-y-0.5 disabled:translate-y-0 disabled:shadow-none"
                   >
                     <Printer size={18} /> Tạo bản in
                   </button>
-                  <p className="text-center text-[10px] text-slate-400 font-medium mt-3">Hệ thống sẽ mở Tab mới để in. Vui lòng tắt chặn Pop-up trình duyệt nếu có.</p>
+                  <p className="text-center text-xs text-slate-400 font-medium mt-3">Hệ thống sẽ mở Tab mới để in. Vui lòng tắt chặn Pop-up trình duyệt nếu có.</p>
                 </div>
 
               </div>

@@ -21,7 +21,7 @@ const CANCELED_STATUS_CODES = [58, 63, 64];
 const DISPATCHED_STATUS_CODES = [59, 60, 61, 71, 72];
 
 export default function Dashboard() {
-  // ⚡️ TỐI ƯU 1: Lấy mặc định 7 ngày gần nhất cho nhẹ Database
+  // ️ TỐI ƯU 1: Lấy mặc định 7 ngày gần nhất cho nhẹ Database
   const getTodayStr = () => new Date().toISOString().split('T')[0];
   const getLast7DaysStr = () => {
     const d = new Date();
@@ -53,7 +53,9 @@ export default function Dashboard() {
             id, created_at, carrier_code, carrier_date, printed_at, status,
             order_products (product_code, product_name, quantity)
           `)
-          .or(`printed_at.gte.${startDate}T00:00:00Z,carrier_date.gte.${startDate}T00:00:00Z,created_at.gte.${startDate}T00:00:00Z`)
+          .or(`and(printed_at.gte.${startDate}T00:00:00Z,printed_at.lte.${endDate}T23:59:59Z),and(carrier_date.gte.${startDate}T00:00:00Z,carrier_date.lte.${endDate}T23:59:59Z),and(created_at.gte.${startDate}T00:00:00Z,created_at.lte.${endDate}T23:59:59Z)`)
+          .order('created_at', { ascending: true })
+          .order('id', { ascending: true })
           .range(page * pageSize, (page + 1) * pageSize - 1);
 
         if (error) throw error;
@@ -68,7 +70,7 @@ export default function Dashboard() {
       }
       setOrders(fetchedOrders);
     } catch (err) {
-      console.error("❌ Lỗi load báo cáo:", err.message);
+      console.error(" Lỗi load báo cáo:", err.message);
     } finally {
       setLoading(false);
     }
@@ -150,7 +152,7 @@ export default function Dashboard() {
   const totalCanceledNow = pendingShippingData.reduce((sum, item) => sum + item.canceledCount, 0);
   const totalDispatchedNow = pendingShippingData.reduce((sum, item) => sum + item.dispatchedCount, 0);
 
-  // ⚡️ TỐI ƯU 2: Tính toán Trung bình cộng để vẽ line
+  // ️ TỐI ƯU 2: Tính toán Trung bình cộng để vẽ line
   const avgPrinted = chartData.length > 0 ? Math.round(totalPrintedInRange / chartData.length) : 0;
   const avgShipped = chartData.length > 0 ? Math.round(totalShippedInRange / chartData.length) : 0;
 
@@ -159,13 +161,13 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 pb-16 animate-in fade-in duration-300">
         
         {/* HEADER & THANH BỘ LỌC NGÀY (Responsive) */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center p-5 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm gap-4">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
           <div>
-            <h2 className="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Báo cáo đơn đi hàng ngày</h2>
-            <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">DESIGNED AND DEVELOPED BY VINH</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Báo cáo đơn đi hàng ngày</h2>
+            <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">Tổng quan đơn đi hàng ngày theo khoảng thời gian đã chọn</p>
           </div>
           
-          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 bg-white/80 backdrop-blur-md border border-white/40 p-2 sm:p-2.5 rounded-2xl shadow-sm w-full lg:w-auto">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 bg-white border border-slate-200 p-2 sm:p-2.5 rounded-2xl shadow-sm w-full lg:w-auto">
             <Calendar size={18} className="text-gray-400 ml-1.5 hidden sm:block" />
             <input 
               type="date" 
@@ -185,46 +187,46 @@ export default function Dashboard() {
 
         {/* KHỐI THẺ KPI (Responsive Grid) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          <div className="p-5 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm flex items-center gap-4 sm:gap-5 transition-transform hover:-translate-y-1">
+          <div className="p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-transform hover:-translate-y-1">
             <div className="p-3 sm:p-4 bg-blue-100/70 rounded-2xl text-blue-600 shadow-sm shrink-0">
               <Printer size={24} />
             </div>
             <div>
-              <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider">Tổng đơn đã in</span>
-              <h4 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">{loading ? "..." : totalPrintedInRange} <span className="text-sm sm:text-base font-medium text-gray-400">đơn</span></h4>
+              <span className="text-xs sm:text-xs font-bold text-gray-400 uppercase tracking-wider">Tổng đơn đã in</span>
+              <h4 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{loading ? "..." : totalPrintedInRange} <span className="text-sm sm:text-base font-medium text-gray-400">đơn</span></h4>
             </div>
           </div>
 
-          <div className="p-5 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm flex items-center gap-4 sm:gap-5 transition-transform hover:-translate-y-1">
+          <div className="p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-transform hover:-translate-y-1">
             <div className="p-3 sm:p-4 bg-emerald-100/70 rounded-2xl text-emerald-600 shadow-sm shrink-0">
               <Truck size={24} />
             </div>
             <div>
-              <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider">Tổng đơn đã đi</span>
-              <h4 className="text-2xl sm:text-3xl font-black text-gray-900 mt-1">{loading ? "..." : totalShippedInRange} <span className="text-sm sm:text-base font-medium text-gray-400">đơn</span></h4>
+              <span className="text-xs sm:text-xs font-bold text-gray-400 uppercase tracking-wider">Tổng đơn đã đi</span>
+              <h4 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{loading ? "..." : totalShippedInRange} <span className="text-sm sm:text-base font-medium text-gray-400">đơn</span></h4>
             </div>
           </div>
 
-          <div className="p-5 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm flex items-center gap-4 sm:gap-5 transition-transform hover:-translate-y-1 sm:col-span-2 lg:col-span-1">
+          <div className="p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-transform hover:-translate-y-1 sm:col-span-2 lg:col-span-1">
             <div className="p-3 sm:p-4 bg-amber-100/70 rounded-2xl text-amber-600 shadow-sm shrink-0">
               <Layers size={24} />
             </div>
             <div className="flex-1">
-              <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider">Số lượng đơn tồn</span>
-              <div className="text-2xl sm:text-3xl font-black text-amber-600 mt-1 flex items-baseline gap-x-2">
+              <span className="text-xs sm:text-xs font-bold text-gray-400 uppercase tracking-wider">Số lượng đơn tồn</span>
+              <div className="text-2xl sm:text-3xl font-bold text-amber-600 mt-1 flex items-baseline gap-x-2">
                 <span>{loading ? "..." : totalPendingNow}</span>
                 <span className="text-sm sm:text-base font-medium text-gray-400">đơn</span>
               </div>
               <div className="flex flex-wrap gap-1.5 mt-2">
-                {totalCanceledNow > 0 && <span className="text-[10px] sm:text-[11px] font-bold text-red-600 bg-red-50/80 px-2 py-0.5 rounded-full border border-red-100/50">🚫 {totalCanceledNow} hủy</span>}
-                {totalDispatchedNow > 0 && <span className="text-[10px] sm:text-[11px] font-bold text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded-full border border-blue-100/50">📦 {totalDispatchedNow} đã đi</span>}
+                {totalCanceledNow > 0 && <span className="text-xs sm:text-[11px] font-bold text-red-600 bg-red-50/80 px-2 py-0.5 rounded-full border border-red-100/50">{totalCanceledNow} hủy</span>}
+                {totalDispatchedNow > 0 && <span className="text-xs sm:text-[11px] font-bold text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded-full border border-blue-100/50">{totalDispatchedNow} đã đi</span>}
               </div>
             </div>
           </div>
         </div>
 
         {/* 1. BIỂU ĐỒ BIẾN ĐỘNG (CÓ ĐƯỜNG TRUNG BÌNH) */}
-        <div className="p-4 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm">
+        <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm">
           <h3 className="text-sm sm:text-base font-bold text-gray-800 uppercase tracking-wider mb-6 flex items-center gap-2">
             <div className="w-1.5 h-5 bg-blue-600 rounded-full" /> Tương quan Đơn in và Đơn đi
           </h3>
@@ -242,7 +244,7 @@ export default function Dashboard() {
                   />
                   <Legend wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', paddingTop: '10px' }} />
                   
-                  {/* ⚡️ ĐƯỜNG TRUNG BÌNH ĐƠN IN */}
+                  {/* ️ ĐƯỜNG TRUNG BÌNH ĐƠN IN */}
                   <ReferenceLine 
                     y={avgPrinted} 
                     stroke="#3b82f6" 
@@ -250,7 +252,7 @@ export default function Dashboard() {
                     opacity={0.6}
                     label={{ position: 'insideTopLeft', value: `TB In: ${avgPrinted}`, fill: '#3b82f6', fontSize: 10, fontWeight: 800 }} 
                   />
-                  {/* ⚡️ ĐƯỜNG TRUNG BÌNH ĐƠN ĐI */}
+                  {/* ️ ĐƯỜNG TRUNG BÌNH ĐƠN ĐI */}
                   <ReferenceLine 
                     y={avgShipped} 
                     stroke="#10b981" 
@@ -271,15 +273,15 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8">
           
           {/* 2. BẢNG THỐNG KÊ ĐƠN TỒN */}
-          <div className="p-4 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm flex flex-col h-[400px] sm:h-[480px]">
+          <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col h-[400px] sm:h-[480px]">
             <h3 className="text-sm sm:text-base font-bold text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-2">
               <div className="w-1.5 h-5 bg-amber-500 rounded-full" /> Đơn đã in chưa đi
             </h3>
-            {/* ⚡️ Bọc overflow-x-auto để cuộn ngang trên mobile */}
+            {/* ️ Bọc overflow-x-auto để cuộn ngang trên mobile */}
             <div className="flex-1 overflow-auto rounded-2xl border border-slate-100 bg-white/50">
               <table className="w-full text-left text-sm border-collapse min-w-[400px]">
                 <thead>
-                  <tr className="bg-slate-50/80 sticky top-0 backdrop-blur-md text-gray-500 font-bold text-[10px] sm:text-xs uppercase z-10">
+                  <tr className="bg-slate-50/80 sticky top-0 backdrop-blur-md text-gray-500 font-bold text-xs sm:text-xs uppercase z-10">
                     <th className="p-3 sm:p-4">Ngày in</th>
                     <th className="p-3 sm:p-4 text-center">Trạng thái tồn</th>
                     <th className="p-3 sm:p-4 text-right">Hành động</th>
@@ -289,24 +291,24 @@ export default function Dashboard() {
                   {loading ? (
                     <tr><td colSpan={3} className="text-center p-10 text-gray-400 animate-pulse text-xs">Đang bóc tách số liệu...</td></tr>
                   ) : pendingShippingData.length === 0 ? (
-                    <tr><td colSpan={3} className="text-center p-10 text-gray-400 text-xs sm:text-sm">🎉 Không có đơn tồn.</td></tr>
+                    <tr><td colSpan={3} className="text-center p-10 text-gray-400 text-xs sm:text-sm">Không có đơn tồn.</td></tr>
                   ) : (
                     pendingShippingData.map(item => (
                       <tr key={item.date} className="hover:bg-blue-50/30 transition">
                         <td className="p-3 sm:p-4 text-xs sm:text-sm font-bold text-gray-900 whitespace-nowrap">{item.date}</td>
                         <td className="p-3 sm:p-4 text-center flex flex-col items-center gap-1">
-                          <span className="px-2.5 py-1 bg-amber-50 border border-amber-200/50 text-amber-700 rounded-full text-[10px] sm:text-xs font-bold whitespace-nowrap">
+                          <span className="px-2.5 py-1 bg-amber-50 border border-amber-200/50 text-amber-700 rounded-full text-xs sm:text-xs font-bold whitespace-nowrap">
                             {item.count} đơn tổng tồn
                           </span>
                           <div className="flex gap-1 flex-wrap justify-center max-w-[150px]">
-                            {item.canceledCount > 0 && <span className="text-[9px] sm:text-[10px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">🚫 {item.canceledCount}</span>}
-                            {item.dispatchedCount > 0 && <span className="text-[9px] sm:text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100">🚚 {item.dispatchedCount}</span>}
+                            {item.canceledCount > 0 && <span className="text-xs sm:text-xs font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">{item.canceledCount} hủy</span>}
+                            {item.dispatchedCount > 0 && <span className="text-xs sm:text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100"> {item.dispatchedCount}</span>}
                           </div>
                         </td>
                         <td className="p-3 sm:p-4 text-right">
                           <button 
                             onClick={() => { setSelectedModalDate(item.date); setModalOrdersList(item.ordersList); }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-[10px] sm:text-xs font-bold shadow-sm transition"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-xs font-bold shadow-sm transition"
                           >
                             <Eye size={14} /> <span className="hidden sm:inline">Xem</span>
                           </button>
@@ -320,7 +322,7 @@ export default function Dashboard() {
           </div>
 
           {/* 3. BÁO CÁO TOP SẢN PHẨM */}
-          <div className="p-4 sm:p-6 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-sm flex flex-col h-[400px] sm:h-[480px]">
+          <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col h-[400px] sm:h-[480px]">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-3">
               <h3 className="text-sm sm:text-base font-bold text-gray-800 uppercase tracking-wider flex items-center gap-2">
                 <div className="w-1.5 h-5 bg-emerald-500 rounded-full" /> Top {topProductLimit} Xuất kho
@@ -350,13 +352,13 @@ export default function Dashboard() {
                     <div key={prod.code} className="space-y-1.5">
                       <div className="flex justify-between items-start text-xs font-bold">
                         <div className="flex items-start sm:items-center gap-2 sm:gap-3 max-w-[75%]">
-                          <span className="shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-gray-500 font-black text-[10px] sm:text-[11px] mt-0.5 sm:mt-0">{idx + 1}</span>
+                          <span className="shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-gray-500 font-bold text-xs sm:text-[11px] mt-0.5 sm:mt-0">{idx + 1}</span>
                           <div className="flex flex-col truncate">
                             <span className="text-gray-900 truncate font-semibold text-[11px] sm:text-sm">{prod.name}</span>
-                            <span className="text-[9px] sm:text-[11px] text-gray-400 font-medium mt-0.5">SKU: {prod.code}</span>
+                            <span className="text-xs sm:text-[11px] text-gray-400 font-medium mt-0.5">SKU: {prod.code}</span>
                           </div>
                         </div>
-                        <span className="shrink-0 text-gray-900 font-black bg-slate-50 border border-slate-200 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-xs sm:text-sm">{prod.quantity} <span className="hidden sm:inline text-[10px] text-gray-400 font-medium">cái</span></span>
+                        <span className="shrink-0 text-gray-900 font-bold bg-slate-50 border border-slate-200 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-xs sm:text-sm">{prod.quantity} <span className="hidden sm:inline text-xs text-gray-400 font-medium">cái</span></span>
                       </div>
                       <div className="w-full bg-slate-100 h-1.5 sm:h-2 rounded-full overflow-hidden">
                         <div 
@@ -376,11 +378,11 @@ export default function Dashboard() {
         {/* 4. POPUP MODAL (Responsive Table) */}
         {selectedModalDate && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 animate-in zoom-in-95 duration-200">
-            <div className="bg-white w-full max-w-4xl rounded-2xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[90vh] sm:max-h-[85vh]">
+            <div className="bg-white w-full max-w-4xl rounded-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh] sm:max-h-[85vh]">
               
               <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl sm:rounded-t-3xl">
                 <div>
-                  <h4 className="text-base sm:text-lg font-black text-slate-800">Chi tiết đơn tồn: {selectedModalDate}</h4>
+                  <h4 className="text-base sm:text-lg font-bold text-slate-800">Chi tiết đơn tồn: {selectedModalDate}</h4>
                   <p className="text-[11px] sm:text-sm text-slate-500 font-medium mt-0.5">Tìm thấy {modalOrdersList.length} đơn hàng</p>
                 </div>
                 <button 
@@ -391,11 +393,11 @@ export default function Dashboard() {
                 </button>
               </div>
 
-              {/* ⚡️ Bọc overflow-x-auto cho bảng trên điện thoại */}
+              {/* ️ Bọc overflow-x-auto cho bảng trên điện thoại */}
               <div className="flex-1 overflow-auto p-0 sm:p-6">
                 <table className="w-full text-left text-[11px] sm:text-sm border-collapse min-w-[500px]">
                   <thead>
-                    <tr className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] sm:text-xs sticky top-0 z-10">
+                    <tr className="bg-slate-50 text-slate-500 font-bold uppercase text-xs sm:text-xs sticky top-0 z-10">
                       <th className="p-3 sm:p-4">ID Đơn</th>
                       <th className="p-3 sm:p-4">Mã vận đơn</th>
                       <th className="p-3 sm:p-4">Trạng thái</th>
@@ -416,14 +418,14 @@ export default function Dashboard() {
 
                       return (
                         <tr key={order.id} className={`hover:bg-slate-50 transition ${isCanceled ? 'opacity-50' : ''}`}>
-                          <td className="p-3 sm:p-4 font-black text-blue-600">{order.id}</td>
-                          <td className="p-3 sm:p-4">{order.carrier_code || "❌ Chưa có"}</td>
+                          <td className="p-3 sm:p-4 font-bold text-blue-600">{order.id}</td>
+                          <td className="p-3 sm:p-4">{order.carrier_code || "Chưa có"}</td>
                           <td className="p-3 sm:p-4 whitespace-nowrap">
-                            <span className={`px-2 py-1 rounded-lg text-[9px] sm:text-[10px] uppercase font-black border ${badgeClass}`}>
-                              {isCanceled ? `🚫 ${statusText}` : isDispatched ? `🚚 ${statusText}` : statusText}
+                            <span className={`px-2 py-1 rounded-lg text-xs sm:text-xs uppercase font-bold border ${badgeClass}`}>
+                              {isCanceled ? statusText : isDispatched ? statusText : statusText}
                             </span>
                           </td>
-                          <td className="p-3 sm:p-4 text-right text-[10px] sm:text-xs max-w-[150px] sm:max-w-[240px] truncate">
+                          <td className="p-3 sm:p-4 text-right text-xs sm:text-xs max-w-[150px] sm:max-w-[240px] truncate">
                             {order.order_products?.length > 0 ? (
                               order.order_products.map(p => `${p.product_name} (x${p.quantity})`).join(', ')
                             ) : (

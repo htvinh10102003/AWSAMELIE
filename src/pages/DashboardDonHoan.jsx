@@ -86,7 +86,7 @@ export default function DashboardDonHoan() {
             <RotateCcw size={26} strokeWidth={2.5} />
           </div>
           <div>
-            <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">Quản lý Đơn Hoàn</h2>
+            <h2 className="text-xl font-bold text-slate-800 uppercase tracking-wide">Quản lý Đơn Hoàn</h2>
             <p className="text-xs text-slate-500 font-medium mt-1">Theo dõi biến động hàng hoàn về kho theo thời gian thực</p>
           </div>
         </div>
@@ -125,8 +125,8 @@ export default function DashboardDonHoan() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-gradient-to-br from-white to-slate-50 p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Tổng số đơn hàng</p>
-            <p className="text-3xl font-black text-slate-800 mt-1">{filteredOrders.length} <span className="text-sm font-bold text-slate-500">đơn</span></p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tổng số đơn hàng</p>
+            <p className="text-3xl font-bold text-slate-800 mt-1">{filteredOrders.length} <span className="text-sm font-bold text-slate-500">đơn</span></p>
           </div>
           <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center border border-slate-200 text-slate-400">
             <PackageX size={28} />
@@ -135,8 +135,8 @@ export default function DashboardDonHoan() {
 
         <div className="bg-gradient-to-br from-white to-red-50/30 p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
           <div>
-            <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Tổng sản phẩm quay đầu</p>
-            <p className="text-3xl font-black text-red-600 mt-1">{totalProducts} <span className="text-sm font-bold text-red-400">items</span></p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tổng sản phẩm quay đầu</p>
+            <p className="text-3xl font-bold text-red-600 mt-1">{totalProducts} <span className="text-sm font-bold text-red-400">items</span></p>
           </div>
           <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center border border-red-200 text-red-500">
             <Box size={28} />
@@ -148,7 +148,7 @@ export default function DashboardDonHoan() {
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col h-[600px]">
         {/* Toolbar Bảng */}
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center shrink-0">
-          <h3 className="text-sm font-black text-slate-700 uppercase">Danh sách chi tiết</h3>
+          <h3 className="text-sm font-bold text-slate-700 uppercase">Danh sách chi tiết</h3>
           <div className="relative w-64">
             <input 
               type="text" 
@@ -178,7 +178,7 @@ export default function DashboardDonHoan() {
           ) : (
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-white sticky top-0 z-10 border-b border-slate-200 shadow-sm">
-                <tr className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
+                <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                   <th className="py-4 px-6">Thông tin Đơn</th>
                   <th className="py-4 px-6 w-1/3">Chi tiết Sản phẩm</th>
                   <th className="py-4 px-6">Thời gian cập nhật</th>
@@ -192,7 +192,7 @@ export default function DashboardDonHoan() {
                     {/* Cột Thông tin đơn */}
                     <td className="py-4 px-6 align-top">
                       <div className="flex items-center gap-2">
-                        <span className="font-black text-slate-800 text-sm">#{order.id}</span>
+                        <span className="font-bold text-slate-800 text-sm">#{order.id}</span>
                         {order.tracking_url && (
                           <a href={order.tracking_url} target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-700 bg-blue-50 p-1 rounded-md" title="Tra cứu mã vận đơn">
                             <ExternalLink size={14} />
@@ -233,7 +233,7 @@ export default function DashboardDonHoan() {
 
                     {/* Cột Trạng thái */}
                     <td className="py-4 px-6 align-top text-center">
-                      <span className={`inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase border ${STATUS_MAP[order.status]?.color || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                      <span className={`inline-block px-3 py-1.5 rounded-lg text-xs font-bold uppercase border ${STATUS_MAP[order.status]?.color || 'bg-slate-100 text-slate-600 border-slate-200'}`}>
                         {STATUS_MAP[order.status]?.label || `Code: ${order.status}`}
                       </span>
                     </td>

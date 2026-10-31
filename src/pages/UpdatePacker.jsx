@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import { UserCog, Loader2, CheckCircle2, AlertCircle, Search, Calendar, Check, Filter, RefreshCw, Users, Package, Truck } from 'lucide-react';
 
 const NHANH_STATUS_MAP = {
@@ -25,7 +25,7 @@ export default function UpdatePacker() {
 
   const [localSelections, setLocalSelections] = useState({});
   
-  // ⚡️ State phục vụ việc cào log lịch sử tự động từ Nhanh.vn
+  // ️ State phục vụ việc cào log lịch sử tự động từ Nhanh.vn
   const [isSyncingHistory, setIsSyncingHistory] = useState(false);
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export default function UpdatePacker() {
 
       if (error) throw error;
       
-      // ⚡️ BƯỚC LỌC MỚI: Đuổi cổ đơn Đang đóng gói (42), Đơn mới (54)... ra khỏi danh sách gán tay
+      // ️ BƯỚC LỌC MỚI: Đuổi cổ đơn Đang đóng gói (42), Đơn mới (54)... ra khỏi danh sách gán tay
       const ALLOWED_STATUSES = ['40', '43', '59', '60', '61', '71', '72', '74'];
       const validOrders = data ? data.filter(o => ALLOWED_STATUSES.includes(String(o.status))) : [];
       
@@ -69,11 +69,11 @@ export default function UpdatePacker() {
       validOrders.forEach(o => { if (o.packed_by_name) initialSelections[o.id] = o.packed_by_name; });
       setLocalSelections(initialSelections);
     } catch (err) {
-      setMessage(`❌ Lỗi tải dữ liệu: ${err.message}`);
+      setMessage(` Lỗi tải dữ liệu: ${err.message}`);
     } finally { setLoading(false); }
   };
 
-  // ⚡️ HÀM CÀO TỰ ĐỘNG LOG LỊCH SỬ CHO NGÀY ĐANG CHỌN
+  // ️ HÀM CÀO TỰ ĐỘNG LOG LỊCH SỬ CHO NGÀY ĐANG CHỌN
   const handleAutoSyncFromHistory = async () => {
     setIsSyncingHistory(true);
     setMessage(`⏳ Đang truy vết log hệ thống Nhanh.vn để khôi phục nhân sự ngày ${selectedDate}...`);
@@ -86,8 +86,8 @@ export default function UpdatePacker() {
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       const daysParam = diffDays < 1 ? 1 : diffDays; // Đảm bảo tối thiểu cào 1 ngày
 
-      const projectUrl = "https://infljrayvhidhfimksfp.supabase.co";
-      const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImluZmxqcmF5dmhpZGhmaW1rc2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzMzAyNjksImV4cCI6MjA5NjkwNjI2OX0.ap1UnciJ5OccAvC-l5sm-JGqObTkEC038Kjf2L_IFr0";
+      const projectUrl = SUPABASE_URL;
+      const anonKey = SUPABASE_ANON_KEY;
 
       const res = await fetch(`${projectUrl}/functions/v1/sync-packer`, {
         method: 'POST',
@@ -106,8 +106,8 @@ export default function UpdatePacker() {
       if (!res.ok) throw new Error(data.error || `Lỗi kết nối: ${res.status}`);
 
       if (data && data.success) {
-        setMessage(`✅ Hoàn tất vá log tự động! Đã khôi phục thành công ${data.totalFixed} đơn hàng.`);
-        // ⚡️ Kéo lại data bảng ngay lập tức để đồng bộ thông tin mới về UI
+        setMessage(` Hoàn tất vá log tự động! Đã khôi phục thành công ${data.totalFixed} đơn hàng.`);
+        // ️ Kéo lại data bảng ngay lập tức để đồng bộ thông tin mới về UI
         await fetchPackerOrders();
       } else {
         throw new Error(data?.error || 'Lỗi xử lý luồng lịch sử');
@@ -115,7 +115,7 @@ export default function UpdatePacker() {
 
     } catch (err) {
       console.error(err);
-      setMessage(`❌ Thất bại khi cào log tự động: ${err.message}`);
+      setMessage(` Thất bại khi cào log tự động: ${err.message}`);
     } finally {
       setIsSyncingHistory(false);
     }
@@ -135,9 +135,9 @@ export default function UpdatePacker() {
       if (error) throw error;
 
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, packed_by_name: packerName } : o));
-      setMessage(`✅ Đã cập nhật nhân sự [${packerName}] cho đơn hàng ${orderId}`);
+      setMessage(` Đã cập nhật nhân sự [${packerName}] cho đơn hàng ${orderId}`);
     } catch (err) {
-      setMessage(`❌ Lỗi lưu dữ liệu: ${err.message}`);
+      setMessage(` Lỗi lưu dữ liệu: ${err.message}`);
     } finally {
       setUpdatingId(null);
     }
@@ -187,7 +187,7 @@ export default function UpdatePacker() {
                 />
               </div>
 
-              {/* ⚡️ NÚT CÀO LOG TỰ ĐỘNG CHỐNG MISS DATA MỚI TÍCH HỢP */}
+              {/* ️ NÚT CÀO LOG TỰ ĐỘNG CHỐNG MISS DATA MỚI TÍCH HỢP */}
               <button
                 onClick={handleAutoSyncFromHistory}
                 disabled={isSyncingHistory || loading}
@@ -270,7 +270,7 @@ export default function UpdatePacker() {
               onChange={e => setFilterStatus(e.target.value)}
               className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none cursor-pointer"
             >
-              <option value="all">📋 Tất cả trạng thái</option>
+              <option value="all"> Tất cả trạng thái</option>
               {uniqueStatuses.map(st => (
                 <option key={st} value={st}>{NHANH_STATUS_MAP[st] || st}</option>
               ))}
@@ -281,7 +281,7 @@ export default function UpdatePacker() {
               onChange={e => setFilterCarrier(e.target.value)}
               className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none cursor-pointer"
             >
-              <option value="all">🚚 Tất cả đơn vị vận chuyển</option>
+              <option value="all"> Tất cả đơn vị vận chuyển</option>
               {uniqueCarriers.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
@@ -292,9 +292,9 @@ export default function UpdatePacker() {
               onChange={e => setFilterAssignment(e.target.value)}
               className="w-full py-2.5 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none cursor-pointer"
             >
-              <option value="all">🔍 Tất cả phân công</option>
-              <option value="assigned">✅ Đã có người đóng</option>
-              <option value="unassigned">❌ Chưa có người đóng</option>
+              <option value="all"> Tất cả phân công</option>
+              <option value="assigned"> Đã có người đóng</option>
+              <option value="unassigned"> Chưa có người đóng</option>
             </select>
           </div>
         </div>
@@ -302,11 +302,11 @@ export default function UpdatePacker() {
         {/* THÔNG BÁO */}
         {message && (
           <div className={`p-4 rounded-xl border flex items-center gap-3 text-sm font-medium animate-fadeIn ${
-            message.includes('✅') 
+            message.includes('') 
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800' 
-              : message.includes('❌') ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-800'
+              : message.includes('') ? 'bg-red-50 border-red-200 text-red-800' : 'bg-amber-50 border-amber-200 text-amber-800'
           }`}>
-            {message.includes('✅') ? <CheckCircle2 size={18} className="text-emerald-500" /> : <AlertCircle size={18} className="text-amber-500" />}
+            {message.includes('') ? <CheckCircle2 size={18} className="text-emerald-500" /> : <AlertCircle size={18} className="text-amber-500" />}
             {message}
           </div>
         )}

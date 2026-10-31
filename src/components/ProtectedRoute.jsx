@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { isAdminRole } from '../lib/roles';
 
 export default function ProtectedRoute({ children }) {
     const [session, setSession] = useState(null);
@@ -35,10 +36,10 @@ export default function ProtectedRoute({ children }) {
         return <Navigate to="/login" replace />;
     }
 
-    // ⚡️ VÒNG GỬI XE 2: Đã đăng nhập nhưng KHÔNG PHẢI ADMIN -> Đá văng về trang chủ báo cáo ngay lập tức
-    const isAdmin = session.user?.user_metadata?.role === 'admin';
+    // ️ VÒNG GỬI XE 2: Đã đăng nhập nhưng KHÔNG PHẢI ADMIN -> Đá văng về trang chủ báo cáo ngay lập tức
+    const isAdmin = isAdminRole(session.user?.user_metadata?.role);
     if (!isAdmin) {
-        console.warn(`🔒 Cảnh báo bảo mật: Tài khoản ${session.user?.email} cố gắng truy cập vùng admin trái phép!`);
+        console.warn(` Cảnh báo bảo mật: Tài khoản ${session.user?.email} cố gắng truy cập vùng admin trái phép!`);
         return <Navigate to="/" replace />;
     }
 

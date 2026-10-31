@@ -27,7 +27,8 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Không thể xác thực phiên đăng nhập!' }), { status: 401, headers: corsHeaders });
     }
 
-    const isReqAdmin = reqUser.user_metadata?.role === 'admin';
+    const isReqAdmin = reqUser.user_metadata?.role === 'admin' || reqUser.user_metadata?.role === 'super_admin';
+    // Super admin ke thua admin o day (list/create). Doi role / xoa tai khoan van chi Owner, xem ben duoi.
     const isReqOwner = reqUser.user_metadata?.is_owner === true; // Kiểm tra cờ Tài khoản chủ
 
     // Chỉ Admin hoặc Chủ mới được quyền sờ vào cổng này

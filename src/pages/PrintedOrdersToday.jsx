@@ -124,7 +124,7 @@ export default function PrintedOrdersByDate() {
     const fetchPrintedOrders = async () => {
         setLoading(true);
         try {
-            const { data: stData } = await supabase.from('order_statuses').select('*');
+            const { data: stData } = await supabase.from('order_statuses').select('id,name');
             const dict = {};
             stData?.forEach(s => dict[s.id] = s.name);
             setStatusDict(dict);
@@ -240,7 +240,7 @@ export default function PrintedOrdersByDate() {
         <div className="max-w-7xl mx-auto space-y-8 pb-12 mt-8 animate-in fade-in duration-300">
             
             {/* TIÊU ĐỀ & NÚT XUẤT EXCEL */}
-            <div className="bg-white/70 backdrop-blur-2xl border border-white/30 px-8 py-6 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-shadow hover:shadow-[0_8px_40px_rgba(0,0,0,0.08)]">
+            <div className="bg-white/70 backdrop-blur-2xl border border-white/30 px-8 py-6 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-shadow hover:shadow-[0_8px_40px_rgba(0,0,0,0.08)]">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
                         <PackageCheck className="text-green-600" size={28} /> Đơn đã in ({formattedDate})
@@ -269,9 +269,9 @@ export default function PrintedOrdersByDate() {
             </div>
 
             {/* BỘ LỌC */}
-            <div className="relative z-20 bg-white/70 backdrop-blur-xl border border-white/30 p-6 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] flex flex-wrap items-end gap-4">
+            <div className="relative z-20 bg-white border border-slate-200 p-6 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] flex flex-wrap items-end gap-4">
                 
-                {/* ⚡️ THÊM BỘ CHỌN NGÀY Ở ĐÂY */}
+                {/* ️ THÊM BỘ CHỌN NGÀY Ở ĐÂY */}
                 <div className="w-full sm:w-48">
                     <input 
                         type="date"
@@ -305,7 +305,7 @@ export default function PrintedOrdersByDate() {
             </div>
 
             {/* BẢNG DỮ LIỆU */}
-            <div className="relative z-10 bg-white/70 backdrop-blur-xl border border-white/30 rounded-3xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
+            <div className="relative z-10 bg-white border border-slate-200 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col">
                 <div className="overflow-x-auto">
                     {loading ? (
                         <div className="p-20 text-center flex flex-col items-center justify-center gap-3">
@@ -343,7 +343,7 @@ export default function PrintedOrdersByDate() {
                                             {index === 0 && (
                                                 <>
                                                     <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-gray-100/50">
-                                                        <div className="font-extrabold text-blue-600 text-base">{order.id}</div>
+                                                        <div className="font-bold text-blue-600 text-base">{order.id}</div>
                                                     </td>
                                                     <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-gray-100/50">
                                                         <div className="font-bold text-gray-800">{order.carrier_code || <span className="text-gray-400 italic font-normal">Chưa có mã</span>}</div>
@@ -356,19 +356,19 @@ export default function PrintedOrdersByDate() {
                                                 <div>{prod.product_name}</div>
                                                 <div className="text-[11px] text-gray-400 font-normal mt-0.5">{prod.product_code}</div>
                                             </td>
-                                            <td className="py-3 px-5 align-top text-center font-black text-slate-900 text-base">
+                                            <td className="py-3 px-5 align-top text-center font-bold text-slate-900 text-base">
                                                 {prod.quantity}
                                             </td>
 
                                             {index === 0 && (
                                                 <>
                                                     <td rowSpan={rowCount} className="py-4 px-5 align-top border-l border-gray-100/50">
-                                                        <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold backdrop-blur-sm ${channelColorClass}`}>
+                                                        <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold backdrop-blur-sm ${channelColorClass}`}>
                                                             {channelName}
                                                         </div>
                                                     </td>
                                                     <td rowSpan={rowCount} className="py-4 px-5 align-top">
-                                                        <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold backdrop-blur-sm ${statusColorClass}`}>
+                                                        <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold backdrop-blur-sm ${statusColorClass}`}>
                                                             {statusName}
                                                         </div>
                                                     </td>

@@ -69,6 +69,8 @@ export default function PackingSpeed() {
                     .in('status', ALLOWED_STATUSES)
                     .gte('packed_at', startIso)
                     .lte('packed_at', endIso)
+                    .order('packed_at', { ascending: true })
+                    .order('id', { ascending: true })
                     .range(page * pageSize, (page + 1) * pageSize - 1);
 
                 if (error) throw error;
@@ -247,7 +249,7 @@ export default function PackingSpeed() {
             
             {/* OVERLAY LOADING MƯỢT MÀ */}
             {loading && (
-                <div className="absolute inset-0 z-50 bg-slate-50/60 backdrop-blur-[2px] flex items-center justify-center rounded-3xl">
+                <div className="absolute inset-0 z-50 bg-slate-50/60 backdrop-blur-[2px] flex items-center justify-center rounded-2xl">
                     <div className="flex flex-col items-center justify-center gap-3 bg-white p-6 rounded-2xl shadow-xl border border-slate-100">
                         <Loader2 size={32} className="animate-spin text-blue-600" />
                         <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Đang tải dữ liệu...</span>
@@ -260,7 +262,7 @@ export default function PackingSpeed() {
                 <div>
                     <div className="flex items-center gap-2 mb-1">
                         <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600"><Package size={18} /></div>
-                        <h2 className="text-xl font-black text-slate-900 tracking-tight">Tốc độ đóng gói kho</h2>
+                        <h2 className="text-xl font-bold text-slate-900 tracking-tight">Tốc độ đóng gói kho</h2>
                     </div>
                     <p className="text-sm text-slate-500 font-medium ml-10">Phân tích hiệu suất xử lý đơn hàng chung toàn kho</p>
                 </div>
@@ -329,7 +331,7 @@ export default function PackingSpeed() {
                                 <div className="flex-1">
                                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Tổng số đơn</h3>
                                     <div className="flex items-baseline gap-2">
-                                        <span className="text-3xl font-black text-slate-800">{dayMetrics.totalOrders.toLocaleString('vi-VN')}</span>
+                                        <span className="text-3xl font-bold text-slate-800">{dayMetrics.totalOrders.toLocaleString('vi-VN')}</span>
                                         <span className="text-sm font-bold text-slate-400">đơn</span>
                                     </div>
                                     {renderComparisonBadge(ordersComparePercent)}
@@ -341,7 +343,7 @@ export default function PackingSpeed() {
                                 <div className="flex-1">
                                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Tốc độ trung bình</h3>
                                     <div className="flex items-baseline gap-2">
-                                        <span className="text-3xl font-black text-emerald-600">{dayMetrics.speed.toFixed(1)}</span>
+                                        <span className="text-3xl font-bold text-emerald-600">{dayMetrics.speed.toFixed(1)}</span>
                                         <span className="text-sm font-bold text-slate-400">đơn/giờ</span>
                                     </div>
                                     {renderComparisonBadge(speedComparePercent)}
@@ -353,7 +355,7 @@ export default function PackingSpeed() {
                                 <div className="flex-1 min-w-0">
                                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Nhân sự thực hiện</h3>
                                     <div className="flex items-baseline gap-2">
-                                        <span className="text-3xl font-black text-slate-800">{dayMetrics.staffCount}</span>
+                                        <span className="text-3xl font-bold text-slate-800">{dayMetrics.staffCount}</span>
                                         <span className="text-sm font-bold text-slate-400">người</span>
                                     </div>
                                     <div className="text-[11px] font-semibold text-slate-500 truncate mt-2 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 inline-block max-w-full" title={dayMetrics.staffList.join(', ')}>
@@ -364,14 +366,14 @@ export default function PackingSpeed() {
                         </div>
 
                         {/* Banner Thống Kê Tháng Context */}
-                        <div className="relative overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900 rounded-3xl shadow-lg border border-slate-700/50 p-6 md:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+                        <div className="relative overflow-hidden bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-lg border border-slate-700/50 p-6 md:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
                             {/* Decorative Blur */}
                             <div className="absolute -top-24 -right-24 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
                             
                             <div className="flex items-start gap-4 z-10 max-w-sm">
                                 <div className="p-3 bg-white/10 text-white rounded-2xl backdrop-blur-md shadow-inner"><TrendingUp size={24} /></div>
                                 <div>
-                                    <h4 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
+                                    <h4 className="text-sm font-bold uppercase tracking-wider text-white flex items-center gap-2">
                                         Thống kê toàn tháng {loadedMonth.split('-')[1]} <CheckCircle2 size={16} className="text-emerald-400"/>
                                     </h4>
                                     <p className="text-xs text-slate-300 font-medium mt-1.5 leading-relaxed opacity-90">
@@ -382,20 +384,20 @@ export default function PackingSpeed() {
                             
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 w-full lg:w-auto z-10">
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Tổng lượng đơn</span>
-                                    <span className="text-xl font-black text-white">{monthMetrics.totalOrders.toLocaleString('vi-VN')}</span>
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Tổng lượng đơn</span>
+                                    <span className="text-xl font-bold text-white">{monthMetrics.totalOrders.toLocaleString('vi-VN')}</span>
                                 </div>
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Trung bình/ngày</span>
-                                    <span className="text-xl font-black text-amber-400">{monthMetrics.avgOrdersPerDay.toFixed(1)}</span>
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Trung bình/ngày</span>
+                                    <span className="text-xl font-bold text-amber-400">{monthMetrics.avgOrdersPerDay.toFixed(1)}</span>
                                 </div>
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Tổng giờ công</span>
-                                    <span className="text-xl font-black text-white">{monthMetrics.hours.toLocaleString('vi-VN')}</span>
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Tổng giờ công</span>
+                                    <span className="text-xl font-bold text-white">{monthMetrics.hours.toLocaleString('vi-VN')}</span>
                                 </div>
                                 <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Tốc độ TB tháng</span>
-                                    <span className="text-xl font-black text-emerald-400">{monthMetrics.avgSpeed.toFixed(1)}</span>
+                                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Tốc độ TB tháng</span>
+                                    <span className="text-xl font-bold text-emerald-400">{monthMetrics.avgSpeed.toFixed(1)}</span>
                                 </div>
                             </div>
                         </div>
@@ -407,7 +409,7 @@ export default function PackingSpeed() {
                     <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm animate-fade-in flex flex-col">
                         <div className="px-6 py-5 border-b border-slate-100 flex items-center gap-3">
                             <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600"><Table size={16} /></div>
-                            <h4 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+                            <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wider">
                                 Bảng nhật ký năng suất chi tiết tháng {loadedMonth}
                             </h4>
                         </div>
@@ -429,7 +431,7 @@ export default function PackingSpeed() {
                                                 {row.date.split('-').reverse().join('/')}
                                             </td>
                                             <td className="py-4 px-6 text-center">
-                                                <span className="inline-block px-3 py-1 bg-slate-100 font-black text-slate-700 rounded-lg group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors">
+                                                <span className="inline-block px-3 py-1 bg-slate-100 font-bold text-slate-700 rounded-lg group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors">
                                                     {row.orders.toLocaleString('vi-VN')}
                                                 </span>
                                             </td>

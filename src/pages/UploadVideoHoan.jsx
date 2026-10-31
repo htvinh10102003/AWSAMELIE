@@ -278,7 +278,7 @@ export default function UploadVideoHoan() {
           <UploadCloud size={26} strokeWidth={2.5} />
         </div>
         <div>
-          <h2 className="text-xl font-black text-slate-800 uppercase tracking-wide">Upload Video Khiếu Nại / Hàng Hoàn</h2>
+          <h2 className="text-xl font-bold text-slate-800 uppercase tracking-wide">Upload Video Khiếu Nại / Hàng Hoàn</h2>
           <p className="text-xs text-slate-500 font-medium mt-1">Lưu trữ video bóc hàng, đóng hàng trực tiếp lên Google Drive</p>
         </div>
       </div>
@@ -292,7 +292,7 @@ export default function UploadVideoHoan() {
             
             {/* BƯỚC 1: THÔNG TIN ĐƠN HÀNG */}
             <div>
-              <h3 className="text-sm font-black text-slate-700 uppercase flex items-center gap-2 mb-4">
+              <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2 mb-4">
                 <PackageSearch size={18} /> 1. Thông tin tra cứu
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -336,7 +336,7 @@ export default function UploadVideoHoan() {
 
             {/* BƯỚC 2: CHỌN SẢN PHẨM KHIẾU NẠI */}
             <div>
-              <h3 className="text-sm font-black text-slate-700 uppercase flex items-center gap-2 mb-4">
+              <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2 mb-4">
                 <Box size={18} /> 2. Sản phẩm khiếu nại <span className="text-slate-400 font-medium normal-case text-xs">(Không bắt buộc)</span>
               </h3>
               
@@ -382,14 +382,14 @@ export default function UploadVideoHoan() {
                     <div key={idx} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl shadow-sm">
                       <div className="flex-1 pr-3">
                         <p className="text-xs font-bold text-slate-800 line-clamp-2 leading-tight mb-1">{prod.product_name}</p>
-                        <p className="text-[10px] text-slate-500 font-mono bg-slate-100 inline-block px-1.5 py-0.5 rounded">{prod.product_code}</p>
+                        <p className="text-xs text-slate-500 font-mono bg-slate-100 inline-block px-1.5 py-0.5 rounded">{prod.product_code}</p>
                       </div>
                       <div className="flex items-center gap-3 border-l border-slate-100 pl-3">
                         <div className="flex items-center bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
                           <button type="button" onClick={() => updateQuantity(prod.product_code, -1)} className="p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors">
                             <Minus size={14} />
                           </button>
-                          <span className="w-8 text-center text-sm font-black text-slate-800 select-none">{prod.quantity}</span>
+                          <span className="w-8 text-center text-sm font-bold text-slate-800 select-none">{prod.quantity}</span>
                           <button type="button" onClick={() => updateQuantity(prod.product_code, 1)} className="p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-colors">
                             <Plus size={14} />
                           </button>
@@ -408,7 +408,7 @@ export default function UploadVideoHoan() {
 
             {/* BƯỚC 3: UPLOAD VIDEO */}
             <div>
-              <h3 className="text-sm font-black text-slate-700 uppercase flex items-center gap-2 mb-4">
+              <h3 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-2 mb-4">
                 <Video size={18} /> 3. File Video Lưu Trữ
               </h3>
               
@@ -503,7 +503,7 @@ export default function UploadVideoHoan() {
           
           {/* LƯU Ý */}
           <div className="bg-amber-50 border border-amber-200 rounded-2xl shadow-sm p-5">
-            <h3 className="text-sm font-black text-amber-800 flex items-center gap-2 mb-2">
+            <h3 className="text-sm font-bold text-amber-800 flex items-center gap-2 mb-2">
               <AlertCircle size={18} /> Hướng dẫn & Lưu ý
             </h3>
             <ul className="text-xs font-medium text-amber-700 space-y-2 list-disc pl-4">
@@ -515,7 +515,7 @@ export default function UploadVideoHoan() {
 
           {/* BOX LOG TERMINAL */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-sm overflow-hidden flex flex-col flex-1 min-h-[300px]">
-            <div className="p-3 bg-slate-800 text-xs font-black text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-2">
+            <div className="p-3 bg-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-2">
               <Settings size={14} /> Trạng thái tiến trình
             </div>
             <div className="p-4 overflow-y-auto flex-1 space-y-2 font-mono text-[11px] bg-slate-950">
