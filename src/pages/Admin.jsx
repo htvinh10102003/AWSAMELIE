@@ -1295,7 +1295,8 @@ export default function Admin() {
             </div>
           </div>
 
-          {/* SECTION 8: BAO TRI (404) - CHI OWNER */}
+          {/* SECTION 8: BAO TRI (404) - CHI OWNER, AN HAN VOI QUYEN KHAC (GIONG TAB THONG BAO) */}
+          {isOwner && (
           <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border-2 border-slate-200 mt-8">
             <h2 className="text-lg font-bold mb-1 text-slate-800 flex items-center gap-2">
               <AlertTriangle size={22} className="text-slate-500" /> Bảo trì hệ thống (404)
@@ -1311,7 +1312,6 @@ export default function Admin() {
                 {maintenanceMessage}
               </div>
             )}
-            {isOwner ? (
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${maintenanceOn ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
                   {maintenanceOn ? 'Đang bật bảo trì' : 'Đang tắt bảo trì'}
@@ -1324,10 +1324,8 @@ export default function Admin() {
                   {maintenanceLoading ? 'Đang xử lý...' : maintenanceOn ? 'Tắt bảo trì' : 'Bật bảo trì (hiện 404)'}
                 </button>
               </div>
-            ) : (
-              <LockedFeature msg="Chỉ Chủ sở hữu (Owner) mới được bật/tắt bảo trì." />
-            )}
           </div>
+          )}
 
         </div>
       )}
