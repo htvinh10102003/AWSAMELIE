@@ -67,7 +67,9 @@ export default function MaintenanceGate({ children }) {
   if (maintenance && isOwnerUser(user)) {
     return (
       <>
-        <div className="w-full bg-slate-900 text-white text-sm font-bold px-4 py-2.5 flex items-center justify-center gap-4 flex-wrap">
+        {/* sticky + z-1000: banner toan cuc trong Layout dang absolute top-0 z-500,
+            neu khong co z-index cao hon thi banner bao tri se bi no de len va an mat. */}
+        <div className="sticky top-0 z-[1000] w-full bg-slate-900 text-white text-sm font-bold px-4 py-2.5 flex items-center justify-center gap-4 flex-wrap shadow-lg">
           <span>Đang bật chế độ bảo trì — mọi người khác đang thấy trang 404.</span>
           <button
             onClick={handleTurnOff}
