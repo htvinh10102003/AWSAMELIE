@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import FeatureGuard from './components/FeatureGuard';
+import MaintenanceGate from './components/MaintenanceGate';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Admin = lazy(() => import('./pages/Admin'));
@@ -41,6 +42,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Suspense fallback={<div className="h-screen flex items-center justify-center font-sans text-slate-500 font-semibold animate-pulse">Đang tải trang...</div>}>
+      <MaintenanceGate>
       <Routes>
         <Route path="/login" element={<Login />} />
 
@@ -197,6 +199,7 @@ export default function App() {
 
         </Route>
       </Routes>
+      </MaintenanceGate>
       </Suspense>
     </BrowserRouter>
   );

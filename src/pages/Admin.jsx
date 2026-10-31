@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import { isAdminRole, isSuperAdminRole, roleLabel } from '../lib/roles';
 import { sessionRevokedKey } from '../lib/session';
+import { getMaintenanceMode, setMaintenanceMode } from '../lib/maintenance';
 import { 
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
   Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert,
@@ -85,6 +86,11 @@ export default function Admin() {
   
   const [isSyncingReturns, setIsSyncingReturns] = useState(false);
   const [syncReturnsMessage, setSyncReturnsMessage] = useState({ text: '', type: '' });
+
+  // --- BAO TRI (404) ---
+  const [maintenanceOn, setMaintenanceOn] = useState(false);
+  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState('');
 
   // --- DB CLEANUP & STORAGE ---
   const [cleanDays, setCleanDays] = useState('180');
@@ -180,6 +186,7 @@ export default function Admin() {
     if (configs) {
       const configMap = {};
       configs.forEach(item => configMap[item.key] = item.value);
+      setMaintenanceOn(configMap['maintenance_mode'] === 'true');
       
       setApiConfigs(prev => ({ 
           ...prev, 
@@ -540,6 +547,30 @@ export default function Admin() {
       if (hasError) setSyncReturnsMessage({ text: `️ Đã cào được ${total} đơn, nhưng bị gián đoạn ở một vài trang.`, type: 'error' });
       else setSyncReturnsMessage({ text: ` Hoàn tất! Đã đồng bộ an toàn ${total} đơn trả hàng từ 3 sàn.`, type: 'success' });
     } catch (err) { setSyncReturnsMessage({ text: ` Lỗi hệ thống: ${err.message}`, type: 'error' }); } finally { setIsSyncingReturns(false); }
+  };
+
+  // --- BAO TRI (404): chi Owner moi duoc bat/tat ---
+  const handleToggleMaintenance = async () => {
+    if (!isOwner) {
+      setMaintenanceMessage('Chỉ Chủ sở hữu (Owner) mới được bật/tắt bảo trì.');
+      return;
+    }
+    const turningOn = !maintenanceOn;
+    if (turningOn) {
+      const ok = await showCustomDialog('confirm', 'Bật chế độ bảo trì?', 'Khi bật, tất cả mọi người trừ Owner sẽ chỉ thấy màn hình xám 404 Not Found, kể cả trang đăng nhập. Owner vẫn vào được để tắt lại. Ông có chắc muốn bật không?');
+      if (!ok) return;
+    }
+    setMaintenanceLoading(true);
+    setMaintenanceMessage('');
+    try {
+      await setMaintenanceMode(turningOn);
+      setMaintenanceOn(turningOn);
+      setMaintenanceMessage(turningOn ? 'Đã bật bảo trì: mọi người khác đang thấy trang 404.' : 'Đã tắt bảo trì: web đã mở lại bình thường.');
+    } catch (err) {
+      setMaintenanceMessage('Lỗi: ' + (err.message || err));
+    } finally {
+      setMaintenanceLoading(false);
+    }
   };
 
   const handleCleanData = async () => {
@@ -1262,6 +1293,40 @@ export default function Admin() {
                 <LockedFeature msg="Chỉ Chủ sở hữu (Owner) mới có quyền truy cập dọn dẹp hệ thống Database." />
               )}
             </div>
+          </div>
+
+          {/* SECTION 8: BAO TRI (404) - CHI OWNER */}
+          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border-2 border-slate-200 mt-8">
+            <h2 className="text-lg font-bold mb-1 text-slate-800 flex items-center gap-2">
+              <AlertTriangle size={22} className="text-slate-500" /> Bảo trì hệ thống (404)
+            </h2>
+            <p className="text-sm text-slate-500 mb-4 font-medium max-w-3xl leading-relaxed">
+              Khi bật, tất cả mọi người trừ Owner sẽ chỉ thấy màn hình xám 404 Not Found, kể cả trang đăng nhập. Owner vẫn vào web bình thường để tắt lại, và sẽ thấy banner cảnh báo ở trên cùng.
+            </p>
+            <p className="text-xs font-bold text-red-600 mb-6">
+              Lưu ý: nếu Owner đăng xuất trong lúc đang bật bảo trì thì không đăng nhập lại được bằng web, phải tắt bằng Supabase SQL Editor: update system_configs set value = 'false' where key = 'maintenance_mode';
+            </p>
+            {maintenanceMessage && (
+              <div className="p-4 mb-6 rounded-xl font-bold text-sm bg-slate-50 border border-slate-200 text-slate-700">
+                {maintenanceMessage}
+              </div>
+            )}
+            {isOwner ? (
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${maintenanceOn ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                  {maintenanceOn ? 'Đang bật bảo trì' : 'Đang tắt bảo trì'}
+                </span>
+                <button
+                  onClick={handleToggleMaintenance}
+                  disabled={maintenanceLoading}
+                  className={`px-8 py-3 text-sm font-bold rounded-xl shadow-md transition cursor-pointer disabled:opacity-50 ${maintenanceOn ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-red-600 text-white hover:bg-red-700'}`}
+                >
+                  {maintenanceLoading ? 'Đang xử lý...' : maintenanceOn ? 'Tắt bảo trì' : 'Bật bảo trì (hiện 404)'}
+                </button>
+              </div>
+            ) : (
+              <LockedFeature msg="Chỉ Chủ sở hữu (Owner) mới được bật/tắt bảo trì." />
+            )}
           </div>
 
         </div>
