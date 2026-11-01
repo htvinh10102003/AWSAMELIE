@@ -123,7 +123,7 @@ export default function Login() {
             <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-lg shadow-orange-500/30">
               <PackageCheck size={24} className="text-white" />
             </div>
-            <span className="text-2xl font-bold text-white tracking-wider">AMELIE WMS</span>
+            <span className="text-2xl font-bold text-white tracking-wider">WMS</span>
           </div>
 
           <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight tracking-tight mb-6">

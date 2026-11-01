@@ -720,7 +720,7 @@ export default function Layout() {
               </div>
               <div className={`transition-opacity duration-300 ${sidebarExpanded || isTopLayout ? 'opacity-100' : 'opacity-0 hidden max-md:block'}`}>
                 <h1 className={`text-lg font-bold tracking-tight flex items-center gap-1.5 leading-none whitespace-nowrap ${themeVars.textPrimary}`}>
-                  Amelie WMS
+                  WMS
                 </h1>
               </div>
             </div>
