@@ -359,7 +359,7 @@ export default function Login() {
                           setEmail(e.target.value);
                           if (error) setError('');
                         }}
-                        placeholder="admin@amelie.com"
+                        placeholder="admin@vinhstudio.io.vn"
                         className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10"
                       />
                       <Mail
