@@ -37,6 +37,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const UploadVideoHoan = lazy(() => import('./pages/UploadVideoHoan'));
 const VideoKhieuNai = lazy(() => import('./pages/VideoKhieuNai'));
 const TongHopKhieuNai = lazy(() => import('./pages/TongHopKhieuNai'));
+const Mobile = lazy(() => import('./pages/Mobile'));
 
 export default function App() {
   return (
@@ -45,6 +46,9 @@ export default function App() {
       <MaintenanceGate>
       <Routes>
         <Route path="/login" element={<Login />} />
+
+        {/* Giao diện điện thoại riêng, ngoài Layout desktop, tự kiểm tra đăng nhập trong trang */}
+        <Route path="/mobile" element={<Mobile />} />
 
         <Route path="/" element={<Layout />}>
 
