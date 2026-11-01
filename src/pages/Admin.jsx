@@ -71,6 +71,21 @@ export default function Admin() {
   const [sheetPrintGid, setSheetPrintGid] = useState('0');
   const [syncLoading, setSyncLoading] = useState(false);
   const [sheetMessage, setSheetMessage] = useState('');
+  // Cấu hình cột tự gán: null = chưa cấu hình riêng, dùng cách quét cũ.
+  // Khi khác null: { codeChain: [{ db: 'id'|'carrier_code', header }], dateHeader }
+  // codeChain theo thứ tự trên xuống = thứ tự thử khi đối chiếu mã đơn.
+  const [dailyMap, setDailyMap] = useState(null);
+  const [printMap, setPrintMap] = useState(null);
+  const [dailyLastScan, setDailyLastScan] = useState('');
+  const [printLastScan, setPrintLastScan] = useState('');
+  const [syncDailyLoading, setSyncDailyLoading] = useState(false);
+  const [syncPrintLoading, setSyncPrintLoading] = useState(false);
+  const [dailySummary, setDailySummary] = useState(null);
+  const [printSummary, setPrintSummary] = useState(null);
+  const [dailyScanMessage, setDailyScanMessage] = useState('');
+  const [printScanMessage, setPrintScanMessage] = useState('');
+  // Log đơn in có trong sheet nhưng DB không tìm thấy — chỉ owner/super_admin thấy.
+  const [printMissing, setPrintMissing] = useState([]);
 
   // --- EDGE FUNCTIONS SYNC ---
   const [syncDays, setSyncDays] = useState(1); 
@@ -215,6 +230,19 @@ export default function Admin() {
       setSheetDailyGid(configMap['sheet_daily_gid'] || '0');
       setSheetPrintUrl(configMap['sheet_print_url'] || '');
       setSheetPrintGid(configMap['sheet_print_gid'] || '0');
+      const parseSheetMap = (raw) => {
+        try {
+          const p = JSON.parse(raw || '');
+          if (p && Array.isArray(p.code_chain) && p.code_chain.length > 0) {
+            return { codeChain: p.code_chain.filter(c => c && (c.db === 'id' || c.db === 'carrier_code') && c.header).map(c => ({ db: c.db, header: String(c.header) })), dateHeader: String(p.date_header || 'Ngày') };
+          }
+        } catch {}
+        return null;
+      };
+      setDailyMap(parseSheetMap(configMap['sheet_daily_map']));
+      setPrintMap(parseSheetMap(configMap['sheet_print_map']));
+      setDailyLastScan(configMap['sheet_daily_last_scan_at'] || '');
+      setPrintLastScan(configMap['sheet_print_last_scan_at'] || '');
 
       let savedStatuses = ['54', '55', '56', '42', '40'];
       if (configMap['print_allowed_statuses']) savedStatuses = configMap['print_allowed_statuses'].split(',');
@@ -501,24 +529,110 @@ export default function Admin() {
   const handleSaveConfig = async () => {
     setSyncLoading(true); setSheetMessage('');
     try {
+      const mapToValue = (m) => m ? JSON.stringify({ code_chain: m.codeChain, date_header: m.dateHeader }) : '';
       const updates = [
         { key: 'sheet_daily_url', value: sheetDailyUrl }, { key: 'sheet_daily_gid', value: sheetDailyGid },
-        { key: 'sheet_print_url', value: sheetPrintUrl }, { key: 'sheet_print_gid', value: sheetPrintGid }
+        { key: 'sheet_print_url', value: sheetPrintUrl }, { key: 'sheet_print_gid', value: sheetPrintGid },
+        { key: 'sheet_daily_map', value: mapToValue(dailyMap) },
+        { key: 'sheet_print_map', value: mapToValue(printMap) }
       ];
       const { error } = await supabase.from('system_configs').upsert(updates, { onConflict: 'key' });
       if (error) throw error;
-      setSheetMessage(' Đã ghi đè link cấu hình mới thành công!');
-    } catch (err) { setSheetMessage(' Lỗi lưu cấu hình: ' + err.message); } finally { setSyncLoading(false); }
+      setSheetMessage('Đã lưu cấu hình liên kết và cấu hình cột thành công!');
+    } catch (err) { setSheetMessage('Lỗi lưu cấu hình: ' + err.message); } finally { setSyncLoading(false); }
   };
 
-  const handleTriggerSyncSheets = async () => {
-    setSyncLoading(true); setSheetMessage('');
+  const handleTriggerSyncSheets = async (type) => {
+    const isDaily = type === 'daily';
+    const setLoading = isDaily ? setSyncDailyLoading : setSyncPrintLoading;
+    const setScanMessage = isDaily ? setDailyScanMessage : setPrintScanMessage;
+    const setSummary = isDaily ? setDailySummary : setPrintSummary;
+    setLoading(true); setScanMessage(''); setSummary(null);
+    if (!isDaily) setPrintMissing([]);
     try {
-        const res = await fetch(`${projectUrl}/functions/v1/sync-sheets`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        // Gửi kèm JWT của người đang đăng nhập để backend biết có phải
+        // owner/super_admin không — chỉ khi đó backend mới trả danh sách
+        // mã không tìm thấy. Không có token thì quét vẫn chạy, chỉ có số lượng.
+        const { data: { session } } = await supabase.auth.getSession();
+        const headers = { 'Content-Type': 'application/json' };
+        if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
+        const res = await fetch(`${projectUrl}/functions/v1/sync-sheets`, { method: 'POST', headers, body: JSON.stringify({ type }) });
         const data = await res.json();
-        if (data.success) setSheetMessage(" " + data.message); else setSheetMessage(" Thất bại: " + data.error);
-    } catch (err) { setSheetMessage(" Lỗi kết nối: " + err.message); }
-    setSyncLoading(false);
+        if (!res.ok || !data.success) throw new Error(data.error || 'Lỗi server');
+        const summary = data.debug?.[isDaily ? 'daily_sheet' : 'print_sheet'] || {};
+        setSummary(summary);
+        if (summary.error) {
+          setScanMessage('Thất bại: ' + summary.error);
+        } else if (summary.skipped) {
+          setScanMessage(summary.reason || 'Chưa cấu hình sheet này.');
+        } else {
+          setScanMessage(`Đã quét xong: ${summary.total_rows_parsed ?? 0} dòng, khớp ${summary.matched ?? 0} đơn, cập nhật ${summary.final_unique_updated ?? 0} đơn.`);
+          if (!isDaily && Array.isArray(summary.missing)) setPrintMissing(summary.missing);
+          if (isDaily) setDailyLastScan(new Date().toISOString()); else setPrintLastScan(new Date().toISOString());
+        }
+    } catch (err) { setScanMessage('Lỗi kết nối: ' + err.message); }
+    setLoading(false);
+  };
+
+  const downloadPrintMissingCsv = () => {
+    if (!printMissing.length) return;
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const rows = [['Dòng sheet', 'Mã gốc', 'Mã chuẩn hóa', 'Ngày trong sheet', 'Đã thử (theo thứ tự)']];
+    printMissing.forEach(m => {
+      rows.push([
+        m.sheet_row,
+        (m.codes || []).map(c => `${c.header}: ${c.raw}`).join(' | '),
+        (m.codes || []).map(c => c.cleaned).filter(Boolean).join(' | '),
+        m.date_raw || '',
+        (m.codes || []).map(c => c.db === 'id' ? 'ID đơn' : 'Mã vận đơn').join(' -> ')
+      ]);
+    });
+    const csv = '﻿' + rows.map(r => r.map(esc).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `don-in-thieu-db-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  // --- Cấu hình cột quét sheet (hàm trả về JSX, không phải component riêng
+  // để tránh mất focus khi gõ) ---
+  const defaultSheetMap = () => ({ codeChain: [{ db: 'id', header: '' }, { db: 'carrier_code', header: '' }], dateHeader: 'Ngày' });
+  const renderSheetMapEditor = (kind, map, setMap) => {
+    if (!map) {
+      return (
+        <div className="mt-4 bg-white p-4 rounded-xl border border-slate-200">
+          <p className="text-sm text-slate-600 font-medium">Chưa cấu hình cột riêng. Hệ thống đang quét theo cách cũ: mã lấy từ cột “Mã vận đơn” / “Mã đơn hàng” / “Mã đơn” (cột nào có trước), ngày lấy từ cột “Ngày”, tìm theo mã vận đơn trước rồi tới ID đơn.</p>
+          <button onClick={() => setMap(defaultSheetMap())} className="mt-3 px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-sm font-bold rounded-lg transition-colors cursor-pointer">Tạo cấu hình cột riêng</button>
+        </div>
+      );
+    }
+    return (
+      <div className="mt-4 bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+        <p className="text-sm font-bold text-slate-700">Cấu hình cột quét — tiêu đề luôn ở hàng 1, dữ liệu từ hàng 2 trở đi. Thứ tự trên xuống là thứ tự thử: cột trên không tìm thấy đơn thì thử cột dưới.</p>
+        {map.codeChain.map((row, idx) => (
+          <div key={idx} className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+            <span className="text-xs font-bold text-slate-500 whitespace-nowrap w-28">Mã đối chiếu {idx + 1}</span>
+            <select value={row.db} onChange={e => setMap({ ...map, codeChain: map.codeChain.map((r, i) => i === idx ? { ...r, db: e.target.value } : r) })} className="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white font-medium">
+              <option value="id">ID đơn (orders.id)</option>
+              <option value="carrier_code">Mã vận đơn (carrier_code)</option>
+            </select>
+            <input type="text" value={row.header} onChange={e => setMap({ ...map, codeChain: map.codeChain.map((r, i) => i === idx ? { ...r, header: e.target.value } : r) })} placeholder="Tiêu đề cột trong sheet, ví dụ: ID đơn" className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium" />
+            <button onClick={() => setMap({ ...map, codeChain: map.codeChain.filter((_, i) => i !== idx) })} disabled={map.codeChain.length <= 1} className="px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-40 cursor-pointer">Xóa</button>
+          </div>
+        ))}
+        <button onClick={() => setMap({ ...map, codeChain: [...map.codeChain, { db: 'carrier_code', header: '' }] })} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 text-sm font-bold rounded-lg transition-colors cursor-pointer">Thêm cột đối chiếu</button>
+        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+          <span className="text-xs font-bold text-slate-500 whitespace-nowrap w-28">Cột ngày</span>
+          <input type="text" value={map.dateHeader} onChange={e => setMap({ ...map, dateHeader: e.target.value })} placeholder="Tiêu đề cột ngày, ví dụ: Ngày" className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium" />
+          <span className="text-xs text-slate-500 font-medium">{kind === 'daily' ? 'Gán vào ngày đi đơn (carrier_date).' : 'Gán vào ngày in (printed_at).'}</span>
+        </div>
+        <div className="flex justify-end">
+          <button onClick={() => setMap(null)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer">Quay về cách quét cũ (chưa lưu)</button>
+        </div>
+        <p className="text-xs text-slate-500 font-medium">Nhớ bấm “Lưu cấu hình liên kết” bên dưới để áp dụng. Quét trước khi lưu vẫn dùng cấu hình cũ.</p>
+      </div>
+    );
   };
 
   const handleSyncReturns = async () => {
@@ -988,36 +1102,99 @@ export default function Admin() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Database size={20} className="text-indigo-600"/> Liên kết Google Sheets</h2>
               {isAdminOrOwner && (
-                <button onClick={handleTriggerSyncSheets} disabled={syncLoading} className="px-5 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer">
-                  {syncLoading ? <Loader2 size={16} className="animate-spin"/> : <RefreshCcw size={16}/>} Bấm Quét Dữ Liệu
-                </button>
+                <div className="flex gap-2">
+                  <button onClick={() => handleTriggerSyncSheets('daily')} disabled={syncDailyLoading || syncPrintLoading} className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer">
+                    {syncDailyLoading ? <Loader2 size={16} className="animate-spin"/> : <RefreshCcw size={16}/>} Quét đơn đi
+                  </button>
+                  <button onClick={() => handleTriggerSyncSheets('print')} disabled={syncDailyLoading || syncPrintLoading} className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer">
+                    {syncPrintLoading ? <Loader2 size={16} className="animate-spin"/> : <RefreshCcw size={16}/>} Quét đơn in
+                  </button>
+                </div>
               )}
             </div>
-            
-            {sheetMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${sheetMessage.includes('') || sheetMessage.includes('') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}><CheckCircle2 size={18}/> {sheetMessage}</div>}
-            
+
+            {sheetMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${sheetMessage.includes('Lỗi') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}><CheckCircle2 size={18}/> {sheetMessage}</div>}
+            {dailyScanMessage && <div className={`p-4 mb-4 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${dailyScanMessage.includes('Lỗi') || dailyScanMessage.includes('Thất bại') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}><CheckCircle2 size={18}/> Đơn đi: {dailyScanMessage}</div>}
+            {dailySummary && !dailySummary.error && !dailySummary.skipped && (
+              <div className="p-4 mb-4 rounded-xl text-sm font-medium bg-slate-50 text-slate-700 border border-slate-200">
+                Kết quả quét đơn đi: {dailySummary.total_rows_parsed ?? 0} dòng dữ liệu, khớp {dailySummary.matched ?? 0} đơn (theo ID: {dailySummary.matched_by_id ?? 0}, theo mã vận đơn: {dailySummary.matched_by_carrier ?? 0}), cập nhật {dailySummary.final_unique_updated ?? 0} đơn, không tìm thấy {dailySummary.missing_count ?? dailySummary.skipped_not_found ?? 0} mã, ngày không hợp lệ {dailySummary.skipped_invalid_date ?? 0} dòng.
+              </div>
+            )}
+            {printScanMessage && <div className={`p-4 mb-4 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${printScanMessage.includes('Lỗi') || printScanMessage.includes('Thất bại') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}><CheckCircle2 size={18}/> Đơn in: {printScanMessage}</div>}
+            {printSummary && !printSummary.error && !printSummary.skipped && (
+              <div className="p-4 mb-6 rounded-xl text-sm font-medium bg-slate-50 text-slate-700 border border-slate-200">
+                Kết quả quét đơn in: {printSummary.total_rows_parsed ?? 0} dòng dữ liệu, khớp {printSummary.matched ?? 0} đơn (theo ID: {printSummary.matched_by_id ?? 0}, theo mã vận đơn: {printSummary.matched_by_carrier ?? 0}), cập nhật {printSummary.final_unique_updated ?? 0} đơn, không tìm thấy {printSummary.missing_count ?? printSummary.skipped_not_found ?? 0} mã, ngày không hợp lệ {printSummary.skipped_invalid_date ?? 0} dòng.
+              </div>
+            )}
+
+            {canEditSensitiveConfig && printSummary && !printSummary.error && !printSummary.skipped && printMissing.length > 0 && (
+              <div className="mb-6 bg-white p-5 rounded-2xl border border-amber-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <h3 className="text-base font-bold text-slate-800">Log đơn in có trong sheet nhưng database không tìm thấy — {printMissing.length} dòng (chỉ Owner và Super Admin thấy)</h3>
+                  <button onClick={downloadPrintMissingCsv} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-indigo-600 transition-colors cursor-pointer whitespace-nowrap">Tải danh sách (CSV)</button>
+                </div>
+                <p className="text-sm text-slate-500 font-medium mb-3">Bảng hiển thị tối đa 500 dòng đầu, file CSV tải về đủ toàn bộ. Dòng sheet tính từ hàng 1 là tiêu đề.</p>
+                <div className="overflow-auto max-h-96 border border-slate-100 rounded-xl">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 sticky top-0">
+                      <tr className="text-left text-xs font-bold text-slate-500 uppercase">
+                        <th className="px-3 py-2">Dòng sheet</th>
+                        <th className="px-3 py-2">Mã gốc trong sheet</th>
+                        <th className="px-3 py-2">Mã chuẩn hóa</th>
+                        <th className="px-3 py-2">Ngày trong sheet</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {printMissing.slice(0, 500).map((m, i) => (
+                        <tr key={i} className="border-t border-slate-100">
+                          <td className="px-3 py-2 font-bold">{m.sheet_row}</td>
+                          <td className="px-3 py-2 font-medium">{(m.codes || []).map(c => `${c.header}: ${c.raw}`).join(' | ')}</td>
+                          <td className="px-3 py-2 font-medium">{(m.codes || []).map(c => c.cleaned).filter(Boolean).join(' | ')}</td>
+                          <td className="px-3 py-2">{m.date_raw}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {printSummary.conflicts && printSummary.conflicts.length > 0 && (
+                  <p className="mt-3 text-sm font-bold text-amber-700">Cảnh báo xung đột: {printSummary.conflicts.length} dòng có 2 cột mã khớp 2 đơn khác nhau, hệ thống đã ưu tiên cột đứng trước. Kiểm tra lại các dòng này trong file CSV nếu cần — chi tiết xung đột nằm trong phản hồi quét.</p>
+                )}
+              </div>
+            )}
+            {canEditSensitiveConfig && printSummary && !printSummary.error && !printSummary.skipped && (printSummary.missing_count ?? 0) > 0 && printMissing.length === 0 && (
+              <div className="p-4 mb-6 rounded-xl font-bold text-sm bg-amber-50 text-amber-700 border border-amber-200">Có {printSummary.missing_count} mã không tìm thấy, nhưng backend không trả danh sách chi tiết (có thể do phiên đăng nhập hết hạn hoặc quyền chưa phải Owner/Super Admin). Thử đăng nhập lại rồi quét lại.</div>
+            )}
+
             {canEditSensitiveConfig ? (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-5 bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                    <div className="md:col-span-3">
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Link Sheet Đơn Đi (Log)</label>
-                        <input type="text" value={sheetDailyUrl} onChange={e => setSheetDailyUrl(e.target.value)} placeholder="https://docs.google.com/..." className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition bg-white"/>
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                        <div className="md:col-span-3">
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Link Sheet Đơn Đi (Log)</label>
+                            <input type="text" value={sheetDailyUrl} onChange={e => setSheetDailyUrl(e.target.value)} placeholder="https://docs.google.com/..." className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition bg-white"/>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Mã GID</label>
+                            <input type="text" value={sheetDailyGid} onChange={e => setSheetDailyGid(e.target.value)} placeholder="0" className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition bg-white"/>
+                        </div>
                     </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Mã GID</label>
-                        <input type="text" value={sheetDailyGid} onChange={e => setSheetDailyGid(e.target.value)} placeholder="0" className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition bg-white"/>
-                    </div>
+                    {dailyLastScan && <p className="mt-3 text-xs text-slate-500 font-medium">Lần quét đơn đi trước: {new Date(dailyLastScan).toLocaleString('vi-VN')}</p>}
+                    {renderSheetMapEditor('daily', dailyMap, setDailyMap)}
                 </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-5 bg-slate-50 p-5 rounded-2xl border border-slate-100">
-                    <div className="md:col-span-3">
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Link Sheet Đơn In (Giao việc)</label>
-                        <input type="text" value={sheetPrintUrl} onChange={e => setSheetPrintUrl(e.target.value)} placeholder="https://docs.google.com/..." className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition bg-white"/>
+
+                <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                        <div className="md:col-span-3">
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Link Sheet Đơn In (Giao việc)</label>
+                            <input type="text" value={sheetPrintUrl} onChange={e => setSheetPrintUrl(e.target.value)} placeholder="https://docs.google.com/..." className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition bg-white"/>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Mã GID</label>
+                            <input type="text" value={sheetPrintGid} onChange={e => setSheetPrintGid(e.target.value)} placeholder="1245667" className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition bg-white"/>
+                        </div>
                     </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Mã GID</label>
-                        <input type="text" value={sheetPrintGid} onChange={e => setSheetPrintGid(e.target.value)} placeholder="1245667" className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition bg-white"/>
-                    </div>
+                    {printLastScan && <p className="mt-3 text-xs text-slate-500 font-medium">Lần quét đơn in trước: {new Date(printLastScan).toLocaleString('vi-VN')}</p>}
+                    {renderSheetMapEditor('print', printMap, setPrintMap)}
                 </div>
 
                 <div className="flex justify-end">
