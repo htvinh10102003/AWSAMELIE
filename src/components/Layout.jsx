@@ -525,6 +525,33 @@ export default function Layout() {
     }] : [])
   ];
 
+  // Ẩn khỏi menu với người không phải Owner khi tính năng bị khóa: khóa cấp
+  // cha thì ẩn cả mục cha, khóa cấp con thì chỉ ẩn mục con đó; mục cha nào
+  // không còn mục con nào thì ẩn luôn. Dùng đúng bảng ROUTE_TO_FEATURE_MAP
+  // như màn hình khóa bên dưới, nên nút bị ẩn đúng với những trang mà mở
+  // trực tiếp sẽ hiện bảo trì. Owner vẫn thấy đủ để kiểm tra.
+  const isLockedConfig = (cfg) => cfg?.isLocked === true || cfg?.isLocked === 'true';
+  const isMenuPathLocked = (path) => {
+    const mapping = ROUTE_TO_FEATURE_MAP[path];
+    if (!mapping) return false;
+    const lock = featureLocks[mapping.parent];
+    if (!lock) return false;
+    if (isLockedConfig(lock)) return true;
+    if (mapping.sub && isLockedConfig(lock.subs?.[mapping.sub])) return true;
+    return false;
+  };
+  const visibleMenuConfig = isOwner ? MENU_CONFIG : MENU_CONFIG.map(group => ({
+    ...group,
+    items: group.items.map(item => {
+      if (item.subItems) {
+        if (isLockedConfig(featureLocks[item.id])) return null;
+        const visibleSubs = item.subItems.filter(sub => !isMenuPathLocked(sub.path));
+        return visibleSubs.length ? { ...item, subItems: visibleSubs } : null;
+      }
+      return isMenuPathLocked(item.path) ? null : item;
+    }).filter(Boolean)
+  })).filter(group => group.items.length > 0);
+
   const toggleSubmenu = (id) => setMenuStates(prev => ({ ...prev, [id]: !prev[id] }));
 
   const handleMouseEnter = (e, label) => {
@@ -736,7 +763,7 @@ export default function Layout() {
             
             {isTopLayout && (
               <div className="flex h-full items-center gap-2 relative">
-                {MENU_CONFIG.map((group, gIdx) => {
+                {visibleMenuConfig.map((group, gIdx) => {
                   const isAdminGroup = group.groupLabel === 'Hệ thống Quản trị';
                   return (
                     <div key={gIdx} className="h-full flex items-center group/mainnav">
@@ -801,7 +828,7 @@ export default function Layout() {
               </div>
             )}
 
-            {!isTopLayout && MENU_CONFIG.map((group, gIdx) => {
+            {!isTopLayout && visibleMenuConfig.map((group, gIdx) => {
               const isAdminGroup = group.groupLabel === 'Hệ thống Quản trị';
               
               return (
