@@ -7,8 +7,26 @@ import Maintenance404 from './Maintenance404';
 // - maintenance = true + khong phai Owner (ke ca chua dang nhap) => chi thay man hinh xam 404.
 // - Owner van vao duoc binh thuong de tat bao tri, kem banner canh bao o tren cung.
 // - Nghe realtime system_configs nen khi Owner bat/tat, cac tab dang mo se doi ngay khong can F5.
+// - Fix xam moi lan load: nho ket qua kiem tra lan truoc vao localStorage,
+//   lan sau mo len la hien ngay trang theo ket qua cu, roi kiem tra ngam o
+//   sau va doi neu khac. Nhu vay khong con man hinh xam cho. Doi lai: neu
+//   Owner vua bat bao tri ma ai do load lai dung luc do thi ho co the thay
+//   trang chinh trong tich tac truoc khi kiem tra ngam doi sang 404; tab
+//   dang mo san thi realtime van doi ngay lap tuc nhu cu.
+const MAINTENANCE_CACHE_KEY = 'wms_maintenance_cached';
+function readCachedMaintenance() {
+  try {
+    const v = localStorage.getItem(MAINTENANCE_CACHE_KEY);
+    if (v === 'true') return true;
+    if (v === 'false') return false;
+  } catch (e) {}
+  return null;
+}
+function writeCachedMaintenance(on) {
+  try { localStorage.setItem(MAINTENANCE_CACHE_KEY, on ? 'true' : 'false'); } catch (e) {}
+}
 export default function MaintenanceGate({ children }) {
-  const [maintenance, setMaintenance] = useState(null);
+  const [maintenance, setMaintenance] = useState(readCachedMaintenance);
   const [user, setUser] = useState(null);
   const [turningOff, setTurningOff] = useState(false);
 
@@ -25,7 +43,7 @@ export default function MaintenanceGate({ children }) {
         getMaintenanceMode(),
         new Promise(resolve => setTimeout(() => resolve(false), 5000)),
       ]);
-      if (!cancelled) setMaintenance(on);
+      if (!cancelled) { setMaintenance(on); writeCachedMaintenance(on); }
     };
     load();
 
@@ -37,7 +55,8 @@ export default function MaintenanceGate({ children }) {
       .channel('maintenance_mode_listener')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'system_configs' }, (payload) => {
         if (payload.new && payload.new.key === MAINTENANCE_KEY) {
-          setMaintenance(payload.new.value === 'true' || payload.new.value === true);
+          const on = payload.new.value === 'true' || payload.new.value === true;
+          setMaintenance(on); writeCachedMaintenance(on);
         }
       })
       .subscribe();
@@ -53,7 +72,7 @@ export default function MaintenanceGate({ children }) {
     setTurningOff(true);
     try {
       await setMaintenanceMode(false);
-      setMaintenance(false);
+      setMaintenance(false); writeCachedMaintenance(false);
     } catch (e) {
       alert('Lỗi tắt bảo trì: ' + e.message);
     } finally {
@@ -61,9 +80,10 @@ export default function MaintenanceGate({ children }) {
     }
   };
 
-  // Dang kiem tra thi hien man hinh xam trong, tranh loe noi dung web truoc khi chan.
+  // Chi lan dau tien chua co cache moi phai cho kiem tra, va cho bang man
+  // hinh trang co chu dang tai chu khong phai man hinh xam nua.
   if (maintenance === null) {
-    return <div className="min-h-screen w-full" style={{ backgroundColor: '#808080' }} />;
+    return <div className="min-h-screen w-full flex items-center justify-center font-sans text-slate-500 font-semibold animate-pulse">Đang tải...</div>;
   }
 
   if (maintenance && !isOwnerUser(user)) {
