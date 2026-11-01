@@ -100,6 +100,7 @@ export default function Mobile() {
     const [pwConfirm, setPwConfirm] = useState('');
     const [pwMessage, setPwMessage] = useState('');
     const [pwSaving, setPwSaving] = useState(false);
+    const [showPwForm, setShowPwForm] = useState(false);
     const [sheetDailyMsg, setSheetDailyMsg] = useState('');
     const [sheetPrintMsg, setSheetPrintMsg] = useState('');
     const [sheetDailyLoading, setSheetDailyLoading] = useState(false);
@@ -458,7 +459,7 @@ export default function Mobile() {
             const { error } = await supabase.auth.updateUser({ password: pwNew });
             if (error) throw error;
             setPwMessage('Đã đổi mật khẩu thành công.');
-            setPwCurrent(''); setPwNew(''); setPwConfirm('');
+            setPwCurrent(''); setPwNew(''); setPwConfirm(''); setShowPwForm(false);
         } catch (err) { setPwMessage('Lỗi: ' + err.message); }
         finally { setPwSaving(false); }
     };
@@ -642,17 +643,17 @@ export default function Mobile() {
                         <Section icon={User} title="Tài khoản">
                             <div className="text-sm"><span className="text-slate-500">Email: </span><span className="font-bold text-slate-900 break-all">{user.email}</span></div>
                             <div className="text-sm"><span className="text-slate-500">Vai trò: </span><span className="font-bold text-slate-900">{roleLabel(role)}{isOwnerUser ? ' (Owner)' : ''}</span></div>
+                            <button onClick={() => setShowPwForm(v => !v)} className="w-full py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-700 flex items-center justify-center gap-2"><Lock size={16} /> Đổi mật khẩu</button>
+                            {showPwForm && (
+                                <form onSubmit={handleChangePassword} className="space-y-2">
+                                    <input type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} placeholder="Mật khẩu hiện tại" className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-blue-500 bg-white" required />
+                                    <input type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} placeholder="Mật khẩu mới (từ 6 ký tự)" className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-blue-500 bg-white" required />
+                                    <input type="password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} placeholder="Nhập lại mật khẩu mới" className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-blue-500 bg-white" required />
+                                    <button type="submit" disabled={pwSaving} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50">Lưu mật khẩu mới</button>
+                                </form>
+                            )}
+                            {pwMessage && <div className={`text-sm font-medium ${pwMessage.startsWith('Đã') ? 'text-green-700' : 'text-red-700'}`}>{pwMessage}</div>}
                             <button onClick={handleLogout} className="w-full py-3 bg-red-50 border border-red-200 rounded-xl text-sm font-bold text-red-700 flex items-center justify-center gap-2"><LogOut size={16} /> Đăng xuất</button>
-                        </Section>
-
-                        <Section icon={Lock} title="Đổi mật khẩu">
-                            <form onSubmit={handleChangePassword} className="space-y-2">
-                                <input type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} placeholder="Mật khẩu hiện tại" className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-blue-500 bg-white" required />
-                                <input type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} placeholder="Mật khẩu mới (từ 6 ký tự)" className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-blue-500 bg-white" required />
-                                <input type="password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} placeholder="Nhập lại mật khẩu mới" className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-blue-500 bg-white" required />
-                                {pwMessage && <div className={`text-sm font-medium ${pwMessage.startsWith('Đã') ? 'text-green-700' : 'text-red-700'}`}>{pwMessage}</div>}
-                                <button type="submit" disabled={pwSaving} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50">Đổi mật khẩu</button>
-                            </form>
                         </Section>
 
                         {isAdminOrOwner && (
