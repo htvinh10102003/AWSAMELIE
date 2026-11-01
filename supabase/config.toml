@@ -81,3 +81,9 @@ enabled = true
 verify_jwt = false
 import_map = "./functions/sync-sheets/deno.json"
 entrypoint = "./functions/sync-sheets/index.ts"
+
+[functions.nhanh-order-actions]
+enabled = true
+verify_jwt = false
+import_map = "./functions/nhanh-order-actions/deno.json"
+entrypoint = "./functions/nhanh-order-actions/index.ts"

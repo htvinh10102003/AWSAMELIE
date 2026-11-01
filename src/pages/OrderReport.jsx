@@ -133,6 +133,34 @@ const fmtWeight = (g) => {
 };
 const stripHtml = (s) => String(s || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '').trim();
 
+// Tên hành động trong lịch sử Nhanh (order step, theo tài liệu Nhanh.vn).
+const NHANH_STEP_NAMES = {
+    1: 'Tạo đơn hàng', 2: 'Xác nhận', 3: 'In đơn hàng', 4: 'Vận chuyển',
+    6: 'Sửa đơn hàng', 7: 'Đổi trạng thái', 8: 'Gửi đơn sang HVC',
+    9: 'Cập nhật tiền chuyển khoản', 10: 'Đổi kho hàng',
+    11: 'Thêm đơn hàng vào biên bản', 12: 'Xóa đơn hàng khỏi biên bản',
+    13: 'HVC cập nhật trạng thái', 14: 'Đổi hãng vận chuyển',
+    15: 'Báo hãng vận chuyển hủy', 16: 'HVC trả về mã code',
+    17: 'Xóa đơn hàng', 18: 'Trả về trạng thái và khối lượng',
+    19: 'Thêm nội dung đơn hàng', 20: 'API cập nhật đơn hàng',
+    21: 'HVC đã nhận hàng', 22: 'Gộp đơn hàng', 23: 'Gộp đơn hàng (lỗi)',
+    25: 'Gửi đơn sang HVC (lỗi)', 26: 'Thay đổi mã vận đơn HVC',
+    27: 'Lấy trạng thái từ HVC', 28: 'Đổi trạng thái từ biên bản bàn giao',
+    29: 'Chuyển từ Tour sang biên bản', 30: 'Lỗi hủy đơn HVC',
+    31: 'Lỗi lấy lịch trình từ HVC', 32: 'Vượt cân', 33: 'Đối soát lỗi',
+    34: 'Import đơn hàng', 35: 'Import trạng thái đơn hàng',
+    36: 'Đang đối soát', 37: 'Đã đối soát', 38: 'Tạo hóa đơn bán lẻ',
+    39: 'Chuyển đơn hàng sang bán sỉ', 40: 'Đơn hàng chuyển kho',
+    41: 'Copy đơn hàng', 42: 'Đóng gói', 43: 'Cập nhật nhân viên đóng gói',
+    44: 'Tạo đơn giao hàng một phần', 45: 'Xóa đơn hàng khỏi tour',
+    46: 'Tạo link thanh toán', 47: 'Tạo phiếu xuất kho',
+    48: 'Tạo phiếu nhập kho', 49: 'Xóa phiếu xuất kho',
+    50: 'Xóa phiếu nhập kho', 51: 'Gửi thông tin sang Vpage',
+    52: 'Hủy ghép nối giao dịch chuyển khoản', 53: 'Nhập hoàn kho',
+    54: 'Tách đơn hàng', 55: 'Gửi hàng đa điểm', 56: 'Sửa COD',
+    57: 'Cập nhật nhân viên bán hàng', 58: 'Tạo hóa đơn điện tử',
+};
+
 const OPTIONAL_COLUMNS = [
     { id: 'carrier', label: 'Hãng vận chuyển & Trạng thái' },
     { id: 'source', label: 'Nguồn đơn & Kênh' },
@@ -252,9 +280,36 @@ export default function OrderReport() {
     // để đọc thành luồng hành trình của đơn.
     const [detailHistory, setDetailHistory] = useState([]);
     const [detailHistoryLoading, setDetailHistoryLoading] = useState(false);
-    // Nút Thao tác ở góc popup: tạm thời chưa có chức năng, chỉ hiện ghi
-    // chú chờ tài liệu Nhanh.vn (xem mục 5).
-    const [showDetailActionNote, setShowDetailActionNote] = useState(false);
+    // Nút Thao tác ở góc popup: menu gọi API v3 của Nhanh.vn qua edge
+    // function nhanh-order-actions (chỉ owner). Panel nào đang mở thì
+    // detailAction giữ tên panel đó, đóng panel thì về null.
+    const [showDetailActionMenu, setShowDetailActionMenu] = useState(false);
+    const [detailAction, setDetailAction] = useState(null); // edit | send | cancel
+    const [detailActionLoading, setDetailActionLoading] = useState(false);
+    const [detailActionMsg, setDetailActionMsg] = useState('');
+    const [detailSendDone, setDetailSendDone] = useState(false);
+    const [editDescription, setEditDescription] = useState('');
+    const [editPrivateDescription, setEditPrivateDescription] = useState('');
+    const [editStatus, setEditStatus] = useState('');
+    const [cancelReason, setCancelReason] = useState('');
+    // Lịch sử Nhanh.vn trong popup: mặc định ẩn, bấm mới tải về hiển thị.
+    const [nhanhHistory, setNhanhHistory] = useState([]);
+    const [nhanhHistorySource, setNhanhHistorySource] = useState('all');
+    const [nhanhHistoryLoading, setNhanhHistoryLoading] = useState(false);
+    const [nhanhHistoryLoaded, setNhanhHistoryLoaded] = useState(false);
+    const [nhanhHistoryMsg, setNhanhHistoryMsg] = useState('');
+    // Bộ lọc nhãn ở báo cáo đặc biệt: nhãn chỉ có cho đơn mới đồng bộ
+    // sau khi chạy migration + sync-nhanh mới (đơn cũ bỏ qua).
+    const [selectedTags, setSelectedTags] = useState([]);
+    const [nhanhTagOptions, setNhanhTagOptions] = useState([]);
+    const [nhanhTagOptionsLoaded, setNhanhTagOptionsLoaded] = useState(false);
+    // Gửi / hủy hàng loạt từ nút Thao tác trên thanh công cụ.
+    const [bulkSendResult, setBulkSendResult] = useState(null);
+    const [showBulkSendModal, setShowBulkSendModal] = useState(false);
+    const [showBulkCancelModal, setShowBulkCancelModal] = useState(false);
+    const [cancelReasonBulk, setCancelReasonBulk] = useState('');
+    const [bulkCancelRunning, setBulkCancelRunning] = useState(false);
+    const [bulkCancelResult, setBulkCancelResult] = useState(null);
     
     // UI State
     const [activeTab, setActiveTab] = useState('printable');
@@ -543,6 +598,96 @@ export default function OrderReport() {
         try {
             const asc = specialSortOrder === 'asc';
             const orderBy = (q) => q.order('created_at', { ascending: asc }).order('id', { ascending: asc });
+            if (selectedTags.length > 0) {
+                // Đường lọc theo nhãn: nhãn chỉ có trong bảng order_tags
+                // cho đơn mới đồng bộ. Kéo id đơn gắn nhãn đã chọn theo
+                // từng đợt 1000 rồi khử trùng; nếu đồng thời tìm theo sản
+                // phẩm thì giao với tập id tìm theo sản phẩm, sau đó kéo
+                // trường phục vụ lọc tab cho các id đó rồi tính tổng số +
+                // trang như đường tìm theo sản phẩm.
+                const tagIdSet = new Set();
+                let tagOffset = 0;
+                for (let chunk = 0; chunk < 50; chunk++) {
+                    const { data: rows, error } = await supabase.from('order_tags')
+                        .select('order_id')
+                        .in('tag_id', selectedTags)
+                        .range(tagOffset, tagOffset + 999);
+                    if (error) throw error;
+                    const list = rows || [];
+                    list.forEach(r => tagIdSet.add(String(r.order_id)));
+                    if (list.length < 1000) break;
+                    tagOffset += 1000;
+                }
+                let candidateIds = [...tagIdSet];
+                if (debouncedSearchProduct.trim()) {
+                    const pq = escapeLike(debouncedSearchProduct.trim());
+                    const productIdSet = new Set();
+                    let offset = 0;
+                    for (let chunk = 0; chunk < 50; chunk++) {
+                        let q = supabase.from('orders')
+                            .select('id, order_products!inner(product_name, product_code)');
+                        q = applySpecialFilters(q, { tabId: null, missingOnly: false });
+                        q = q.or(`product_name.ilike.%${pq}%,product_code.ilike.%${pq}%`, { foreignTable: 'order_products' });
+                        q = q.range(offset, offset + 999);
+                        const { data: rows, error } = await q;
+                        if (error) throw error;
+                        const list = rows || [];
+                        list.forEach(r => productIdSet.add(String(r.id)));
+                        if (list.length < 1000) break;
+                        offset += 1000;
+                    }
+                    candidateIds = candidateIds.filter(id => productIdSet.has(id));
+                }
+                const fieldRows = [];
+                const fieldSeen = new Set();
+                for (let i = 0; i < candidateIds.length; i += 1000) {
+                    const chunkIds = candidateIds.slice(i, i + 1000);
+                    let q = supabase.from('orders')
+                        .select('id, status, carrier_name, carrier_code, created_at');
+                    q = applySpecialFilters(q, { tabId: null, missingOnly: false });
+                    q = orderBy(q).in('id', chunkIds);
+                    const { data: rows, error } = await q;
+                    if (error) throw error;
+                    (rows || []).forEach(r => { if (!fieldSeen.has(r.id)) { fieldSeen.add(r.id); fieldRows.push(r); } });
+                }
+                // Kéo theo từng đợt nên phải sắp lại theo thứ tự đã chọn.
+                fieldRows.sort((a, b) => {
+                    const da = new Date(a.created_at).getTime(), db = new Date(b.created_at).getTime();
+                    if (da !== db) return asc ? da - db : db - da;
+                    return asc ? Number(a.id) - Number(b.id) : Number(b.id) - Number(a.id);
+                });
+                const isConfirmTag = (o) => SPECIAL_CONFIRM_STATUSES.includes(String(o.status)) && !hasRealCarrier(o);
+                const isPrintTag = (o) => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && hasRealCarrier(o);
+                const isTransitTag = (o) => SPECIAL_TRANSIT_STATUSES.includes(String(o.status));
+                const isMissingTag = (o) => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && !hasRealCarrier(o);
+                const countsTag = {
+                    all: fieldRows.length,
+                    confirm: fieldRows.filter(isConfirmTag).length,
+                    print: fieldRows.filter(isPrintTag).length,
+                    transit: fieldRows.filter(isTransitTag).length,
+                };
+                const missingTotalTag = fieldRows.filter(isMissingTag).length;
+                const viewListTag = specialOnlyMissingPrint
+                    ? fieldRows.filter(isMissingTag)
+                    : fieldRows.filter(o => specialTab === 'all' ? true : specialTab === 'confirm' ? isConfirmTag(o) : specialTab === 'print' ? isPrintTag(o) : isTransitTag(o));
+                const totalTag = viewListTag.length;
+                const totalPagesTag = Math.max(1, Math.ceil(totalTag / SPECIAL_PAGE_SIZE));
+                const effectivePageTag = totalTag > 0 ? Math.min(page, totalPagesTag) : 1;
+                if (effectivePageTag !== page) setSpecialPage(effectivePageTag);
+                const pageIdsTag = viewListTag.slice((effectivePageTag - 1) * SPECIAL_PAGE_SIZE, effectivePageTag * SPECIAL_PAGE_SIZE).map(o => o.id);
+                let rowsTag = [];
+                if (pageIdsTag.length) {
+                    const { data: full, error } = await supabase.from('orders').select(SPECIAL_COLUMNS).in('id', pageIdsTag);
+                    if (error) throw error;
+                    const byId = new Map((full || []).map(o => [o.id, o]));
+                    rowsTag = pageIdsTag.map(id => byId.get(id)).filter(Boolean);
+                }
+                setSpecialCounts(countsTag);
+                setSpecialMissingTotal(missingTotalTag);
+                setSpecialTotal(totalTag);
+                setSpecialPageOrders(rowsTag);
+                return;
+            }
             if (debouncedSearchProduct.trim()) {
                 // Đường tìm theo sản phẩm: phải nối bảng order_products nên
                 // không đếm bằng count query được (join làm trùng đơn).
@@ -640,7 +785,7 @@ export default function OrderReport() {
 
     // Đổi tab / ngày / bộ lọc / sắp xếp thì quay về trang 1 rồi mới tải,
     // để khỏi tải nhầm trang cũ với bộ lọc mới.
-    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0'].join('|');
+    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), selectedTags.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0'].join('|');
     useEffect(() => {
         if (!specialMode) return;
         if (specialFilterSigRef.current !== specialFilterSig) {
@@ -649,7 +794,7 @@ export default function OrderReport() {
         }
         fetchSpecialData(specialPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialPage, specialReloadToken]);
+    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, selectedTags, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialPage, specialReloadToken]);
 
     // Đổi trang thì bỏ chọn cũ để nút Copy / Xuất chỉ tính trên trang mới.
     useEffect(() => {
@@ -674,7 +819,13 @@ export default function OrderReport() {
         setShowRawJson(false);
         setDetailHistory([]);
         setDetailHistoryLoading(true);
-        setShowDetailActionNote(false);
+        setShowDetailActionMenu(false);
+        setDetailAction(null);
+        setDetailActionMsg('');
+        setDetailSendDone(false);
+        setNhanhHistory([]);
+        setNhanhHistoryLoaded(false);
+        setNhanhHistoryMsg('');
         try {
             // Lấy toàn bộ cột của đơn trong bảng orders. Nếu bảng có cột
             // chứa JSON gốc của Nhanh (ví dụ raw_data / data / payload),
@@ -699,6 +850,168 @@ export default function OrderReport() {
             console.error('Lỗi tải lịch sử đơn:', err);
         } finally {
             setDetailHistoryLoading(false);
+        }
+    };
+
+    // --- Thao tác Nhanh.vn (qua edge function nhanh-order-actions,
+    // chỉ owner) ---
+    const callNhanhActionRaw = async (action, body = {}) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/nhanh-order-actions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
+            body: JSON.stringify({ action, ...body }),
+        });
+        return res.json();
+    };
+    const callNhanhOrderAction = async (action, body = {}) => {
+        if (!detailOrder) return { success: false, message: 'Chưa mở đơn hàng nào.' };
+        return callNhanhActionRaw(action, { orderId: detailOrder.id, ...body });
+    };
+    // Vá lại dòng đơn đang hiển thị trong popup sau khi Nhanh nhận thao
+    // tác (bảng orders trong Supabase chỉ đồng bộ lại ở lần kéo đơn sau,
+    // nên popup tự cập nhật trước để owner thấy kết quả ngay).
+    const patchDetailRow = (patch) => {
+        setDetailOrder(prev => prev ? { ...prev, ...patch } : prev);
+        setDetailData(prev => prev ? { ...prev, ...patch } : prev);
+    };
+    const openDetailAction = (kind) => {
+        setShowDetailActionMenu(false);
+        setDetailActionMsg('');
+        if (kind === 'edit' && detailOrder) {
+            setEditDescription(stripHtml(detailOrder.description || ''));
+            setEditPrivateDescription(stripHtml(detailOrder.private_description || ''));
+            setEditStatus('');
+        }
+        if (kind === 'cancel') setCancelReason('');
+        if (kind === 'send') setDetailSendDone(false);
+        setDetailAction(kind);
+    };
+    const handleSaveEdit = async () => {
+        const body = {};
+        if (editDescription !== stripHtml(detailOrder?.description || '')) body.description = editDescription;
+        if (editPrivateDescription !== stripHtml(detailOrder?.private_description || '')) body.privateDescription = editPrivateDescription;
+        if (editStatus) body.status = Number(editStatus);
+        if (Object.keys(body).length === 0) {
+            setDetailActionMsg('Chưa thay đổi thông tin nào.');
+            return;
+        }
+        setDetailActionLoading(true);
+        setDetailActionMsg('');
+        try {
+            const result = await callNhanhOrderAction('edit', body);
+            if (result.success) {
+                const patch = {};
+                if (body.description !== undefined) patch.description = body.description;
+                if (body.privateDescription !== undefined) patch.private_description = body.privateDescription;
+                if (body.status !== undefined) patch.status = body.status;
+                patchDetailRow(patch);
+                setSpecialReloadToken(t => t + 1);
+                setDetailActionMsg('Đã lưu thay đổi lên Nhanh.vn.');
+            } else setDetailActionMsg(result.message || 'Nhanh.vn từ chối lưu thay đổi.');
+        } catch (err) {
+            setDetailActionMsg(`Lỗi hệ thống: ${err.message}`);
+        } finally {
+            setDetailActionLoading(false);
+        }
+    };
+    // Gửi 1 đơn trong popup: kết quả nằm ở results[0].
+    const handleSendShip = async () => {
+        setDetailActionLoading(true);
+        setDetailActionMsg('');
+        try {
+            const result = await callNhanhOrderAction('send');
+            const first = result.results?.[0];
+            if (first?.ok) {
+                if (first.carrierCode) patchDetailRow({ carrier_code: first.carrierCode });
+                setSpecialReloadToken(t => t + 1);
+                setDetailSendDone(true);
+                setDetailActionMsg(first.existed
+                    ? `Đơn đã gửi từ trước, mã vận đơn cũ: ${first.carrierCode || 'không rõ'}.`
+                    : (first.carrierCode ? `Đã gửi sang hãng, mã vận đơn: ${first.carrierCode}.` : 'Đã gửi đơn sang hãng vận chuyển.'));
+            } else setDetailActionMsg(first?.message || result.message || 'Nhanh.vn từ chối gửi đơn.');
+        } catch (err) {
+            setDetailActionMsg(`Lỗi hệ thống: ${err.message}`);
+        } finally {
+            setDetailActionLoading(false);
+        }
+    };
+    // Hủy 1 đơn trong popup.
+    const handleCancelShip = async () => {
+        setDetailActionLoading(true);
+        setDetailActionMsg('');
+        try {
+            const result = await callNhanhOrderAction('cancel', cancelReason ? { cancelReason } : {});
+            const first = result.results?.[0];
+            if (first?.ok) {
+                if (first.status) patchDetailRow({ status: first.status });
+                setSpecialReloadToken(t => t + 1);
+                setDetailActionMsg(first.statusName ? `Đã hủy đơn trên Nhanh: ${first.statusName}.` : 'Đã hủy đơn trên Nhanh.');
+            } else setDetailActionMsg(first?.message || result.message || 'Nhanh.vn từ chối hủy đơn.');
+        } catch (err) {
+            setDetailActionMsg(`Lỗi hệ thống: ${err.message}`);
+        } finally {
+            setDetailActionLoading(false);
+        }
+    };
+    // Lịch sử Nhanh.vn trong popup: mặc định ẩn, bấm mới tải.
+    const handleLoadNhanhHistory = async () => {
+        setNhanhHistoryLoading(true);
+        setNhanhHistoryMsg('');
+        try {
+            const result = await callNhanhOrderAction('history');
+            if (result.success) {
+                setNhanhHistory(result.data || []);
+                setNhanhHistoryLoaded(true);
+            } else setNhanhHistoryMsg(result.message || 'Không tải được lịch sử từ Nhanh.');
+        } catch (err) {
+            setNhanhHistoryMsg(`Lỗi hệ thống: ${err.message}`);
+        } finally {
+            setNhanhHistoryLoading(false);
+        }
+    };
+    // Danh sách nhãn cho bộ lọc: tải 1 lần khi mở báo cáo đặc biệt.
+    useEffect(() => {
+        if (!specialMode || nhanhTagOptionsLoaded) return;
+        setNhanhTagOptionsLoaded(true);
+        callNhanhActionRaw('tags').then(result => {
+            if (result.success) setNhanhTagOptions((result.data || []).map(t => ({ value: String(t.id), label: t.name })));
+        }).catch(() => {});
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [specialMode]);
+    // Gửi hàng loạt từ nút Thao tác trên thanh công cụ: tick bao nhiêu
+    // gửi bấy nhiêu, xong hiện popup kết quả kèm nút in các đơn vừa gửi.
+    const handleBulkSend = async () => {
+        if (selectedOrders.length === 0) return;
+        setSendingOrder(true);
+        setShowActionMenu(false);
+        try {
+            const result = await callNhanhActionRaw('send', { orderIds: selectedOrders });
+            setBulkSendResult(result);
+            setShowBulkSendModal(true);
+            if (result.okCount > 0) setSpecialReloadToken(t => t + 1);
+        } catch (err) {
+            setCopyMessage(`Lỗi hệ thống: ${err.message}`);
+            setTimeout(() => setCopyMessage(''), 5000);
+        } finally {
+            setSendingOrder(false);
+        }
+    };
+    // Hủy hàng loạt: tick bao nhiêu hủy bấy nhiêu, 1 lý do chung.
+    const handleBulkCancel = async () => {
+        if (selectedOrders.length === 0) return;
+        setBulkCancelRunning(true);
+        try {
+            const result = await callNhanhActionRaw('cancel', { orderIds: selectedOrders, cancelReason: cancelReasonBulk || undefined });
+            setBulkCancelResult(result);
+            if (result.okCount > 0) {
+                setSpecialReloadToken(t => t + 1);
+                setSelectedOrders([]);
+            }
+        } catch (err) {
+            setBulkCancelResult({ success: false, results: [], message: `Lỗi hệ thống: ${err.message}` });
+        } finally {
+            setBulkCancelRunning(false);
         }
     };
 
@@ -916,7 +1229,7 @@ export default function OrderReport() {
         specialPageOrders.forEach(o => { if (o.depot_id !== null && o.depot_id !== undefined) m.set(String(o.depot_id), DEPOT_NAMES[o.depot_id] || `Kho ${o.depot_id}`); });
         return [...m.entries()].map(([value, label]) => ({ value, label }));
     })();
-    const activeFilterCount = (searchProduct ? 1 : 0) + (searchNote ? 1 : 0) + selectedStatus.length + selectedCarrier.length + selectedChannel.length + selectedCreator.length + selectedDepot.length + (printedFilter ? 1 : 0) + (missingCarrierFilter ? 1 : 0);
+    const activeFilterCount = (searchProduct ? 1 : 0) + (searchNote ? 1 : 0) + selectedStatus.length + selectedCarrier.length + selectedChannel.length + selectedCreator.length + selectedDepot.length + selectedTags.length + (printedFilter ? 1 : 0) + (missingCarrierFilter ? 1 : 0);
     const handleClearSpecialFilters = () => {
         setSearchProduct('');
         setSearchNote('');
@@ -925,6 +1238,7 @@ export default function OrderReport() {
         setSelectedChannel([]);
         setSelectedCreator([]);
         setSelectedDepot([]);
+        setSelectedTags([]);
         setPrintedFilter('');
         setMissingCarrierFilter(false);
         setSpecialSortOrder('desc');
@@ -1245,43 +1559,24 @@ export default function OrderReport() {
 
     const isAllSelected = paginatedOrders.length > 0 && paginatedOrders.every(o => selectedOrders.includes(o.id));
 
-    const executePrint = (printSize) => {
+    // Mở trang in của Nhanh cho đúng các đơn truyền vào (mẫu từ báo cáo
+    // cũ). Dùng chung cho: in đơn đã tick, in 1 đơn trong popup, và in
+    // các đơn vừa gửi xong.
+    const openNhanhPrint = (orderIds, printSize) => {
         if (!businessId) { alert("️ Chưa cấu hình Business ID!"); return; }
+        if (!orderIds || orderIds.length === 0) return;
+        const idString = orderIds.join(',');
         let printUrl = "";
-        const idString = selectedOrders.join(',');
-        if (selectedOrders.length === 1) {
+        if (orderIds.length === 1) {
             printUrl = `https://nhanh.vn/order/manage/pickup?storeId=${businessId}&businessId=${businessId}&ids=${idString}&emptyLayout=true&printDialogMode=manual&format=print${printSize === 'K80' ? '&typePrint=k80' : ''}`;
-        } else if (selectedOrders.length > 1) {
+        } else {
             printUrl = `https://nhanh.vn/order/manage/pickup?ids=${idString}&storeId=${businessId}&format=print&printDialogMode=manual&noclose=1${printSize === 'K80' ? '&typePrint=k80' : ''}`;
         }
-        if (printUrl) { window.open(printUrl, '_blank'); setShowActionMenu(false); }
+        window.open(printUrl, '_blank');
     };
-
-    const handleSendCarrier = async () => {
-        if (selectedOrders.length === 0) return;
-        setSendingOrder(true);
+    const executePrint = (printSize) => {
+        openNhanhPrint(selectedOrders, printSize);
         setShowActionMenu(false);
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/nhanh-carrier`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-                body: JSON.stringify({ action: 'sendCarrier', orderIds: selectedOrders })
-            });
-            const result = await response.json();
-            if (result.success) {
-                setCopyMessage(` Đã gửi ${selectedOrders.length} đơn sang hãng vận chuyển.`);
-                setSelectedOrders([]);
-                fetchAllocation(statusDict); 
-            } else {
-                setCopyMessage(`️ Lỗi gửi đơn: ${result.message}`);
-            }
-        } catch (error) {
-            setCopyMessage('️ Đã xảy ra lỗi hệ thống.');
-        } finally {
-            setSendingOrder(false);
-            setTimeout(() => setCopyMessage(''), 5000);
-        }
     };
 
     const renderAgingBadge = (dateStr) => {
@@ -1590,7 +1885,8 @@ export default function OrderReport() {
                                             <button onClick={() => executePrint('K80')} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
                                             
                                             <div className="px-3 py-1.5 mt-1 text-[11px] font-semibold text-gray-400 uppercase bg-gray-50 border-t border-gray-100">Vận Chuyển</div>
-                                            <button onClick={handleSendCarrier} className="w-full text-left px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 flex items-center gap-2"><Send size={15} /> Gửi Hãng Vận Chuyển</button>
+                                            <button onClick={handleBulkSend} className="w-full text-left px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 flex items-center gap-2"><Send size={15} /> Gửi đơn sang hãng</button>
+                                            <button onClick={() => { setShowActionMenu(false); setBulkCancelResult(null); setCancelReasonBulk(''); setShowBulkCancelModal(true); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><XCircle size={15} /> Hủy đơn</button>
 
                                             <div className="px-3 py-1.5 mt-1 text-[11px] font-semibold text-gray-400 uppercase bg-gray-50 border-t border-gray-100">Hệ Thống</div>
                                             <button onClick={handleUpdateSelectedWebhooks} className="w-full text-left px-4 py-2 text-sm text-blue-700 hover:bg-blue-50 flex items-center gap-2"><RefreshCw size={15} /> Cập nhật lại Webhook</button>
@@ -1651,7 +1947,11 @@ export default function OrderReport() {
                                     <MultiSelect options={effectiveChannelOptions} selected={selectedChannel} onChange={setSelectedChannel} placeholder="Kênh bán" />
                                     <MultiSelect options={effectiveDepotOptions} selected={selectedDepot} onChange={setSelectedDepot} placeholder="Kho hàng" />
                                     <MultiSelect options={effectiveCreatorOptions} selected={selectedCreator} onChange={setSelectedCreator} placeholder="Nhân viên" />
+                                    {specialMode && <MultiSelect options={nhanhTagOptions} selected={selectedTags} onChange={setSelectedTags} placeholder="Nhãn đơn" />}
                                 </div>
+                                {specialMode && nhanhTagOptions.length === 0 && (
+                                    <p className="text-xs text-slate-500">Chưa có nhãn nào: nhãn chỉ có cho đơn mới đồng bộ sau khi chạy migration + sync-nhanh mới.</p>
+                                )}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <select value={printedFilter} onChange={(e) => setPrintedFilter(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg outline-none focus:border-blue-500 bg-gray-50">
                                         <option value="">Lọc theo Trạng thái in</option>
@@ -1963,14 +2263,75 @@ export default function OrderReport() {
                                     <h3 className="font-bold text-lg text-slate-800">Chi tiết đơn hàng #{detailOrder.id}</h3>
                                     <p className="text-sm text-slate-500 mt-0.5">Trạng thái: {statusName} &nbsp;|&nbsp; Kênh: {channelName} &nbsp;|&nbsp; Tình trạng kho: {stockInfo.label}</p>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <button onClick={() => setShowDetailActionNote(v => !v)} className="px-3 py-1.5 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800">Thao tác</button>
+                                <div className="flex items-center gap-2 shrink-0 relative">
+                                    <button onClick={() => setShowDetailActionMenu(v => !v)} className="px-3 py-1.5 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800">Thao tác</button>
+                                    {showDetailActionMenu && (
+                                        <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1" onClick={(e) => e.stopPropagation()}>
+                                            <button onClick={() => openDetailAction('send')} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Gửi đơn</button>
+                                            <button onClick={() => openDetailAction('edit')} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Sửa đơn</button>
+                                            <button onClick={() => { setShowDetailActionMenu(false); openNhanhPrint([detailOrder.id], 'A4'); }} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">In đơn</button>
+                                            <button onClick={() => openDetailAction('cancel')} className="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50">Hủy đơn</button>
+                                        </div>
+                                    )}
                                     <button onClick={() => setDetailOrder(null)} className="text-slate-400 hover:text-slate-600"><XCircle size={22} /></button>
                                 </div>
                             </div>
-                            {showDetailActionNote && (
-                                <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 text-sm font-medium text-amber-800">
-                                    Chưa có thao tác nào — các chức năng thao tác sẽ được bổ sung sau khi có tài liệu Nhanh.vn.
+                            {detailAction && (
+                                <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="text-sm font-bold text-slate-800">
+                                            {detailAction === 'edit' && 'Sửa đơn trên Nhanh'}
+                                            {detailAction === 'send' && 'Gửi đơn sang hãng vận chuyển'}
+                                            {detailAction === 'cancel' && 'Hủy đơn trên Nhanh'}
+                                        </h4>
+                                        <button onClick={() => setDetailAction(null)} className="text-slate-400 hover:text-slate-600 text-sm font-bold">Đóng</button>
+                                    </div>
+                                    {detailAction === 'edit' && (
+                                        <div className="space-y-2">
+                                            <label className="block text-xs font-bold text-slate-600">Ghi chú đơn</label>
+                                            <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500" />
+                                            <label className="block text-xs font-bold text-slate-600">Ghi chú nội bộ</label>
+                                            <textarea value={editPrivateDescription} onChange={(e) => setEditPrivateDescription(e.target.value)} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500" />
+                                            <label className="block text-xs font-bold text-slate-600">Trạng thái</label>
+                                            <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500">
+                                                <option value="">Giữ nguyên trạng thái</option>
+                                                <option value="56">Đã xác nhận</option>
+                                                <option value="60">Thành công</option>
+                                                <option value="63">Khách hủy</option>
+                                                <option value="64">Hệ thống hủy</option>
+                                            </select>
+                                            <p className="text-xs text-slate-500">Nhanh.vn không cho sửa đơn đã gửi sang hãng, đơn Thành công hoặc đơn đã hoàn — trường hợp đó sẽ báo lỗi từ Nhanh.</p>
+                                            <button onClick={handleSaveEdit} disabled={detailActionLoading} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
+                                                {detailActionLoading && <RefreshCw size={14} className="animate-spin" />} Lưu thay đổi
+                                            </button>
+                                        </div>
+                                    )}
+                                    {detailAction === 'send' && (
+                                        <div className="space-y-2">
+                                            {hasRealCarrier(detailOrder) && <p className="text-sm font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Đơn đã có mã vận đơn {detailOrder.carrier_code}, Nhanh sẽ trả lại mã cũ nếu đơn đã gửi rồi.</p>}
+                                            <p className="text-sm text-slate-600">Gửi đơn này sang hãng vận chuyển để lấy mã vận đơn trên Nhanh.</p>
+                                            <button onClick={handleSendShip} disabled={detailActionLoading} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
+                                                {detailActionLoading && <RefreshCw size={14} className="animate-spin" />} Xác nhận gửi sang hãng
+                                            </button>
+                                            {detailSendDone && (
+                                                <div className="flex gap-2 pt-1">
+                                                    <button onClick={() => openNhanhPrint([detailOrder.id], 'A4')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In đơn hàng (A4/A5)</button>
+                                                    <button onClick={() => openNhanhPrint([detailOrder.id], 'K80')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                    {detailAction === 'cancel' && (
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">Hủy đơn trên Nhanh sẽ đổi trạng thái đơn và gọi hủy sang hãng nếu đơn đã gửi. Hành động này không hoàn tác được từ đây.</p>
+                                            <label className="block text-xs font-bold text-slate-600">Lý do hủy (không bắt buộc)</label>
+                                            <input value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} placeholder="VD: Khách hàng yêu cầu hủy" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500" />
+                                            <button onClick={handleCancelShip} disabled={detailActionLoading} className="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
+                                                {detailActionLoading && <RefreshCw size={14} className="animate-spin" />} Xác nhận hủy đơn
+                                            </button>
+                                        </div>
+                                    )}
+                                    {detailActionMsg && <p className="text-sm font-medium text-slate-700">{detailActionMsg}</p>}
                                 </div>
                             )}
                             <div className="p-5 overflow-y-auto space-y-6">
@@ -2113,6 +2474,50 @@ export default function OrderReport() {
                                     )}
                                 </section>
 
+                                <section>
+                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Lịch sử Nhanh.vn</h4>
+                                    {!nhanhHistoryLoaded ? (
+                                        <div className="space-y-2">
+                                            <p className="text-sm text-slate-500">Lịch sử này lấy trực tiếp từ Nhanh.vn, không tự tải khi mở popup.</p>
+                                            <button onClick={handleLoadNhanhHistory} disabled={nhanhHistoryLoading} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
+                                                {nhanhHistoryLoading && <RefreshCw size={14} className="animate-spin" />} Tải lịch sử Nhanh
+                                            </button>
+                                            {nhanhHistoryMsg && <p className="text-sm font-medium text-slate-700">{nhanhHistoryMsg}</p>}
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                {['all', 'Nhanh', 'Hãng vận chuyển'].map(src => (
+                                                    <button key={src} onClick={() => setNhanhHistorySource(src)} className={`px-3 py-1 rounded-full text-xs font-bold ${nhanhHistorySource === src ? 'bg-slate-900 text-white' : 'bg-white border border-slate-300 text-slate-600'}`}>
+                                                        {src === 'all' ? 'Tất cả' : src}
+                                                    </button>
+                                                ))}
+                                                <button onClick={handleLoadNhanhHistory} disabled={nhanhHistoryLoading} className="px-3 py-1 rounded-full text-xs font-bold bg-white border border-slate-300 text-slate-600 flex items-center gap-1">
+                                                    <RefreshCw size={12} className={nhanhHistoryLoading ? 'animate-spin' : ''} /> Tải lại
+                                                </button>
+                                            </div>
+                                            {nhanhHistoryMsg && <p className="text-sm font-medium text-slate-700">{nhanhHistoryMsg}</p>}
+                                            {nhanhHistory.filter(l => nhanhHistorySource === 'all' || l.source === nhanhHistorySource).length === 0 && (
+                                                <p className="text-sm text-slate-500">Không có lịch sử nào từ Nhanh cho đơn này.</p>
+                                            )}
+                                            <div className="max-h-64 overflow-y-auto space-y-1.5">
+                                                {nhanhHistory.filter(l => nhanhHistorySource === 'all' || l.source === nhanhHistorySource).map(l => (
+                                                    <div key={l.logId} className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                                                        <div className="flex justify-between gap-3">
+                                                            <span className="font-bold text-slate-800">{NHANH_STEP_NAMES[l.step] || `Hành động ${l.step}`}</span>
+                                                            <span className="text-xs text-slate-400 shrink-0">{fmtUnix(l.createdAt)} · {l.source}</span>
+                                                        </div>
+                                                        <p className="text-slate-500 text-xs mt-0.5">
+                                                            {l.status?.old !== null && l.status?.old !== undefined ? `${specialStatusName(l.status.old)} → ` : ''}{l.status?.new !== null && l.status?.new !== undefined ? specialStatusName(l.status.new) : 'Không đổi trạng thái'}
+                                                            {l.createdBy ? ` · ${l.createdBy}` : ''}
+                                                        </p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </section>
+
                                 <div className="border-t border-slate-200 pt-3">
                                     <button onClick={() => setShowRawJson(v => !v)} className="text-sm font-bold text-slate-700 hover:text-slate-900">{showRawJson ? 'Ẩn JSON gốc' : 'Xem JSON gốc'}</button>
                                     {showRawJson && (
@@ -2124,6 +2529,85 @@ export default function OrderReport() {
                     </div>
                 );
             })()}
+
+            {/* Kết quả gửi hàng loạt: kèm nút in các đơn vừa gửi xong */}
+            {showBulkSendModal && bulkSendResult && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50" onClick={() => setShowBulkSendModal(false)}>
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                        <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                            <h3 className="font-bold text-gray-800">Kết quả gửi đơn sang hãng</h3>
+                            <button onClick={() => setShowBulkSendModal(false)} className="text-gray-400 hover:text-gray-600"><XCircle size={20} /></button>
+                        </div>
+                        <div className="p-5 overflow-y-auto space-y-3">
+                            <p className="text-sm font-medium text-slate-700">
+                                Thành công <span className="font-bold text-green-700">{bulkSendResult.okCount || 0}</span> đơn
+                                {(bulkSendResult.failCount || 0) > 0 && (<> · Thất bại <span className="font-bold text-red-600">{bulkSendResult.failCount}</span> đơn</>)}.
+                            </p>
+                            {(bulkSendResult.results || []).filter(r => r.ok).length > 0 && (
+                                <div className="space-y-1">
+                                    {(bulkSendResult.results || []).filter(r => r.ok).map(r => (
+                                        <p key={r.id} className="text-sm text-slate-600">Đơn #{r.id}: mã vận đơn <span className="font-bold text-slate-800">{r.carrierCode || 'không rõ'}</span>{r.existed ? ' (đã gửi từ trước)' : ''}</p>
+                                    ))}
+                                </div>
+                            )}
+                            {(bulkSendResult.results || []).filter(r => !r.ok).length > 0 && (
+                                <div className="space-y-1 border-t border-slate-200 pt-2">
+                                    {(bulkSendResult.results || []).filter(r => !r.ok).map(r => (
+                                        <p key={r.id} className="text-sm text-red-600">Đơn #{r.id}: {r.message}</p>
+                                    ))}
+                                </div>
+                            )}
+                            {(bulkSendResult.results || []).filter(r => r.ok).length > 0 && (
+                                <div className="flex gap-2 pt-2">
+                                    <button onClick={() => openNhanhPrint((bulkSendResult.results || []).filter(r => r.ok).map(r => r.id), 'A4')} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 flex items-center gap-2"><Printer size={15} /> In đơn hàng (A4/A5)</button>
+                                    <button onClick={() => openNhanhPrint((bulkSendResult.results || []).filter(r => r.ok).map(r => r.id), 'K80')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
+                                </div>
+                            )}
+                            <p className="text-xs text-slate-500">Mã vận đơn sẽ hiện trong bảng sau khi hệ thống đồng bộ đơn từ Nhanh về.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Hủy hàng loạt: nhập 1 lý do chung rồi xác nhận */}
+            {showBulkCancelModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50" onClick={() => !bulkCancelRunning && setShowBulkCancelModal(false)}>
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                        <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                            <h3 className="font-bold text-gray-800">Hủy {selectedOrders.length} đơn đã chọn</h3>
+                            <button onClick={() => !bulkCancelRunning && setShowBulkCancelModal(false)} disabled={bulkCancelRunning} className="text-gray-400 hover:text-gray-600"><XCircle size={20} /></button>
+                        </div>
+                        <div className="p-5 overflow-y-auto space-y-3">
+                            {!bulkCancelResult ? (
+                                <>
+                                    <p className="text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">Hủy trên Nhanh sẽ đổi trạng thái các đơn này và gọi hủy sang hãng nếu đơn đã gửi. Hành động này không hoàn tác được từ đây.</p>
+                                    <label className="block text-xs font-bold text-slate-600">Lý do hủy chung (không bắt buộc)</label>
+                                    <input value={cancelReasonBulk} onChange={(e) => setCancelReasonBulk(e.target.value)} placeholder="VD: Khách hàng yêu cầu hủy" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500" />
+                                    <button onClick={handleBulkCancel} disabled={bulkCancelRunning} className="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
+                                        {bulkCancelRunning && <RefreshCw size={14} className="animate-spin" />} Xác nhận hủy {selectedOrders.length} đơn
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="text-sm font-medium text-slate-700">
+                                        Đã hủy <span className="font-bold text-green-700">{bulkCancelResult.okCount || 0}</span> đơn
+                                        {(bulkCancelResult.failCount || 0) > 0 && (<> · Thất bại <span className="font-bold text-red-600">{bulkCancelResult.failCount}</span> đơn</>)}.
+                                    </p>
+                                    {(bulkCancelResult.results || []).filter(r => !r.ok).length > 0 && (
+                                        <div className="space-y-1">
+                                            {(bulkCancelResult.results || []).filter(r => !r.ok).map(r => (
+                                                <p key={r.id} className="text-sm text-red-600">Đơn #{r.id}: {r.message}</p>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {bulkCancelResult.message && <p className="text-sm text-red-600">{bulkCancelResult.message}</p>}
+                                    <button onClick={() => setShowBulkCancelModal(false)} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800">Đóng</button>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Missed Webhook Modal */}
             {showMissedModal && (

@@ -94,6 +94,11 @@ serve(async (req) => {
           const ordersToUpsert: any[] = [];
           const productInsertions: any[] = [];
           const orderIds: string[] = [];
+          // Nhãn đơn: info.tags của API order/list. Chỉ đơn mới đồng bộ
+          // mới có nhãn (đơn cũ bỏ qua, cào lại sau). Bảng order_tags
+          // thay toàn bộ nhãn của đơn mỗi lần đồng bộ lại đơn đó.
+          const tagInsertions: any[] = [];
+          const tagListRows: any[] = [];
 
           rawOrders.forEach((order: any) => {
             const info = order.info || {};
@@ -115,6 +120,28 @@ serve(async (req) => {
               created_by_name: info.createdByName || ''
             });
 
+            if (Array.isArray(info.tags)) {
+              info.tags.forEach((tag: any) => {
+                if (tag.id === undefined || tag.id === null) return;
+                const tagId = String(tag.id);
+                tagInsertions.push({
+                  order_id: orderId,
+                  tag_id: tagId,
+                  tag_name: tag.name || '',
+                  bg_color: tag.bgColor || null,
+                  text_color: tag.textColor || null
+                });
+                tagListRows.push({
+                  tag_id: tagId,
+                  name: tag.name || '',
+                  bg_color: tag.bgColor || null,
+                  text_color: tag.textColor || null,
+                  status: tag.status ?? null,
+                  updated_at: new Date().toISOString()
+                });
+              });
+            }
+
             if (order.products && Array.isArray(order.products)) {
               order.products.forEach((prod: any) => {
                 productInsertions.push({
@@ -132,6 +159,16 @@ serve(async (req) => {
             if (productInsertions.length > 0) {
               await supabase.from('order_products').delete().in('order_id', orderIds);
               await supabase.from('order_products').insert(productInsertions);
+            }
+            // Nhãn: xóa nhãn cũ của các đơn trong đợt rồi ghi nhãn mới.
+            // Bảng chưa có (chưa chạy migration) thì bỏ qua, không làm
+            // hỏng đợt đồng bộ.
+            await supabase.from('order_tags').delete().in('order_id', orderIds).then(() => {});
+            if (tagInsertions.length > 0) {
+              await supabase.from('order_tags').insert(tagInsertions).then(() => {});
+            }
+            if (tagListRows.length > 0) {
+              await supabase.from('nhanh_tags').upsert(tagListRows, { onConflict: 'tag_id' }).then(() => {});
             }
             totalSynced += ordersToUpsert.length;
           }
