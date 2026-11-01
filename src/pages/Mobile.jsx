@@ -15,8 +15,10 @@ import { getUserRole, isAdminRole, isSuperAdminRole, roleLabel } from '../lib/ro
 //   Chrome Android; trình duyệt không hỗ trợ thì vẫn nhập tay bình thường).
 // - Đối soát: chỉ Tổng in, Tổng đóng, Tổng hủy, Tổng bàn giao trong ngày hôm
 //   nay (đơn in trong ngày làm gốc, giống phiên đối soát bản máy tính), và
-//   danh sách đơn cần bàn giao lại (đã in trong ngày, chưa hủy, chưa có ngày
-//   bàn giao, và trạng thái không phải Đã đóng gói (40) hay Đang chuyển (59)).
+//   danh sách đơn cần bàn giao lại chỉ gồm đơn in trong ngày có trạng thái
+//   Đang đóng gói (42), Đã xác nhận (56) hoặc Chờ xác nhận (57). Đơn Đã đóng
+//   gói (40), Đang chuyển (59) và các trạng thái khác đã giao cho đơn vị vận
+//   chuyển rồi nên không cần bàn giao lại.
 // - Cài đặt: tài khoản (xem thông tin, đổi mật khẩu, đăng xuất) cho mọi người;
 //   quét Google Sheet cho admin/owner; giao diện lễ hội cho owner/super_admin;
 //   thông báo toàn hệ thống và khóa tính năng cho owner (đúng phân quyền bản máy tính).
@@ -321,7 +323,7 @@ export default function Mobile() {
         const totalPacked = reconData.filter(o => o.packed_at).length;
         const totalCanceled = reconData.filter(o => CANCELED_STATUS.includes(Number(o.status))).length;
         const totalHanded = reconData.filter(o => o.carrier_date).length;
-        const needHandover = reconData.filter(o => !CANCELED_STATUS.includes(Number(o.status)) && !o.carrier_date && Number(o.status) !== 40 && Number(o.status) !== 59);
+        const needHandover = reconData.filter(o => [42, 56, 57].includes(Number(o.status)));
         return { totalPrint, totalPacked, totalCanceled, totalHanded, needHandover };
     }, [reconData]);
 
