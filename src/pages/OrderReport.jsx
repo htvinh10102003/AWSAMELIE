@@ -79,6 +79,16 @@ const isGHNCarrier = (carrierName) => {
     return n.includes('GHN') || n.includes('GIAOHANGNHANH') || n.includes('GIAO HÀNG NHANH');
 };
 
+// Ô tìm kiếm debounce dùng chung cho báo cáo đặc biệt.
+const useDebouncedValue = (value, delay) => {
+    const [debounced, setDebounced] = useState(value);
+    useEffect(() => {
+        const t = setTimeout(() => setDebounced(value), delay);
+        return () => clearTimeout(t);
+    }, [value, delay]);
+    return debounced;
+};
+
 // Mã vận đơn "thật" trong báo cáo đặc biệt: có mã, và không phải trường hợp
 // GHN mà mã bắt đầu bằng NVN (theo yêu cầu, trường hợp đó coi như chưa có mã).
 const hasRealCarrier = (order) => {
@@ -207,9 +217,17 @@ export default function OrderReport() {
     // chuyển sang báo cáo cũ) ---
     const [specialMode, setSpecialMode] = useState(false);
     const [specialTab, setSpecialTab] = useState('all'); // all | confirm | print | transit
-    // Lazyload theo tab: chỉ kéo dữ liệu của tab đang mở, mỗi lần tối đa
-    // 1000 đơn mới nhất. Cache: tabId -> {orders, nextPage, hasMore}.
-    const [specialCache, setSpecialCache] = useState({});
+    // Phân trang thật phía server: tổng số load đúng bằng count query,
+    // dữ liệu chỉ tải đúng 20 đơn của trang đang mở, bấm sang trang nào
+    // mới tải trang đó (không còn lazyload 1000 đơn + Tải thêm nữa).
+    const [specialPage, setSpecialPage] = useState(1);
+    const [specialTotal, setSpecialTotal] = useState(0);
+    const [specialPageOrders, setSpecialPageOrders] = useState([]);
+    const [specialCounts, setSpecialCounts] = useState({});
+    const [specialMissingTotal, setSpecialMissingTotal] = useState(null);
+    const [specialReloadToken, setSpecialReloadToken] = useState(0);
+    const [missingUpdateTotal, setMissingUpdateTotal] = useState(0);
+    const specialFilterSigRef = useRef(null);
     const [specialLoading, setSpecialLoading] = useState(false);
     const [specialError, setSpecialError] = useState('');
     const [specialOnlyMissingPrint, setSpecialOnlyMissingPrint] = useState(false);
@@ -267,6 +285,12 @@ export default function OrderReport() {
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
+
+    // Ô tìm kiếm gõ là đổi state ngay, nhưng query server của báo cáo đặc
+    // biệt chỉ chạy sau khi ngừng gõ 400ms để khỏi bắn query theo từng phím.
+    const debouncedSearchId = useDebouncedValue(searchId, 400);
+    const debouncedSearchProduct = useDebouncedValue(searchProduct, 400);
+    const debouncedSearchNote = useDebouncedValue(searchNote, 400);
     
     // Action State
     const [isUpdatingWebhooks, setIsUpdatingWebhooks] = useState(false);
@@ -438,59 +462,200 @@ export default function OrderReport() {
     // Xác nhận (gồm 57) sẽ trống nếu chỉ dùng allocation. Tải trực tiếp
     // theo ngày tạo trong khoảng đã chọn, rồi gộp với nhóm tồn kho của
     // allocation theo ID để giữ nguyên logic đủ hàng / tạm giữ / hết hàng.
-    const SPECIAL_TAB_STATUSES = {
-        all: null,
-        confirm: [54, 55, 56, 57],
-        print: [42, 40],
-        transit: [59, 43, 74, 71, 61],
+    // --- Báo cáo đặc biệt: phân trang thật phía server ---
+    // Tổng số đơn load đúng bằng count query (không còn … hay 1000+),
+    // còn dữ liệu đơn chỉ tải đúng 20 đơn của trang đang mở, bấm sang
+    // trang nào mới tải trang đó. Bộ lọc dùng chung với báo cáo cũ được
+    // đẩy xuống query server để tổng số và các trang khớp nhau.
+    const SPECIAL_PAGE_SIZE = 20;
+    const SPECIAL_COLUMNS = 'id, created_at, updated_at, packed_at, status, carrier_name, carrier_code, carrier_date, printed_at, sale_channel, ecom_order_id, created_by_name, depot_id, description, private_description, traffic_source, tracking_url, is_declared_fee, order_products (product_code, product_name, quantity)';
+
+    // Escape cho ilike: \ % _ là ký tự đặc biệt; dấu phẩy thì PostgREST
+    // không biểu diễn được trong or() nên bỏ đi khỏi mẫu tìm.
+    const escapeLike = (s) => String(s).replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_').replace(/,/g, '');
+    const toNumberList = (arr) => arr.map(v => Number(v)).filter(n => !Number.isNaN(n));
+    // Điều kiện "chưa có mã thật": chưa có mã, hoặc GHN mà mã bắt đầu NVN.
+    const NOT_REAL_CARRIER_OR = 'carrier_code.is.null,carrier_code.eq.,and(carrier_name.ilike.%GHN%,carrier_code.ilike.NVN%),and(carrier_name.ilike.%GIAOHANGNHANH%,carrier_code.ilike.NVN%),and(carrier_name.ilike.%GIAO HÀNG NHANH%,carrier_code.ilike.NVN%)';
+    // Điều kiện "có mã thật": mã khác rỗng và không thuộc trường hợp GHN + NVN.
+    const REAL_CARRIER_OR = 'and(carrier_name.not.ilike.%GHN%,carrier_name.not.ilike.%GIAOHANGNHANH%,carrier_name.not.ilike.%GIAO HÀNG NHANH%),carrier_code.not.ilike.NVN%,carrier_name.is.null';
+
+    // Áp bộ lọc dùng chung + lọc của tab lên một query orders. Dùng chung
+    // cho cả count query, query lấy trang và query lấy id khi tìm theo
+    // sản phẩm, để tổng số và dữ liệu luôn khớp nhau.
+    const applySpecialFilters = (query, { tabId, missingOnly }) => {
+        let q = query
+            .gte('created_at', `${specialStartDate}T00:00:00.000Z`)
+            .lte('created_at', `${specialEndDate}T23:59:59.999Z`);
+        // Lọc của tab (Tất cả / Xác nhận / In và đóng gói / Đang chuyển),
+        // chạy phía server theo đúng định nghĩa cũ của từng tab.
+        if (tabId === 'confirm') {
+            q = q.in('status', SPECIAL_CONFIRM_STATUSES.map(Number));
+            q = q.or(NOT_REAL_CARRIER_OR);
+        } else if (tabId === 'print') {
+            q = q.in('status', SPECIAL_PRINT_STATUSES.map(Number));
+            if (missingOnly) q = q.or(NOT_REAL_CARRIER_OR);
+            else q = q.neq('carrier_code', '').or(REAL_CARRIER_OR);
+        } else if (tabId === 'transit') {
+            q = q.in('status', SPECIAL_TRANSIT_STATUSES.map(Number));
+        }
+        // Bộ lọc dùng chung với báo cáo cũ.
+        const idTerm = debouncedSearchId.trim();
+        if (idTerm) {
+            const term = escapeLike(idTerm);
+            // Cột id là số nên không tìm chứa được phía server: nhập đủ ID
+            // thì khớp chính xác, còn mã sàn / mã vận đơn vẫn tìm chứa.
+            if (/^\d+$/.test(idTerm)) q = q.or(`id.eq.${idTerm},ecom_order_id.ilike.%${term}%,carrier_code.ilike.%${term}%`);
+            else q = q.or(`ecom_order_id.ilike.%${term}%,carrier_code.ilike.%${term}%`);
+        }
+        const noteTerm = debouncedSearchNote.trim();
+        if (noteTerm) {
+            const term = escapeLike(noteTerm);
+            q = q.or(`description.ilike.%${term}%,private_description.ilike.%${term}%`);
+        }
+        if (selectedStatus.length) {
+            const nums = toNumberList(selectedStatus);
+            q = q.in('status', nums.length ? nums : selectedStatus);
+        }
+        if (selectedCarrier.length) q = q.in('carrier_name', selectedCarrier);
+        if (selectedChannel.length) {
+            const nums = toNumberList(selectedChannel);
+            q = q.in('sale_channel', nums.length ? nums : selectedChannel);
+        }
+        if (selectedCreator.length) q = q.in('created_by_name', selectedCreator);
+        if (selectedDepot.length) {
+            const nums = toNumberList(selectedDepot);
+            q = q.in('depot_id', nums.length ? nums : selectedDepot);
+        }
+        if (printedFilter === 'not_printed') q = q.is('printed_at', null);
+        else if (printedFilter === 'printed') q = q.not('printed_at', 'is', null);
+        else if (printedFilter === 'today') {
+            const s = new Date(); s.setHours(0, 0, 0, 0);
+            const e = new Date(); e.setHours(23, 59, 59, 999);
+            q = q.gte('printed_at', s.toISOString()).lte('printed_at', e.toISOString());
+        }
+        if (missingCarrierFilter) q = q.or(NOT_REAL_CARRIER_OR);
+        return q;
     };
 
-    const fetchSpecialTab = async (tabId, { append = false, force = false, startDate, endDate } = {}) => {
-        const sd = startDate || specialStartDate;
-        const ed = endDate || specialEndDate;
-        const existing = specialCache[tabId];
-        if (!force && !append && existing) return;
-        if (append && existing && !existing.hasMore) return;
+    const fetchSpecialData = async (page) => {
         setSpecialLoading(true);
-        if (!append) setSpecialError('');
+        setSpecialError('');
         try {
-            const page = append ? (existing?.nextPage || 0) : 0;
-            let query = supabase
-                .from('orders')
-                .select('id, created_at, updated_at, packed_at, status, carrier_name, carrier_code, carrier_date, printed_at, sale_channel, ecom_order_id, created_by_name, depot_id, description, private_description, traffic_source, tracking_url, is_declared_fee, order_products (product_code, product_name, quantity)')
-                .gte('created_at', `${sd}T00:00:00.000Z`)
-                .lte('created_at', `${ed}T23:59:59.999Z`)
-                .order('created_at', { ascending: false })
-                .order('id', { ascending: false })
-                .range(page * 1000, (page + 1) * 1000 - 1);
-            const statuses = SPECIAL_TAB_STATUSES[tabId];
-            if (statuses) query = query.in('status', statuses);
-            const { data: chunk, error } = await query;
-            if (error) throw error;
-            const rows = chunk || [];
-            setSpecialCache(prev => {
-                const prevTab = prev[tabId] || { orders: [], nextPage: 0, hasMore: true };
-                return {
-                    ...prev,
-                    [tabId]: {
-                        orders: append ? [...prevTab.orders, ...rows] : rows,
-                        nextPage: page + 1,
-                        hasMore: rows.length === 1000,
-                    },
+            const asc = specialSortOrder === 'asc';
+            const orderBy = (q) => q.order('created_at', { ascending: asc }).order('id', { ascending: asc });
+            if (debouncedSearchProduct.trim()) {
+                // Đường tìm theo sản phẩm: phải nối bảng order_products nên
+                // không đếm bằng count query được (join làm trùng đơn).
+                // Kéo id + trường phục vụ lọc tab theo từng đợt 1000 rồi
+                // khử trùng, từ đó tính đúng tổng số các tab và lấy 20 id
+                // của trang đang mở, sau đó mới kéo đủ dữ liệu 20 đơn đó.
+                const pq = escapeLike(debouncedSearchProduct.trim());
+                const matched = [];
+                const seen = new Set();
+                let offset = 0;
+                for (let chunk = 0; chunk < 50; chunk++) {
+                    let q = supabase.from('orders')
+                        .select('id, status, carrier_name, carrier_code, order_products!inner(product_name, product_code)');
+                    q = applySpecialFilters(q, { tabId: null, missingOnly: false });
+                    q = q.or(`product_name.ilike.%${pq}%,product_code.ilike.%${pq}%`, { foreignTable: 'order_products' });
+                    q = orderBy(q).range(offset, offset + 999);
+                    const { data: rows, error } = await q;
+                    if (error) throw error;
+                    const list = rows || [];
+                    list.forEach(r => { if (!seen.has(r.id)) { seen.add(r.id); matched.push(r); } });
+                    if (list.length < 1000) break;
+                    offset += 1000;
+                }
+                const isConfirm = (o) => SPECIAL_CONFIRM_STATUSES.includes(String(o.status)) && !hasRealCarrier(o);
+                const isPrint = (o) => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && hasRealCarrier(o);
+                const isTransit = (o) => SPECIAL_TRANSIT_STATUSES.includes(String(o.status));
+                const isMissing = (o) => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && !hasRealCarrier(o);
+                const counts = {
+                    all: matched.length,
+                    confirm: matched.filter(isConfirm).length,
+                    print: matched.filter(isPrint).length,
+                    transit: matched.filter(isTransit).length,
                 };
-            });
+                const missingTotal = matched.filter(isMissing).length;
+                const viewList = specialOnlyMissingPrint
+                    ? matched.filter(isMissing)
+                    : matched.filter(o => specialTab === 'all' ? true : specialTab === 'confirm' ? isConfirm(o) : specialTab === 'print' ? isPrint(o) : isTransit(o));
+                const total = viewList.length;
+                const totalPages = Math.max(1, Math.ceil(total / SPECIAL_PAGE_SIZE));
+                const effectivePage = total > 0 ? Math.min(page, totalPages) : 1;
+                if (effectivePage !== page) setSpecialPage(effectivePage);
+                const pageIds = viewList.slice((effectivePage - 1) * SPECIAL_PAGE_SIZE, effectivePage * SPECIAL_PAGE_SIZE).map(o => o.id);
+                let rows = [];
+                if (pageIds.length) {
+                    const { data: full, error } = await supabase.from('orders').select(SPECIAL_COLUMNS).in('id', pageIds);
+                    if (error) throw error;
+                    const byId = new Map((full || []).map(o => [o.id, o]));
+                    rows = pageIds.map(id => byId.get(id)).filter(Boolean);
+                }
+                setSpecialCounts(counts);
+                setSpecialMissingTotal(missingTotal);
+                setSpecialTotal(total);
+                setSpecialPageOrders(rows);
+                return;
+            }
+            // Đường thường: 4 count query cho 4 tab (chạy song song) +
+            // 1 query lấy đúng 20 đơn của trang. Khi ở tab print thì đếm
+            // thêm số đơn thiếu mã để hiện ở tick lọc.
+            const countFor = async (tabId, missingOnly) => {
+                let q = supabase.from('orders').select('id', { count: 'exact', head: true });
+                q = applySpecialFilters(q, { tabId, missingOnly });
+                const { count, error } = await q;
+                if (error) throw error;
+                return count || 0;
+            };
+            const [cAll, cConfirm, cPrint, cTransit] = await Promise.all([
+                countFor('all', false), countFor('confirm', false), countFor('print', false), countFor('transit', false),
+            ]);
+            const counts = { all: cAll, confirm: cConfirm, print: cPrint, transit: cTransit };
+            const missingTotal = specialTab === 'print' ? await countFor('print', true) : null;
+            const total = specialOnlyMissingPrint ? (missingTotal || 0) : counts[specialTab];
+            const totalPages = Math.max(1, Math.ceil(total / SPECIAL_PAGE_SIZE));
+            const effectivePage = total > 0 ? Math.min(page, totalPages) : 1;
+            if (effectivePage !== page) setSpecialPage(effectivePage);
+            let rows = [];
+            if (total > 0) {
+                let q = supabase.from('orders').select(SPECIAL_COLUMNS);
+                q = applySpecialFilters(q, { tabId: specialTab, missingOnly: specialOnlyMissingPrint });
+                q = orderBy(q).range((effectivePage - 1) * SPECIAL_PAGE_SIZE, effectivePage * SPECIAL_PAGE_SIZE - 1);
+                const { data, error } = await q;
+                if (error) throw error;
+                rows = data || [];
+            }
+            setSpecialCounts(counts);
+            setSpecialMissingTotal(missingTotal);
+            setSpecialTotal(total);
+            setSpecialPageOrders(rows);
         } catch (err) {
             console.error('Lỗi tải báo cáo đặc biệt:', err);
-            if (!append) setSpecialError(err.message || 'Không tải được đơn từ bảng orders.');
+            setSpecialError(err.message || 'Không tải được đơn từ bảng orders.');
         } finally {
             setSpecialLoading(false);
         }
     };
 
+    // Đổi tab / ngày / bộ lọc / sắp xếp thì quay về trang 1 rồi mới tải,
+    // để khỏi tải nhầm trang cũ với bộ lọc mới.
+    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0'].join('|');
     useEffect(() => {
-        if (specialMode) fetchSpecialTab(specialTab);
+        if (!specialMode) return;
+        if (specialFilterSigRef.current !== specialFilterSig) {
+            specialFilterSigRef.current = specialFilterSig;
+            if (specialPage !== 1) { setSpecialPage(1); return; }
+        }
+        fetchSpecialData(specialPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [specialMode, specialTab, specialStartDate, specialEndDate]);
+    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialPage, specialReloadToken]);
+
+    // Đổi trang thì bỏ chọn cũ để nút Copy / Xuất chỉ tính trên trang mới.
+    useEffect(() => {
+        if (specialMode) setSelectedOrders([]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [specialPage]);
 
     const handleToggleSpecialMode = () => {
         const next = !specialMode;
@@ -690,89 +855,30 @@ export default function OrderReport() {
         );
     };
 
-    // Lọc phụ cho báo cáo đặc biệt: dùng chung các bộ lọc cũ (tìm kiếm,
-    // kênh, hãng, trạng thái, kho, nhân viên, ghi chú, trạng thái in,
-    // sắp xếp), nhưng bỏ lọc tồn >= 2 ngày (chỉ có ở tab đủ hàng cũ).
-    // Riêng tick "Chưa có Mã vận đơn" ở báo cáo đặc biệt dùng định nghĩa
-    // mã thật (GHN mã NVN coi như chưa có mã).
-    const getSpecialFiltered = (orderList) => {
-        if (!orderList) return [];
-        let filtered = orderList.filter(order => {
-            if (searchId) {
-                const query = searchId.trim().toLowerCase();
-                const matchId = String(order.id).toLowerCase().includes(query);
-                const matchEcom = order.ecom_order_id && String(order.ecom_order_id).toLowerCase().includes(query);
-                const matchCarrier = order.carrier_code && String(order.carrier_code).toLowerCase().includes(query);
-                if (!matchId && !matchEcom && !matchCarrier) return false;
-            }
-            if (searchProduct) {
-                const prodQuery = searchProduct.trim().toLowerCase();
-                const hasProductMatch = order.order_products?.some(p =>
-                    (p.product_name && p.product_name.toLowerCase().includes(prodQuery)) ||
-                    (p.product_code && p.product_code.toLowerCase().includes(prodQuery))
-                );
-                if (!hasProductMatch) return false;
-            }
-            if (searchNote) {
-                const note = (order.description || '') + ' ' + (order.private_description || '');
-                if (!note.toLowerCase().includes(searchNote.toLowerCase())) return false;
-            }
-            if (selectedStatus.length > 0 && !selectedStatus.includes(String(order.status))) return false;
-            if (selectedCarrier.length > 0 && !selectedCarrier.includes(order.carrier_name)) return false;
-            if (selectedChannel.length > 0 && !selectedChannel.includes(String(order.sale_channel))) return false;
-            if (selectedCreator.length > 0 && !selectedCreator.includes(order.created_by_name)) return false;
-            if (selectedDepot.length > 0 && !selectedDepot.includes(String(order.depot_id))) return false;
-            if (printedFilter === 'not_printed' && order.printed_at) return false;
-            if (printedFilter === 'printed' && !order.printed_at) return false;
-            if (printedFilter === 'today') {
-                if (!order.printed_at) return false;
-                const isToday = new Date(order.printed_at).toDateString() === new Date().toDateString();
-                if (!isToday) return false;
-            }
-            if (missingCarrierFilter && hasRealCarrier(order)) return false;
-            return true;
-        });
-        if (specialSortOrder === 'asc') filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        else filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        return filtered;
-    };
-
     // Tên trạng thái ngắn chỉ dùng trong báo cáo đặc biệt: 57 là Chờ xác nhận.
     const specialStatusName = (code) => String(code) === '57' ? 'Chờ xác nhận' : (statusDict[code] || LOCAL_STATUS_NAMES[String(code)] || String(code));
-    const specialCachedOrders = Object.values(specialCache).flatMap(tab => tab.orders);
-    const specialCurrentRaw = specialCache[specialTab]?.orders || [];
-    const specialFilteredByOther = getSpecialFiltered(specialCurrentRaw);
-    const applySpecialTabFilter = (list, tabId) => {
-        if (tabId === 'confirm') return list.filter(o => SPECIAL_CONFIRM_STATUSES.includes(String(o.status)) && !hasRealCarrier(o));
-        if (tabId === 'print') return list.filter(o => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && hasRealCarrier(o));
-        if (tabId === 'transit') return list.filter(o => SPECIAL_TRANSIT_STATUSES.includes(String(o.status)));
-        return list;
-    };
-    // Tab đang mở dùng dữ liệu vừa kéo; tab khác chỉ tính từ cache nếu đã
-    // từng mở, chưa mở thì chưa có số (hiển thị … trên tab, không đoán).
-    const specialTabLists = {
-        all: specialTab === 'all' ? specialFilteredByOther : (specialCache.all ? getSpecialFiltered(specialCache.all.orders) : []),
-        confirm: specialTab === 'confirm' ? applySpecialTabFilter(specialFilteredByOther, 'confirm') : (specialCache.confirm ? applySpecialTabFilter(getSpecialFiltered(specialCache.confirm.orders), 'confirm') : []),
-        print: specialTab === 'print' ? applySpecialTabFilter(specialFilteredByOther, 'print') : (specialCache.print ? applySpecialTabFilter(getSpecialFiltered(specialCache.print.orders), 'print') : []),
-        transit: specialTab === 'transit' ? specialFilteredByOther : (specialCache.transit ? getSpecialFiltered(specialCache.transit.orders) : []),
-    };
+    // Số trên tab là số đếm đúng từ server (chưa đếm xong thì …).
     const specialTabCount = (tabId) => {
-        if (!specialCache[tabId] && tabId !== specialTab) return null;
-        const count = specialTabLists[tabId]?.length ?? 0;
-        return specialCache[tabId]?.hasMore ? `${count}+` : String(count);
+        const v = specialCounts[tabId];
+        return v === undefined || v === null ? null : String(v);
     };
-    // Đơn Đang/Đã đóng gói chưa có mã thật, chỉ hiện khi tick ở tab In và đóng gói.
-    const specialMissingPrintOrders = specialTab === 'print'
-        ? specialFilteredByOther.filter(o => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && !hasRealCarrier(o))
-        : (specialCache.print ? getSpecialFiltered(specialCache.print.orders).filter(o => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && !hasRealCarrier(o)) : []);
-    const specialCurrentList = (specialMode && specialTab === 'print' && specialOnlyMissingPrint)
-        ? specialMissingPrintOrders
-        : (specialMode ? (specialTabLists[specialTab] || []) : []);
+    // Cửa sổ số trang cho pager của báo cáo đặc biệt: trang hiện tại ±2,
+    // kèm trang đầu / cuối, chèn … ở khoảng trống.
+    const specialPageWindow = () => {
+        const total = Math.max(1, Math.ceil(specialTotal / SPECIAL_PAGE_SIZE));
+        const pages = new Set([1, total]);
+        for (let p = specialPage - 2; p <= specialPage + 2; p++) if (p >= 1 && p <= total) pages.add(p);
+        const sorted = [...pages].sort((a, b) => a - b);
+        const out = [];
+        sorted.forEach((p, i) => { if (i > 0 && p - sorted[i - 1] > 1) out.push('…'); out.push(p); });
+        return out;
+    };
 
-    // Danh sách hiển thị / thao tác: báo cáo đặc biệt dùng specialCurrentList,
-    // báo cáo cũ dùng filteredOrders. Các nút Copy / Xuất Excel / Thao tác
-    // ở dưới đều dùng chung các biến này nên không cần viết lại từng nút.
-    const effectiveFiltered = specialMode ? specialCurrentList : filteredOrders;
+    // Danh sách hiển thị / thao tác: báo cáo đặc biệt chỉ dùng 20 đơn của
+    // trang đang mở, báo cáo cũ dùng filteredOrders. Các nút Copy / Xuất
+    // Excel / Thao tác ở dưới đều dùng chung các biến này nên ở chế độ
+    // đặc biệt chúng chỉ tính trên trang đang xem, không phải toàn bộ.
+    const effectiveFiltered = specialMode ? specialPageOrders : filteredOrders;
     const targetOrdersAction = selectedOrders.length > 0
         ? effectiveFiltered.filter(o => selectedOrders.includes(o.id))
         : effectiveFiltered;
@@ -781,26 +887,35 @@ export default function OrderReport() {
     const ecomOrdersCount = targetOrdersAction.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id).length;
     const carrierOrdersCount = targetOrdersAction.filter(o => specialMode ? hasRealCarrier(o) : o.carrier_code).length;
 
-    const totalOrdersCount = effectiveFiltered.length;
-    const totalPages = Math.ceil(totalOrdersCount / pageSize) || 1;
-    const paginatedOrders = effectiveFiltered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    const totalOrdersCount = specialMode ? specialTotal : effectiveFiltered.length;
+    const totalPages = specialMode ? (Math.ceil(specialTotal / SPECIAL_PAGE_SIZE) || 1) : (Math.ceil(totalOrdersCount / pageSize) || 1);
+    const paginatedOrders = specialMode ? specialPageOrders : effectiveFiltered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-    // Tùy chọn lọc cho báo cáo đặc biệt, lấy từ chính đơn đặc biệt để các
-    // trạng thái Đang chuyển / Thất bại... cũng xuất hiện trong dropdown.
-    const specialStatusOptions = [...new Set(specialCachedOrders.map(o => o.status).filter(v => v !== null && v !== undefined))].map(code => ({
+    // Tùy chọn lọc cho báo cáo đặc biệt: trạng thái lấy đủ từ bảng
+    // order_statuses, kênh lấy đủ từ SALE_CHANNELS, còn hãng / nhân viên /
+    // kho lấy từ báo cáo cũ cộng thêm giá trị gặp trên trang đang mở
+    // (trước đây lấy từ cache đơn đặc biệt, nay không còn cache nữa).
+    const specialStatusOptions = Object.keys(statusDict).sort((a, b) => Number(a) - Number(b)).map(code => ({
         value: String(code),
         label: specialStatusName(code)
     }));
-    const specialCarrierOptions = [...new Set(specialCachedOrders.map(o => o.carrier_name).filter(Boolean))];
-    const specialChannelOptions = [...new Set(specialCachedOrders.map(o => o.sale_channel).filter(Boolean))].map(ch => ({
+    const specialCarrierOptions = [...new Set([...carrierOptions, ...specialPageOrders.map(o => o.carrier_name).filter(Boolean)])];
+    const specialChannelOptions = Object.entries(SALE_CHANNELS).map(([ch, name]) => ({
         value: String(ch),
-        label: SALE_CHANNELS[ch] || `Kênh ${ch}`
+        label: name
     }));
-    const specialCreatorOptions = [...new Set(specialCachedOrders.map(o => o.created_by_name).filter(Boolean))].map(c => ({ value: String(c), label: c }));
-    const specialDepotOptions = [...new Set(specialCachedOrders.map(o => o.depot_id).filter(Boolean))].map(id => ({
-        value: String(id),
-        label: DEPOT_NAMES[id] || `Kho ${id}`
-    }));
+    const specialCreatorOptions = (() => {
+        const m = new Map();
+        creatorOptions.forEach(o => { const v = typeof o === 'string' ? o : o.value; const l = typeof o === 'string' ? o : o.label; if (v) m.set(String(v), l); });
+        specialPageOrders.forEach(o => { if (o.created_by_name) m.set(String(o.created_by_name), o.created_by_name); });
+        return [...m.entries()].map(([value, label]) => ({ value, label }));
+    })();
+    const specialDepotOptions = (() => {
+        const m = new Map();
+        depotOptions.forEach(o => { const v = typeof o === 'string' ? o : o.value; const l = typeof o === 'string' ? o : o.label; if (v) m.set(String(v), l); });
+        specialPageOrders.forEach(o => { if (o.depot_id !== null && o.depot_id !== undefined) m.set(String(o.depot_id), DEPOT_NAMES[o.depot_id] || `Kho ${o.depot_id}`); });
+        return [...m.entries()].map(([value, label]) => ({ value, label }));
+    })();
     const activeFilterCount = (searchProduct ? 1 : 0) + (searchNote ? 1 : 0) + selectedStatus.length + selectedCarrier.length + selectedChannel.length + selectedCreator.length + selectedDepot.length + (printedFilter ? 1 : 0) + (missingCarrierFilter ? 1 : 0);
     const handleClearSpecialFilters = () => {
         setSearchProduct('');
@@ -917,38 +1032,77 @@ export default function OrderReport() {
         setTimeout(() => setCopyMessage(''), 5000);
     };
 
-    // Cập nhật webhook cho toàn bộ đơn Đang/Đã đóng gói chưa có mã thật
-    // đang hiển thị ở tab In và đóng gói (khi tick lọc thiếu mã).
-    const handleUpdateMissingPrintWebhooks = async () => {
-        if (specialMissingPrintOrders.length === 0) {
-            setCopyMessage('Không có đơn Đang/Đã đóng gói nào chưa có mã vận đơn thực.');
-            setTimeout(() => setCopyMessage(''), 3000);
-            return;
+    // Kéo toàn bộ id đơn thiếu mã thật theo đúng bộ lọc đang mở. Chỉ gọi
+    // khi bấm nút cập nhật webhook (nút ít dùng nên không load trước khi
+    // mở trang, bấm mới load rồi mới chạy).
+    const fetchSpecialMissingIds = async () => {
+        const ids = [];
+        const seen = new Set();
+        let offset = 0;
+        for (let chunk = 0; chunk < 50; chunk++) {
+            let q;
+            if (debouncedSearchProduct.trim()) {
+                const pq = escapeLike(debouncedSearchProduct.trim());
+                q = supabase.from('orders').select('id, order_products!inner(product_name, product_code)');
+                q = applySpecialFilters(q, { tabId: 'print', missingOnly: true });
+                q = q.or(`product_name.ilike.%${pq}%,product_code.ilike.%${pq}%`, { foreignTable: 'order_products' });
+            } else {
+                q = supabase.from('orders').select('id');
+                q = applySpecialFilters(q, { tabId: 'print', missingOnly: true });
+            }
+            q = q.range(offset, offset + 999);
+            const { data: rows, error } = await q;
+            if (error) throw error;
+            const list = rows || [];
+            list.forEach(r => { if (!seen.has(r.id)) { seen.add(r.id); ids.push(r.id); } });
+            if (list.length < 1000) break;
+            offset += 1000;
         }
+        return ids;
+    };
+
+    // Cập nhật webhook cho toàn bộ đơn Đang/Đã đóng gói chưa có mã thật
+    // ở tab In và đóng gói (khi tick lọc thiếu mã): bấm mới load danh
+    // sách rồi mới chạy, không load trước.
+    const handleUpdateMissingPrintWebhooks = async () => {
         setIsUpdatingMissingCarrier(true);
         setMissingCarrierProgress(0);
-        setCopyMessage(`Đang cập nhật lại webhook cho ${specialMissingPrintOrders.length} đơn đóng gói chưa có mã vận đơn thực...`);
-        const orderIds = specialMissingPrintOrders.map(o => o.id);
-        const chunks = chunkArray(orderIds, 5);
-        let completed = 0;
-        const processChunk = async (chunk) => {
-            for (let i = 0; i < chunk.length; i++) {
-                try {
-                    await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${chunk[i]}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
-                } catch (err) {}
-                completed += 1;
-                setMissingCarrierProgress(completed);
-                await new Promise(resolve => setTimeout(resolve, 200));
+        setMissingUpdateTotal(0);
+        try {
+            setCopyMessage('Đang tải danh sách đơn đóng gói chưa có mã vận đơn thực...');
+            const orderIds = await fetchSpecialMissingIds();
+            if (orderIds.length === 0) {
+                setCopyMessage('Không có đơn Đang/Đã đóng gói nào chưa có mã vận đơn thực.');
+                setTimeout(() => setCopyMessage(''), 3000);
+                return;
             }
-        };
-        await Promise.all(chunks.map(chunk => processChunk(chunk)));
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setSpecialCache(prev => { const next = { ...prev }; delete next.print; return next; });
-        await fetchSpecialTab('print', { force: true });
-        await fetchAllocation(statusDict);
-        setIsUpdatingMissingCarrier(false);
-        setCopyMessage(`Đã cập nhật lại webhook cho ${orderIds.length} đơn đóng gói chưa có mã vận đơn thực.`);
-        setTimeout(() => setCopyMessage(''), 5000);
+            setMissingUpdateTotal(orderIds.length);
+            setCopyMessage(`Đang cập nhật lại webhook cho ${orderIds.length} đơn đóng gói chưa có mã vận đơn thực...`);
+            const chunks = chunkArray(orderIds, 5);
+            let completed = 0;
+            const processChunk = async (chunk) => {
+                for (let i = 0; i < chunk.length; i++) {
+                    try {
+                        await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${chunk[i]}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
+                    } catch (err) {}
+                    completed += 1;
+                    setMissingCarrierProgress(completed);
+                    await new Promise(resolve => setTimeout(resolve, 200));
+                }
+            };
+            await Promise.all(chunks.map(chunk => processChunk(chunk)));
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            setSpecialReloadToken(t => t + 1);
+            await fetchAllocation(statusDict);
+            setCopyMessage(`Đã cập nhật lại webhook cho ${orderIds.length} đơn đóng gói chưa có mã vận đơn thực.`);
+            setTimeout(() => setCopyMessage(''), 5000);
+        } catch (err) {
+            console.error('Lỗi cập nhật webhook đơn thiếu mã:', err);
+            setCopyMessage(`Không tải được danh sách đơn thiếu mã: ${err.message}`);
+            setTimeout(() => setCopyMessage(''), 5000);
+        } finally {
+            setIsUpdatingMissingCarrier(false);
+        }
     };
 
     const executeCopy = async (type) => {
@@ -1200,13 +1354,13 @@ export default function OrderReport() {
                             <div className="flex flex-wrap items-center gap-2">
                                 <label className="flex items-center gap-1 text-xs font-medium text-slate-600">
                                     Từ
-                                    <input type="date" value={specialStartDate} onChange={(e) => { setSpecialCache({}); setSpecialStartDate(e.target.value); }} className="px-2 py-1 text-xs border border-slate-300 rounded-lg outline-none focus:border-blue-500" />
+                                    <input type="date" value={specialStartDate} onChange={(e) => setSpecialStartDate(e.target.value)} className="px-2 py-1 text-xs border border-slate-300 rounded-lg outline-none focus:border-blue-500" />
                                 </label>
                                 <label className="flex items-center gap-1 text-xs font-medium text-slate-600">
                                     Đến
-                                    <input type="date" value={specialEndDate} onChange={(e) => { setSpecialCache({}); setSpecialEndDate(e.target.value); }} className="px-2 py-1 text-xs border border-slate-300 rounded-lg outline-none focus:border-blue-500" />
+                                    <input type="date" value={specialEndDate} onChange={(e) => setSpecialEndDate(e.target.value)} className="px-2 py-1 text-xs border border-slate-300 rounded-lg outline-none focus:border-blue-500" />
                                 </label>
-                                <button onClick={() => fetchSpecialTab(specialTab, { force: true })} disabled={specialLoading} className="px-2 py-1 bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1">
+                                <button onClick={() => setSpecialReloadToken(t => t + 1)} disabled={specialLoading} className="px-2 py-1 bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1">
                                     <RefreshCw size={13} className={specialLoading ? 'animate-spin' : ''} /> Tải lại
                                 </button>
                             </div>
@@ -1237,15 +1391,15 @@ export default function OrderReport() {
                         {specialTab === 'print' && (
                             <label className="flex items-center gap-2 cursor-pointer bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                                 <input type="checkbox" checked={specialOnlyMissingPrint} onChange={(e) => setSpecialOnlyMissingPrint(e.target.checked)} className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500" />
-                                <span className="text-sm font-bold text-amber-800">Chỉ hiển thị đơn Đang/Đã đóng gói chưa có mã vận đơn thực ({specialMissingPrintOrders.length})</span>
+                                <span className="text-sm font-bold text-amber-800">Chỉ hiển thị đơn Đang/Đã đóng gói chưa có mã vận đơn thực ({specialMissingTotal === null || specialMissingTotal === undefined ? '…' : specialMissingTotal})</span>
                             </label>
                         )}
-                        {specialTab === 'print' && specialOnlyMissingPrint && specialMissingPrintOrders.length > 0 && (
+                        {specialTab === 'print' && specialOnlyMissingPrint && (specialMissingTotal || 0) > 0 && (
                             <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200 rounded-lg px-4 py-3">
-                                <p className="text-sm font-medium text-slate-700">{specialMissingPrintOrders.length} đơn đóng gói chưa có mã vận đơn thực.</p>
+                                <p className="text-sm font-medium text-slate-700">{specialMissingTotal} đơn đóng gói chưa có mã vận đơn thực.</p>
                                 <button onClick={handleUpdateMissingPrintWebhooks} disabled={isUpdatingMissingCarrier} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2">
                                     <RefreshCw size={15} className={isUpdatingMissingCarrier ? 'animate-spin' : ''} />
-                                    {isUpdatingMissingCarrier ? `Đang cập nhật (${missingCarrierProgress}/${specialMissingPrintOrders.length})...` : 'Cập nhật webhook cho tất cả đơn đang hiển thị'}
+                                    {isUpdatingMissingCarrier ? `Đang cập nhật (${missingCarrierProgress}/${missingUpdateTotal})...` : 'Cập nhật webhook cho tất cả đơn thiếu mã'}
                                 </button>
                             </div>
                         )}
@@ -1533,7 +1687,7 @@ export default function OrderReport() {
                 {/* Main Table */}
                 <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
                     <div className="overflow-x-auto">
-                        {(specialMode ? (!specialCache[specialTab] && specialLoading) : loading) ? (
+                        {(specialMode ? (specialPageOrders.length === 0 && specialLoading) : loading) ? (
                             <div className="p-16 text-center text-gray-400 font-medium text-sm flex flex-col items-center gap-3">
                                 <RefreshCw className="animate-spin text-blue-500" size={24} /> Đang tải dữ liệu...
                             </div>
@@ -1725,37 +1879,47 @@ export default function OrderReport() {
                         )}
                     </div>
 
-                    {specialMode && specialCache[specialTab]?.hasMore && (
-                        <div className="flex justify-center py-3 border-t border-gray-100">
-                            <button onClick={() => fetchSpecialTab(specialTab, { append: true })} disabled={specialLoading} className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2">
-                                <RefreshCw size={14} className={specialLoading ? 'animate-spin' : ''} />
-                                {specialLoading ? 'Đang tải...' : 'Tải thêm đơn'}
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Pagination */}
-                    {!loading && totalOrdersCount > 0 && (
+                    {/* Pagination: báo cáo đặc biệt cố định 20 đơn / trang,
+                        bấm sang trang nào mới tải trang đó từ server. */}
+                    {((specialMode && totalOrdersCount > 0) || (!specialMode && !loading && totalOrdersCount > 0)) && (
                         <div className="bg-gray-50 px-4 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-4">
                                 <span className="text-sm text-gray-600">
-                                    Đang xem <span className="font-semibold text-gray-900">{(currentPage - 1) * pageSize + 1}</span> - <span className="font-semibold text-gray-900">{Math.min(currentPage * pageSize, totalOrdersCount)}</span> / <span className="font-semibold text-gray-900">{totalOrdersCount}</span> đơn
+                                    Đang xem <span className="font-semibold text-gray-900">{specialMode ? (specialTotal === 0 ? 0 : (specialPage - 1) * SPECIAL_PAGE_SIZE + 1) : (currentPage - 1) * pageSize + 1}</span> - <span className="font-semibold text-gray-900">{specialMode ? Math.min(specialPage * SPECIAL_PAGE_SIZE, totalOrdersCount) : Math.min(currentPage * pageSize, totalOrdersCount)}</span> / <span className="font-semibold text-gray-900">{totalOrdersCount}</span> đơn
                                 </span>
                                 <div className="border-l border-gray-300 pl-4">
-                                    <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:ring-1 focus:ring-blue-500">
-                                        <option value={20}>20 dòng / trang</option>
-                                        <option value={50}>50 dòng / trang</option>
-                                        <option value={100}>100 dòng / trang</option>
-                                    </select>
+                                    {specialMode ? (
+                                        <span className="text-sm text-gray-600">20 dòng / trang</span>
+                                    ) : (
+                                        <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="px-2 py-1 border border-gray-300 rounded text-sm outline-none focus:ring-1 focus:ring-blue-500">
+                                            <option value={20}>20 dòng / trang</option>
+                                            <option value={50}>50 dòng / trang</option>
+                                            <option value={100}>100 dòng / trang</option>
+                                        </select>
+                                    )}
                                 </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"><ChevronLeft size={18} /></button>
-                                <div className="flex items-center px-2 text-sm">
-                                    Trang <span className="font-semibold text-gray-900 mx-1">{currentPage}</span> / {totalPages}
+                            {specialMode ? (
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => setSpecialPage(1)} disabled={specialPage === 1 || specialLoading} className="px-2 py-1.5 rounded text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-sm font-bold">«</button>
+                                    <button onClick={() => setSpecialPage(p => Math.max(1, p - 1))} disabled={specialPage === 1 || specialLoading} className="p-1.5 rounded text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"><ChevronLeft size={18} /></button>
+                                    {specialPageWindow().map((p, i) => p === '…' ? (
+                                        <span key={`gap-${i}`} className="px-1 text-sm text-gray-400">…</span>
+                                    ) : (
+                                        <button key={p} onClick={() => setSpecialPage(p)} disabled={specialLoading} className={`min-w-8 px-2 py-1.5 rounded text-sm font-bold transition-colors disabled:opacity-50 ${p === specialPage ? 'bg-slate-900 text-white' : 'text-gray-600 hover:bg-gray-200'}`}>{p}</button>
+                                    ))}
+                                    <button onClick={() => setSpecialPage(p => Math.min(totalPages, p + 1))} disabled={specialPage === totalPages || specialLoading} className="p-1.5 rounded text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"><ChevronRight size={18} /></button>
+                                    <button onClick={() => setSpecialPage(totalPages)} disabled={specialPage === totalPages || specialLoading} className="px-2 py-1.5 rounded text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-transparent transition-colors text-sm font-bold">»</button>
                                 </div>
-                                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"><ChevronRight size={18} /></button>
-                            </div>
+                            ) : (
+                                <div className="flex items-center gap-1">
+                                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1.5 rounded text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"><ChevronLeft size={18} /></button>
+                                    <div className="flex items-center px-2 text-sm">
+                                        Trang <span className="font-semibold text-gray-900 mx-1">{currentPage}</span> / {totalPages}
+                                    </div>
+                                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="p-1.5 rounded text-gray-500 hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"><ChevronRight size={18} /></button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>
