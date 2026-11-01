@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { getMaintenanceMode, setMaintenanceMode, isOwnerUser, MAINTENANCE_KEY } from '../lib/maintenance';
 import Maintenance404 from './Maintenance404';
+import MaintenanceMobile from './MaintenanceMobile';
 
 // Chan toan bo web khi dang bao tri.
 // - maintenance = true + khong phai Owner (ke ca chua dang nhap) => chi thay man hinh xam 404.
@@ -26,6 +28,7 @@ function writeCachedMaintenance(on) {
   try { localStorage.setItem(MAINTENANCE_CACHE_KEY, on ? 'true' : 'false'); } catch (e) {}
 }
 export default function MaintenanceGate({ children }) {
+  const location = useLocation();
   const [maintenance, setMaintenance] = useState(readCachedMaintenance);
   const [user, setUser] = useState(null);
   const [turningOff, setTurningOff] = useState(false);
@@ -87,6 +90,11 @@ export default function MaintenanceGate({ children }) {
   }
 
   if (maintenance && !isOwnerUser(user)) {
+    // Giao dien mobile (/mobile) co man hinh bao tri rieng, khong dung
+    // man hinh xam 404 cua ban may tinh.
+    if (location.pathname.startsWith('/mobile')) {
+      return <MaintenanceMobile />;
+    }
     return <Maintenance404 />;
   }
 
@@ -96,7 +104,7 @@ export default function MaintenanceGate({ children }) {
         {/* sticky + z-1000: banner toan cuc trong Layout dang absolute top-0 z-500,
             neu khong co z-index cao hon thi banner bao tri se bi no de len va an mat. */}
         <div className="sticky top-0 z-[1000] w-full bg-slate-900 text-white text-sm font-bold px-4 py-2.5 flex items-center justify-center gap-4 flex-wrap shadow-lg">
-          <span>Đang bật chế độ bảo trì — mọi người khác đang thấy trang 404.</span>
+          <span>Đang bật chế độ bảo trì — mọi người khác đang thấy trang bảo trì.</span>
           <button
             onClick={handleTurnOff}
             disabled={turningOff}

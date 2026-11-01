@@ -203,7 +203,8 @@ export default function OrderReport() {
     // Trạng thái được chọn ở Admin > Cấu hình Lọc & Ưu tiên Đơn In.
     const [printAllowedStatuses, setPrintAllowedStatuses] = useState(PRINT_ALLOWED_DEFAULT);
 
-    // --- Báo cáo đặc biệt (chỉ owner, mặc định tắt để báo cáo cũ không đổi) ---
+    // --- Báo cáo đặc biệt (chỉ owner; mặc định bật với owner, nút gạt
+    // chuyển sang báo cáo cũ) ---
     const [specialMode, setSpecialMode] = useState(false);
     const [specialTab, setSpecialTab] = useState('all'); // all | confirm | print | transit
     // Lazyload theo tab: chỉ kéo dữ liệu của tab đang mở, mỗi lần tối đa
@@ -229,6 +230,13 @@ export default function OrderReport() {
     const [detailData, setDetailData] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [showRawJson, setShowRawJson] = useState(false);
+    // Lịch sử đơn trong popup: lấy từ bảng order_histories, xếp cũ trước
+    // để đọc thành luồng hành trình của đơn.
+    const [detailHistory, setDetailHistory] = useState([]);
+    const [detailHistoryLoading, setDetailHistoryLoading] = useState(false);
+    // Nút Thao tác ở góc popup: tạm thời chưa có chức năng, chỉ hiện ghi
+    // chú chờ tài liệu Nhanh.vn (xem mục 5).
+    const [showDetailActionNote, setShowDetailActionNote] = useState(false);
     
     // UI State
     const [activeTab, setActiveTab] = useState('printable');
@@ -285,7 +293,10 @@ export default function OrderReport() {
                 const { data: authData } = await supabase.auth.getUser();
                 const email = authData?.user?.email || 'default_user';
                 setUserEmail(email);
-                setIsOwner(authData?.user?.user_metadata?.is_owner === true || email === 'contact.hotavinh@gmail.com');
+                const owner = authData?.user?.user_metadata?.is_owner === true || email === 'contact.hotavinh@gmail.com';
+                setIsOwner(owner);
+                // Owner mở trang là thấy ngay báo cáo đặc biệt, không cần bấm sang.
+                if (owner) setSpecialMode(true);
 
                 const dict = await fetchSystemData(email);
                 await fetchAllocation(dict);
@@ -496,6 +507,9 @@ export default function OrderReport() {
         setDetailData(null);
         setDetailLoading(true);
         setShowRawJson(false);
+        setDetailHistory([]);
+        setDetailHistoryLoading(true);
+        setShowDetailActionNote(false);
         try {
             // Lấy toàn bộ cột của đơn trong bảng orders. Nếu bảng có cột
             // chứa JSON gốc của Nhanh (ví dụ raw_data / data / payload),
@@ -507,6 +521,19 @@ export default function OrderReport() {
             console.error('Lỗi tải chi tiết đơn:', err);
         } finally {
             setDetailLoading(false);
+        }
+        try {
+            const { data: history, error: historyError } = await supabase
+                .from('order_histories')
+                .select('id, created_at, created_by_name, status_old, status_new, order_id')
+                .eq('order_id', order.id)
+                .order('created_at', { ascending: true })
+                .limit(200);
+            if (!historyError && history) setDetailHistory(history);
+        } catch (err) {
+            console.error('Lỗi tải lịch sử đơn:', err);
+        } finally {
+            setDetailHistoryLoading(false);
         }
     };
 
@@ -1137,13 +1164,22 @@ export default function OrderReport() {
                             </button>
                         )}
                         {isOwner && (
-                            <button
-                                onClick={handleToggleSpecialMode}
-                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 shadow-sm border ${specialMode ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
-                                title="Chỉ Owner thấy nút này. Bật để chuyển sang báo cáo đặc biệt, tắt để quay về báo cáo cũ."
+                            <div
+                                className="flex items-center gap-2 bg-white border border-slate-300 rounded-lg px-3 py-2 shadow-sm"
+                                title="Chỉ Owner thấy nút gạt này. Bật để xem báo cáo đặc biệt, tắt để quay về báo cáo cũ."
                             >
-                                {specialMode ? 'Đang xem: Báo cáo đặc biệt' : 'Báo cáo đặc biệt'}
-                            </button>
+                                <span className={`text-sm font-bold ${!specialMode ? 'text-slate-900' : 'text-slate-400'}`}>Báo cáo cũ</span>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={specialMode}
+                                    onClick={handleToggleSpecialMode}
+                                    className={`relative w-12 h-6 rounded-full transition-colors shrink-0 cursor-pointer ${specialMode ? 'bg-slate-900' : 'bg-slate-300'}`}
+                                >
+                                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${specialMode ? 'left-6' : 'left-0.5'}`} />
+                                </button>
+                                <span className={`text-sm font-bold ${specialMode ? 'text-slate-900' : 'text-slate-400'}`}>Báo cáo đặc biệt</span>
+                            </div>
                         )}
                         <button
                             onClick={() => fetchAllocation(statusDict)}
@@ -1763,13 +1799,21 @@ export default function OrderReport() {
                                     <h3 className="font-bold text-lg text-slate-800">Chi tiết đơn hàng #{detailOrder.id}</h3>
                                     <p className="text-sm text-slate-500 mt-0.5">Trạng thái: {statusName} &nbsp;|&nbsp; Kênh: {channelName} &nbsp;|&nbsp; Tình trạng kho: {stockInfo.label}</p>
                                 </div>
-                                <button onClick={() => setDetailOrder(null)} className="text-slate-400 hover:text-slate-600 shrink-0"><XCircle size={22} /></button>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <button onClick={() => setShowDetailActionNote(v => !v)} className="px-3 py-1.5 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800">Thao tác</button>
+                                    <button onClick={() => setDetailOrder(null)} className="text-slate-400 hover:text-slate-600"><XCircle size={22} /></button>
+                                </div>
                             </div>
+                            {showDetailActionNote && (
+                                <div className="px-5 py-3 bg-amber-50 border-b border-amber-200 text-sm font-medium text-amber-800">
+                                    Chưa có thao tác nào — các chức năng thao tác sẽ được bổ sung sau khi có tài liệu Nhanh.vn.
+                                </div>
+                            )}
                             <div className="p-5 overflow-y-auto space-y-6">
                                 {detailLoading && <p className="text-sm text-slate-500 font-medium flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Đang tải đầy đủ chi tiết...</p>}
 
                                 <section>
-                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Thông tin chung</h4>
+                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Thông tin đơn</h4>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
                                         <DetailRow label="ID hệ thống" value={String(info?.id ?? base.id)} />
                                         <DetailRow label="ID đơn sàn" value={base.ecom_order_id ? String(base.ecom_order_id) : (channel?.ecomOrderId ? String(channel.ecomOrderId) : 'Chưa có')} />
@@ -1785,11 +1829,26 @@ export default function OrderReport() {
                                         <DetailRow label="Ngày đi" value={base.carrier_date ? fmtDateStr(base.carrier_date) : 'Chưa có'} />
                                         {info?.description && <DetailRow label="Mô tả đơn" value={stripHtml(info.description)} />}
                                         {(info?.privateDescription || base.private_description) && <DetailRow label="Ghi chú nội bộ" value={stripHtml(info?.privateDescription || base.private_description)} />}
+                                        {payment && <DetailRow label="VAT" value={fmtMoney(payment.vat?.amount)} />}
+                                        {payment && <DetailRow label="Tiền cọc" value={fmtMoney(payment.deposit?.amount)} />}
+                                        {payment && <DetailRow label="Tiền chuyển khoản" value={fmtMoney(payment.transfer?.amount)} />}
+                                        {payment && <DetailRow label="Chiết khấu đơn" value={fmtMoney(payment.discount?.amount)} />}
+                                        {payment && <DetailRow label="Điểm đã dùng" value={`${fmtMoney(payment.usedPoints?.amount)} (${payment.usedPoints?.points ?? 'Chưa có'} điểm)`} />}
                                     </div>
                                 </section>
 
                                 <section>
-                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Vận chuyển</h4>
+                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Thông tin khách hàng</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                                        <DetailRow label="Người nhận" value={shipAddr?.name || 'Chưa có'} />
+                                        <DetailRow label="Số điện thoại" value={shipAddr?.mobile || 'Chưa có'} />
+                                        <DetailRow label="Địa chỉ" value={shipAddr?.address || 'Chưa có'} />
+                                        <DetailRow label="Tỉnh / Huyện / Phường" value={shipAddr ? `${shipAddr.cityId ?? 'Chưa có'} / ${shipAddr.districtId ?? 'Chưa có'} / ${shipAddr.wardId ?? 'Chưa có'}` : 'Chưa có'} />
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Cước, vận chuyển &amp; mã vận đơn</h4>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
                                         <DetailRow label="Hãng vận chuyển" value={carrier?.name || base.carrier_name || 'Chưa có'} />
                                         <DetailRow label="Mã vận đơn" value={carrier?.carrierCode || base.carrier_code || 'Chưa có'} />
@@ -1811,20 +1870,8 @@ export default function OrderReport() {
                                     </div>
                                 </section>
 
-                                {shipAddr && (
-                                    <section>
-                                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Khách hàng &amp; giao hàng</h4>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-                                            <DetailRow label="Người nhận" value={shipAddr.name || 'Chưa có'} />
-                                            <DetailRow label="Số điện thoại" value={shipAddr.mobile || 'Chưa có'} />
-                                            <DetailRow label="Địa chỉ" value={shipAddr.address || 'Chưa có'} />
-                                            <DetailRow label="Tỉnh / Huyện / Phường" value={`${shipAddr.cityId ?? 'Chưa có'} / ${shipAddr.districtId ?? 'Chưa có'} / ${shipAddr.wardId ?? 'Chưa có'}`} />
-                                        </div>
-                                    </section>
-                                )}
-
                                 <section>
-                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Sản phẩm ({totalQty} sản phẩm)</h4>
+                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Thông tin sản phẩm ({totalQty} sản phẩm)</h4>
                                     {productsForPopup.length === 0 ? (
                                         <p className="text-sm text-slate-500 font-medium">Đơn này chưa có danh sách sản phẩm trong bảng orders.</p>
                                     ) : (
@@ -1863,18 +1910,44 @@ export default function OrderReport() {
                                     )}
                                 </section>
 
-                                {payment && (
-                                    <section>
-                                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Thanh toán</h4>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-                                            <DetailRow label="VAT" value={fmtMoney(payment.vat?.amount)} />
-                                            <DetailRow label="Tiền cọc" value={fmtMoney(payment.deposit?.amount)} />
-                                            <DetailRow label="Tiền chuyển khoản" value={fmtMoney(payment.transfer?.amount)} />
-                                            <DetailRow label="Chiết khấu đơn" value={fmtMoney(payment.discount?.amount)} />
-                                            <DetailRow label="Điểm đã dùng" value={`${fmtMoney(payment.usedPoints?.amount)} (${payment.usedPoints?.points ?? 'Chưa có'} điểm)`} />
+                                <section>
+                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Lịch sử đơn hàng</h4>
+                                    {detailHistoryLoading ? (
+                                        <p className="text-sm text-slate-500 font-medium flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Đang tải lịch sử...</p>
+                                    ) : detailHistory.length === 0 ? (
+                                        <div>
+                                            <p className="text-sm text-slate-500 font-medium mb-4">Chưa có lịch sử trong bảng order_histories, chỉ có mốc tạo đơn:</p>
+                                            <ol className="relative border-l-2 border-slate-200 ml-2 space-y-4">
+                                                <li className="pl-5 relative">
+                                                    <span className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-slate-900 border-2 border-white shadow" />
+                                                    <p className="text-xs font-medium text-slate-500">{fmtDateStr(base.created_at)}</p>
+                                                    <p className="text-sm font-semibold text-slate-800">Tạo đơn: {statusName}</p>
+                                                    <p className="text-xs text-slate-500">Bởi: {base.created_by_name || 'Hệ thống'}</p>
+                                                </li>
+                                            </ol>
                                         </div>
-                                    </section>
-                                )}
+                                    ) : (
+                                        <ol className="relative border-l-2 border-slate-200 ml-2 space-y-4">
+                                            {detailHistory.map(h => {
+                                                const fromName = h.status_old !== null && h.status_old !== undefined ? specialStatusName(String(h.status_old)) : null;
+                                                const toName = h.status_new !== null && h.status_new !== undefined ? specialStatusName(String(h.status_new)) : null;
+                                                const text = fromName && toName
+                                                    ? `${fromName} → ${toName}`
+                                                    : toName
+                                                        ? (fromName ? `Chuyển sang: ${toName}` : `Tạo đơn: ${toName}`)
+                                                        : 'Cập nhật đơn';
+                                                return (
+                                                    <li key={h.id} className="pl-5 relative">
+                                                        <span className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-slate-900 border-2 border-white shadow" />
+                                                        <p className="text-xs font-medium text-slate-500">{fmtDateStr(h.created_at)}</p>
+                                                        <p className="text-sm font-semibold text-slate-800">{text}</p>
+                                                        <p className="text-xs text-slate-500">Bởi: {h.created_by_name || 'Hệ thống'}</p>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ol>
+                                    )}
+                                </section>
 
                                 <div className="border-t border-slate-200 pt-3">
                                     <button onClick={() => setShowRawJson(v => !v)} className="text-sm font-bold text-slate-700 hover:text-slate-900">{showRawJson ? 'Ẩn JSON gốc' : 'Xem JSON gốc'}</button>

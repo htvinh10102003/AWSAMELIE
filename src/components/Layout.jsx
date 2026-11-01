@@ -7,7 +7,7 @@ import {
   TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
   BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2, 
-  LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2, Menu,
+  LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2,
   Filter, FileEdit, LayoutGrid, Webhook, History, ShieldAlert, Settings2, Loader2, Info, PartyPopper,
   AlignLeft, AlignRight, AlignVerticalSpaceAround, Settings as SettingsIcon,
   Megaphone, Bell, Sparkles, Gift, Rocket, Flame, Star, Zap, Lock,
@@ -111,7 +111,6 @@ export default function Layout() {
   });
   const [showLayoutSettings, setShowLayoutSettings] = useState(false);
   const layoutSettingsRef = useRef(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [menuStates, setMenuStates] = useState({
     dashboard: false, print_orders: false, packing: false, 
@@ -732,20 +731,17 @@ export default function Layout() {
         )}
 
         <div
-          onClick={(e) => { if (e.target.closest('a')) setMobileMenuOpen(false); }}
           className={`flex-shrink-0 z-40 flex transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] relative ${themeVars.sidebar}
-            ${isTopLayout 
-              ? `w-full h-16 flex-row items-center px-4 border-b ${themeVars.headerBorder}` 
+            ${isTopLayout
+              ? `w-full h-16 flex-row items-center px-4 border-b ${themeVars.headerBorder}`
               : `flex-col h-full ${layoutPrefs.position === 'left' ? 'border-r' : 'border-l'} ${sidebarExpanded ? 'w-[300px]' : 'w-[72px]'}`}
-            max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:w-[300px] max-md:flex-col max-md:h-full max-md:z-50 max-md:transition-transform max-md:border-r
-            ${mobileMenuOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full'}`}
-        >
+        `}>
           <div className={`${isTopLayout ? 'w-auto pr-8' : `h-[68px] flex items-center justify-between px-4 sticky top-0 z-20 border-b ${themeVars.headerBorder}`}`}>
             <div className="flex items-center gap-3 overflow-hidden">
               <div className={`w-10 h-10 rounded-xl shrink-0 flex items-center justify-center shadow-md ${themeVars.logoBg}`}>
                 <PackageSearch className={themeVars.logoIcon} size={24} strokeWidth={2.5}/>
               </div>
-              <div className={`transition-opacity duration-300 ${sidebarExpanded || isTopLayout ? 'opacity-100' : 'opacity-0 hidden max-md:block'}`}>
+              <div className={`transition-opacity duration-300 ${sidebarExpanded || isTopLayout ? 'opacity-100' : 'opacity-0 hidden'}`}>
                 <h1 className={`text-lg font-bold tracking-tight flex items-center gap-1.5 leading-none whitespace-nowrap ${themeVars.textPrimary}`}>
                   WMS
                 </h1>
@@ -753,7 +749,7 @@ export default function Layout() {
             </div>
             
             {!isTopLayout && (
-              <button onClick={togglePin} className={`p-1.5 rounded-lg hover:bg-slate-100/20 transition-colors shrink-0 max-md:hidden ${themeVars.textMuted} hover:${themeVars.textPrimary} ${!sidebarExpanded ? 'absolute right-[16px]' : ''}`}>
+              <button onClick={togglePin} className={`p-1.5 rounded-lg hover:bg-slate-100/20 transition-colors shrink-0 ${themeVars.textMuted} hover:${themeVars.textPrimary} ${!sidebarExpanded ? 'absolute right-[16px]' : ''}`}>
                 {sidebarExpanded ? <PinOff size={18} /> : <Pin size={18} />}
               </button>
             )}
@@ -974,12 +970,6 @@ export default function Layout() {
         </div>
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden relative h-full z-10 flex flex-col">
-          {!isTopLayout && (
-            <button onClick={() => setMobileMenuOpen(true)} className={`md:hidden absolute top-4 ${layoutPrefs.position === 'right' ? 'right-4' : 'left-4'} z-30 p-2.5 bg-white/80 backdrop-blur-md rounded-xl shadow-sm border border-slate-200/60 hover:bg-white`}>
-              <Menu size={20} className="text-slate-700" />
-            </button>
-          )}
-
           <div className="relative p-4 sm:p-8 flex-1 flex flex-col">
             {isInitializing ? (
               <div className="flex flex-col items-center justify-center m-auto gap-4">
@@ -1025,10 +1015,6 @@ export default function Layout() {
           </div>
         </div>
         
-        {mobileMenuOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in" onClick={() => setMobileMenuOpen(false)} />
-        )}
-
         {showLogoutModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-8 animate-in zoom-in-95 duration-200">
