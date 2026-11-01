@@ -11,8 +11,11 @@ import { getUserRole, isAdminRole, isSuperAdminRole, roleLabel } from '../lib/ro
 // - Vị trí: tra cứu theo tên/mã; admin trở lên bấm vào sản phẩm để cập nhật
 //   vị trí, giống bản máy tính (Cập nhật sơ đồ kho): tên có dạng "Tên - S/M/L"
 //   thì tick "size khác" sẽ cập nhật cả 3 size, còn không thì chỉ đúng sản phẩm đó.
-// - Tìm đơn: nhập tay hoặc quét barcode/QR trên đơn (BarcodeDetector của
-//   Chrome Android; trình duyệt không hỗ trợ thì vẫn nhập tay bình thường).
+// - Tìm đơn: KHÔNG load trước data, chỉ tìm khi người dùng nhập hoặc quét.
+//   Người dùng chọn tìm theo Mã vận đơn (mặc định) hoặc ID đơn. Quét xong
+//   lấy mã vận đơn đó tìm thẳng cột carrier_code trong bảng orders (toàn bộ
+//   CSDL, không chỉ đơn có thể in). Kết quả gồm mã vận đơn/ID đơn, ngày tạo
+//   đơn, sản phẩm, số lượng, trạng thái.
 // - Đối soát: chỉ Tổng in, Tổng đóng, Tổng hủy, Tổng bàn giao trong ngày hôm
 //   nay (đơn in trong ngày làm gốc, giống phiên đối soát bản máy tính), và
 //   danh sách đơn cần bàn giao lại chỉ gồm đơn in trong ngày có trạng thái
@@ -95,6 +98,11 @@ export default function Mobile() {
     const [reconLoading, setReconLoading] = useState(false);
     const [reconError, setReconError] = useState('');
     const [reconVisible, setReconVisible] = useState(30);
+    const [searchMode, setSearchMode] = useState('carrier');
+    const [dbSearchResults, setDbSearchResults] = useState([]);
+    const [dbSearching, setDbSearching] = useState(false);
+    const [dbSearched, setDbSearched] = useState(false);
+    const [dbSearchError, setDbSearchError] = useState('');
     const [pwCurrent, setPwCurrent] = useState('');
     const [pwNew, setPwNew] = useState('');
     const [pwConfirm, setPwConfirm] = useState('');
@@ -151,7 +159,7 @@ export default function Mobile() {
     useEffect(() => { fetchAllocation(); }, []);
 
     useEffect(() => {
-        setSearch(''); setVisibleCount(30); setReconVisible(30);
+        setSearch(''); setVisibleCount(30); setReconVisible(30); setDbSearched(false); setDbSearchResults([]); setDbSearchError('');
         if (tab === 'reconcile') fetchRecon();
         if (tab === 'settings' && !settingsLoaded) loadSettings();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -183,8 +191,37 @@ export default function Mobile() {
     };
 
     const printOrders = useMemo(() => data.printable.filter(o => matchesSearch(o, search)), [data, search]);
-    const allOrders = useMemo(() => [...data.printable, ...data.holding, ...data.outOfStock], [data]);
-    const searchResults = useMemo(() => search.trim() ? allOrders.filter(o => matchesSearch(o, search)) : [], [allOrders, search]);
+
+    // Tìm đơn trực tiếp trong bảng orders, không qua dữ liệu phân bổ đã load
+    // cho tab Đơn in, nên tìm được cả đơn ngoài nhóm đơn có thể in.
+    const handleDbSearch = async (termOverride, modeOverride) => {
+        const term = (termOverride !== undefined ? termOverride : search).trim();
+        const mode = modeOverride || searchMode;
+        if (!term) return;
+        setDbSearching(true); setDbSearched(true); setDbSearchError('');
+        try {
+            let query = supabase
+                .from('orders')
+                .select('id, carrier_code, created_at, status, order_products (product_code, product_name, quantity)')
+                .order('created_at', { ascending: false })
+                .limit(20);
+            if (mode === 'carrier') query = query.ilike('carrier_code', term);
+            else query = query.eq('id', term);
+            const { data: rows, error: dbErr } = await query;
+            if (dbErr) throw dbErr;
+            setDbSearchResults(rows || []);
+        } catch (err) {
+            setDbSearchResults([]);
+            setDbSearchError(err.message || 'Không tìm được đơn.');
+        } finally { setDbSearching(false); }
+    };
+
+    const formatOrderDate = (value) => {
+        if (!value) return '';
+        try {
+            return new Date(value).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        } catch (e) { return String(value); }
+    };
 
     const handleLocationSearch = async () => {
         if (!locQuery.trim()) return;
@@ -235,18 +272,21 @@ export default function Mobile() {
         finally { setLocSaving(false); }
     };
 
-    const extractScanQuery = (text) => {
+    // Mã quét được chính là mã vận đơn, dùng nguyên văn để tìm cột
+    // carrier_code, không cắt thành dãy số (cắt số sẽ biến mã NVS... thành
+    // ID đơn và tìm sai cột).
+    const extractCarrierCode = (text) => {
         const t = (text || '').trim();
         if (!t) return '';
         if (/^https?:\/\//i.test(t)) {
             try {
                 const url = new URL(t);
-                const id = url.searchParams.get('id') || url.searchParams.get('order_id') || url.searchParams.get('code');
-                if (id) return id;
+                const code = url.searchParams.get('code') || url.searchParams.get('carrier_code') || url.searchParams.get('tracking');
+                if (code) return code;
+                const parts = url.pathname.split('/').filter(Boolean);
+                if (parts.length) return parts[parts.length - 1];
             } catch (e) {}
         }
-        const digits = t.match(/\d{6,}/);
-        if (digits) return digits[0];
         return t;
     };
 
@@ -285,8 +325,9 @@ export default function Mobile() {
                     try {
                         const codes = await detector.detect(videoRef.current);
                         if (codes?.length) {
-                            const q = extractScanQuery(codes[0].rawValue);
-                            setSearch(q); setVisibleCount(30); setScanning(false);
+                            const q = extractCarrierCode(codes[0].rawValue);
+                            setSearch(q); setSearchMode('carrier'); setScanning(false);
+                            handleDbSearch(q, 'carrier');
                             return;
                         }
                     } catch (e) {}
@@ -485,7 +526,7 @@ export default function Mobile() {
     }
     if (!session) return <Navigate to="/login" replace state={{ from: '/mobile' }} />;
 
-    const currentList = tab === 'print' ? printOrders : searchResults;
+    const currentList = printOrders;
     const visibleList = currentList.slice(0, visibleCount);
     const reconVisibleList = reconTotals.needHandover.slice(0, reconVisible);
 
@@ -609,22 +650,47 @@ export default function Mobile() {
 
                 {tab === 'search' && (
                     <div className="space-y-3">
-                        <div className="flex gap-2">
-                            <div className="relative flex-1">
-                                <input type="text" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} placeholder="Tìm ID, mã sàn, mã vận đơn..." className="w-full pl-10 pr-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-blue-500 bg-white" />
-                                <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
-                            </div>
-                            <button onClick={startScanner} className="px-4 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold flex items-center gap-1.5"><ScanLine size={18} /> Quét</button>
+                        <div className="grid grid-cols-2 gap-2 bg-white border border-slate-300 rounded-xl p-1">
+                            <button onClick={() => { setSearchMode('carrier'); setDbSearched(false); setDbSearchResults([]); }} className={`py-2.5 rounded-lg text-sm font-bold ${searchMode === 'carrier' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>Mã vận đơn</button>
+                            <button onClick={() => { setSearchMode('id'); setDbSearched(false); setDbSearchResults([]); }} className={`py-2.5 rounded-lg text-sm font-bold ${searchMode === 'id' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>ID đơn</button>
                         </div>
-                        {loading && <div className="text-center text-sm text-slate-500 font-medium py-10">Đang tải...</div>}
-                        {!loading && !search.trim() && <div className="text-center text-sm text-slate-500 py-10">Nhập ID, mã sàn, mã vận đơn hoặc bấm Quét để quét barcode/QR trên đơn.</div>}
-                        {!loading && search.trim() && visibleList.length === 0 && <div className="text-center text-sm text-slate-500 py-10">Không tìm thấy đơn nào.</div>}
-                        {!loading && visibleList.map(order => <OrderCard key={order.id} order={order} />)}
-                        {!loading && currentList.length > visibleCount && (
-                            <button onClick={() => setVisibleCount(c => c + 30)} className="w-full py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-700">
-                                Tải thêm ({currentList.length - visibleCount} đơn còn lại)
-                            </button>
-                        )}
+                        <form onSubmit={(e) => { e.preventDefault(); handleDbSearch(); }} className="space-y-2">
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={searchMode === 'carrier' ? 'Nhập mã vận đơn...' : 'Nhập ID đơn...'} className="w-full pl-10 pr-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-blue-500 bg-white" />
+                                    <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                                </div>
+                                <button type="button" onClick={startScanner} className="px-4 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold flex items-center gap-1.5"><ScanLine size={18} /> Quét</button>
+                            </div>
+                            <button type="submit" disabled={dbSearching || !search.trim()} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50">Tìm đơn</button>
+                        </form>
+                        {dbSearching && <div className="text-center text-sm text-slate-500 font-medium py-10">Đang tìm...</div>}
+                        {!dbSearching && !dbSearched && <div className="text-center text-sm text-slate-500 py-10">Nhập {searchMode === 'carrier' ? 'mã vận đơn' : 'ID đơn'} rồi bấm Tìm đơn, hoặc bấm Quét để quét mã trên đơn.</div>}
+                        {!dbSearching && dbSearchError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm font-medium text-red-700">{dbSearchError}</div>}
+                        {!dbSearching && dbSearched && !dbSearchError && dbSearchResults.length === 0 && <div className="text-center text-sm text-slate-500 py-10">Không tìm thấy đơn nào.</div>}
+                        {!dbSearching && dbSearchResults.map(order => (
+                            <div key={order.id} className="bg-white rounded-xl border border-slate-200 p-3">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="font-bold text-slate-900 text-base leading-tight">{order.id}</div>
+                                    {order.carrier_code && (
+                                        <span className="shrink-0 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded">{order.carrier_code}</span>
+                                    )}
+                                </div>
+                                <div className="text-sm text-slate-500 mt-1">Ngày tạo: {formatOrderDate(order.created_at)}</div>
+                                <div className="mt-2 space-y-1">
+                                    {(order.order_products || []).length === 0 && <div className="text-sm text-slate-400">Chưa có sản phẩm</div>}
+                                    {(order.order_products || []).map((p, i) => (
+                                        <div key={i} className="flex justify-between gap-2 text-sm">
+                                            <span className="text-slate-800 leading-tight">{p.product_name}</span>
+                                            <span className="shrink-0 font-bold text-slate-900">x{p.quantity}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-2">
+                                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700">{statusName(order.status)}</span>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 )}
 
