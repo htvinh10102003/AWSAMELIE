@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import TurnstileWidget, { TURNSTILE_SITE_KEY } from '../components/TurnstileWidget';
 import {
@@ -44,6 +44,7 @@ export default function Login() {
   const sessionExpired = searchParams.get('session_expired') === '1';
 
   const navigate = useNavigate();
+  const location = useLocation();
 
   // ️ XỬ LÝ ĐĂNG NHẬP
   const handleLogin = async (e) => {
@@ -71,7 +72,13 @@ export default function Login() {
           : error.message
       );
     } else {
-      navigate('/admin');
+      // Trả về đúng nơi người dùng tới từ đó (ví dụ /mobile khi đăng xuất
+      // từ giao diện điện thoại), nếu không thì điện thoại tự về /mobile,
+      // còn máy tính giữ nguyên về /admin như trước.
+      const from = location.state?.from;
+      const validFrom = typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') && from !== '/login' ? from : null;
+      const isMobileDevice = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      navigate(validFrom || (isMobileDevice ? '/mobile' : '/admin'), { replace: true });
     }
     setLoading(false);
   };

@@ -18,7 +18,13 @@ export default function MaintenanceGate({ children }) {
     const load = async () => {
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!cancelled) setUser(currentUser);
-      const on = await getMaintenanceMode();
+      // Màn hình xám ban đầu chỉ để chờ kiểm tra bảo trì, không được kẹt
+      // vĩnh viễn nếu mạng chậm: quá 5 giây thì mặc định là không bảo trì
+      // (đúng tinh thần fail-open của getMaintenanceMode).
+      const on = await Promise.race([
+        getMaintenanceMode(),
+        new Promise(resolve => setTimeout(() => resolve(false), 5000)),
+      ]);
       if (!cancelled) setMaintenance(on);
     };
     load();

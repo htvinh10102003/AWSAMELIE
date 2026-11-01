@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Printer, AlertTriangle, MapPin, Search, ScanLine, Settings, ClipboardList, RefreshCw, Package, Pencil, X, LogOut, Save, Lock, Bell, Palette, FileSpreadsheet, User } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getUserRole, isAdminRole, isSuperAdminRole, roleLabel } from '../lib/roles';
@@ -464,15 +464,26 @@ export default function Mobile() {
         finally { setPwSaving(false); }
     };
 
+    const navigate = useNavigate();
     const handleLogout = async () => {
-        await supabase.auth.signOut();
+        // Đăng xuất kiểu cũ chỉ trông chờ vào Navigate có điều kiện khi session
+        // đổi thành null, nên nếu signOut kẹt mạng thì màn hình cứ đứng yên.
+        // Bản này: chờ signOut tối đa 3 giây rồi chuyển thẳng sang /login,
+        // giống cách Layout bản máy tính làm (signOut xong navigate).
+        try {
+            await Promise.race([
+                supabase.auth.signOut(),
+                new Promise(resolve => setTimeout(resolve, 3000)),
+            ]);
+        } catch (e) {}
         setSession(null);
+        navigate('/login', { replace: true, state: { from: '/mobile' } });
     };
 
     if (authLoading) {
         return <div className="min-h-dvh flex items-center justify-center text-slate-500 font-semibold">Đang kiểm tra đăng nhập...</div>;
     }
-    if (!session) return <Navigate to="/login" replace />;
+    if (!session) return <Navigate to="/login" replace state={{ from: '/mobile' }} />;
 
     const currentList = tab === 'print' ? printOrders : searchResults;
     const visibleList = currentList.slice(0, visibleCount);
