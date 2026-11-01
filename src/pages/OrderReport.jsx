@@ -43,6 +43,86 @@ const DEPOT_NAMES = {
     '225005': 'LUNARA'
 };
 
+// Tên trạng thái Nhanh.vn dùng làm fallback khi order_statuses chưa tải xong.
+// Map này khớp Dashboard / DeclaredFeeReport (40 Đã đóng gói, 42 Đang đóng gói,
+// 43 Chờ thu gom, 54 Đơn mới, 55 Đang xác nhận, 56 Đã xác nhận, 57 Chờ khách
+// xác nhận, 59 Đang chuyển, 61 Thất bại, 71 Đang chuyển hoàn, 74 Xác nhận hoàn).
+const LOCAL_STATUS_NAMES = {
+    '40': 'Đã đóng gói', '42': 'Đang đóng gói', '43': 'Chờ thu gom',
+    '54': 'Đơn mới', '55': 'Đang xác nhận', '56': 'Đã xác nhận', '57': 'Chờ khách xác nhận',
+    '58': 'Hãng vận chuyển hủy đơn', '59': 'Đang chuyển', '60': 'Thành công', '61': 'Thất bại',
+    '63': 'Khách hủy', '64': 'Hệ thống hủy', '68': 'Hết hàng',
+    '71': 'Đang chuyển hoàn', '72': 'Đã chuyển hoàn', '73': 'Đổi kho xuất hàng', '74': 'Xác nhận hoàn'
+};
+
+// Mặc định Admin > Cấu hình Lọc & Ưu tiên Đơn In khi chưa lưu cấu hình.
+const PRINT_ALLOWED_DEFAULT = ['54', '55', '56', '42', '40'];
+
+// Nhóm trạng thái cho báo cáo đặc biệt (theo tên trạng thái, dùng mã số).
+// - Xác nhận: Đơn mới, Đang xác nhận, Đã xác nhận, Chờ khách xác nhận.
+// - In và đóng gói: Đang đóng gói, Đã đóng gói.
+// - Đang chuyển: Đang chuyển, Chờ thu gom, Xác nhận hoàn, Đang chuyển hoàn
+//   (tên "Đang hoàn" trong yêu cầu được hiểu là mã 71 Đang chuyển hoàn),
+//   Thất bại.
+const SPECIAL_CONFIRM_STATUSES = ['54', '55', '56', '57'];
+const SPECIAL_PRINT_STATUSES = ['42', '40'];
+const SPECIAL_TRANSIT_STATUSES = ['59', '43', '74', '71', '61'];
+// Kênh cho nút miss mã vận đơn: Shopee (42), Tiktok Shop (48). Không tính
+// Shopee chat (50) hay Lazada chat (51) vì đó không phải kênh bán Shopee/TikTok.
+const MISS_CARRIER_CHANNELS = ['42', '48'];
+// Trạng thái cho nút miss mã vận đơn: Đã xác nhận (56), Chờ khách xác nhận (57),
+// Đã đóng gói (40). Chỉ tính đơn đủ hàng (nhóm printable của wms-allocation).
+const MISS_CARRIER_STATUSES = ['56', '57', '40'];
+
+const isGHNCarrier = (carrierName) => {
+    const n = String(carrierName || '').toUpperCase();
+    return n.includes('GHN') || n.includes('GIAOHANGNHANH') || n.includes('GIAO HÀNG NHANH');
+};
+
+// Mã vận đơn "thật" trong báo cáo đặc biệt: có mã, và không phải trường hợp
+// GHN mà mã bắt đầu bằng NVN (theo yêu cầu, trường hợp đó coi như chưa có mã).
+const hasRealCarrier = (order) => {
+    const code = String(order?.carrier_code || '').trim();
+    if (!code) return false;
+    if (isGHNCarrier(order?.carrier_name) && code.toUpperCase().startsWith('NVN')) return false;
+    return true;
+};
+
+// --- Helpers trình bày số thành chữ thuần cho popup chi tiết ---
+const fmtMoney = (v) => {
+    if (v === null || v === undefined || v === '') return 'Chưa có';
+    const n = Number(v);
+    if (Number.isNaN(n)) return String(v);
+    return `${n.toLocaleString('vi-VN')} đ`;
+};
+const fmtNumber = (v) => {
+    if (v === null || v === undefined || v === '') return 'Chưa có';
+    const n = Number(v);
+    return Number.isNaN(n) ? String(v) : n.toLocaleString('vi-VN');
+};
+const fmtUnix = (sec) => {
+    if (!sec) return 'Chưa có';
+    const d = new Date(Number(sec) * 1000);
+    return Number.isNaN(d.getTime()) ? String(sec) : d.toLocaleString('vi-VN');
+};
+const fmtDateStr = (s) => {
+    if (!s) return 'Chưa có';
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? String(s) : d.toLocaleString('vi-VN');
+};
+const fmtDateOnly = (s) => {
+    if (!s) return 'Chưa có';
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? String(s) : d.toLocaleDateString('vi-VN');
+};
+const fmtWeight = (g) => {
+    if (g === null || g === undefined || g === '') return 'Chưa có';
+    const n = Number(g);
+    if (Number.isNaN(n)) return String(g);
+    return `${n.toLocaleString('vi-VN')} g (${(n / 1000).toLocaleString('vi-VN')} kg)`;
+};
+const stripHtml = (s) => String(s || '').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]*>/g, '').trim();
+
 const OPTIONAL_COLUMNS = [
     { id: 'carrier', label: 'Hãng vận chuyển & Trạng thái' },
     { id: 'source', label: 'Nguồn đơn & Kênh' },
@@ -116,6 +196,33 @@ export default function OrderReport() {
     const [statusDict, setStatusDict] = useState({});
     const [businessId, setBusinessId] = useState('');
     const [userEmail, setUserEmail] = useState('');
+    // Owner được nhận diện giống Admin / maintenance: user_metadata.is_owner
+    // hoặc email super owner. Chỉ owner thấy nút miss mã vận đơn và nút
+    // chuyển sang báo cáo đặc biệt (super_admin cũng không thấy).
+    const [isOwner, setIsOwner] = useState(false);
+    // Trạng thái được chọn ở Admin > Cấu hình Lọc & Ưu tiên Đơn In.
+    const [printAllowedStatuses, setPrintAllowedStatuses] = useState(PRINT_ALLOWED_DEFAULT);
+
+    // --- Báo cáo đặc biệt (chỉ owner, mặc định tắt để báo cáo cũ không đổi) ---
+    const [specialMode, setSpecialMode] = useState(false);
+    const [specialTab, setSpecialTab] = useState('all'); // all | confirm | print | transit
+    const [specialOrders, setSpecialOrders] = useState([]);
+    const [specialLoading, setSpecialLoading] = useState(false);
+    const [specialError, setSpecialError] = useState('');
+    const [specialOnlyMissingPrint, setSpecialOnlyMissingPrint] = useState(false);
+    const getTodayStr = () => new Date().toISOString().split('T')[0];
+    const get30DaysAgoStr = () => {
+        const d = new Date();
+        d.setDate(d.getDate() - 29);
+        return d.toISOString().split('T')[0];
+    };
+    const [specialStartDate, setSpecialStartDate] = useState(get30DaysAgoStr());
+    const [specialEndDate, setSpecialEndDate] = useState(getTodayStr());
+    // Popup chi tiết đơn (chỉ trong báo cáo đặc biệt).
+    const [detailOrder, setDetailOrder] = useState(null);
+    const [detailData, setDetailData] = useState(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [showRawJson, setShowRawJson] = useState(false);
     
     // UI State
     const [activeTab, setActiveTab] = useState('printable');
@@ -172,6 +279,7 @@ export default function OrderReport() {
                 const { data: authData } = await supabase.auth.getUser();
                 const email = authData?.user?.email || 'default_user';
                 setUserEmail(email);
+                setIsOwner(authData?.user?.user_metadata?.is_owner === true || email === 'contact.hotavinh@gmail.com');
 
                 const dict = await fetchSystemData(email);
                 await fetchAllocation(dict);
@@ -202,18 +310,30 @@ export default function OrderReport() {
         setCurrentPage(1);
     }, [activeTab, searchId, searchProduct, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, searchNote, sortOrder, pageSize, agingFilter, printedFilter, missingCarrierFilter]);
 
+    useEffect(() => {
+        setSelectedOrders([]);
+        setShowActionMenu(false);
+        setShowCopyMenu(false);
+        setCurrentPage(1);
+    }, [specialMode, specialTab, specialOnlyMissingPrint]);
+
     const fetchSystemData = async (email) => {
         const { data: stData } = await supabase.from('order_statuses').select('id,name');
         const dict = {};
         stData?.forEach(s => dict[s.id] = s.name);
         setStatusDict(dict);
 
-        const [confRes, userConfRes] = await Promise.all([
+        const [confRes, userConfRes, printConfRes] = await Promise.all([
             supabase.from('system_configs').select('key,value').eq('key', 'nhanh_business_id').maybeSingle(),
-            supabase.from('system_configs').select('key,value').eq('key', `order_cols_pref_${email}`).maybeSingle()
+            supabase.from('system_configs').select('key,value').eq('key', `order_cols_pref_${email}`).maybeSingle(),
+            supabase.from('system_configs').select('key,value').eq('key', 'print_allowed_statuses').maybeSingle()
         ]);
 
         if (confRes.data) setBusinessId(confRes.data.value);
+        if (printConfRes.data?.value) {
+            const parsed = String(printConfRes.data.value).split(',').map(s => s.trim()).filter(Boolean);
+            if (parsed.length > 0) setPrintAllowedStatuses(parsed);
+        }
         if (userConfRes.data) {
             try {
                 const savedCols = JSON.parse(userConfRes.data.value);
@@ -294,6 +414,113 @@ export default function OrderReport() {
         }
     };
 
+    // --- Báo cáo đặc biệt: tải trực tiếp đơn từ bảng orders ---
+    // Lý do phải tải trực tiếp thay vì chỉ dùng wms-allocation: allocation
+    // chỉ trả đơn trong các trạng thái được chọn ở Admin (mặc định là
+    // 54, 55, 56, 42, 40), nên tab Đang chuyển (59, 43, 74, 71, 61) và tab
+    // Xác nhận (gồm 57) sẽ trống nếu chỉ dùng allocation. Tải trực tiếp
+    // theo ngày tạo trong khoảng đã chọn, rồi gộp với nhóm tồn kho của
+    // allocation theo ID để giữ nguyên logic đủ hàng / tạm giữ / hết hàng.
+    const fetchSpecialOrders = async (startDate, endDate) => {
+        setSpecialLoading(true);
+        setSpecialError('');
+        try {
+            let fetched = [];
+            let page = 0;
+            const pageSize = 1000;
+            let hasMore = true;
+            while (hasMore) {
+                const { data: chunk, error } = await supabase
+                    .from('orders')
+                    .select('id, created_at, updated_at, packed_at, status, carrier_name, carrier_code, carrier_date, printed_at, sale_channel, ecom_order_id, created_by_name, depot_id, description, private_description, traffic_source, tracking_url, is_declared_fee, order_products (product_code, product_name, quantity)')
+                    .gte('created_at', `${startDate}T00:00:00.000Z`)
+                    .lte('created_at', `${endDate}T23:59:59.999Z`)
+                    .order('created_at', { ascending: false })
+                    .order('id', { ascending: false })
+                    .range(page * pageSize, (page + 1) * pageSize - 1);
+                if (error) throw error;
+                if (!chunk || chunk.length === 0) hasMore = false;
+                else {
+                    fetched = [...fetched, ...chunk];
+                    if (chunk.length < pageSize) hasMore = false;
+                    else page++;
+                }
+            }
+            setSpecialOrders(fetched);
+        } catch (err) {
+            console.error('Lỗi tải báo cáo đặc biệt:', err);
+            setSpecialError(err.message || 'Không tải được đơn từ bảng orders.');
+            setSpecialOrders([]);
+        } finally {
+            setSpecialLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (specialMode) fetchSpecialOrders(specialStartDate, specialEndDate);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [specialMode, specialStartDate, specialEndDate]);
+
+    const handleToggleSpecialMode = () => {
+        const next = !specialMode;
+        setSpecialMode(next);
+        setSelectedOrders([]);
+        setCurrentPage(1);
+        setSpecialTab('all');
+        setSpecialOnlyMissingPrint(false);
+        setDetailOrder(null);
+    };
+
+    const handleResetSpecialDates = () => {
+        setSpecialStartDate(get30DaysAgoStr());
+        setSpecialEndDate(getTodayStr());
+    };
+
+    const openOrderDetail = async (order) => {
+        setDetailOrder(order);
+        setDetailData(null);
+        setDetailLoading(true);
+        setShowRawJson(false);
+        try {
+            // Lấy toàn bộ cột của đơn trong bảng orders. Nếu bảng có cột
+            // chứa JSON gốc của Nhanh (ví dụ raw_data / data / payload),
+            // select('*') sẽ lấy được nó và popup sẽ dùng nó làm nguồn chính.
+            // Nếu không có cột đó, popup dùng các trường đã làm phẳng.
+            const { data: full, error } = await supabase.from('orders').select('*').eq('id', order.id).single();
+            if (!error && full) setDetailData(full);
+        } catch (err) {
+            console.error('Lỗi tải chi tiết đơn:', err);
+        } finally {
+            setDetailLoading(false);
+        }
+    };
+
+    // Tìm JSON gốc trong một dòng orders (nếu có): duyệt các cột, cột nào
+    // là object có info/carrier/products, hoặc chuỗi JSON parse ra được
+    // dạng đó, thì coi là dữ liệu gốc. Trả null nếu không có.
+    const extractRawDetail = (row) => {
+        if (!row || typeof row !== 'object') return null;
+        const candidates = ['raw_data', 'raw', 'data', 'payload', 'nhanh_data', 'order_data'];
+        for (const key of candidates) {
+            const v = row[key];
+            if (!v) continue;
+            if (typeof v === 'object') {
+                if (v.info || v.carrier || v.products) return v;
+                if (v.data && (v.data.info || v.data.carrier)) return v.data;
+            }
+            if (typeof v === 'string' && v.trim().startsWith('{')) {
+                try {
+                    const parsed = JSON.parse(v);
+                    if (parsed.info || parsed.carrier || parsed.products) return parsed;
+                    if (parsed.data && (parsed.data.info || parsed.data.carrier)) return parsed.data;
+                } catch {}
+            }
+        }
+        // Trường hợp chính dòng orders đã là dạng gốc (không qua cột riêng).
+        if (row.info || row.carrier) return row;
+        return null;
+    };
+
     const getFilteredOrders = (orderList) => {
         if (!orderList) return [];
         let filtered = orderList.filter(order => {
@@ -359,23 +586,165 @@ export default function OrderReport() {
 
     const currentRawList = data[activeTab] || [];
     const filteredOrders = getFilteredOrders(currentRawList);
-    
-    // Xác định list đơn hàng mục tiêu để COPY & XUẤT EXCEL (Các đơn đã tick HOẶC Tất cả các đơn hiển thị)
-    const targetOrdersAction = selectedOrders.length > 0 
-        ? filteredOrders.filter(o => selectedOrders.includes(o.id)) 
-        : filteredOrders;
+
+    const allRawOrders = [...(data.printable || []), ...(data.holding || []), ...(data.outOfStock || [])];
+    const missedWebhookOrders = allRawOrders.filter(order => !order.order_products || order.order_products.length === 0);
+    // Nút miss mã vận đơn (chỉ owner thấy, xem phần header): chỉ tính đơn
+    // Shopee (42) / Tiktok Shop (48), ở trạng thái Đã xác nhận (56) /
+    // Chờ khách xác nhận (57) / Đã đóng gói (40), chưa có mã vận đơn,
+    // và phải đủ hàng (nằm trong nhóm printable của wms-allocation).
+    // Đơn tạm giữ / hết hàng, đơn kênh khác, trạng thái khác đều không tính.
+    const printableIds = new Set((data.printable || []).map(o => o.id));
+    const missingCarrierOrders = allRawOrders.filter(order =>
+        MISS_CARRIER_CHANNELS.includes(String(order.sale_channel)) &&
+        MISS_CARRIER_STATUSES.includes(String(order.status)) &&
+        (!order.carrier_code || String(order.carrier_code).trim() === '') &&
+        printableIds.has(order.id)
+    );
+
+    // --- Báo cáo đặc biệt: nhóm tồn kho theo ID từ wms-allocation ---
+    // Logic đủ hàng giữ nguyên: printable = đủ hàng, holding = tạm giữ,
+    // outOfStock = hết hàng. Chỉ thay cách hiển thị, không tính lại tồn kho.
+    const allocationStockById = new Map();
+    (data.printable || []).forEach(o => allocationStockById.set(o.id, { group: 'printable', order: o }));
+    (data.holding || []).forEach(o => allocationStockById.set(o.id, { group: 'holding', order: o }));
+    (data.outOfStock || []).forEach(o => allocationStockById.set(o.id, { group: 'outOfStock', order: o }));
+
+    const getStockInfo = (order) => {
+        if (!printAllowedStatuses.includes(String(order.status))) {
+            return { key: 'not_filtered', label: 'Trạng thái không lọc đơn in', detail: '' };
+        }
+        const stock = allocationStockById.get(order.id);
+        if (!stock) return { key: 'unallocated', label: 'Chưa phân bổ', detail: '' };
+        if (stock.group === 'printable') return { key: 'printable', label: 'Đủ hàng', detail: '' };
+        if (stock.group === 'outOfStock') return { key: 'outOfStock', label: 'Hết hàng', detail: '' };
+        // holding: lấy chi tiết thiếu hàng nếu allocation có debug_shortItems
+        const products = order.order_products || [];
+        const shortItems = stock.order?.debug_shortItems || [];
+        const firstShort = shortItems[0];
+        return {
+            key: 'holding',
+            label: 'Tạm giữ',
+            detail: firstShort ? `Thiếu ${firstShort.missing ?? ''}, tồn ${firstShort.remaining ?? ''}` : (products.length ? 'Thiếu 1 phần' : '')
+        };
+    };
+
+    const getStockBadge = (order) => {
+        const info = getStockInfo(order);
+        const cls = info.key === 'printable'
+            ? 'bg-green-100 text-green-700 border-green-200'
+            : info.key === 'holding'
+            ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
+            : info.key === 'outOfStock'
+            ? 'bg-red-100 text-red-700 border-red-200'
+            : info.key === 'not_filtered'
+            ? 'bg-amber-50 text-amber-700 border-amber-200'
+            : 'bg-gray-100 text-gray-600 border-gray-200';
+        return (
+            <span className={`inline-block px-2 py-1 rounded text-[11px] font-bold border ${cls}`}>
+                {info.label}
+                {info.detail ? <span className="block font-medium text-gray-600">{info.detail}</span> : null}
+            </span>
+        );
+    };
+
+    // Lọc phụ cho báo cáo đặc biệt: dùng chung các bộ lọc cũ (tìm kiếm,
+    // kênh, hãng, trạng thái, kho, nhân viên, ghi chú, trạng thái in,
+    // sắp xếp), nhưng bỏ lọc tồn >= 2 ngày (chỉ có ở tab đủ hàng cũ).
+    // Riêng tick "Chưa có Mã vận đơn" ở báo cáo đặc biệt dùng định nghĩa
+    // mã thật (GHN mã NVN coi như chưa có mã).
+    const getSpecialFiltered = (orderList) => {
+        if (!orderList) return [];
+        let filtered = orderList.filter(order => {
+            if (searchId) {
+                const query = searchId.trim().toLowerCase();
+                const matchId = String(order.id).toLowerCase().includes(query);
+                const matchEcom = order.ecom_order_id && String(order.ecom_order_id).toLowerCase().includes(query);
+                const matchCarrier = order.carrier_code && String(order.carrier_code).toLowerCase().includes(query);
+                if (!matchId && !matchEcom && !matchCarrier) return false;
+            }
+            if (searchProduct) {
+                const prodQuery = searchProduct.trim().toLowerCase();
+                const hasProductMatch = order.order_products?.some(p =>
+                    (p.product_name && p.product_name.toLowerCase().includes(prodQuery)) ||
+                    (p.product_code && p.product_code.toLowerCase().includes(prodQuery))
+                );
+                if (!hasProductMatch) return false;
+            }
+            if (searchNote) {
+                const note = (order.description || '') + ' ' + (order.private_description || '');
+                if (!note.toLowerCase().includes(searchNote.toLowerCase())) return false;
+            }
+            if (selectedStatus.length > 0 && !selectedStatus.includes(String(order.status))) return false;
+            if (selectedCarrier.length > 0 && !selectedCarrier.includes(order.carrier_name)) return false;
+            if (selectedChannel.length > 0 && !selectedChannel.includes(String(order.sale_channel))) return false;
+            if (selectedCreator.length > 0 && !selectedCreator.includes(order.created_by_name)) return false;
+            if (selectedDepot.length > 0 && !selectedDepot.includes(String(order.depot_id))) return false;
+            if (printedFilter === 'not_printed' && order.printed_at) return false;
+            if (printedFilter === 'printed' && !order.printed_at) return false;
+            if (printedFilter === 'today') {
+                if (!order.printed_at) return false;
+                const isToday = new Date(order.printed_at).toDateString() === new Date().toDateString();
+                if (!isToday) return false;
+            }
+            if (missingCarrierFilter && hasRealCarrier(order)) return false;
+            return true;
+        });
+        if (sortOrder === 'asc') filtered.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        else if (sortOrder === 'desc') filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        return filtered;
+    };
+
+    const specialFilteredByOther = getSpecialFiltered(specialOrders);
+    const specialTabLists = {
+        all: specialFilteredByOther,
+        confirm: specialFilteredByOther.filter(o => SPECIAL_CONFIRM_STATUSES.includes(String(o.status)) && !hasRealCarrier(o)),
+        print: specialFilteredByOther.filter(o => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && hasRealCarrier(o)),
+        transit: specialFilteredByOther.filter(o => SPECIAL_TRANSIT_STATUSES.includes(String(o.status))),
+    };
+    // Đơn Đang/Đã đóng gói chưa có mã thật, chỉ hiện khi tick ở tab In và đóng gói.
+    const specialMissingPrintOrders = specialFilteredByOther.filter(o => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && !hasRealCarrier(o));
+    const specialCurrentList = (specialMode && specialTab === 'print' && specialOnlyMissingPrint)
+        ? specialMissingPrintOrders
+        : (specialMode ? (specialTabLists[specialTab] || []) : []);
+
+    // Danh sách hiển thị / thao tác: báo cáo đặc biệt dùng specialCurrentList,
+    // báo cáo cũ dùng filteredOrders. Các nút Copy / Xuất Excel / Thao tác
+    // ở dưới đều dùng chung các biến này nên không cần viết lại từng nút.
+    const effectiveFiltered = specialMode ? specialCurrentList : filteredOrders;
+    const targetOrdersAction = selectedOrders.length > 0
+        ? effectiveFiltered.filter(o => selectedOrders.includes(o.id))
+        : effectiveFiltered;
 
     const copyTargetCount = targetOrdersAction.length;
     const ecomOrdersCount = targetOrdersAction.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id).length;
-    const carrierOrdersCount = targetOrdersAction.filter(o => o.carrier_code).length;
+    const carrierOrdersCount = targetOrdersAction.filter(o => specialMode ? hasRealCarrier(o) : o.carrier_code).length;
 
-    const totalOrdersCount = filteredOrders.length;
+    const totalOrdersCount = effectiveFiltered.length;
     const totalPages = Math.ceil(totalOrdersCount / pageSize) || 1;
-    const paginatedOrders = filteredOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-    
-    const allRawOrders = [...(data.printable || []), ...(data.holding || []), ...(data.outOfStock || [])];
-    const missedWebhookOrders = allRawOrders.filter(order => !order.order_products || order.order_products.length === 0);
-    const missingCarrierOrders = allRawOrders.filter(order => !order.carrier_code || String(order.carrier_code).trim() === '');
+    const paginatedOrders = effectiveFiltered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+    // Tùy chọn lọc cho báo cáo đặc biệt, lấy từ chính đơn đặc biệt để các
+    // trạng thái Đang chuyển / Thất bại... cũng xuất hiện trong dropdown.
+    const specialStatusOptions = [...new Set(specialOrders.map(o => o.status).filter(v => v !== null && v !== undefined))].map(code => ({
+        value: String(code),
+        label: statusDict[code] || LOCAL_STATUS_NAMES[String(code)] || `Mã ${code}`
+    }));
+    const specialCarrierOptions = [...new Set(specialOrders.map(o => o.carrier_name).filter(Boolean))];
+    const specialChannelOptions = [...new Set(specialOrders.map(o => o.sale_channel).filter(Boolean))].map(ch => ({
+        value: String(ch),
+        label: SALE_CHANNELS[ch] || `Kênh ${ch}`
+    }));
+    const specialCreatorOptions = [...new Set(specialOrders.map(o => o.created_by_name).filter(Boolean))].map(c => ({ value: String(c), label: c }));
+    const specialDepotOptions = [...new Set(specialOrders.map(o => o.depot_id).filter(Boolean))].map(id => ({
+        value: String(id),
+        label: DEPOT_NAMES[id] || `Kho ${id}`
+    }));
+    const effectiveStatusOptions = specialMode ? specialStatusOptions : statusOptions;
+    const effectiveCarrierOptions = specialMode ? specialCarrierOptions : carrierOptions;
+    const effectiveChannelOptions = specialMode ? specialChannelOptions : channelOptions;
+    const effectiveCreatorOptions = specialMode ? specialCreatorOptions : creatorOptions;
+    const effectiveDepotOptions = specialMode ? specialDepotOptions : depotOptions;
 
     // HÀM CHIA NHỎ MẢNG (CHUNK) ĐỂ CHẠY SONG SONG
     const chunkArray = (array, chunkSize) => {
@@ -474,6 +843,39 @@ export default function OrderReport() {
         setTimeout(() => setCopyMessage(''), 5000);
     };
 
+    // Cập nhật webhook cho toàn bộ đơn Đang/Đã đóng gói chưa có mã thật
+    // đang hiển thị ở tab In và đóng gói (khi tick lọc thiếu mã).
+    const handleUpdateMissingPrintWebhooks = async () => {
+        if (specialMissingPrintOrders.length === 0) {
+            setCopyMessage('Không có đơn Đang/Đã đóng gói nào chưa có mã vận đơn thực.');
+            setTimeout(() => setCopyMessage(''), 3000);
+            return;
+        }
+        setIsUpdatingMissingCarrier(true);
+        setMissingCarrierProgress(0);
+        setCopyMessage(`Đang cập nhật lại webhook cho ${specialMissingPrintOrders.length} đơn đóng gói chưa có mã vận đơn thực...`);
+        const orderIds = specialMissingPrintOrders.map(o => o.id);
+        const chunks = chunkArray(orderIds, 5);
+        let completed = 0;
+        const processChunk = async (chunk) => {
+            for (let i = 0; i < chunk.length; i++) {
+                try {
+                    await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${chunk[i]}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
+                } catch (err) {}
+                completed += 1;
+                setMissingCarrierProgress(completed);
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+        };
+        await Promise.all(chunks.map(chunk => processChunk(chunk)));
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        await fetchSpecialOrders(specialStartDate, specialEndDate);
+        await fetchAllocation(statusDict);
+        setIsUpdatingMissingCarrier(false);
+        setCopyMessage(`Đã cập nhật lại webhook cho ${orderIds.length} đơn đóng gói chưa có mã vận đơn thực.`);
+        setTimeout(() => setCopyMessage(''), 5000);
+    };
+
     const executeCopy = async (type) => {
         if (targetOrdersAction.length === 0) return;
         
@@ -488,7 +890,8 @@ export default function OrderReport() {
             textToCopy = validOrders.map(o => o.ecom_order_id).join('\n');
             count = validOrders.length;
         } else if (type === 'carrier') {
-            const validOrders = targetOrdersAction.filter(o => o.carrier_code);
+            // Báo cáo đặc biệt: GHN mã NVN coi như chưa có mã nên không copy.
+            const validOrders = targetOrdersAction.filter(o => specialMode ? hasRealCarrier(o) : o.carrier_code);
             textToCopy = validOrders.map(o => o.carrier_code).join('\n');
             count = validOrders.length;
         }
@@ -551,7 +954,9 @@ export default function OrderReport() {
                     baseRow["Ghi chú khách"] = order.description || '';
                     baseRow["Ghi chú nội bộ"] = order.private_description || '';
                 }
-                if (visibleCols.includes('aging')) {
+                if (specialMode) {
+                    baseRow["Tình trạng kho"] = getStockInfo(order).label;
+                } else if (visibleCols.includes('aging')) {
                     const agingDays = order.printable_date ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24)) : 0;
                     baseRow["Ngày tồn / Thiếu"] = activeTab === 'printable' ? `${agingDays} ngày` : 'Đang thiếu hàng';
                 }
@@ -670,16 +1075,28 @@ export default function OrderReport() {
                         <p className="text-gray-500 text-sm mt-1">Phân bổ tự động dựa trên tồn kho thực tế</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                        <button
-                            onClick={handleUpdateMissingCarrierWebhooks}
-                            disabled={loading || isUpdatingMissingCarrier || missingCarrierOrders.length === 0}
-                            className="bg-purple-600 border border-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 focus:ring-2 focus:ring-purple-100 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <RefreshCw size={16} className={isUpdatingMissingCarrier ? "animate-spin" : ""} />
-                            {isUpdatingMissingCarrier
-                                ? `Đang cập nhật (${missingCarrierProgress}/${missingCarrierOrders.length})...`
-                                : `Cập nhật lại đơn miss Mã vận đơn (${missingCarrierOrders.length})`}
-                        </button>
+                        {isOwner && (
+                            <button
+                                onClick={handleUpdateMissingCarrierWebhooks}
+                                disabled={loading || isUpdatingMissingCarrier || missingCarrierOrders.length === 0}
+                                className="bg-purple-600 border border-purple-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 focus:ring-2 focus:ring-purple-100 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Chỉ tính đơn Shopee / Tiktok Shop, ở trạng thái Đã xác nhận, Chờ khách xác nhận hoặc Đã đóng gói, chưa có mã vận đơn và đủ hàng"
+                            >
+                                <RefreshCw size={16} className={isUpdatingMissingCarrier ? "animate-spin" : ""} />
+                                {isUpdatingMissingCarrier
+                                    ? `Đang cập nhật (${missingCarrierProgress}/${missingCarrierOrders.length})...`
+                                    : `Cập nhật lại đơn miss Mã vận đơn (${missingCarrierOrders.length})`}
+                            </button>
+                        )}
+                        {isOwner && (
+                            <button
+                                onClick={handleToggleSpecialMode}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 shadow-sm border ${specialMode ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                                title="Chỉ Owner thấy nút này. Bật để chuyển sang báo cáo đặc biệt, tắt để quay về báo cáo cũ."
+                            >
+                                {specialMode ? 'Đang xem: Báo cáo đặc biệt' : 'Báo cáo đặc biệt'}
+                            </button>
+                        )}
                         <button
                             onClick={() => fetchAllocation(statusDict)}
                             disabled={loading || isUpdatingMissingCarrier}
@@ -691,8 +1108,72 @@ export default function OrderReport() {
                     </div>
                 </div>
 
+                {/* Báo cáo đặc biệt: 4 tab làm việc, gộp đủ / tạm giữ / hết hàng */}
+                {specialMode && (
+                    <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 space-y-4">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-800">Báo cáo đặc biệt</h3>
+                                <p className="text-sm text-slate-500 mt-1">Không chia đủ hàng / tạm giữ / hết hàng thành tab riêng nữa. Tình trạng kho hiển thị trong từng dòng. Mặc định lấy đơn 30 ngày gần nhất.</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                                    Từ ngày
+                                    <input type="date" value={specialStartDate} onChange={(e) => setSpecialStartDate(e.target.value)} className="px-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-blue-500" />
+                                </label>
+                                <label className="flex items-center gap-2 text-sm font-medium text-slate-600">
+                                    Đến ngày
+                                    <input type="date" value={specialEndDate} onChange={(e) => setSpecialEndDate(e.target.value)} className="px-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-blue-500" />
+                                </label>
+                                <button onClick={handleResetSpecialDates} className="px-3 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 text-sm font-bold rounded-lg transition-colors">30 ngày gần nhất</button>
+                                <button onClick={() => fetchSpecialOrders(specialStartDate, specialEndDate)} disabled={specialLoading} className="px-3 py-2 bg-slate-900 text-white hover:bg-slate-800 text-sm font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2">
+                                    <RefreshCw size={14} className={specialLoading ? 'animate-spin' : ''} /> Tải lại
+                                </button>
+                            </div>
+                        </div>
+                        {specialError && (
+                            <div className="p-3 rounded-lg bg-red-50 text-red-700 border border-red-200 text-sm font-medium">Không tải được đơn trực tiếp từ bảng orders: {specialError}. Báo cáo cũ vẫn dùng được khi tắt chế độ này.</div>
+                        )}
+                        <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
+                            {[
+                                { id: 'all', label: 'Tất cả', desc: 'Mọi trạng thái', count: specialTabLists.all.length },
+                                { id: 'confirm', label: 'Xác nhận', desc: 'Mới, Đang xác nhận, Đã xác nhận, Chờ khách xác nhận, chưa có mã', count: specialTabLists.confirm.length },
+                                { id: 'print', label: 'In và đóng gói', desc: 'Đang đóng gói, Đã đóng gói, có mã vận đơn', count: specialTabLists.print.length },
+                                { id: 'transit', label: 'Đang chuyển', desc: 'Đang chuyển, Chờ thu gom, Xác nhận hoàn, Đang hoàn, Thất bại', count: specialTabLists.transit.length },
+                            ].map(tab => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => { setSpecialTab(tab.id); setSpecialOnlyMissingPrint(false); }}
+                                    className={`px-4 py-2.5 rounded-lg text-sm font-bold transition-all flex items-center gap-2 border ${specialTab === tab.id ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                                    title={tab.desc}
+                                >
+                                    {tab.label}
+                                    <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${specialTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>{tab.count}</span>
+                                </button>
+                            ))}
+                        </div>
+                        {specialTab === 'print' && (
+                            <label className="flex items-center gap-2 cursor-pointer bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                                <input type="checkbox" checked={specialOnlyMissingPrint} onChange={(e) => setSpecialOnlyMissingPrint(e.target.checked)} className="w-4 h-4 text-amber-600 rounded border-amber-300 focus:ring-amber-500" />
+                                <span className="text-sm font-bold text-amber-800">Chỉ hiển thị đơn Đang/Đã đóng gói chưa có mã vận đơn thực ({specialMissingPrintOrders.length} đơn) để cập nhật lại webhook</span>
+                                <span className="text-xs font-medium text-amber-700">GHN mã bắt đầu bằng NVN cũng tính là chưa có mã.</span>
+                            </label>
+                        )}
+                        {specialTab === 'print' && specialOnlyMissingPrint && specialMissingPrintOrders.length > 0 && (
+                            <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-slate-200 rounded-lg px-4 py-3">
+                                <p className="text-sm font-medium text-slate-700">Đang hiển thị {specialMissingPrintOrders.length} đơn đóng gói chưa có mã vận đơn thực. Bấm nút bên phải để cập nhật webhook cho toàn bộ danh sách này.</p>
+                                <button onClick={handleUpdateMissingPrintWebhooks} disabled={isUpdatingMissingCarrier} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2">
+                                    <RefreshCw size={15} className={isUpdatingMissingCarrier ? 'animate-spin' : ''} />
+                                    {isUpdatingMissingCarrier ? `Đang cập nhật (${missingCarrierProgress}/${specialMissingPrintOrders.length})...` : 'Cập nhật webhook cho tất cả đơn đang hiển thị'}
+                                </button>
+                            </div>
+                        )}
+                        <p className="text-xs text-slate-500 font-medium">Số trên tab tính trên đơn trong khoảng ngày đã chọn, sau khi áp các bộ lọc tìm kiếm / kênh / hãng / trạng thái bên dưới (chưa tính chính tab đang chọn). Bấm vào ID đơn trong bảng để xem popup chi tiết.</p>
+                    </div>
+                )}
+
                 {/* Dashboard Tabs */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {!specialMode && (<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div onClick={() => setActiveTab('printable')} className={`cursor-pointer p-5 rounded-xl border bg-white flex items-center gap-4 transition-all ${activeTab === 'printable' ? 'ring-2 ring-green-500 border-transparent shadow-md' : 'border-gray-200 hover:border-green-300 shadow-sm'}`}>
                         <div className={`w-12 h-12 rounded-full flex items-center justify-center ${activeTab === 'printable' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
                             <CheckCircle size={24} />
@@ -720,7 +1201,7 @@ export default function OrderReport() {
                             <div className="text-sm text-gray-500 font-medium">Hết hàng</div>
                         </div>
                     </div>
-                </div>
+                </div>)}
 
                 {missedWebhookOrders.length > 0 && (
                     <div className="flex bg-red-50 border border-red-200 rounded-lg p-3">
@@ -747,19 +1228,19 @@ export default function OrderReport() {
                             
                             {/* Selects */}
                             <div className="w-[150px]">
-                                <MultiSelect options={channelOptions} selected={selectedChannel} onChange={setSelectedChannel} placeholder="Kênh bán" />
+                                <MultiSelect options={effectiveChannelOptions} selected={selectedChannel} onChange={setSelectedChannel} placeholder="Kênh bán" />
                             </div>
                             <div className="w-[150px]">
-                                <MultiSelect options={carrierOptions} selected={selectedCarrier} onChange={setSelectedCarrier} placeholder="Hãng VC" />
+                                <MultiSelect options={effectiveCarrierOptions} selected={selectedCarrier} onChange={setSelectedCarrier} placeholder="Hãng VC" />
                             </div>
                             <div className="w-[150px]">
-                                <MultiSelect options={statusOptions} selected={selectedStatus} onChange={setSelectedStatus} placeholder="Trạng thái" />
+                                <MultiSelect options={effectiveStatusOptions} selected={selectedStatus} onChange={setSelectedStatus} placeholder="Trạng thái" />
                             </div>
                             <div className="w-[150px]">
-                                <MultiSelect options={depotOptions} selected={selectedDepot} onChange={setSelectedDepot} placeholder="Kho hàng" />
+                                <MultiSelect options={effectiveDepotOptions} selected={selectedDepot} onChange={setSelectedDepot} placeholder="Kho hàng" />
                             </div>
                             <div className="w-[250px]">
-                                <MultiSelect options={creatorOptions} selected={selectedCreator} onChange={setSelectedCreator} placeholder="Nhân viên" />
+                                <MultiSelect options={effectiveCreatorOptions} selected={selectedCreator} onChange={setSelectedCreator} placeholder="Nhân viên" />
                             </div>
                         </div>
 
@@ -901,11 +1382,14 @@ export default function OrderReport() {
                             />
                             <span className="text-sm font-medium text-gray-700">Chưa có Mã vận đơn</span>
                         </label>
-                        {activeTab === 'printable' && (
+                        {!specialMode && activeTab === 'printable' && (
                             <label className="flex items-center gap-2 cursor-pointer ml-2">
                                 <input type="checkbox" checked={agingFilter} onChange={(e) => setAgingFilter(e.target.checked)} className="w-4 h-4 text-red-600 rounded border-gray-300 focus:ring-red-500" />
                                 <span className="text-sm font-medium text-gray-700">Chỉ đơn tồn &gt;= 2 ngày</span>
                             </label>
+                        )}
+                        {specialMode && (
+                            <span className="text-xs font-medium text-slate-500 ml-2">Tick “Chưa có Mã vận đơn” ở báo cáo đặc biệt tính theo mã thật (GHN mã NVN coi như chưa có mã).</span>
                         )}
                     </div>
                 </div>
@@ -920,7 +1404,7 @@ export default function OrderReport() {
                 {/* Main Table */}
                 <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden flex flex-col">
                     <div className="overflow-x-auto">
-                        {loading ? (
+                        {(specialMode ? specialLoading : loading) ? (
                             <div className="p-16 text-center text-gray-400 font-medium text-sm flex flex-col items-center gap-3">
                                 <RefreshCw className="animate-spin text-blue-500" size={24} /> Đang tải dữ liệu...
                             </div>
@@ -942,7 +1426,8 @@ export default function OrderReport() {
                                         <th className="py-3 px-4 font-semibold min-w-[200px]">Sản phẩm</th>
                                         <th className="py-3 px-4 font-semibold text-center whitespace-nowrap w-24">Số lượng</th>
                                         
-                                        {visibleCols.includes('aging') && <th className="py-3 px-4 font-semibold whitespace-nowrap">{activeTab === 'printable' ? 'Ngày tồn' : 'Kho / Thiếu'}</th>}
+                                        {specialMode && <th className="py-3 px-4 font-semibold whitespace-nowrap">Tình trạng kho</th>}
+                                        {!specialMode && visibleCols.includes('aging') && <th className="py-3 px-4 font-semibold whitespace-nowrap">{activeTab === 'printable' ? 'Ngày tồn' : 'Kho / Thiếu'}</th>}
                                         {visibleCols.includes('creator') && <th className="py-3 px-4 font-semibold text-center whitespace-nowrap">Nhân viên</th>}
                                     </tr>
                                 </thead>
@@ -950,7 +1435,7 @@ export default function OrderReport() {
                                     {paginatedOrders.map(order => {
                                         const products = order.order_products || [];
                                         const rowCount = Math.max(1, products.length);
-                                        const statusName = statusDict[order.status] || `Mã ${order.status}`;
+                                        const statusName = statusDict[order.status] || LOCAL_STATUS_NAMES[String(order.status)] || `Mã ${order.status}`;
                                         const channelName = SALE_CHANNELS[order.sale_channel] || order.sale_channel || 'Khác';
                                         const isChecked = selectedOrders.includes(order.id);
                                         
@@ -977,9 +1462,20 @@ export default function OrderReport() {
                                                     {/* Cột 2: Gộp ID */}
                                                     {index === 0 && (
                                                         <td rowSpan={rowCount} className="py-3 px-4 align-top border-r border-gray-100">
-                                                            <div className="font-bold text-gray-800 cursor-pointer hover:text-blue-600 mb-1" onClick={() => handleSelectOne(order.id)}>
-                                                                {order.id}
-                                                            </div>
+                                                            {specialMode ? (
+                                                                <button className="font-bold text-blue-700 hover:underline mb-1 text-left" onClick={() => openOrderDetail(order)} title="Bấm để xem popup chi tiết đơn">
+                                                                    {order.id}
+                                                                </button>
+                                                            ) : (
+                                                                <div className="font-bold text-gray-800 cursor-pointer hover:text-blue-600 mb-1" onClick={() => handleSelectOne(order.id)}>
+                                                                    {order.id}
+                                                                </div>
+                                                            )}
+                                                            {specialMode && (
+                                                                <div>
+                                                                    <button onClick={() => openOrderDetail(order)} className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded hover:bg-blue-100 transition-colors">Xem chi tiết</button>
+                                                                </div>
+                                                            )}
                                                             {order.ecom_order_id && (
                                                                 <div className="text-[11px] mb-0.5 flex items-center gap-1.5">
                                                                     <span className="font-medium bg-pink-100 text-pink-700 px-1.5 py-0.5 rounded shadow-sm border border-pink-200">Sàn</span>
@@ -1063,8 +1559,13 @@ export default function OrderReport() {
                                                         {prod.quantity}
                                                     </td>
 
-                                                    {/* Cột 8 (Tùy chọn): Tồn kho / Ngày tồn */}
-                                                    {visibleCols.includes('aging') && (
+                                                    {/* Cột 8: Báo cáo đặc biệt luôn hiển thị tình trạng kho, báo cáo cũ giữ theo cột đã chọn */}
+                                                    {specialMode && index === 0 && (
+                                                        <td rowSpan={rowCount} className="py-3 px-4 align-top">
+                                                            {getStockBadge(order)}
+                                                        </td>
+                                                    )}
+                                                    {!specialMode && visibleCols.includes('aging') && (
                                                         <td className="py-2.5 px-4 align-top">
                                                             {activeTab === 'printable' ? (
                                                                 renderAgingBadge(order.printable_date)
@@ -1125,6 +1626,176 @@ export default function OrderReport() {
                     )}
                 </div>
             </div>
+
+            {/* Popup chi tiết đơn - chỉ trong báo cáo đặc biệt */}
+            {detailOrder && (() => {
+                const base = detailData || detailOrder;
+                const raw = extractRawDetail(detailData);
+                const rawData = raw?.data || raw || null;
+                const info = rawData?.info || null;
+                const carrier = rawData?.carrier || null;
+                const channel = rawData?.channel || null;
+                const payment = rawData?.payment || null;
+                const shipAddr = rawData?.shippingAddress || null;
+                const rawProducts = rawData?.products || null;
+                const statusName = statusDict[base.status] || LOCAL_STATUS_NAMES[String(base.status)] || `Mã ${base.status}`;
+                const channelName = SALE_CHANNELS[base.sale_channel] || base.sale_channel || 'Khác';
+                const stockInfo = getStockInfo(detailOrder);
+                const productsForPopup = rawProducts || (base.order_products || []).map(p => ({
+                    name: p.product_name, code: p.product_code, quantity: p.quantity
+                }));
+                const totalQty = productsForPopup.reduce((s, p) => s + (Number(p.quantity) || 0), 0);
+                const totalAmount = rawProducts
+                    ? rawProducts.reduce((s, p) => s + (Number(p.price) || 0) * (Number(p.quantity) || 0), 0)
+                    : null;
+                const totalDiscount = rawProducts
+                    ? rawProducts.reduce((s, p) => s + (Number(p.discount) || 0), 0)
+                    : null;
+                const DetailRow = ({ label, value }) => (
+                    <div className="flex flex-col gap-0.5 py-2 border-b border-slate-100 last:border-0">
+                        <span className="text-xs font-medium text-slate-500">{label}</span>
+                        <span className="text-sm font-semibold text-slate-800 whitespace-pre-line break-words">{value}</span>
+                    </div>
+                );
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50" onClick={() => setDetailOrder(null)}>
+                        <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+                            <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-start bg-slate-50">
+                                <div>
+                                    <h3 className="font-bold text-lg text-slate-800">Chi tiết đơn hàng #{detailOrder.id}</h3>
+                                    <p className="text-sm text-slate-500 mt-0.5">Trạng thái: {statusName} &nbsp;|&nbsp; Kênh: {channelName} &nbsp;|&nbsp; Tình trạng kho: {stockInfo.label}</p>
+                                </div>
+                                <button onClick={() => setDetailOrder(null)} className="text-slate-400 hover:text-slate-600 shrink-0"><XCircle size={22} /></button>
+                            </div>
+                            <div className="p-5 overflow-y-auto space-y-6">
+                                {detailLoading && <p className="text-sm text-slate-500 font-medium flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Đang tải đầy đủ chi tiết...</p>}
+
+                                <section>
+                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Thông tin chung</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                                        <DetailRow label="ID hệ thống" value={fmtNumber(info?.id ?? base.id)} />
+                                        <DetailRow label="ID đơn sàn" value={base.ecom_order_id ? fmtNumber(base.ecom_order_id) : (channel?.ecomOrderId ? fmtNumber(channel.ecomOrderId) : 'Chưa có')} />
+                                        <DetailRow label="Trạng thái" value={`${statusName} (mã ${base.status})`} />
+                                        <DetailRow label="Kênh bán" value={`${channelName} (mã ${base.sale_channel})`} />
+                                        {channel?.trafficSource?.name && <DetailRow label="Nguồn khách" value={channel.trafficSource.name} />}
+                                        <DetailRow label="Kho xuất" value={DEPOT_NAMES[String(base.depot_id)] ? `${DEPOT_NAMES[String(base.depot_id)]} (mã ${base.depot_id})` : fmtNumber(base.depot_id)} />
+                                        <DetailRow label="Nhân viên tạo" value={info?.createdBy?.name || base.created_by_name || 'Hệ thống'} />
+                                        <DetailRow label="Ngày tạo" value={info?.createdAt ? fmtUnix(info.createdAt) : fmtDateStr(base.created_at)} />
+                                        <DetailRow label="Ngày cập nhật" value={info?.updatedAt ? fmtUnix(info.updatedAt) : fmtDateStr(base.updated_at)} />
+                                        <DetailRow label="Ngày đóng gói" value={info?.packedAt ? fmtUnix(info.packedAt) : (base.packed_at ? fmtDateStr(base.packed_at) : 'Chưa có')} />
+                                        <DetailRow label="Ngày in" value={base.printed_at ? fmtDateStr(base.printed_at) : 'Chưa in'} />
+                                        <DetailRow label="Ngày đi" value={base.carrier_date ? fmtDateStr(base.carrier_date) : 'Chưa có'} />
+                                        {info?.description && <DetailRow label="Mô tả đơn" value={stripHtml(info.description)} />}
+                                        {(info?.privateDescription || base.private_description) && <DetailRow label="Ghi chú nội bộ" value={stripHtml(info?.privateDescription || base.private_description)} />}
+                                    </div>
+                                </section>
+
+                                <section>
+                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Vận chuyển</h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                                        <DetailRow label="Hãng vận chuyển" value={carrier?.name || base.carrier_name || 'Chưa có'} />
+                                        <DetailRow label="Mã vận đơn" value={carrier?.carrierCode || base.carrier_code || 'Chưa có'} />
+                                        {carrier?.service?.name && <DetailRow label="Dịch vụ" value={`${carrier.service.name} (mã ${carrier.service.code ?? carrier.service.id})`} />}
+                                        <DetailRow label="Phí ship" value={carrier ? fmtMoney(carrier.shipFee) : 'Chưa có trong dữ liệu đơn'} />
+                                        <DetailRow label="Phí COD" value={carrier ? fmtMoney(carrier.codFee) : 'Chưa có trong dữ liệu đơn'} />
+                                        <DetailRow label="Phí trả hàng" value={carrier ? fmtMoney(carrier.returnFee) : 'Chưa có trong dữ liệu đơn'} />
+                                        <DetailRow label="Phí khai giá" value={carrier ? fmtMoney(carrier.declaredFee) : 'Chưa có trong dữ liệu đơn'} />
+                                        <DetailRow label="Phí ship khách trả" value={carrier ? fmtMoney(carrier.customerShipFee) : 'Chưa có trong dữ liệu đơn'} />
+                                        <DetailRow label="Phí vượt cân" value={carrier ? fmtMoney(carrier.overWeightShipFee) : 'Chưa có trong dữ liệu đơn'} />
+                                        <DetailRow label="Khối lượng" value={carrier ? fmtWeight(carrier.weight) : 'Chưa có trong dữ liệu đơn'} />
+                                        <DetailRow label="Ngày gửi hãng" value={carrier?.sendCarrier?.date ? fmtDateOnly(carrier.sendCarrier.date) : 'Chưa có'} />
+                                        <DetailRow label="Ngày giao dự kiến" value={carrier?.deliveryDate ? fmtDateOnly(carrier.deliveryDate) : 'Chưa có'} />
+                                        {base.tracking_url && (
+                                            <div className="py-2 sm:col-span-2">
+                                                <a href={base.tracking_url} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-700 hover:underline">Tra cứu vận đơn trên Nhanh.vn</a>
+                                            </div>
+                                        )}
+                                    </div>
+                                </section>
+
+                                {shipAddr && (
+                                    <section>
+                                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Khách hàng &amp; giao hàng</h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                                            <DetailRow label="Người nhận" value={shipAddr.name || 'Chưa có'} />
+                                            <DetailRow label="Số điện thoại" value={shipAddr.mobile || 'Chưa có'} />
+                                            <DetailRow label="Địa chỉ" value={shipAddr.address || 'Chưa có'} />
+                                            <DetailRow label="Mã tỉnh / huyện / phường" value={`Tỉnh ${shipAddr.cityId ?? 'Chưa có'} - Huyện ${shipAddr.districtId ?? 'Chưa có'} - Phường ${shipAddr.wardId ?? 'Chưa có'} (dữ liệu gốc chỉ lưu mã, không lưu tên)`} />
+                                        </div>
+                                    </section>
+                                )}
+
+                                <section>
+                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Sản phẩm ({fmtNumber(totalQty)} sản phẩm)</h4>
+                                    {productsForPopup.length === 0 ? (
+                                        <p className="text-sm text-slate-500 font-medium">Đơn này chưa có danh sách sản phẩm trong bảng orders.</p>
+                                    ) : (
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="text-left text-slate-500 border-b border-slate-200">
+                                                        <th className="py-2 pr-3 font-semibold">Sản phẩm</th>
+                                                        <th className="py-2 pr-3 font-semibold">Mã</th>
+                                                        <th className="py-2 pr-3 font-semibold text-right">Đơn giá</th>
+                                                        <th className="py-2 pr-3 font-semibold text-right">Chiết khấu</th>
+                                                        <th className="py-2 pr-3 font-semibold text-center">Số lượng</th>
+                                                        <th className="py-2 font-semibold text-center">Tồn kho</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {productsForPopup.map((p, idx) => (
+                                                        <tr key={idx}>
+                                                            <td className="py-2 pr-3 font-semibold text-slate-800">{p.name}</td>
+                                                            <td className="py-2 pr-3 font-mono text-xs text-slate-500">{p.code}</td>
+                                                            <td className="py-2 pr-3 text-right">{p.price !== undefined ? fmtMoney(p.price) : 'Chưa có'}</td>
+                                                            <td className="py-2 pr-3 text-right">{p.discount !== undefined ? fmtMoney(p.discount) : 'Chưa có'}</td>
+                                                            <td className="py-2 pr-3 text-center font-bold">{fmtNumber(p.quantity)} {p.unit?.name || 'chiếc'}</td>
+                                                            <td className="py-2 text-center">{p.available !== undefined ? (Number(p.available) === 0 ? 'Hết hàng (0)' : fmtNumber(p.available)) : 'Chưa có'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                    {totalAmount !== null && (
+                                        <div className="mt-3 space-y-1 text-sm">
+                                            <div className="flex justify-between"><span className="text-slate-500 font-medium">Tổng tiền sản phẩm</span><span className="font-bold text-slate-800">{fmtMoney(totalAmount)}</span></div>
+                                            <div className="flex justify-between"><span className="text-slate-500 font-medium">Tổng chiết khấu sản phẩm</span><span className="font-bold text-slate-800">{fmtMoney(totalDiscount)}</span></div>
+                                        </div>
+                                    )}
+                                </section>
+
+                                {payment && (
+                                    <section>
+                                        <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Thanh toán</h4>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                                            <DetailRow label="VAT" value={`${fmtMoney(payment.vat?.amount)} (tỷ lệ ${payment.vat?.value ?? 'Chưa có'})`} />
+                                            <DetailRow label="Tiền cọc" value={fmtMoney(payment.deposit?.amount)} />
+                                            <DetailRow label="Tiền chuyển khoản" value={fmtMoney(payment.transfer?.amount)} />
+                                            <DetailRow label="Chiết khấu đơn" value={`${fmtMoney(payment.discount?.amount)} (loại theo dữ liệu gốc: ${payment.discount?.type || 'Chưa có'})`} />
+                                            <DetailRow label="Điểm đã dùng" value={`${fmtMoney(payment.usedPoints?.amount)} (${fmtNumber(payment.usedPoints?.points)} điểm)`} />
+                                            <DetailRow label="Trạng thái thanh toán doanh nghiệp" value={`Mã ${payment.businessPaymentStatus ?? 'Chưa có'}`} />
+                                        </div>
+                                    </section>
+                                )}
+
+                                {!raw && (
+                                    <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg p-3 leading-relaxed">
+                                        Bảng orders hiện chỉ lưu các trường đã làm phẳng (ID, trạng thái, kênh, hãng, mã vận đơn, ngày in / ngày đi, ghi chú, sản phẩm). Popup này hiển thị đầy đủ mọi trường có trong bảng cho đơn này; các mục như địa chỉ giao hàng chi tiết, phí ship, chiết khấu theo sản phẩm sẽ chỉ xuất hiện khi đơn đó có dữ liệu gốc đầy đủ trong bảng. Bấm “Xem JSON gốc” bên dưới để đối chiếu toàn bộ dòng dữ liệu.
+                                    </p>
+                                )}
+
+                                <div className="border-t border-slate-200 pt-3">
+                                    <button onClick={() => setShowRawJson(v => !v)} className="text-sm font-bold text-slate-700 hover:text-slate-900">{showRawJson ? 'Ẩn JSON gốc' : 'Xem JSON gốc'}</button>
+                                    {showRawJson && (
+                                        <pre className="mt-2 bg-slate-900 text-slate-100 text-xs rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-words">{JSON.stringify(detailData || detailOrder, null, 2)}</pre>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
 
             {/* Missed Webhook Modal */}
             {showMissedModal && (
