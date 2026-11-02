@@ -389,7 +389,7 @@ export default function Mobile() {
                 html5QrCode.start(
                     { facingMode: 'environment' },
                     {
-                        fps: 10,
+                        fps: 25,
                         qrbox: { width: 300, height: 100 },
                         formatsToSupport: [
                             Html5QrcodeSupportedFormats.QR_CODE,
@@ -401,6 +401,13 @@ export default function Mobile() {
                             Html5QrcodeSupportedFormats.CODE_93,
                         ],
                         aspectRatio: 1.0,
+                        // Xin camera 720p (ideal, không bắt buộc) để mã nhỏ
+                        // nét hơn; mặc định thư viện chỉ lấy độ phân giải thấp.
+                        videoConstraints: {
+                            facingMode: 'environment',
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                        },
                     },
                     (decodedText) => {
                         if (handled || cancelled) return;
