@@ -390,7 +390,13 @@ export default function Mobile() {
                     { facingMode: 'environment' },
                     {
                         fps: 25,
-                        qrbox: { width: 300, height: 100 },
+                        // Khung quét to theo màn hình (90% rộng, 50% cao) cho
+                        // giống cảm giác quét cả khung như Android; khung cố
+                        // định 300x100 trước đây nhìn bé tí trên iPhone.
+                        qrbox: (viewfinderWidth, viewfinderHeight) => ({
+                            width: Math.floor(viewfinderWidth * 0.9),
+                            height: Math.floor(viewfinderHeight * 0.5),
+                        }),
                         formatsToSupport: [
                             Html5QrcodeSupportedFormats.QR_CODE,
                             Html5QrcodeSupportedFormats.CODE_128,
