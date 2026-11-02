@@ -80,9 +80,26 @@ serve(async (req) => {
     const nhanhErr = (r: any) =>
       Array.isArray(r.messages) ? r.messages.join(', ') : (r.messages || r.message || r.errorCode || 'Nhanh.vn từ chối yêu cầu.');
 
+    // Gọi API Nhanh có thử lại khi lỗi mạng/DNS (ví dụ lỗi "failed to
+    // lookup address information" của Supabase Edge Runtime): những lỗi
+    // này xảy ra trước khi request tới được Nhanh nên thử lại là an
+    // toàn, và gửi đơn vốn đã xử lý ERR_ORDER_EXISTED nếu trùng. Chỉ
+    // thử lại khi fetch ném lỗi, không thử lại khi Nhanh đã trả lỗi.
+    const fetchWithRetry = async (url: string, init: RequestInit, attempts = 3) => {
+      let lastError: any = null;
+      for (let attempt = 1; attempt <= attempts; attempt++) {
+        try {
+          return await fetch(url, init);
+        } catch (e: any) {
+          lastError = e;
+          if (attempt < attempts) await new Promise(r => setTimeout(r, 1000 * attempt));
+        }
+      }
+      throw lastError;
+    };
     // API POS (order/*): Authorization là token thô, theo đúng tài liệu.
     const callPos = async (path: string, body: unknown) => {
-      const res = await fetch(`https://pos.open.nhanh.vn/v3.0${path}?appId=${appId}&businessId=${bizId}`, {
+      const res = await fetchWithRetry(`https://pos.open.nhanh.vn/v3.0${path}?appId=${appId}&businessId=${bizId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': accessToken },
         body: JSON.stringify(body),
@@ -91,7 +108,7 @@ serve(async (req) => {
     };
     // API Ship (shipment/*): Authorization dạng Bearer, theo đúng tài liệu.
     const callShip = async (path: string, body: unknown) => {
-      const res = await fetch(`https://ship.open.nhanh.vn/v3.0${path}?businessId=${bizId}&appId=${appId}`, {
+      const res = await fetchWithRetry(`https://ship.open.nhanh.vn/v3.0${path}?businessId=${bizId}&appId=${appId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
         body: JSON.stringify(body),
@@ -170,17 +187,23 @@ serve(async (req) => {
     }
 
     if (action === 'send') {
-      // Gửi từng đơn tuần tự sang hãng để lấy mã vận đơn.
+      // Gửi từng đơn tuần tự sang hãng để lấy mã vận đơn. Lỗi mạng của
+      // 1 đơn chỉ ghi vào đơn đó, không làm hỏng cả lô (trước đây fetch
+      // ném lỗi là cả lô trả 500).
       const results: any[] = [];
       for (const id of orderIds) {
-        const r = await callShip('/shipment/send', { orderId: id });
-        if (r.code === 1) {
-          results.push({ id, ok: true, carrierCode: r.data?.carrierCode || null });
-        } else if (r.errorCode === 'ERR_ORDER_EXISTED' && r.data?.carrierCode) {
-          // Đơn đã gửi rồi: Nhanh trả lại thông tin đơn đã có bên hãng.
-          results.push({ id, ok: true, existed: true, carrierCode: r.data.carrierCode });
-        } else {
-          results.push({ id, ok: false, message: nhanhErr(r) });
+        try {
+          const r = await callShip('/shipment/send', { orderId: id });
+          if (r.code === 1) {
+            results.push({ id, ok: true, carrierCode: r.data?.carrierCode || null });
+          } else if (r.errorCode === 'ERR_ORDER_EXISTED' && r.data?.carrierCode) {
+            // Đơn đã gửi rồi: Nhanh trả lại thông tin đơn đã có bên hãng.
+            results.push({ id, ok: true, existed: true, carrierCode: r.data.carrierCode });
+          } else {
+            results.push({ id, ok: false, message: nhanhErr(r) });
+          }
+        } catch (e: any) {
+          results.push({ id, ok: false, message: e?.message || 'Lỗi kết nối tới Nhanh.vn.' });
         }
       }
       const okCount = results.filter((x) => x.ok).length;
@@ -220,13 +243,17 @@ serve(async (req) => {
       const reason = payload.cancelReason || undefined;
       const results: any[] = [];
       for (const id of orderIds) {
-        const body: Record<string, unknown> = { orderId: id };
-        if (reason) body.cancelReason = reason;
-        const r = await callShip('/shipment/cancel', body);
-        if (r.code === 1) {
-          results.push({ id, ok: true, status: r.data?.status ?? null, statusName: r.data?.statusName || null });
-        } else {
-          results.push({ id, ok: false, message: nhanhErr(r) });
+        try {
+          const body: Record<string, unknown> = { orderId: id };
+          if (reason) body.cancelReason = reason;
+          const r = await callShip('/shipment/cancel', body);
+          if (r.code === 1) {
+            results.push({ id, ok: true, status: r.data?.status ?? null, statusName: r.data?.statusName || null });
+          } else {
+            results.push({ id, ok: false, message: nhanhErr(r) });
+          }
+        } catch (e: any) {
+          results.push({ id, ok: false, message: e?.message || 'Lỗi kết nối tới Nhanh.vn.' });
         }
       }
       const okCount = results.filter((x) => x.ok).length;

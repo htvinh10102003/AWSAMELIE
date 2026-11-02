@@ -68,18 +68,33 @@ serve(async (req) => {
         };
         if (nextCursor) payload.paginator.next = nextCursor;
 
-        // Gọi API Nhanh.vn với JSON (giống file local)
-        const res = await fetch(
-          `https://pos.open.nhanh.vn/v3.0/order/list?appId=${appId}&businessId=${businessId}`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': accessToken,
-              'Content-Type': 'application/json'  // Sửa thành JSON
-            },
-            body: JSON.stringify(payload)         // Gửi thẳng JSON object
+        // Gọi API Nhanh.vn với JSON (giống file local). Thử lại khi lỗi
+        // mạng/DNS (request chưa tới được Nhanh nên thử lại là an toàn;
+        // chỉ thử lại khi fetch ném lỗi, không thử lại khi Nhanh đã
+        // trả lỗi).
+        let res: Response | null = null;
+        let fetchError: any = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            res = await fetch(
+              `https://pos.open.nhanh.vn/v3.0/order/list?appId=${appId}&businessId=${businessId}`,
+              {
+                method: 'POST',
+                headers: {
+                  'Authorization': accessToken,
+                  'Content-Type': 'application/json'  // Sửa thành JSON
+                },
+                body: JSON.stringify(payload)         // Gửi thẳng JSON object
+              }
+            );
+            fetchError = null;
+            break;
+          } catch (e: any) {
+            fetchError = e;
+            if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
           }
-        );
+        }
+        if (!res) throw fetchError;
 
         const result = await res.json();
 
