@@ -308,6 +308,11 @@ export default function OrderReport() {
     // tiết, panel sau khi gửi, modal kết quả gửi).
     const [printList, setPrintList] = useState(null); // { size, items: [{id, carrier_code}] }
     const [printCopied, setPrintCopied] = useState(false);
+    // Lịch sử gửi sang hãng: 5 lần gần nhất, chỉ owner xem (để gửi xong
+    // lỡ load lại trang vẫn mở ra check lại được).
+    const [sendHistory, setSendHistory] = useState([]);
+    const [sendHistoryLoading, setSendHistoryLoading] = useState(false);
+    const [showSendHistoryModal, setShowSendHistoryModal] = useState(false);
     // Gửi / hủy hàng loạt từ nút Thao tác trên thanh công cụ.
     const [bulkSendResult, setBulkSendResult] = useState(null);
     const [showBulkSendModal, setShowBulkSendModal] = useState(false);
@@ -925,7 +930,7 @@ export default function OrderReport() {
         setDetailActionLoading(true);
         setDetailActionMsg('');
         try {
-            const result = await callNhanhOrderAction('send');
+            const result = await callNhanhOrderAction('send', { source: 'popup' });
             const first = result.results?.[0];
             if (first?.ok) {
                 if (first.carrierCode) patchDetailRow({ carrier_code: first.carrierCode });
@@ -984,6 +989,20 @@ export default function OrderReport() {
         }).catch(() => {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [specialMode]);
+    const handleOpenSendHistory = async () => {
+        setShowSendHistoryModal(true);
+        setSendHistoryLoading(true);
+        try {
+            const result = await callNhanhActionRaw('sendHistory');
+            if (result.success) setSendHistory(result.data || []);
+            else setCopyMessage(result.message || 'Không tải được lịch sử gửi.');
+        } catch (err) {
+            setCopyMessage(`Lỗi hệ thống: ${err.message}`);
+        } finally {
+            setSendHistoryLoading(false);
+            setTimeout(() => setCopyMessage(''), 5000);
+        }
+    };
     // Gửi hàng loạt từ nút Thao tác trên thanh công cụ: chỉ gửi đơn
     // kênh Admin, đơn Shopee/TikTok và các kênh khác trong list đã tick
     // đều bỏ qua mặc định và được báo rõ trong popup kết quả.
@@ -1002,7 +1021,7 @@ export default function OrderReport() {
         }
         setSendingOrder(true);
         try {
-            const result = await callNhanhActionRaw('send', { orderIds: adminIds });
+            const result = await callNhanhActionRaw('send', { orderIds: adminIds, skippedIds, source: 'toolbar' });
             setBulkSendResult({ ...result, skippedIds });
             setShowBulkSendModal(true);
             if (result.okCount > 0) setSpecialReloadToken(t => t + 1);
@@ -1921,6 +1940,13 @@ export default function OrderReport() {
                                 )}
                             </div>
 
+                            {/* Lịch sử gửi sang hãng: chỉ owner, để gửi xong lỡ load lại trang vẫn mở ra check lại được */}
+                            {isOwner && (
+                                <button onClick={handleOpenSendHistory} className="px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-sm bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
+                                    <Send size={15} /> Lịch sử gửi
+                                </button>
+                            )}
+
                             {/* Actions Dropdown */}
                             <div className="relative" onMouseLeave={() => setShowActionMenu(false)}>
                                 <button onClick={() => setShowActionMenu(!showActionMenu)} disabled={selectedOrders.length === 0 || sendingOrder || updatingSelected} className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all shadow-sm ${selectedOrders.length > 0 ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}>
@@ -2620,6 +2646,7 @@ export default function OrderReport() {
                                     <button onClick={() => openNhanhPrint((bulkSendResult.results || []).filter(r => r.ok).map(r => ({ id: r.id, carrier_code: r.carrierCode || '' })), 'K80')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
                                 </div>
                             )}
+                            <button onClick={() => { setShowBulkSendModal(false); handleOpenSendHistory(); }} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 self-start">Xem lịch sử gửi</button>
                             <p className="text-xs text-slate-500">Mã vận đơn sẽ hiện trong bảng sau khi hệ thống đồng bộ đơn từ Nhanh về.</p>
                         </div>
                     </div>
@@ -2661,6 +2688,68 @@ export default function OrderReport() {
                                     <button onClick={() => setShowBulkCancelModal(false)} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800">Đóng</button>
                                 </>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Lịch sử gửi sang hãng: 5 lần gần nhất, mỗi mục có nút in lại */}
+            {showSendHistoryModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50" onClick={() => setShowSendHistoryModal(false)}>
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                        <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                            <h3 className="font-bold text-gray-800">Lịch sử gửi sang hãng (5 lần gần nhất)</h3>
+                            <button onClick={() => setShowSendHistoryModal(false)} className="text-gray-400 hover:text-gray-600"><XCircle size={20} /></button>
+                        </div>
+                        <div className="p-5 overflow-y-auto space-y-4">
+                            {sendHistoryLoading && <p className="text-sm text-slate-500 font-medium flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Đang tải lịch sử...</p>}
+                            {!sendHistoryLoading && sendHistory.length === 0 && (
+                                <p className="text-sm text-slate-500">Chưa có lần gửi nào được lưu.</p>
+                            )}
+                            {sendHistory.map(entry => {
+                                const items = Array.isArray(entry.items) ? entry.items : [];
+                                const okItems = items.filter(it => it.ok);
+                                const failItems = items.filter(it => !it.ok);
+                                const skipped = Array.isArray(entry.skipped_ids) ? entry.skipped_ids : [];
+                                return (
+                                    <div key={entry.id} className="border border-slate-200 rounded-lg p-3 space-y-2">
+                                        <div className="flex justify-between gap-3">
+                                            <span className="text-sm font-bold text-slate-800">{fmtDateStr(entry.created_at)}</span>
+                                            <span className="text-xs text-slate-400 shrink-0">{entry.source === 'popup' ? 'Popup chi tiết' : entry.source === 'toolbar' ? 'Thanh công cụ' : (entry.source || '')}</span>
+                                        </div>
+                                        <p className="text-sm text-slate-600">
+                                            Thành công <span className="font-bold text-green-700">{entry.ok_count}</span>
+                                            {entry.fail_count > 0 && (<> · Thất bại <span className="font-bold text-red-600">{entry.fail_count}</span></>)}
+                                            {entry.skipped_count > 0 && (<> · Bỏ qua <span className="font-bold text-amber-700">{entry.skipped_count}</span> đơn không phải kênh Admin</>)}
+                                        </p>
+                                        {okItems.length > 0 && (
+                                            <p className="text-xs text-slate-500 break-words">Mã vận đơn: {okItems.map(it => it.carrierCode || `#${it.id}`).join(', ')}</p>
+                                        )}
+                                        {failItems.length > 0 && (
+                                            <div className="space-y-0.5">
+                                                {failItems.map(it => (
+                                                    <p key={it.id} className="text-xs text-red-600">Đơn #{it.id}: {it.message}</p>
+                                                ))}
+                                            </div>
+                                        )}
+                                        {skipped.length > 0 && (
+                                            <p className="text-xs text-amber-800">Bỏ qua: {skipped.join(', ')}</p>
+                                        )}
+                                        <div className="flex gap-2 pt-1">
+                                            <button
+                                                disabled={okItems.length === 0}
+                                                onClick={() => openNhanhPrint(okItems.map(it => ({ id: it.id, carrier_code: it.carrierCode || '' })), 'A4')}
+                                                className="px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1"
+                                            ><Printer size={13} /> In lại (A4/A5)</button>
+                                            <button
+                                                disabled={okItems.length === 0}
+                                                onClick={() => openNhanhPrint(okItems.map(it => ({ id: it.id, carrier_code: it.carrierCode || '' })), 'K80')}
+                                                className="px-3 py-1.5 bg-white border border-slate-300 text-xs font-bold rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1"
+                                            ><Printer size={13} /> In lại (K80)</button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>

@@ -51,8 +51,9 @@ serve(async (req) => {
     const orderIds: number[] = Array.isArray(payload.orderIds)
       ? payload.orderIds.map((v: unknown) => parseInt(String(v), 10)).filter((n: number) => !Number.isNaN(n))
       : (payload.orderId ? [parseInt(String(payload.orderId), 10)].filter((n: number) => !Number.isNaN(n)) : []);
-    // Riêng tags không cần đơn hàng (chỉ lấy danh sách nhãn để lọc).
-    if (action !== 'tags' && orderIds.length === 0) {
+    // Riêng tags không cần đơn hàng (chỉ lấy danh sách nhãn để lọc),
+    // sendHistory cũng vậy (chỉ đọc 5 dòng gần nhất).
+    if (action !== 'tags' && action !== 'sendHistory' && orderIds.length === 0) {
       return json({ success: false, message: 'Thiếu ID đơn hàng.' }, 400);
     }
 
@@ -183,7 +184,36 @@ serve(async (req) => {
         }
       }
       const okCount = results.filter((x) => x.ok).length;
+      // Ghi lịch sử gửi để gửi xong lỡ load lại trang vẫn mở ra check
+      // lại được. Ghi lỗi thì không làm hỏng kết quả gửi; bảng chưa có
+      // (chưa chạy migration) thì lần ghi này tự bỏ qua.
+      const skippedIds = Array.isArray(payload.skippedIds) ? payload.skippedIds : [];
+      try {
+        await supabaseAdmin.from('send_history').insert({
+          created_by: user.email || null,
+          source: typeof payload.source === 'string' ? payload.source : null,
+          total_count: orderIds.length,
+          ok_count: okCount,
+          fail_count: results.length - okCount,
+          skipped_count: skippedIds.length,
+          items: results,
+          skipped_ids: skippedIds,
+        });
+      } catch { /* Bỏ qua lỗi ghi lịch sử */ }
       return json({ success: okCount > 0, results, okCount, failCount: results.length - okCount });
+    }
+
+    if (action === 'sendHistory') {
+      // 5 lần gửi gần nhất cho owner check lại sau khi load lại trang.
+      const { data, error } = await supabaseAdmin
+        .from('send_history')
+        .select('id, created_at, created_by, source, total_count, ok_count, fail_count, skipped_count, items, skipped_ids')
+        .order('id', { ascending: false })
+        .limit(5);
+      if (error) {
+        return json({ success: false, message: 'Chưa đọc được lịch sử gửi (có thể chưa chạy migration tạo bảng send_history).' });
+      }
+      return json({ success: true, data: data || [] });
     }
 
     if (action === 'cancel') {
