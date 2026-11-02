@@ -301,6 +301,18 @@ export default function OrderReport() {
     // Bộ lọc nhãn ở báo cáo đặc biệt: nhãn chỉ có cho đơn mới đồng bộ
     // sau khi chạy migration + sync-nhanh mới (đơn cũ bỏ qua).
     const [selectedTags, setSelectedTags] = useState([]);
+    // Bộ lọc tồn kho ở báo cáo đặc biệt, theo đúng nhóm của
+    // wms-allocation đang hiển thị ở cột Tình trạng kho: Đủ hàng =
+    // printable, Giữ hàng = holding (cột hiện "Tạm giữ"), Thiếu hàng =
+    // outOfStock (cột hiện "Hết hàng"). Đơn nào không nằm trong
+    // allocation (trạng thái ngoài 54/55/56/42/40, hoặc chưa phân bổ)
+    // thì không khớp nhóm nào.
+    const [selectedStock, setSelectedStock] = useState([]);
+    const STOCK_FILTER_OPTIONS = [
+        { value: 'printable', label: 'Đủ hàng' },
+        { value: 'holding', label: 'Giữ hàng' },
+        { value: 'outOfStock', label: 'Thiếu hàng' },
+    ];
     const [nhanhTagOptions, setNhanhTagOptions] = useState([]);
     const [nhanhTagOptionsLoaded, setNhanhTagOptionsLoaded] = useState(false);
     // Popup list sau khi bấm in: khổ A thì list mã vận đơn, khổ K80 thì
@@ -608,27 +620,39 @@ export default function OrderReport() {
         try {
             const asc = specialSortOrder === 'asc';
             const orderBy = (q) => q.order('created_at', { ascending: asc }).order('id', { ascending: asc });
-            if (selectedTags.length > 0) {
-                // Đường lọc theo nhãn: nhãn chỉ có trong bảng order_tags
-                // cho đơn mới đồng bộ. Kéo id đơn gắn nhãn đã chọn theo
-                // từng đợt 1000 rồi khử trùng; nếu đồng thời tìm theo sản
-                // phẩm thì giao với tập id tìm theo sản phẩm, sau đó kéo
-                // trường phục vụ lọc tab cho các id đó rồi tính tổng số +
-                // trang như đường tìm theo sản phẩm.
-                const tagIdSet = new Set();
-                let tagOffset = 0;
-                for (let chunk = 0; chunk < 50; chunk++) {
-                    const { data: rows, error } = await supabase.from('order_tags')
-                        .select('order_id')
-                        .in('tag_id', selectedTags)
-                        .range(tagOffset, tagOffset + 999);
-                    if (error) throw error;
-                    const list = rows || [];
-                    list.forEach(r => tagIdSet.add(String(r.order_id)));
-                    if (list.length < 1000) break;
-                    tagOffset += 1000;
+            if (selectedTags.length > 0 || selectedStock.length > 0) {
+                // Đường lọc theo id: nhãn và/hoặc tồn kho. Nhãn chỉ có
+                // trong bảng order_tags cho đơn mới đồng bộ; tồn kho lấy
+                // từ wms-allocation đã tải (cùng nguồn với cột Tình trạng
+                // kho). Kéo id theo từng nguồn rồi giao nhau; nếu đồng
+                // thời tìm theo sản phẩm thì giao tiếp với tập id tìm
+                // theo sản phẩm, sau đó kéo trường phục vụ lọc tab cho
+                // các id đó rồi tính tổng số + trang như đường tìm theo
+                // sản phẩm.
+                let candidateIds = null;
+                if (selectedTags.length > 0) {
+                    const tagIdSet = new Set();
+                    let tagOffset = 0;
+                    for (let chunk = 0; chunk < 50; chunk++) {
+                        const { data: rows, error } = await supabase.from('order_tags')
+                            .select('order_id')
+                            .in('tag_id', selectedTags)
+                            .range(tagOffset, tagOffset + 999);
+                        if (error) throw error;
+                        const list = rows || [];
+                        list.forEach(r => tagIdSet.add(String(r.order_id)));
+                        if (list.length < 1000) break;
+                        tagOffset += 1000;
+                    }
+                    candidateIds = [...tagIdSet];
                 }
-                let candidateIds = [...tagIdSet];
+                if (selectedStock.length > 0) {
+                    const stockIds = new Set();
+                    allocationStockById.forEach((stock, id) => {
+                        if (selectedStock.includes(stock.group)) stockIds.add(String(id));
+                    });
+                    candidateIds = candidateIds === null ? [...stockIds] : candidateIds.filter(id => stockIds.has(id));
+                }
                 if (debouncedSearchProduct.trim()) {
                     const pq = escapeLike(debouncedSearchProduct.trim());
                     const productIdSet = new Set();
@@ -795,7 +819,7 @@ export default function OrderReport() {
 
     // Đổi tab / ngày / bộ lọc / sắp xếp thì quay về trang 1 rồi mới tải,
     // để khỏi tải nhầm trang cũ với bộ lọc mới.
-    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), selectedTags.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0'].join('|');
+    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), selectedTags.join(','), selectedStock.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0'].join('|');
     useEffect(() => {
         if (!specialMode) return;
         if (specialFilterSigRef.current !== specialFilterSig) {
@@ -804,7 +828,7 @@ export default function OrderReport() {
         }
         fetchSpecialData(specialPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, selectedTags, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialPage, specialReloadToken]);
+    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, selectedTags, selectedStock, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialPage, specialReloadToken, data]);
 
     // Đổi trang thì bỏ chọn cũ để nút Copy / Xuất chỉ tính trên trang mới.
     useEffect(() => {
@@ -1264,7 +1288,7 @@ export default function OrderReport() {
         specialPageOrders.forEach(o => { if (o.depot_id !== null && o.depot_id !== undefined) m.set(String(o.depot_id), DEPOT_NAMES[o.depot_id] || `Kho ${o.depot_id}`); });
         return [...m.entries()].map(([value, label]) => ({ value, label }));
     })();
-    const activeFilterCount = (searchProduct ? 1 : 0) + (searchNote ? 1 : 0) + selectedStatus.length + selectedCarrier.length + selectedChannel.length + selectedCreator.length + selectedDepot.length + selectedTags.length + (printedFilter ? 1 : 0) + (missingCarrierFilter ? 1 : 0);
+    const activeFilterCount = (searchProduct ? 1 : 0) + (searchNote ? 1 : 0) + selectedStatus.length + selectedCarrier.length + selectedChannel.length + selectedCreator.length + selectedDepot.length + selectedTags.length + selectedStock.length + (printedFilter ? 1 : 0) + (missingCarrierFilter ? 1 : 0);
     const handleClearSpecialFilters = () => {
         setSearchProduct('');
         setSearchNote('');
@@ -1274,6 +1298,7 @@ export default function OrderReport() {
         setSelectedCreator([]);
         setSelectedDepot([]);
         setSelectedTags([]);
+        setSelectedStock([]);
         setPrintedFilter('');
         setMissingCarrierFilter(false);
         setSpecialSortOrder('desc');
@@ -2023,6 +2048,7 @@ export default function OrderReport() {
                                     <MultiSelect options={effectiveDepotOptions} selected={selectedDepot} onChange={setSelectedDepot} placeholder="Kho hàng" />
                                     <MultiSelect options={effectiveCreatorOptions} selected={selectedCreator} onChange={setSelectedCreator} placeholder="Nhân viên" />
                                     {specialMode && <MultiSelect options={nhanhTagOptions} selected={selectedTags} onChange={setSelectedTags} placeholder="Nhãn đơn" />}
+                                    {specialMode && <MultiSelect options={STOCK_FILTER_OPTIONS} selected={selectedStock} onChange={setSelectedStock} placeholder="Tình trạng kho" />}
                                 </div>
                                 {specialMode && nhanhTagOptions.length === 0 && (
                                     <p className="text-xs text-slate-500">Chưa có nhãn nào: nhãn chỉ có cho đơn mới đồng bộ sau khi chạy migration + sync-nhanh mới.</p>
