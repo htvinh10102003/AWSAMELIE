@@ -98,10 +98,15 @@ serve(async (req) => {
 
         const result = await res.json();
 
-        // Nếu API trả lỗi, ném ra message để giao diện hiển thị
+        // Nếu API trả lỗi, ném ra message để giao diện hiển thị.
+        // Nhanh có khi trả messages là chuỗi (không phải mảng) nên không
+        // được lấy messages[0] — với chuỗi đó là ký tự đầu tiên (đã từng
+        // hiện ra chỉ 1 chữ "K" và che mất lỗi thật).
         if (result.code !== 1) {
-          const errMsg = result.messages?.[0] || result.message || 'Lỗi không xác định từ Nhanh.vn';
-          throw new Error(`Nhanh.vn báo lỗi: ${errMsg}`);
+          const rawMsg = result.messages;
+          const errMsg = (Array.isArray(rawMsg) ? rawMsg.join(', ') : rawMsg)
+            || result.message || result.errorCode || result.error || 'Lỗi không xác định từ Nhanh.vn';
+          throw new Error(`Nhanh.vn báo lỗi: ${errMsg} (code: ${result.code}${result.errorCode ? ', ' + result.errorCode : ''})`);
         }
 
         if (result.data && result.data.length > 0) {
