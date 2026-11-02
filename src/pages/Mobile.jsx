@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Printer, AlertTriangle, MapPin, Search, ScanLine, Settings, ClipboardList, RefreshCw, Package, Pencil, X, LogOut, Save, Lock, Bell, Palette, FileSpreadsheet, User } from 'lucide-react';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { readBarcodesFromImageData, setZXingModuleOverrides } from 'zxing-wasm/reader';
+import zxingReaderWasmUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
 import { supabase } from '../lib/supabase';
 import { getUserRole, isAdminRole, isSuperAdminRole, roleLabel } from '../lib/roles';
 
@@ -100,7 +101,7 @@ export default function Mobile() {
     const videoRef = useRef(null);
     const streamRef = useRef(null);
     const rafRef = useRef(null);
-    const html5QrcodeRef = useRef(null);
+    const wasmAliveRef = useRef(false);
     const [reconData, setReconData] = useState([]);
     const [reconLoading, setReconLoading] = useState(false);
     const [reconError, setReconError] = useState('');
@@ -362,11 +363,7 @@ export default function Mobile() {
         rafRef.current = null;
         if (streamRef.current) { streamRef.current.getTracks().forEach(tr => tr.stop()); streamRef.current = null; }
         if (videoRef.current) videoRef.current.srcObject = null;
-        if (html5QrcodeRef.current) {
-            const inst = html5QrcodeRef.current;
-            html5QrcodeRef.current = null;
-            try { if (inst.isScanning) inst.stop().catch(() => {}); } catch (e) {}
-        }
+        wasmAliveRef.current = false;
     };
 
     const startScanner = () => {
@@ -378,57 +375,61 @@ export default function Mobile() {
         if (!scanning) return;
         let cancelled = false;
         // Dự phòng cho iPhone: Safari iOS không có BarcodeDetector nên dùng
-        // html5-qrcode (đã có sẵn trong app, các trang desktop đang dùng).
-        // Máy có BarcodeDetector (Android) vẫn đi đường native bên dưới.
+        // zxing-wasm (ZXing bản C++ biên dịch sang WASM, đọc mã vạch 1D khỏe
+        // hơn hẳn bản JavaScript của html5-qrcode). Giải mã toàn khung hình
+        // như Android, không còn khung nhỏ. Máy có BarcodeDetector
+        // (Android) vẫn đi đường native bên dưới.
         if (!window.BarcodeDetector) {
-            const timer = setTimeout(() => {
-                if (cancelled) return;
-                const html5QrCode = new Html5Qrcode('mobile-scan-reader');
-                html5QrcodeRef.current = html5QrCode;
-                let handled = false;
-                html5QrCode.start(
-                    { facingMode: 'environment' },
-                    {
-                        fps: 25,
-                        // Khung quét to theo màn hình (90% rộng, 50% cao) cho
-                        // giống cảm giác quét cả khung như Android; khung cố
-                        // định 300x100 trước đây nhìn bé tí trên iPhone.
-                        qrbox: (viewfinderWidth, viewfinderHeight) => ({
-                            width: Math.floor(viewfinderWidth * 0.9),
-                            height: Math.floor(viewfinderHeight * 0.5),
-                        }),
-                        formatsToSupport: [
-                            Html5QrcodeSupportedFormats.QR_CODE,
-                            Html5QrcodeSupportedFormats.CODE_128,
-                            Html5QrcodeSupportedFormats.CODE_39,
-                            Html5QrcodeSupportedFormats.EAN_13,
-                            Html5QrcodeSupportedFormats.EAN_8,
-                            Html5QrcodeSupportedFormats.UPC_A,
-                            Html5QrcodeSupportedFormats.CODE_93,
-                        ],
-                        aspectRatio: 1.0,
-                        // Xin camera 720p (ideal, không bắt buộc) để mã nhỏ
-                        // nét hơn; mặc định thư viện chỉ lấy độ phân giải thấp.
-                        videoConstraints: {
-                            facingMode: 'environment',
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 },
-                        },
-                    },
-                    (decodedText) => {
-                        if (handled || cancelled) return;
-                        handled = true;
-                        const q = extractCarrierCode(decodedText);
-                        stopScanner();
-                        setSearch(q); setSearchMode('carrier'); setScanning(false);
-                        handleDbSearch(q, 'carrier');
-                    },
-                    () => {}
-                ).catch(() => {
-                    if (!cancelled) setScanError('Thiết bị không có camera hoặc trình duyệt chặn camera.');
-                });
-            }, 150);
-            return () => { cancelled = true; clearTimeout(timer); stopScanner(); };
+            wasmAliveRef.current = true;
+            (async () => {
+                try {
+                    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Thiết bị không có camera hoặc trình duyệt chặn camera.');
+                    // Báo cho zxing-wasm biết file .wasm nằm ở đâu (Vite
+                    // đóng gói thành asset, đường dẫn lấy qua ?url).
+                    setZXingModuleOverrides({ locateFile: () => zxingReaderWasmUrl });
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+                    if (!wasmAliveRef.current) { stream.getTracks().forEach(tr => tr.stop()); return; }
+                    streamRef.current = stream;
+                    if (videoRef.current) { videoRef.current.srcObject = stream; await videoRef.current.play(); }
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                    if (!ctx) throw new Error('Không khởi tạo được bộ giải mã.');
+                    let decoding = false;
+                    const loop = async () => {
+                        if (!wasmAliveRef.current) return;
+                        const video = videoRef.current;
+                        if (video && video.readyState >= 2 && !decoding) {
+                            decoding = true;
+                            try {
+                                const vw = video.videoWidth, vh = video.videoHeight;
+                                if (vw && vh) {
+                                    if (canvas.width !== vw || canvas.height !== vh) { canvas.width = vw; canvas.height = vh; }
+                                    ctx.drawImage(video, 0, 0, vw, vh);
+                                    const imageData = ctx.getImageData(0, 0, vw, vh);
+                                    const results = await readBarcodesFromImageData(imageData, {
+                                        tryHarder: true,
+                                        formats: ['QRCode', 'Code128', 'Code39', 'Code93', 'EAN13', 'EAN8', 'UPCA'],
+                                        maxNumberOfSymbols: 1,
+                                    });
+                                    if (results?.length && wasmAliveRef.current) {
+                                        const q = extractCarrierCode(results[0].text);
+                                        stopScanner();
+                                        setSearch(q); setSearchMode('carrier'); setScanning(false);
+                                        handleDbSearch(q, 'carrier');
+                                        return;
+                                    }
+                                }
+                            } catch (e) {}
+                            decoding = false;
+                        }
+                        rafRef.current = requestAnimationFrame(loop);
+                    };
+                    rafRef.current = requestAnimationFrame(loop);
+                } catch (err) {
+                    if (wasmAliveRef.current) setScanError(err.message || 'Không mở được camera.');
+                }
+            })();
+            return () => { wasmAliveRef.current = false; stopScanner(); };
         }
         (async () => {
             try {
@@ -1102,7 +1103,12 @@ export default function Mobile() {
                     {window.BarcodeDetector ? (
                         <video ref={videoRef} playsInline muted className="w-full max-w-[480px] rounded-xl bg-black" />
                     ) : (
-                        <div id="mobile-scan-reader" className="w-full max-w-[480px] rounded-xl overflow-hidden bg-black" />
+                        <div className="relative w-full max-w-[480px]">
+                            <video ref={videoRef} playsInline muted className="w-full rounded-xl bg-black" />
+                            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                <div className="w-[90%] h-1/2 rounded-lg border-2 border-white/80" />
+                            </div>
+                        </div>
                     )}
                     {scanError && <div className="text-red-300 text-sm font-medium text-center">{scanError}</div>}
                     <button onClick={() => { stopScanner(); setScanning(false); }} className="px-6 py-3 bg-white text-slate-900 rounded-xl text-sm font-bold">Đóng</button>
