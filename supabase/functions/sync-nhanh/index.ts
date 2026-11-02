@@ -94,9 +94,19 @@ serve(async (req) => {
             if (attempt < 3) await new Promise(r => setTimeout(r, 1000 * attempt));
           }
         }
-        if (!res) throw fetchError;
+        if (!res) {
+          console.error('[sync-nhanh] Khong goi duoc API Nhanh sau 3 lan thu:', String(fetchError?.message || fetchError).substring(0, 500));
+          throw fetchError;
+        }
 
         const result = await res.json();
+
+        // Log để đọc trong Supabase Dashboard > Edge Functions > sync-nhanh
+        // > Logs. Chỉ log phản hồi của Nhanh, KHÔNG log access token.
+        if (result.code !== 1) {
+          const logged = { httpStatus: res.status, code: result.code, errorCode: result.errorCode, messages: result.messages, message: result.message, error: result.error };
+          console.error('[sync-nhanh] Nhanh tra loi loi:', JSON.stringify(logged).substring(0, 2000));
+        }
 
         // Nếu API trả lỗi, ném ra message để giao diện hiển thị.
         // Nhanh có khi trả messages là chuỗi (không phải mảng) nên không
@@ -201,6 +211,7 @@ serve(async (req) => {
       } while (nextCursor);
     }
 
+    console.log(`[sync-nhanh] Dong bo xong: ${totalSynced} don.`);
     return new Response(JSON.stringify({ success: true, totalSynced }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
