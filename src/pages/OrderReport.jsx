@@ -303,6 +303,11 @@ export default function OrderReport() {
     const [selectedTags, setSelectedTags] = useState([]);
     const [nhanhTagOptions, setNhanhTagOptions] = useState([]);
     const [nhanhTagOptionsLoaded, setNhanhTagOptionsLoaded] = useState(false);
+    // Popup list sau khi bấm in: khổ A thì list mã vận đơn, khổ K80 thì
+    // list ID đơn. Hiện ở mọi chỗ có thao tác in (toolbar, popup chi
+    // tiết, panel sau khi gửi, modal kết quả gửi).
+    const [printList, setPrintList] = useState(null); // { size, items: [{id, carrier_code}] }
+    const [printCopied, setPrintCopied] = useState(false);
     // Gửi / hủy hàng loạt từ nút Thao tác trên thanh công cụ.
     const [bulkSendResult, setBulkSendResult] = useState(null);
     const [showBulkSendModal, setShowBulkSendModal] = useState(false);
@@ -979,15 +984,26 @@ export default function OrderReport() {
         }).catch(() => {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [specialMode]);
-    // Gửi hàng loạt từ nút Thao tác trên thanh công cụ: tick bao nhiêu
-    // gửi bấy nhiêu, xong hiện popup kết quả kèm nút in các đơn vừa gửi.
+    // Gửi hàng loạt từ nút Thao tác trên thanh công cụ: chỉ gửi đơn
+    // kênh Admin, đơn Shopee/TikTok và các kênh khác trong list đã tick
+    // đều bỏ qua mặc định và được báo rõ trong popup kết quả.
     const handleBulkSend = async () => {
         if (selectedOrders.length === 0) return;
-        setSendingOrder(true);
+        const adminIds = selectedOrders.filter(id => {
+            const row = effectiveFiltered.find(o => String(o.id) === String(id));
+            return row && isAdminChannel(row);
+        });
+        const skippedIds = selectedOrders.filter(id => !adminIds.some(a => String(a) === String(id)));
         setShowActionMenu(false);
+        if (adminIds.length === 0) {
+            setCopyMessage('Các đơn đã chọn không có đơn kênh Admin nên không gửi được đơn nào (đơn Shopee/TikTok được bỏ qua).');
+            setTimeout(() => setCopyMessage(''), 5000);
+            return;
+        }
+        setSendingOrder(true);
         try {
-            const result = await callNhanhActionRaw('send', { orderIds: selectedOrders });
-            setBulkSendResult(result);
+            const result = await callNhanhActionRaw('send', { orderIds: adminIds });
+            setBulkSendResult({ ...result, skippedIds });
             setShowBulkSendModal(true);
             if (result.okCount > 0) setSpecialReloadToken(t => t + 1);
         } catch (err) {
@@ -1559,12 +1575,18 @@ export default function OrderReport() {
 
     const isAllSelected = paginatedOrders.length > 0 && paginatedOrders.every(o => selectedOrders.includes(o.id));
 
+    // Đơn kênh Admin mới được gửi sang hãng (mã kênh 1 trong
+    // SALE_CHANNELS); đơn Shopee (42) / Tiktok Shop (48) và các kênh
+    // khác đều bỏ qua khi gửi.
+    const isAdminChannel = (order) => String(order?.sale_channel) === '1';
     // Mở trang in của Nhanh cho đúng các đơn truyền vào (mẫu từ báo cáo
-    // cũ). Dùng chung cho: in đơn đã tick, in 1 đơn trong popup, và in
-    // các đơn vừa gửi xong.
-    const openNhanhPrint = (orderIds, printSize) => {
+    // cũ), rồi popup list các đơn vừa in: khổ A thì list mã vận đơn,
+    // khổ K80 thì list ID đơn. Dùng chung cho: in đơn đã tick, in 1 đơn
+    // trong popup, và in các đơn vừa gửi xong.
+    const openNhanhPrint = (printItems, printSize) => {
         if (!businessId) { alert("️ Chưa cấu hình Business ID!"); return; }
-        if (!orderIds || orderIds.length === 0) return;
+        if (!printItems || printItems.length === 0) return;
+        const orderIds = printItems.map(item => typeof item === 'object' ? item.id : item);
         const idString = orderIds.join(',');
         let printUrl = "";
         if (orderIds.length === 1) {
@@ -1573,10 +1595,37 @@ export default function OrderReport() {
             printUrl = `https://nhanh.vn/order/manage/pickup?ids=${idString}&storeId=${businessId}&format=print&printDialogMode=manual&noclose=1${printSize === 'K80' ? '&typePrint=k80' : ''}`;
         }
         window.open(printUrl, '_blank');
+        setPrintList({
+            size: printSize,
+            items: printItems.map(item => typeof item === 'object'
+                ? { id: item.id, carrier_code: item.carrier_code || '' }
+                : { id: item, carrier_code: '' }),
+        });
+        setPrintCopied(false);
     };
     const executePrint = (printSize) => {
-        openNhanhPrint(selectedOrders, printSize);
+        // Lấy mã vận đơn từ dòng đơn đang hiển thị (trang hiện tại ở
+        // báo cáo đặc biệt, toàn bộ list đã lọc ở báo cáo cũ).
+        const items = selectedOrders.map(id => {
+            const row = effectiveFiltered.find(o => String(o.id) === String(id));
+            return { id, carrier_code: row?.carrier_code || '' };
+        });
+        openNhanhPrint(items, printSize);
         setShowActionMenu(false);
+    };
+    const handleCopyPrintList = async () => {
+        if (!printList) return;
+        const lines = printList.items.map(item => printList.size === 'K80'
+            ? String(item.id)
+            : (item.carrier_code ? item.carrier_code : `#${item.id}`));
+        try {
+            await navigator.clipboard.writeText(lines.join('\n'));
+            setPrintCopied(true);
+            setTimeout(() => setPrintCopied(false), 2000);
+        } catch (err) {
+            setCopyMessage('Không sao chép được, vui lòng copy tay từ bảng list.');
+            setTimeout(() => setCopyMessage(''), 5000);
+        }
     };
 
     const renderAgingBadge = (dateStr) => {
@@ -2267,9 +2316,11 @@ export default function OrderReport() {
                                     <button onClick={() => setShowDetailActionMenu(v => !v)} className="px-3 py-1.5 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800">Thao tác</button>
                                     {showDetailActionMenu && (
                                         <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1" onClick={(e) => e.stopPropagation()}>
-                                            <button onClick={() => openDetailAction('send')} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Gửi đơn</button>
+                                            {isAdminChannel(detailOrder) && (
+                                                <button onClick={() => openDetailAction('send')} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Gửi đơn</button>
+                                            )}
                                             <button onClick={() => openDetailAction('edit')} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Sửa đơn</button>
-                                            <button onClick={() => { setShowDetailActionMenu(false); openNhanhPrint([detailOrder.id], 'A4'); }} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">In đơn</button>
+                                            <button onClick={() => { setShowDetailActionMenu(false); openNhanhPrint([{ id: detailOrder.id, carrier_code: detailOrder.carrier_code || '' }], 'A4'); }} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">In đơn</button>
                                             <button onClick={() => openDetailAction('cancel')} className="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50">Hủy đơn</button>
                                         </div>
                                     )}
@@ -2315,8 +2366,8 @@ export default function OrderReport() {
                                             </button>
                                             {detailSendDone && (
                                                 <div className="flex gap-2 pt-1">
-                                                    <button onClick={() => openNhanhPrint([detailOrder.id], 'A4')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In đơn hàng (A4/A5)</button>
-                                                    <button onClick={() => openNhanhPrint([detailOrder.id], 'K80')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
+                                                    <button onClick={() => openNhanhPrint([{ id: detailOrder.id, carrier_code: detailOrder.carrier_code || '' }], 'A4')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In đơn hàng (A4/A5)</button>
+                                                    <button onClick={() => openNhanhPrint([{ id: detailOrder.id, carrier_code: detailOrder.carrier_code || '' }], 'K80')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
                                                 </div>
                                             )}
                                         </div>
@@ -2541,8 +2592,14 @@ export default function OrderReport() {
                         <div className="p-5 overflow-y-auto space-y-3">
                             <p className="text-sm font-medium text-slate-700">
                                 Thành công <span className="font-bold text-green-700">{bulkSendResult.okCount || 0}</span> đơn
-                                {(bulkSendResult.failCount || 0) > 0 && (<> · Thất bại <span className="font-bold text-red-600">{bulkSendResult.failCount}</span> đơn</>)}.
+                                {(bulkSendResult.failCount || 0) > 0 && (<> · Thất bại <span className="font-bold text-red-600">{bulkSendResult.failCount}</span> đơn</>)}
+                                {(bulkSendResult.skippedIds || []).length > 0 && (<> · Bỏ qua <span className="font-bold text-amber-700">{bulkSendResult.skippedIds.length}</span> đơn không phải kênh Admin</>)}.
                             </p>
+                            {(bulkSendResult.skippedIds || []).length > 0 && (
+                                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                    Bỏ qua vì không phải kênh Admin (đơn Shopee/TikTok và các kênh khác): {bulkSendResult.skippedIds.join(', ')}
+                                </p>
+                            )}
                             {(bulkSendResult.results || []).filter(r => r.ok).length > 0 && (
                                 <div className="space-y-1">
                                     {(bulkSendResult.results || []).filter(r => r.ok).map(r => (
@@ -2559,8 +2616,8 @@ export default function OrderReport() {
                             )}
                             {(bulkSendResult.results || []).filter(r => r.ok).length > 0 && (
                                 <div className="flex gap-2 pt-2">
-                                    <button onClick={() => openNhanhPrint((bulkSendResult.results || []).filter(r => r.ok).map(r => r.id), 'A4')} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 flex items-center gap-2"><Printer size={15} /> In đơn hàng (A4/A5)</button>
-                                    <button onClick={() => openNhanhPrint((bulkSendResult.results || []).filter(r => r.ok).map(r => r.id), 'K80')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
+                                    <button onClick={() => openNhanhPrint((bulkSendResult.results || []).filter(r => r.ok).map(r => ({ id: r.id, carrier_code: r.carrierCode || '' })), 'A4')} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 flex items-center gap-2"><Printer size={15} /> In đơn hàng (A4/A5)</button>
+                                    <button onClick={() => openNhanhPrint((bulkSendResult.results || []).filter(r => r.ok).map(r => ({ id: r.id, carrier_code: r.carrierCode || '' })), 'K80')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
                                 </div>
                             )}
                             <p className="text-xs text-slate-500">Mã vận đơn sẽ hiện trong bảng sau khi hệ thống đồng bộ đơn từ Nhanh về.</p>
@@ -2604,6 +2661,39 @@ export default function OrderReport() {
                                     <button onClick={() => setShowBulkCancelModal(false)} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800">Đóng</button>
                                 </>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* List các đơn vừa in: khổ A thì mã vận đơn, khổ K80 thì ID đơn */}
+            {printList && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50" onClick={() => setPrintList(null)}>
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                        <div className="px-5 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                            <h3 className="font-bold text-gray-800">
+                                {printList.size === 'K80'
+                                    ? `List ID đơn vừa in (khổ K80) — ${printList.items.length} đơn`
+                                    : `List mã vận đơn vừa in (khổ A4/A5) — ${printList.items.length} đơn`}
+                            </h3>
+                            <button onClick={() => setPrintList(null)} className="text-gray-400 hover:text-gray-600"><XCircle size={20} /></button>
+                        </div>
+                        <div className="p-5 overflow-y-auto space-y-1.5">
+                            {printList.items.map(item => (
+                                <p key={item.id} className="text-sm text-slate-700 border-b border-slate-100 pb-1.5">
+                                    {printList.size === 'K80' ? (
+                                        <span className="font-bold text-slate-900">{item.id}</span>
+                                    ) : item.carrier_code ? (
+                                        <><span className="font-bold text-slate-900">{item.carrier_code}</span><span className="text-slate-400 text-xs"> · Đơn #{item.id}</span></>
+                                    ) : (
+                                        <><span className="text-slate-500">Đơn #{item.id} — chưa có mã vận đơn</span></>
+                                    )}
+                                </p>
+                            ))}
+                        </div>
+                        <div className="px-5 py-4 border-t border-gray-200 flex gap-2">
+                            <button onClick={handleCopyPrintList} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800">{printCopied ? 'Đã sao chép' : 'Sao chép list'}</button>
+                            <button onClick={() => setPrintList(null)} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50">Đóng</button>
                         </div>
                     </div>
                 </div>
