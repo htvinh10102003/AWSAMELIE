@@ -33,6 +33,11 @@ const LOCAL_STATUS_NAMES = {
     '71': 'Đang chuyển hoàn', '72': 'Đã chuyển hoàn', '73': 'Đổi kho xuất hàng', '74': 'Xác nhận hoàn'
 };
 const CANCELED_STATUS = [58, 63, 64];
+const CHANNEL_NAMES = {
+    '1': 'Admin', '2': 'Website', '10': 'API', '20': 'Facebook', '21': 'Instagram',
+    '41': 'Lazada', '42': 'Shopee', '43': 'Sendo', '45': 'Tiki', '48': 'Tiktok Shop',
+    '49': 'Zalo OA', '50': 'Shopee chat', '51': 'Lazada chat', '52': 'Zalo cá nhân'
+};
 const SUPER_OWNER_EMAIL = 'contact.hotavinh@gmail.com';
 const FEATURE_PARENTS = [
     { id: 'dashboard', name: 'Dashboard' }, { id: 'print_orders', name: 'Đơn in' },
@@ -202,27 +207,79 @@ export default function Mobile() {
 
     // Tìm đơn trực tiếp trong bảng orders, không qua dữ liệu phân bổ đã load
     // cho tab Đơn in, nên tìm được cả đơn ngoài nhóm đơn có thể in.
+    // Tìm theo mã vận đơn chậm vì trước đây chỉ dùng ilike (quét toàn bảng,
+    // cột carrier_code chưa có index). Nay thử khớp chính xác trước (.eq dùng
+    // được index btree khi đã chạy file supabase/20261102_orders_carrier_code_index.sql),
+    // không khớp mới thử khớp không phân biệt hoa/thường như cũ.
     const handleDbSearch = async (termOverride, modeOverride) => {
         const term = (termOverride !== undefined ? termOverride : search).trim();
         const mode = modeOverride || searchMode;
         if (!term) return;
         setDbSearching(true); setDbSearched(true); setDbSearchError('');
         try {
-            let query = supabase
-                .from('orders')
-                .select('id, carrier_code, created_at, status, order_products (product_code, product_name, quantity)')
-                .order('created_at', { ascending: false })
-                .limit(20);
-            if (mode === 'carrier') query = query.ilike('carrier_code', term);
-            else query = query.eq('id', term);
-            const { data: rows, error: dbErr } = await query;
-            if (dbErr) throw dbErr;
+            const searchCols = 'id, carrier_code, created_at, status, order_products (product_code, product_name, quantity)';
+            let rows = null;
+            if (mode === 'carrier') {
+                const exact = await supabase.from('orders').select(searchCols)
+                    .eq('carrier_code', term).order('created_at', { ascending: false }).limit(20);
+                if (exact.error) throw exact.error;
+                rows = exact.data;
+                if (!rows || rows.length === 0) {
+                    const ci = await supabase.from('orders').select(searchCols)
+                        .ilike('carrier_code', term).order('created_at', { ascending: false }).limit(20);
+                    if (ci.error) throw ci.error;
+                    rows = ci.data;
+                }
+            } else {
+                const byId = await supabase.from('orders').select(searchCols)
+                    .eq('id', term).order('created_at', { ascending: false }).limit(20);
+                if (byId.error) throw byId.error;
+                rows = byId.data;
+            }
             setDbSearchResults(rows || []);
         } catch (err) {
             setDbSearchResults([]);
             setDbSearchError(err.message || 'Không tìm được đơn.');
         } finally { setDbSearching(false); }
     };
+
+    // Popup chi tiết đơn cho kết quả tìm: lấy nguyên dòng orders + lịch sử.
+    const [detailOrder, setDetailOrder] = useState(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [detailError, setDetailError] = useState('');
+    const [detailHistory, setDetailHistory] = useState([]);
+
+    const parseOrderRaw = (order) => {
+        if (!order) return null;
+        for (const key of ['raw_data', 'raw', 'data', 'payload', 'nhanh_data', 'order_data']) {
+            const v = order[key];
+            if (!v) continue;
+            try {
+                const parsed = typeof v === 'string' ? JSON.parse(v) : v;
+                if (parsed && typeof parsed === 'object') return parsed;
+            } catch (e) {}
+        }
+        return null;
+    };
+
+    const openOrderDetail = async (order) => {
+        setDetailOrder(order); setDetailLoading(true); setDetailError(''); setDetailHistory([]);
+        try {
+            const { data, error } = await supabase.from('orders')
+                .select('*, order_products (product_code, product_name, quantity)')
+                .eq('id', order.id).single();
+            if (error) throw error;
+            setDetailOrder(data);
+            const { data: hist } = await supabase.from('order_histories')
+                .select('id, created_at, created_by_name, status_old, status_new')
+                .eq('order_id', order.id).order('created_at', { ascending: false }).limit(20);
+            setDetailHistory(hist || []);
+        } catch (err) {
+            setDetailError(err.message || 'Không tải được chi tiết đơn.');
+        } finally { setDetailLoading(false); }
+    };
+
+    const closeOrderDetail = () => { setDetailOrder(null); setDetailError(''); setDetailHistory([]); };
 
     const formatOrderDate = (value) => {
         if (!value) return '';
@@ -741,7 +798,7 @@ export default function Mobile() {
                         {!dbSearching && dbSearchError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm font-medium text-red-700">{dbSearchError}</div>}
                         {!dbSearching && dbSearched && !dbSearchError && dbSearchResults.length === 0 && <div className="text-center text-sm text-slate-500 py-10">Không tìm thấy đơn nào.</div>}
                         {!dbSearching && dbSearchResults.map(order => (
-                            <div key={order.id} className="bg-white rounded-xl border border-slate-200 p-3">
+                            <div key={order.id} onClick={() => openOrderDetail(order)} className="bg-white rounded-xl border border-slate-200 p-3 cursor-pointer">
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="font-bold text-slate-900 text-base leading-tight">{order.id}</div>
                                     {order.carrier_code && (
@@ -758,8 +815,9 @@ export default function Mobile() {
                                         </div>
                                     ))}
                                 </div>
-                                <div className="mt-2">
+                                <div className="mt-2 flex items-center justify-between">
                                     <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700">{statusName(order.status)}</span>
+                                    <span className="text-xs font-bold text-blue-700">Xem chi tiết</span>
                                 </div>
                             </div>
                         ))}
@@ -983,6 +1041,80 @@ export default function Mobile() {
                     <video ref={videoRef} playsInline muted className="w-full max-w-[480px] rounded-xl bg-black" />
                     {scanError && <div className="text-red-300 text-sm font-medium text-center">{scanError}</div>}
                     <button onClick={() => { stopScanner(); setScanning(false); }} className="px-6 py-3 bg-white text-slate-900 rounded-xl text-sm font-bold">Đóng</button>
+                </div>
+            )}
+
+            {detailOrder && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center" onClick={closeOrderDetail}>
+                    <div className="w-full max-w-[480px] bg-white rounded-t-2xl p-4 space-y-3 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between">
+                            <div className="font-bold text-slate-900 text-base leading-tight">Đơn #{detailOrder.id}</div>
+                            <button onClick={closeOrderDetail} className="p-1 text-slate-400"><X size={20} /></button>
+                        </div>
+                        {detailLoading && <div className="text-center text-sm text-slate-500 py-6">Đang tải chi tiết...</div>}
+                        {detailError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm font-medium text-red-700">{detailError}</div>}
+                        {!detailLoading && (
+                            <div className="space-y-3">
+                                <div className="flex flex-wrap gap-2">
+                                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700">{statusName(detailOrder.status)}</span>
+                                    {detailOrder.sale_channel && <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700">{CHANNEL_NAMES[String(detailOrder.sale_channel)] || `Kênh ${detailOrder.sale_channel}`}</span>}
+                                </div>
+                                <div className="text-sm space-y-1">
+                                    <div><span className="text-slate-500">Mã vận đơn: </span><span className="font-bold text-slate-900 break-all">{detailOrder.carrier_code || 'Chưa có'}</span></div>
+                                    {detailOrder.carrier_name && <div><span className="text-slate-500">Hãng vận chuyển: </span><span className="font-bold text-slate-900">{detailOrder.carrier_name}</span></div>}
+                                    {detailOrder.ecom_order_id && <div><span className="text-slate-500">Mã sàn: </span><span className="font-bold text-slate-900 break-all">{detailOrder.ecom_order_id}</span></div>}
+                                    {detailOrder.created_by_name && <div><span className="text-slate-500">Người tạo: </span><span className="font-bold text-slate-900">{detailOrder.created_by_name}</span></div>}
+                                    <div><span className="text-slate-500">Ngày tạo: </span><span className="font-bold text-slate-900">{formatOrderDate(detailOrder.created_at)}</span></div>
+                                    <div><span className="text-slate-500">Ngày in: </span><span className="font-bold text-slate-900">{detailOrder.printed_at ? formatOrderDate(detailOrder.printed_at) : '—'}</span></div>
+                                    <div><span className="text-slate-500">Ngày đóng: </span><span className="font-bold text-slate-900">{detailOrder.packed_at ? formatOrderDate(detailOrder.packed_at) : '—'}</span></div>
+                                    <div><span className="text-slate-500">Ngày bàn giao: </span><span className="font-bold text-slate-900">{detailOrder.carrier_date ? formatOrderDate(detailOrder.carrier_date) : '—'}</span></div>
+                                </div>
+                                <div>
+                                    <div className="font-bold text-sm text-slate-900">Sản phẩm</div>
+                                    {(detailOrder.order_products || []).length === 0 && <div className="text-sm text-slate-400 mt-1">Chưa có sản phẩm</div>}
+                                    {(detailOrder.order_products || []).map((p, i) => (
+                                        <div key={i} className="flex justify-between gap-2 text-sm py-1 border-b border-slate-100">
+                                            <span className="text-slate-800 leading-tight">{p.product_name}{p.product_code ? <span className="text-slate-400"> ({p.product_code})</span> : null}</span>
+                                            <span className="shrink-0 font-bold text-slate-900">x{p.quantity}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                {(() => {
+                                    const raw = parseOrderRaw(detailOrder);
+                                    const ship = raw?.shippingAddress;
+                                    if (!ship) return null;
+                                    return (
+                                        <div>
+                                            <div className="font-bold text-sm text-slate-900">Khách hàng</div>
+                                            <div className="text-sm space-y-1 mt-1">
+                                                {ship.name && <div><span className="text-slate-500">Tên: </span><span className="font-bold text-slate-900">{ship.name}</span></div>}
+                                                {ship.mobile && <div><span className="text-slate-500">SĐT: </span><span className="font-bold text-slate-900">{ship.mobile}</span></div>}
+                                                {ship.address && <div><span className="text-slate-500">Địa chỉ: </span><span className="font-bold text-slate-900">{ship.address}</span></div>}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                                {(detailOrder.description || detailOrder.private_description) && (
+                                    <div>
+                                        <div className="font-bold text-sm text-slate-900">Ghi chú</div>
+                                        {detailOrder.description && <div className="text-sm text-slate-800 mt-1">{detailOrder.description}</div>}
+                                        {detailOrder.private_description && <div className="text-sm text-slate-500 mt-1">Nội bộ: {detailOrder.private_description}</div>}
+                                    </div>
+                                )}
+                                <div>
+                                    <div className="font-bold text-sm text-slate-900">Lịch sử đơn hàng</div>
+                                    {detailHistory.length === 0 && <div className="text-sm text-slate-400 mt-1">Chưa có lịch sử.</div>}
+                                    {detailHistory.map(h => (
+                                        <div key={h.id} className="text-sm py-1 border-b border-slate-100">
+                                            <span className="text-slate-500">{formatOrderDate(h.created_at)} · </span>
+                                            <span className="text-slate-800">{h.status_old ? statusName(h.status_old) : 'Tạo đơn'} → {h.status_new ? statusName(h.status_new) : '—'}</span>
+                                            {h.created_by_name && <span className="text-slate-500"> ({h.created_by_name})</span>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </div>
