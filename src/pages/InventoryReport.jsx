@@ -184,22 +184,70 @@ export default function InventoryReport() {
 
         const parsedMap = new Map();
 
-        for (let i = 1; i < rows.length; i++) {
-          const cols = rows[i];
-          if (!cols || cols.length === 0) continue; 
-          
-          const name = cols[nameIdx] ? String(cols[nameIdx]).trim() : '';
-          const qty = parseInt(cols[qtyIdx], 10) || 1;
-          const fileBarcode = barcodeIdx !== -1 && cols[barcodeIdx] ? String(cols[barcodeIdx]).trim().toUpperCase() : '';
-          
-          if (!name && !fileBarcode) continue;
-          
-          const pivotKey = fileBarcode || normalizeString(name);
-          
-          if (parsedMap.has(pivotKey)) {
-            parsedMap.get(pivotKey).qty += qty;
-          } else {
-            parsedMap.set(pivotKey, { originalName: name, fileBarcode: fileBarcode, qty: qty });
+        // Định dạng file kế toán (ma trận size): 1 dòng = 1 mẫu, số lượng
+        // rải theo từng cột size, tên mẫu kèm mã màu (vd 'AMARA 768-BE').
+        // Khớp theo TÊN (chuẩn nhất): tên gốc + màu + size -> tên trong kho
+        // (vd 'AMARA 768 - Beige - S'). Mã SKU trong file không dùng để khớp
+        // vì khác mã trong kho; mã vạch in ra lấy từ sản phẩm đã khớp tên.
+        const lowerHeaders = (rows[0] && Array.isArray(rows[0]))
+          ? rows[0].map(h => String(h ?? '').toLowerCase().trim())
+          : [];
+        const isAccountingFile = lowerHeaders.some(h => h.includes('tên vật tư'))
+          && lowerHeaders.some(h => h.includes('màu'))
+          && ['xs', 's', 'm', 'l', 'xl'].some(sz => lowerHeaders.includes(sz));
+
+        if (isAccountingFile) {
+          const SIZE_LIST = ['XS', 'S', 'M', 'L', 'XL'];
+          const accNameIdx = lowerHeaders.findIndex(h => h.includes('tên vật tư'));
+          const accColorIdx = lowerHeaders.findIndex(h => h.includes('màu'));
+          // Cột số lượng theo size = lần xuất hiện ĐẦU TIÊN của mỗi nhãn size
+          // (khối cột size sau là mã SKU, không dùng ở đây).
+          const qtyColBySize = {};
+          SIZE_LIST.forEach(sz => {
+            const idx = lowerHeaders.findIndex(h => h === sz.toLowerCase());
+            if (idx !== -1) qtyColBySize[sz] = idx;
+          });
+          for (let i = 1; i < rows.length; i++) {
+            const cols = rows[i];
+            if (!cols || cols.length === 0) continue;
+            const rawName = cols[accNameIdx] ? String(cols[accNameIdx]).trim() : '';
+            if (!rawName) continue;
+            // Tên gốc: bỏ đoạn mã màu sau dấu '-' cuối cùng.
+            const dashIdx = rawName.lastIndexOf('-');
+            const baseName = dashIdx > 0 ? rawName.slice(0, dashIdx).trim() : rawName;
+            const colorName = accColorIdx !== -1 && cols[accColorIdx] ? String(cols[accColorIdx]).trim() : '';
+            SIZE_LIST.forEach(sz => {
+              const qIdx = qtyColBySize[sz];
+              if (qIdx === undefined) return;
+              const qty = parseInt(cols[qIdx], 10) || 0;
+              if (qty <= 0) return;
+              const composite = colorName ? `${baseName} - ${colorName} - ${sz}` : `${baseName} - ${sz}`;
+              const key = normalizeString(composite);
+              if (parsedMap.has(key)) {
+                parsedMap.get(key).qty += qty;
+              } else {
+                parsedMap.set(key, { originalName: composite, fileBarcode: '', qty });
+              }
+            });
+          }
+        } else {
+          for (let i = 1; i < rows.length; i++) {
+            const cols = rows[i];
+            if (!cols || cols.length === 0) continue;
+
+            const name = cols[nameIdx] ? String(cols[nameIdx]).trim() : '';
+            const qty = parseInt(cols[qtyIdx], 10) || 1;
+            const fileBarcode = barcodeIdx !== -1 && cols[barcodeIdx] ? String(cols[barcodeIdx]).trim().toUpperCase() : '';
+
+            if (!name && !fileBarcode) continue;
+
+            const pivotKey = fileBarcode || normalizeString(name);
+
+            if (parsedMap.has(pivotKey)) {
+              parsedMap.get(pivotKey).qty += qty;
+            } else {
+              parsedMap.set(pivotKey, { originalName: name, fileBarcode: fileBarcode, qty: qty });
+            }
           }
         }
 
@@ -239,8 +287,18 @@ export default function InventoryReport() {
           }
         });
 
+        // Đếm tên trùng trong kho: khớp theo tên mà có 2 sản phẩm cùng tên
+        // chuẩn hóa thì không được tự chọn bừa, phải để lại cho người rà.
+        const nameCounts = new Map();
+        currentDB.forEach(item => {
+          if (item.product_name) {
+            const k = normalizeString(item.product_name);
+            nameCounts.set(k, (nameCounts.get(k) || 0) + 1);
+          }
+        });
+
         const newPrintItems = [];
-        
+
         parsedMap.forEach((val) => {
           let match = null;
 
@@ -257,12 +315,22 @@ export default function InventoryReport() {
           }
 
           if (match && match.product_code) {
-            newPrintItems.push({
-              name: match.product_name,
-              barcode: match.product_code,
-              qty: val.qty,
-              status: 'ok'
-            });
+            const dupCount = nameCounts.get(normalizeString(match.product_name)) || 0;
+            if (!val.fileBarcode && dupCount > 1) {
+              newPrintItems.push({
+                name: `${val.originalName} (trùng tên trong kho)`,
+                barcode: 'KHÔNG TÌM THẤY',
+                qty: val.qty,
+                status: 'error'
+              });
+            } else {
+              newPrintItems.push({
+                name: match.product_name,
+                barcode: match.product_code,
+                qty: val.qty,
+                status: 'ok'
+              });
+            }
           } else {
             newPrintItems.push({
               name: val.originalName || `Mã vạch: ${val.fileBarcode}`,

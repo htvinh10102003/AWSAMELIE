@@ -472,7 +472,7 @@ export default function Mobile() {
                 const chunk = allIds.slice(i, i + 200);
                 const { data: rows, error: ordersError } = await supabase
                     .from('orders')
-                    .select('id, carrier_code, status')
+                    .select('id, carrier_code, status, sale_channel')
                     .in('id', chunk);
                 if (ordersError) throw ordersError;
                 (rows || []).forEach(o => { ordersMap[String(o.id)] = o; });
@@ -659,7 +659,7 @@ export default function Mobile() {
     const visibleList = currentList.slice(0, visibleCount);
     const reconVisibleList = reconTotals.needHandover.slice(0, reconVisible);
 
-    const OrderCard = ({ order, showStock = true }) => {
+    const OrderCard = ({ order, showStock = true, showChannel = false }) => {
         const stock = stockOf(order);
         const products = order.order_products || [];
         const shortItem = [...(data.holding || []), ...(data.outOfStock || [])]
@@ -683,6 +683,7 @@ export default function Mobile() {
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                     <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700">{statusName(order.status)}</span>
+                    {showChannel && order.sale_channel && <span className="px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700">{CHANNEL_NAMES[String(order.sale_channel)] || `Kênh ${order.sale_channel}`}</span>}
                     {showStock && stock && <span className={`px-2 py-0.5 rounded text-xs font-bold ${stock.cls}`}>{stock.label}</span>}
                     {showStock && shortItem && (
                         <span className="px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-600">Thiếu {shortItem.missing}, tồn {shortItem.remaining}</span>
@@ -836,7 +837,7 @@ export default function Mobile() {
                         <div className="font-bold text-slate-900 text-sm">Cần bàn giao lại ({reconTotals.needHandover.length})</div>
                         {reconLoading && <div className="text-center text-sm text-slate-500 font-medium py-10">Đang tải...</div>}
                         {!reconLoading && reconVisibleList.length === 0 && <div className="text-center text-sm text-slate-500 py-6">Tất cả đơn in hôm nay đã được bàn giao.</div>}
-                        {!reconLoading && reconVisibleList.map(order => <OrderCard key={order.id} order={order} showStock={false} />)}
+                        {!reconLoading && reconVisibleList.map(order => <OrderCard key={order.id} order={order} showStock={false} showChannel />)}
                         {!reconLoading && reconTotals.needHandover.length > reconVisible && (
                             <button onClick={() => setReconVisible(c => c + 30)} className="w-full py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-700">
                                 Tải thêm ({reconTotals.needHandover.length - reconVisible} đơn còn lại)
@@ -882,7 +883,7 @@ export default function Mobile() {
                                                             {detail.missing.length === 0 && <div className="text-sm text-slate-500 mt-1">Không có đơn thiếu.</div>}
                                                             {detail.missing.map(o => (
                                                                 <div key={`miss-${o.id}`} className="flex justify-between gap-2 py-1.5 border-b border-slate-100 text-sm">
-                                                                    <span className="font-medium text-slate-900">Đơn #{o.id}</span>
+                                                                    <span className="flex items-center gap-1.5"><span className="font-medium text-slate-900">Đơn #{o.id}</span>{o.sale_channel && <span className="shrink-0 px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700">{CHANNEL_NAMES[String(o.sale_channel)] || `Kênh ${o.sale_channel}`}</span>}</span>
                                                                     <span className="text-slate-600 break-all">{o.carrier_code || 'Chưa có mã'}</span>
                                                                     <span className="shrink-0 px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700 h-fit">{o.status ? statusName(o.status) : 'Không rõ'}</span>
                                                                 </div>
@@ -893,7 +894,7 @@ export default function Mobile() {
                                                             {detail.surplus.length === 0 && <div className="text-sm text-slate-500 mt-1">Không có đơn thừa.</div>}
                                                             {detail.surplus.map(o => (
                                                                 <div key={`surp-${o.id}`} className="flex justify-between gap-2 py-1.5 border-b border-slate-100 text-sm">
-                                                                    <span className="font-medium text-slate-900">Đơn #{o.id}</span>
+                                                                    <span className="flex items-center gap-1.5"><span className="font-medium text-slate-900">Đơn #{o.id}</span>{o.sale_channel && <span className="shrink-0 px-2 py-0.5 rounded text-xs font-bold bg-blue-50 text-blue-700">{CHANNEL_NAMES[String(o.sale_channel)] || `Kênh ${o.sale_channel}`}</span>}</span>
                                                                     <span className="text-slate-600 break-all">{o.carrier_code || 'Chưa có mã'}</span>
                                                                     <span className="shrink-0 px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700 h-fit">{o.status ? statusName(o.status) : 'Không rõ'}</span>
                                                                 </div>
