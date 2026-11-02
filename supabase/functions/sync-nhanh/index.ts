@@ -143,13 +143,18 @@ serve(async (req) => {
             const orderId = String(info.id);
             orderIds.push(orderId);
 
+            // Giữ ngày đi cũ: chỉ ghi carrier_date khi Nhanh có trả ngày.
+            // Nhanh không trả sendCarrier.date (vd đơn đã giao) mà ghi NULL
+            // sẽ xóa mất ngày đi quét từ sheet trước đó. Bỏ cột khỏi upsert
+            // thì PostgREST giữ nguyên giá trị cũ trong DB.
+            const carrierDate = safeDate(carrier.sendCarrier?.date);
             ordersToUpsert.push({
               id: orderId,
               status: info.status || null,
               created_at: safeDate(info.createdAt) || new Date().toISOString(),
               carrier_code: carrier.carrierCode || '',
               carrier_name: carrier.name || '',
-              carrier_date: safeDate(carrier.sendCarrier?.date),
+              ...(carrierDate ? { carrier_date: carrierDate } : {}),
               is_declared_fee: carrier.isDeclaredFee ? 1 : 0,
               sale_channel: channel.saleChannel || null,
               created_by_name: info.createdByName || ''

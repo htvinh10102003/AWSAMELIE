@@ -77,8 +77,13 @@ serve(async (req) => {
                     const createdAt = safeDate(info.createdAt) || new Date().toISOString(); 
                     const updatedAt = safeDate(info.updatedAt) || createdAt;
 
+                    // Giữ ngày đi cũ: chỉ ghi carrier_date khi Nhanh có trả ngày.
+                    // Nhanh không trả sendCarrier.date mà ghi NULL sẽ xóa mất
+                    // ngày đi quét từ sheet trước đó. Bỏ cột khỏi upsert thì
+                    // PostgREST giữ nguyên giá trị cũ trong DB.
+                    const carrierDate = safeDate(carrier.sendCarrier?.date);
                     const mappedOrder = {
-                        id: String(info.id), 
+                        id: String(info.id),
                         depot_id: info.depotId || null,
                         created_by_name: info.createdBy?.name || info.createdByName || '',
                         created_at: createdAt,
@@ -91,8 +96,8 @@ serve(async (req) => {
                         sale_channel: channel.saleChannel || null,
                         traffic_source: channel.trafficSource?.name || channel.trafficSource || '',
                         carrier_name: carrier.name || '',
-                        carrier_code: carrier.carrierCode || '', 
-                        carrier_date: safeDate(carrier.sendCarrier?.date), 
+                        carrier_code: carrier.carrierCode || '',
+                        ...(carrierDate ? { carrier_date: carrierDate } : {}),
                         is_declared_fee: carrier.isDeclaredFee || 0
                     };
 
