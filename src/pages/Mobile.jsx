@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { Printer, AlertTriangle, MapPin, Search, ScanLine, Settings, ClipboardList, RefreshCw, Package, Pencil, X, LogOut, Save, Lock, Bell, Palette, FileSpreadsheet, User } from 'lucide-react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { supabase } from '../lib/supabase';
 import { getUserRole, isAdminRole, isSuperAdminRole, roleLabel } from '../lib/roles';
 
@@ -99,6 +100,7 @@ export default function Mobile() {
     const videoRef = useRef(null);
     const streamRef = useRef(null);
     const rafRef = useRef(null);
+    const html5QrcodeRef = useRef(null);
     const [reconData, setReconData] = useState([]);
     const [reconLoading, setReconLoading] = useState(false);
     const [reconError, setReconError] = useState('');
@@ -360,6 +362,11 @@ export default function Mobile() {
         rafRef.current = null;
         if (streamRef.current) { streamRef.current.getTracks().forEach(tr => tr.stop()); streamRef.current = null; }
         if (videoRef.current) videoRef.current.srcObject = null;
+        if (html5QrcodeRef.current) {
+            const inst = html5QrcodeRef.current;
+            html5QrcodeRef.current = null;
+            try { if (inst.isScanning) inst.stop().catch(() => {}); } catch (e) {}
+        }
     };
 
     const startScanner = () => {
@@ -370,6 +377,46 @@ export default function Mobile() {
     useEffect(() => {
         if (!scanning) return;
         let cancelled = false;
+        // Dự phòng cho iPhone: Safari iOS không có BarcodeDetector nên dùng
+        // html5-qrcode (đã có sẵn trong app, các trang desktop đang dùng).
+        // Máy có BarcodeDetector (Android) vẫn đi đường native bên dưới.
+        if (!window.BarcodeDetector) {
+            const timer = setTimeout(() => {
+                if (cancelled) return;
+                const html5QrCode = new Html5Qrcode('mobile-scan-reader');
+                html5QrcodeRef.current = html5QrCode;
+                let handled = false;
+                html5QrCode.start(
+                    { facingMode: 'environment' },
+                    {
+                        fps: 10,
+                        qrbox: { width: 300, height: 100 },
+                        formatsToSupport: [
+                            Html5QrcodeSupportedFormats.QR_CODE,
+                            Html5QrcodeSupportedFormats.CODE_128,
+                            Html5QrcodeSupportedFormats.CODE_39,
+                            Html5QrcodeSupportedFormats.EAN_13,
+                            Html5QrcodeSupportedFormats.EAN_8,
+                            Html5QrcodeSupportedFormats.UPC_A,
+                            Html5QrcodeSupportedFormats.CODE_93,
+                        ],
+                        aspectRatio: 1.0,
+                    },
+                    (decodedText) => {
+                        if (handled || cancelled) return;
+                        handled = true;
+                        const q = extractCarrierCode(decodedText);
+                        stopScanner();
+                        setSearch(q); setSearchMode('carrier'); setScanning(false);
+                        handleDbSearch(q, 'carrier');
+                    },
+                    () => {}
+                ).catch(() => {
+                    if (!cancelled) setScanError('Thiết bị không có camera hoặc trình duyệt chặn camera.');
+                });
+            }, 150);
+            return () => { cancelled = true; clearTimeout(timer); stopScanner(); };
+        }
         (async () => {
             try {
                 if (!window.BarcodeDetector) throw new Error('Trình duyệt này chưa hỗ trợ quét trực tiếp, hãy nhập tay.');
@@ -1039,7 +1086,11 @@ export default function Mobile() {
             {scanning && (
                 <div className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center gap-4 p-4">
                     <div className="text-white font-bold text-sm">Đưa barcode/QR trên đơn vào khung hình</div>
-                    <video ref={videoRef} playsInline muted className="w-full max-w-[480px] rounded-xl bg-black" />
+                    {window.BarcodeDetector ? (
+                        <video ref={videoRef} playsInline muted className="w-full max-w-[480px] rounded-xl bg-black" />
+                    ) : (
+                        <div id="mobile-scan-reader" className="w-full max-w-[480px] rounded-xl overflow-hidden bg-black" />
+                    )}
                     {scanError && <div className="text-red-300 text-sm font-medium text-center">{scanError}</div>}
                     <button onClick={() => { stopScanner(); setScanning(false); }} className="px-6 py-3 bg-white text-slate-900 rounded-xl text-sm font-bold">Đóng</button>
                 </div>
