@@ -53,13 +53,30 @@ export async function reportPresence() {
     lastPresenceAttempt = now;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    await supabase.from('user_presence').upsert({
+    const row = {
       user_id: user.id,
       device_id: getDeviceId(),
       user_email: user.email || null,
       user_agent: (typeof navigator !== 'undefined' && navigator.userAgent) || null,
       last_seen_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,device_id' });
+    };
+    // KHONG dung upsert: upsert vao bang nay luon bi 403 du policy/quyen
+    // da du (kiem tra 2026-11-03: user_presence 0 dong tu truoc toi gio,
+    // trong khi insert thuong vao user_login_history duoc 90 dong va
+    // admin_action_logs duoc 2 dong). Lam thu cong bang 2 cach da chay
+    // tot: insert, neu trung khoa (23505) thi update.
+    const { error: insertError } = await supabase.from('user_presence').insert(row);
+    if (insertError) {
+      const code = String(insertError.code || '');
+      if (code === '23505' || /duplicate|already exists/i.test(insertError.message || '')) {
+        await supabase.from('user_presence').update({
+          user_email: row.user_email,
+          user_agent: row.user_agent,
+          last_seen_at: row.last_seen_at,
+        }).eq('user_id', row.user_id).eq('device_id', row.device_id);
+      }
+      // Loi khac (ke ca 403): bo qua, presence la best-effort.
+    }
   } catch { /* khong lam hong app */ }
 }
 
