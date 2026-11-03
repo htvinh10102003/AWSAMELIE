@@ -77,8 +77,11 @@ serve(async (req) => {
     const platformIds = PLATFORMS[requested] ? [requested] : Object.keys(PLATFORMS).map(Number);
 
     const callNhanh = async (platformId: number, next: any) => {
+      // Chỉ kéo yêu cầu cập nhật trong 30 ngày gần nhất (Vinh chốt 2026-11-03:
+      // "kéo 1 tháng gần nhất thôi"; bản cũ là 7 ngày, bản đầu viết không lọc ngày).
+      const updatedFromAt = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
       const payload: any = {
-        filters: { appId: platformId },
+        filters: { appId: platformId, updatedFromAt },
         paginator: { icpp: 50 },
       };
       // Phân trang cursor: gửi lại nguyên giá trị paginator.next mà Nhanh trả về
