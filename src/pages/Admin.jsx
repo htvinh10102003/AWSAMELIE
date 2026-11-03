@@ -114,12 +114,14 @@ export default function Admin() {
   
   const [isSyncingReturns, setIsSyncingReturns] = useState(false);
   const [syncReturnsMessage, setSyncReturnsMessage] = useState({ text: '', type: '' });
+  // Ngày VN tính bằng UTC+7 thuần, không dùng Intl timeZone: có trình duyệt
+  // không nhận tên múi giờ Asia/Ho_ChiMinh và làm sập cả trang (lỗi 2026-11-03).
+  const vnTodayStr = () => new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const [syncReturnsFrom, setSyncReturnsFrom] = useState(() => {
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_ChiMinh' }).format(new Date());
-    const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 30);
+    const d = new Date(vnTodayStr() + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 30);
     return d.toISOString().slice(0, 10);
   });
-  const [syncReturnsTo, setSyncReturnsTo] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_ChiMinh' }).format(new Date()));
+  const [syncReturnsTo, setSyncReturnsTo] = useState(() => vnTodayStr());
 
   // --- BAO TRI (404) ---
   const [maintenanceOn, setMaintenanceOn] = useState(false);

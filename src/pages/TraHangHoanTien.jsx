@@ -30,7 +30,9 @@ const PLATFORMS = [
 const PAGE_SIZE = 20;
 
 function vnTodayStr() {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_ChiMinh' }).format(new Date());
+  // Giờ VN = UTC+7, không DST; tính thuần bằng cộng 7 giờ để khỏi phụ thuộc
+  // Intl timeZone (có trình duyệt không nhận Asia/Ho_ChiMinh và làm sập trang).
+  return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 function addDaysStr(dateStr, days) {
   const d = new Date(dateStr + 'T00:00:00Z');
@@ -42,11 +44,10 @@ function vnDayBounds(dateStr) {
 }
 function fmtDateTime(iso) {
   if (!iso) return '—';
-  const d = new Date(iso);
+  const d = new Date(new Date(iso).getTime() + 7 * 60 * 60 * 1000);
   if (isNaN(d.getTime())) return '—';
-  return new Intl.DateTimeFormat('vi-VN', {
-    timeZone: 'Asia/Ho_ChiMinh', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  }).format(d);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
 }
 function fmtMoney(v) {
   if (v === null || v === undefined) return '—';
