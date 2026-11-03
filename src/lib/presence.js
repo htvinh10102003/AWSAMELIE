@@ -41,8 +41,16 @@ export function shortDeviceName(ua) {
 
 // Ghi nhan "dang mo app" (heartbeat). Owner coi 1 thiet bi la dang
 // online neu last_seen_at trong 10 phut gan nhat.
+// Chan spam: du Layout mount lai hay auth event lap lai bao nhieu lan,
+// presence cung chi ghi toi da 1 lan / 4 phut moi tab (moc online la 10 phut
+// nen thua suc). Sua loi 2026-11-03: Vinh thay POST user_presence lap lai
+// vai giay/lan du interval goc la 5 phut.
+let lastPresenceAttempt = 0;
 export async function reportPresence() {
   try {
+    const now = Date.now();
+    if (now - lastPresenceAttempt < 4 * 60 * 1000) return;
+    lastPresenceAttempt = now;
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     await supabase.from('user_presence').upsert({
