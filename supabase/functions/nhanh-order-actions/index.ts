@@ -46,6 +46,20 @@ serve(async (req) => {
       return json({ success: false, message: 'Chỉ Tài khoản Chủ mới được dùng thao tác Nhanh.vn.' }, 403);
     }
 
+    // Ghi log thao tac don cho Owner check lai sau (bang admin_action_logs).
+    // Best-effort: ghi loi thi bo qua, khong bao gio lam hong thao tac;
+    // bang chua co (chua chay migration) thi lan ghi nay tu bo qua.
+    const logOrderActions = async (rows: any[]) => {
+      if (rows.length === 0) return;
+      try {
+        await supabaseAdmin.from('admin_action_logs').insert(rows.map((r) => ({
+          user_id: user.id,
+          user_email: user.email || null,
+          ...r,
+        })));
+      } catch { /* Bo qua loi ghi log */ }
+    };
+
     const payload = await req.json().catch(() => ({}));
     const { action } = payload;
     const orderIds: number[] = Array.isArray(payload.orderIds)
@@ -183,6 +197,14 @@ serve(async (req) => {
       }
       const r = await callPos('/order/edit', { info });
       if (r.code !== 1) return json({ success: false, message: nhanhErr(r) });
+      // Chi ghi ten truong da doi, khong ghi noi dung ghi chu vao log.
+      await logOrderActions([{
+        action: 'edit',
+        target_type: 'order',
+        target_id: String(orderIds[0]),
+        details: { fields: Object.keys(info).filter((k) => k !== 'id'), status: info.status ?? null },
+        result: 'ok',
+      }]);
       return json({ success: true, data: r.data });
     }
 
@@ -223,6 +245,18 @@ serve(async (req) => {
           skipped_ids: skippedIds,
         });
       } catch { /* Bỏ qua lỗi ghi lịch sử */ }
+      await logOrderActions(results.map((r) => ({
+        action: 'send',
+        target_type: 'order',
+        target_id: String(r.id),
+        details: {
+          carrier_code: r.carrierCode || null,
+          existed: !!r.existed,
+          source: typeof payload.source === 'string' ? payload.source : null,
+          message: r.ok ? null : (r.message || null),
+        },
+        result: r.ok ? (r.existed ? 'existed' : 'ok') : 'failed',
+      })));
       return json({ success: okCount > 0, results, okCount, failCount: results.length - okCount });
     }
 
@@ -257,6 +291,17 @@ serve(async (req) => {
         }
       }
       const okCount = results.filter((x) => x.ok).length;
+      await logOrderActions(results.map((r) => ({
+        action: 'cancel',
+        target_type: 'order',
+        target_id: String(r.id),
+        details: {
+          reason: reason || null,
+          status: r.status ?? null,
+          message: r.ok ? null : (r.message || null),
+        },
+        result: r.ok ? 'ok' : 'failed',
+      })));
       return json({ success: okCount > 0, results, okCount, failCount: results.length - okCount });
     }
 

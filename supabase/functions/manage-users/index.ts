@@ -36,7 +36,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Bạn không có quyền truy cập cổng quản trị!' }), { status: 403, headers: corsHeaders });
     }
 
-    const { action, email, password, fullName, role, userId } = await req.json();
+    const { action, email, password, fullName, role, userId, filterUserId, filterAction, filterOrderId, logLimit, logOffset } = await req.json();
 
     // 1. LẤY DANH SÁCH THÀNH VIÊN
     if (action === 'list') {
@@ -91,6 +91,100 @@ serve(async (req) => {
       if (error) throw error;
       return new Response(JSON.stringify({ success: true }), { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
+    }
+
+    // 5. CHI TIET TAI KHOAN + KICK + KHOA/MO KHOA + NHAT KY CHUNG.
+    // Tat ca chi Owner (is_owner) — admin/super_admin khong duoc dung,
+    // khac voi list/create o tren. Cac guard cu (list/create/role/delete)
+    // giu nguyen, khong sua.
+    const SUPER_OWNER_EMAIL = 'contact.hotavinh@gmail.com';
+    const requireOwner = () => {
+      if (!isReqOwner) {
+        return new Response(JSON.stringify({ error: 'Chỉ có Tài khoản Chủ mới được dùng chức năng này!' }), { status: 403, headers: corsHeaders });
+      }
+      return null;
+    };
+    // Chan thao tac len chinh minh va len tai khoan Chu so huu.
+    const guardTarget = async () => {
+      if (!userId) return 'Thiếu ID tài khoản!';
+      if (userId === reqUser.id) return 'Không thể thao tác lên chính tài khoản của mình!';
+      const { data: { user: target } } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (!target) return 'Không tìm thấy tài khoản!';
+      if (target.email === SUPER_OWNER_EMAIL) return 'Không thể thao tác lên tài khoản Chủ sở hữu!';
+      return null;
+    };
+
+    if (action === 'detail') {
+      const denied = requireOwner();
+      if (denied) return denied;
+      const { data: { user: target }, error: uErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (uErr || !target) {
+        return new Response(JSON.stringify({ error: 'Không tìm thấy tài khoản!' }), { status: 404, headers: corsHeaders });
+      }
+      const { data: logins } = await supabaseAdmin.from('user_login_history').select('id, signed_in_at, user_email, user_agent').eq('user_id', userId).order('signed_in_at', { ascending: false }).limit(20);
+      const { data: devices } = await supabaseAdmin.from('user_presence').select('user_id, device_id, user_email, user_agent, last_seen_at').eq('user_id', userId).order('last_seen_at', { ascending: false }).limit(20);
+      const { data: actions } = await supabaseAdmin.from('admin_action_logs').select('id, created_at, action, target_type, target_id, details, result').eq('user_id', userId).order('created_at', { ascending: false }).limit(20);
+      return new Response(JSON.stringify({ success: true, user: target, logins: logins || [], devices: devices || [], actions: actions || [] }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (action === 'kick') {
+      const denied = requireOwner();
+      if (denied) return denied;
+      const blocked = await guardTarget();
+      if (blocked) {
+        return new Response(JSON.stringify({ error: blocked }), { status: 400, headers: corsHeaders });
+      }
+      // Dung co che session_revoked san co: Layout (desktop) va Mobile
+      // kiem tra key nay roi tu dang xuat tai khoan bi kick.
+      const { error } = await supabaseAdmin.from('system_configs').upsert({ key: `session_revoked_${userId}`, value: new Date().toISOString() }, { onConflict: 'key' });
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (action === 'ban') {
+      const denied = requireOwner();
+      if (denied) return denied;
+      const blocked = await guardTarget();
+      if (blocked) {
+        return new Response(JSON.stringify({ error: blocked }), { status: 400, headers: corsHeaders });
+      }
+      // Khoa dang nhap 10 nam; mo khoa bang action 'unban'.
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { ban_duration: '87600h' });
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (action === 'unban') {
+      const denied = requireOwner();
+      if (denied) return denied;
+      const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, { ban_duration: 'none' });
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (action === 'action_logs') {
+      const denied = requireOwner();
+      if (denied) return denied;
+      let query = supabaseAdmin.from('admin_action_logs').select('id, created_at, user_id, user_email, action, target_type, target_id, details, result', { count: 'exact' }).order('created_at', { ascending: false });
+      if (filterUserId) query = query.eq('user_id', filterUserId);
+      if (filterAction) query = query.eq('action', filterAction);
+      if (filterOrderId) query = query.eq('target_id', String(filterOrderId));
+      const limit = Math.min(100, Math.max(1, parseInt(String(logLimit || 50), 10) || 50));
+      const offset = Math.max(0, parseInt(String(logOffset || 0), 10) || 0);
+      query = query.range(offset, offset + limit - 1);
+      const { data, count, error } = await query;
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true, logs: data || [], total: count || 0 }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 

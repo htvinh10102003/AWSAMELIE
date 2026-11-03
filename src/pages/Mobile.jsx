@@ -5,6 +5,8 @@ import { readBarcodesFromImageData, setZXingModuleOverrides } from 'zxing-wasm/r
 import zxingReaderWasmUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
 import { supabase } from '../lib/supabase';
 import { getUserRole, isAdminRole, isSuperAdminRole, roleLabel } from '../lib/roles';
+import { sessionRevokedKey, isRevokedAfterLogin } from '../lib/session';
+import { reportPresence, recordLoginHistory } from '../lib/presence';
 import { getMaintenanceMode, setMaintenanceMode } from '../lib/maintenance';
 
 // Giao diện điện thoại riêng, chỉ xem nhanh và thao tác gọn trên điện thoại.
@@ -154,8 +156,28 @@ export default function Mobile() {
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session: s } }) => { setSession(s); setAuthLoading(false); });
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => { setSession(s); setAuthLoading(false); });
-        return () => subscription.unsubscribe();
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+            setSession(s); setAuthLoading(false);
+            if (event === 'SIGNED_IN' && s) { recordLoginHistory(); reportPresence(); }
+        });
+        // Hien dien (5 phut/lan) + kiem tra bi kick (session_revoked)
+        // de nut Kick cua Owner co tac dung ca tren mobile, nhu desktop.
+        reportPresence();
+        const presenceIntervalId = setInterval(() => { reportPresence(); }, 5 * 60 * 1000);
+        const checkRevoked = async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) return;
+                const { data: revoked } = await supabase.from('system_configs').select('value').eq('key', sessionRevokedKey(user.id)).maybeSingle();
+                if (revoked && isRevokedAfterLogin(revoked.value, user)) {
+                    await supabase.auth.signOut();
+                    setSession(null);
+                }
+            } catch { /* bo qua */ }
+        };
+        checkRevoked();
+        const revokedIntervalId = setInterval(() => { checkRevoked(); }, 60000);
+        return () => { subscription.unsubscribe(); clearInterval(presenceIntervalId); clearInterval(revokedIntervalId); };
     }, []);
 
     useEffect(() => {

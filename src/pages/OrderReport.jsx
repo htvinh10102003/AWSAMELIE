@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { logOrderPrint } from '../lib/presence';
 import { Search, CheckCircle, AlertTriangle, XCircle, RefreshCw, MessageSquare, Lock, User, ChevronDown, Printer, ChevronLeft, ChevronRight, Copy, Send, Settings2, PackageSearch, Save, Download } from 'lucide-react';
 
 const SALE_CHANNELS = {
@@ -288,6 +289,9 @@ export default function OrderReport() {
     const [detailOrder, setDetailOrder] = useState(null);
     const [detailData, setDetailData] = useState(null);
     const [detailLoading, setDetailLoading] = useState(false);
+    // Vị trí kho của từng sản phẩm trong popup (map: code:<mã> / name:<tên>
+    // -> danh sách location_code, 1 sản phẩm có thể ở nhiều vị trí).
+    const [productLocations, setProductLocations] = useState({});
     const [showRawJson, setShowRawJson] = useState(false);
     // Lịch sử đơn trong popup: lấy từ bảng order_histories, xếp cũ trước
     // để đọc thành luồng hành trình của đơn.
@@ -863,6 +867,7 @@ export default function OrderReport() {
         setDetailOrder(order);
         setDetailData(null);
         setDetailLoading(true);
+        setProductLocations({});
         setShowRawJson(false);
         setDetailHistory([]);
         setDetailHistoryLoading(true);
@@ -897,6 +902,33 @@ export default function OrderReport() {
             console.error('Lỗi tải lịch sử đơn:', err);
         } finally {
             setDetailHistoryLoading(false);
+        }
+        // Lấy vị trí kho cho các sản phẩm trong đơn (hiện dưới mỗi SP
+        // trong popup). Khớp mã kho trước (product_code trong kho lấy
+        // từ chính mã Nhanh), không khớp thì khớp tên chính xác.
+        try {
+            const rowProds = order.order_products || [];
+            if (rowProds.length > 0) {
+                const codes = [...new Set(rowProds.map(p => p.product_code).filter(Boolean).map(String))];
+                const names = [...new Set(rowProds.map(p => p.product_name).filter(Boolean))];
+                const locMap = {};
+                const addLoc = (key, loc) => {
+                    if (!loc) return;
+                    if (!locMap[key]) locMap[key] = [];
+                    if (!locMap[key].includes(loc)) locMap[key].push(loc);
+                };
+                if (codes.length > 0) {
+                    const { data: byCode } = await supabase.from('product_inventories').select('product_code, location_code').in('product_code', codes);
+                    (byCode || []).forEach(r => addLoc(`code:${r.product_code}`, r.location_code));
+                }
+                if (names.length > 0) {
+                    const { data: byName } = await supabase.from('product_inventories').select('product_name, location_code').in('product_name', names);
+                    (byName || []).forEach(r => addLoc(`name:${r.product_name}`, r.location_code));
+                }
+                setProductLocations(locMap);
+            }
+        } catch (err) {
+            console.error('Lỗi tải vị trí sản phẩm:', err);
         }
     };
 
@@ -1652,6 +1684,8 @@ export default function OrderReport() {
             printUrl = `https://nhanh.vn/order/manage/pickup?ids=${idString}&storeId=${businessId}&format=print&printDialogMode=manual&noclose=1${printSize === 'K80' ? '&typePrint=k80' : ''}`;
         }
         window.open(printUrl, '_blank');
+        // Ghi log in don (best-effort, khong anh huong viec in).
+        logOrderPrint(orderIds, printSize);
         setPrintList({
             size: printSize,
             items: printItems.map(item => typeof item === 'object'
@@ -2368,6 +2402,9 @@ export default function OrderReport() {
                 const totalDiscount = rawProducts
                     ? rawProducts.reduce((s, p) => s + (Number(p.discount) || 0), 0)
                     : null;
+                // Vị trí kho của 1 sản phẩm trong popup: khớp mã kho trước,
+                // không có thì khớp tên (đã tải trong openOrderDetail).
+                const prodLocation = (p) => (p.code ? productLocations[`code:${p.code}`] : null) || (p.name ? productLocations[`name:${p.name}`] : null);
                 const DetailRow = ({ label, value }) => (
                     <div className="flex flex-col gap-0.5 py-2 border-b border-slate-100 last:border-0">
                         <span className="text-xs font-medium text-slate-500">{label}</span>
@@ -2509,6 +2546,7 @@ export default function OrderReport() {
                                                                             <td className="py-2 pr-3">
                                                                                 <div className="font-semibold text-slate-800">{p.name}</div>
                                                                                 <div className="font-mono text-xs text-slate-500">{p.code}</div>
+                                                                                {prodLocation(p) && <div className="text-xs text-slate-500">Vị trí: {prodLocation(p).join(', ')}</div>}
                                                                                 {p.available !== undefined && <div className="text-xs text-slate-400">Tồn: {Number(p.available) === 0 ? 'Hết hàng (0)' : p.available}</div>}
                                                                             </td>
                                                                             <td className="py-2 pr-3 text-center font-bold">{p.quantity} {p.unit?.name || 'chiếc'}</td>

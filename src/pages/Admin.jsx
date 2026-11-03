@@ -7,8 +7,9 @@ import {
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
   Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert,
   Palette, TreePine, PartyPopper, MoonStar, Flag, Database, HardDrive, Trash2, AlertTriangle, Info,
-  BellRing, Megaphone, MonitorPlay
+  BellRing, Megaphone, MonitorPlay, Ban, History, LogOut
 } from 'lucide-react';
+import { shortDeviceName } from '../lib/presence';
 
 // --- UTILS ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -43,6 +44,18 @@ export default function Admin() {
   const [userForm, setUserForm] = useState({ email: '', password: '', fullName: '', role: 'user' });
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [userMessage, setUserMessage] = useState('');
+  // Chi tiet user (Owner only) + nhat ky thao tac chung (Owner only).
+  const [detailUser, setDetailUser] = useState(null);
+  const [detailData, setDetailData] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailMsg, setDetailMsg] = useState('');
+  const [logs, setLogs] = useState([]);
+  const [logsTotal, setLogsTotal] = useState(0);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logFilterUser, setLogFilterUser] = useState('');
+  const [logFilterAction, setLogFilterAction] = useState('');
+  const [logFilterOrder, setLogFilterOrder] = useState('');
+  const [logPage, setLogPage] = useState(1);
   const [loading, setLoading] = useState(false); 
   const [editingUser, setEditingUser] = useState(null); 
   const [editForm, setEditForm] = useState({ fullName: '', role: 'user' });
@@ -146,6 +159,7 @@ export default function Admin() {
 
   useEffect(() => {
     if (activeTab === 'users_management') fetchSystemUsers();
+    if (activeTab === 'action_logs') { if (users.length === 0) fetchSystemUsers(); fetchActionLogs(1); }
     if (activeTab !== 'configs') setConfirmCleanStep(false);
   }, [activeTab]);
 
@@ -306,6 +320,75 @@ export default function Admin() {
     } catch (err) {
       setUserMessage(` Lỗi tải thành viên: ${err.message}`);
     } finally { setLoading(false); }
+  };
+
+  // --- CHI TIET USER / KICK / KHOA / NHAT KY (OWNER ONLY) ---
+  const isUserBanned = (u) => u?.banned_until && new Date(u.banned_until).getTime() > Date.now();
+  const ACTION_LABELS = { send: 'Gửi đơn', edit: 'Sửa đơn', cancel: 'Hủy đơn', print: 'In đơn' };
+  const RESULT_LABELS = { ok: 'Thành công', failed: 'Thất bại', existed: 'Đã gửi rồi' };
+  const isDeviceOnline = (lastSeen) => lastSeen && (Date.now() - new Date(lastSeen).getTime() <= 10 * 60 * 1000);
+  const fmtLogDetail = (log) => {
+    const d = log.details || {};
+    if (log.action === 'send') return d.carrier_code ? `Mã vận đơn: ${d.carrier_code}` : (d.message || '');
+    if (log.action === 'edit') return d.fields ? `Đổi: ${(d.fields || []).join(', ')}` : '';
+    if (log.action === 'cancel') return d.reason ? `Lý do: ${d.reason}` : (d.message || '');
+    if (log.action === 'print') return d.print_size ? `Khổ: ${d.print_size}` : '';
+    return d.message || '';
+  };
+
+  const fetchUserDetail = async (u) => {
+    setDetailUser(u); setDetailData(null); setDetailMsg(''); setDetailLoading(true);
+    try {
+      const data = await callUserManagementApi({ action: 'detail', userId: u.id });
+      setDetailData(data);
+    } catch (err) {
+      setDetailMsg(`Lỗi tải chi tiết: ${err.message}`);
+    } finally { setDetailLoading(false); }
+  };
+
+  const handleKickUser = async (u) => {
+    const ok = await showCustomDialog('confirm', 'Đá tài khoản ra khỏi hệ thống?', `${u.email} sẽ bị đăng xuất ngay trên mọi thiết bị đang mở app. Tài khoản vẫn đăng nhập lại được sau đó (muốn cấm hẳn thì dùng Khóa tài khoản).`);
+    if (!ok) return;
+    setActionLoadingId(u.id);
+    try {
+      await callUserManagementApi({ action: 'kick', userId: u.id });
+      setDetailMsg('Đã đá tài khoản ra khỏi hệ thống.');
+    } catch (err) {
+      setDetailMsg(`Lỗi: ${err.message}`);
+    } finally { setActionLoadingId(null); }
+  };
+
+  const handleBanUser = async (u, ban) => {
+    const ok = await showCustomDialog('confirm', ban ? 'Khóa tài khoản?' : 'Mở khóa tài khoản?', ban ? `${u.email} sẽ không đăng nhập được nữa cho đến khi Owner mở khóa.` : `${u.email} sẽ đăng nhập lại được bình thường.`);
+    if (!ok) return;
+    setActionLoadingId(u.id);
+    try {
+      await callUserManagementApi({ action: ban ? 'ban' : 'unban', userId: u.id });
+      setDetailMsg(ban ? 'Đã khóa tài khoản.' : 'Đã mở khóa tài khoản.');
+      const data = await callUserManagementApi({ action: 'list' });
+      setUsers(data.users || []);
+      const refreshed = (data.users || []).find(x => x.id === u.id);
+      if (refreshed) { setDetailUser(refreshed); fetchUserDetail(refreshed); }
+    } catch (err) {
+      setDetailMsg(`Lỗi: ${err.message}`);
+    } finally { setActionLoadingId(null); }
+  };
+
+  const fetchActionLogs = async (page = 1) => {
+    setLogsLoading(true);
+    try {
+      const data = await callUserManagementApi({
+        action: 'action_logs',
+        filterUserId: logFilterUser || undefined,
+        filterAction: logFilterAction || undefined,
+        filterOrderId: logFilterOrder || undefined,
+        logLimit: 50,
+        logOffset: (page - 1) * 50,
+      });
+      setLogs(data.logs || []); setLogsTotal(data.total || 0); setLogPage(page);
+    } catch (err) {
+      setUserMessage(`Lỗi tải nhật ký: ${err.message}`);
+    } finally { setLogsLoading(false); }
   };
 
   const handleUpdateProfile = async (e) => {
@@ -876,6 +959,11 @@ export default function Admin() {
           <button onClick={() => { setActiveTab('users_management'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'users_management' ? 'bg-white text-blue-700 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}>
             Quản lý Users
           </button>
+          {isOwner && (
+            <button onClick={() => { setActiveTab('action_logs'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'action_logs' ? 'bg-white text-blue-700 shadow-sm border border-slate-200/50 flex items-center justify-center gap-1.5' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 flex items-center justify-center gap-1.5'}`}>
+              <History size={16}/> Nhật ký thao tác
+            </button>
+          )}
           <button onClick={() => { setActiveTab('profile'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'profile' ? 'bg-white text-blue-700 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}>
             Cá nhân
           </button>
@@ -1587,10 +1675,11 @@ export default function Admin() {
                       return (
                         <tr key={u.id} className="hover:bg-blue-50/30 transition-colors group rounded-xl">
                           <td className="py-3 px-4 rounded-l-xl">
-                            <div className="font-bold text-slate-800 flex items-center gap-2">
+                            <div className={`font-bold text-slate-800 flex items-center gap-2 ${isOwner ? 'cursor-pointer hover:text-blue-600' : ''}`} onClick={() => isOwner && fetchUserDetail(u)} title={isOwner ? 'Bấm để xem chi tiết tài khoản' : ''}>
                               {uName} {isMe && <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-widest">(Bạn)</span>}
                             </div>
                             <div className="text-xs text-slate-500 font-medium">{u.email}</div>
+                            {isUserBanned(u) && <div className="text-xs font-bold text-red-600 mt-0.5">Đã khóa tài khoản</div>}
                           </td>
                           <td className="py-3 px-4 text-center">
                             <span className={`px-3 py-1 border rounded-lg text-xs font-bold uppercase tracking-widest inline-block ${isTargetOwner ? 'bg-amber-50 text-amber-700 border-amber-200' : uRole === 'super_admin' ? 'bg-rose-50 text-rose-700 border-rose-200' : uRole === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
@@ -1607,6 +1696,12 @@ export default function Admin() {
                                   <button onClick={() => handleDeleteUser(u)} disabled={actionLoadingId === u.id || u.email === SUPER_OWNER_EMAIL || isMe} className={`p-2 rounded-lg transition cursor-pointer ${u.email === SUPER_OWNER_EMAIL || isMe ? 'text-slate-200' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`} title="Xóa tài khoản">
                                     {actionLoadingId === u.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                                   </button>
+                                  <button onClick={() => handleKickUser(u)} disabled={actionLoadingId === u.id || u.email === SUPER_OWNER_EMAIL || isMe} className={`p-2 rounded-lg transition cursor-pointer ${u.email === SUPER_OWNER_EMAIL || isMe ? 'text-slate-200' : 'text-slate-400 hover:text-amber-600 hover:bg-amber-50'}`} title="Đá ra khỏi hệ thống">
+                                    <LogOut size={16} />
+                                  </button>
+                                  <button onClick={() => handleBanUser(u, !isUserBanned(u))} disabled={actionLoadingId === u.id || u.email === SUPER_OWNER_EMAIL || isMe} className={`p-2 rounded-lg transition cursor-pointer ${u.email === SUPER_OWNER_EMAIL || isMe ? 'text-slate-200' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`} title={isUserBanned(u) ? 'Mở khóa tài khoản' : 'Khóa tài khoản'}>
+                                    <Ban size={16} />
+                                  </button>
                                 </>
                               ) : (
                                 <Lock size={14} className="text-slate-300 mx-auto"/>
@@ -1619,6 +1714,164 @@ export default function Admin() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CHI TIET USER (OWNER ONLY) */}
+      {detailUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50" onClick={() => setDetailUser(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-start bg-slate-50">
+              <div>
+                <h3 className="font-bold text-lg text-slate-800">{detailUser.user_metadata?.full_name || 'Chưa cập nhật'}</h3>
+                <p className="text-sm text-slate-500">{detailUser.email}</p>
+              </div>
+              <button onClick={() => setDetailUser(null)} className="text-slate-400 hover:text-slate-600"><X size={22} /></button>
+            </div>
+            <div className="p-5 overflow-y-auto space-y-6">
+              {detailLoading && <p className="text-sm text-slate-500 font-medium flex items-center gap-2"><Loader2 size={15} className="animate-spin" /> Đang tải chi tiết...</p>}
+              {detailMsg && <p className="text-sm font-medium text-slate-700">{detailMsg}</p>}
+              {detailData && (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => handleKickUser(detailUser)} disabled={actionLoadingId === detailUser.id} className="px-4 py-2 bg-amber-600 text-white text-sm font-bold rounded-lg hover:bg-amber-700 disabled:opacity-50 flex items-center gap-2"><LogOut size={15} /> Đá ra khỏi hệ thống</button>
+                    {isUserBanned(detailData.user) ? (
+                      <button onClick={() => handleBanUser(detailUser, false)} disabled={actionLoadingId === detailUser.id} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50">Mở khóa tài khoản</button>
+                    ) : (
+                      <button onClick={() => handleBanUser(detailUser, true)} disabled={actionLoadingId === detailUser.id} className="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center gap-2"><Ban size={15} /> Khóa tài khoản</button>
+                    )}
+                  </div>
+                  <section>
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-2 border-b border-slate-200 pb-2">Thông tin</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 text-sm">
+                      <p className="py-1"><span className="text-slate-500">Vai trò: </span><span className="font-bold">{detailData.user.user_metadata?.is_owner ? 'Owner' : roleLabel(detailData.user.user_metadata?.role)}</span></p>
+                      <p className="py-1"><span className="text-slate-500">Trạng thái: </span><span className={`font-bold ${isUserBanned(detailData.user) ? 'text-red-600' : 'text-emerald-600'}`}>{isUserBanned(detailData.user) ? 'Đã khóa' : 'Đang hoạt động'}</span></p>
+                      <p className="py-1"><span className="text-slate-500">Ngày tạo: </span><span className="font-bold">{detailData.user.created_at ? new Date(detailData.user.created_at).toLocaleString('vi-VN') : 'Chưa có'}</span></p>
+                      <p className="py-1"><span className="text-slate-500">Lần cuối đăng nhập: </span><span className="font-bold">{detailData.user.last_sign_in_at ? new Date(detailData.user.last_sign_in_at).toLocaleString('vi-VN') : 'Chưa đăng nhập lần nào'}</span></p>
+                    </div>
+                  </section>
+                  <section>
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-2 border-b border-slate-200 pb-2">Thiết bị đang đăng nhập</h4>
+                    {detailData.devices.length === 0 ? (
+                      <p className="text-sm text-slate-500">Chưa ghi nhận thiết bị nào (thiết bị chỉ hiện sau khi user mở app bản mới có ghi hiện diện).</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {detailData.devices.map(d => (
+                          <li key={`${d.user_id}-${d.device_id}`} className="flex items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                            <div>
+                              <p className="font-bold text-slate-800">{shortDeviceName(d.user_agent)}</p>
+                              <p className="text-xs text-slate-500">Thấy lần cuối: {d.last_seen_at ? new Date(d.last_seen_at).toLocaleString('vi-VN') : 'Chưa có'}</p>
+                            </div>
+                            {isDeviceOnline(d.last_seen_at) ? <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-700 shrink-0">Đang online</span> : <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-500 shrink-0">Ngoại tuyến</span>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <p className="text-xs text-slate-400 mt-2">Online = thiết bị còn mở app trong 10 phút gần nhất.</p>
+                  </section>
+                  <section>
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-2 border-b border-slate-200 pb-2">Lịch sử đăng nhập (20 gần nhất)</h4>
+                    {detailData.logins.length === 0 ? (
+                      <p className="text-sm text-slate-500">Chưa có lịch sử (chỉ ghi từ sau khi deploy bản mới).</p>
+                    ) : (
+                      <ul className="space-y-1.5 text-sm">
+                        {detailData.logins.map(l => (
+                          <li key={l.id} className="flex justify-between gap-3 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                            <span className="font-medium text-slate-800">{shortDeviceName(l.user_agent)}</span>
+                            <span className="text-slate-500 whitespace-nowrap">{l.signed_in_at ? new Date(l.signed_in_at).toLocaleString('vi-VN') : 'Chưa có'}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                  <section>
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-2 border-b border-slate-200 pb-2">Thao tác gần nhất (20)</h4>
+                    {detailData.actions.length === 0 ? (
+                      <p className="text-sm text-slate-500">Chưa có thao tác nào (log chỉ ghi từ sau khi chạy migration và deploy edge mới).</p>
+                    ) : (
+                      <ul className="space-y-1.5 text-sm">
+                        {detailData.actions.map(a => (
+                          <li key={a.id} className="flex flex-wrap justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                            <span className="font-bold text-slate-800">{ACTION_LABELS[a.action] || a.action}{a.target_id ? ` · Đơn #${a.target_id}` : ''}</span>
+                            <span className="text-slate-500">{a.created_at ? new Date(a.created_at).toLocaleString('vi-VN') : ''} · {RESULT_LABELS[a.result] || a.result || ''}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* TAB: NHAT KY THAO TAC (OWNER ONLY) */}
+      {/* ============================================================== */}
+      {activeTab === 'action_logs' && isOwner && (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80">
+            <h2 className="text-lg font-bold text-slate-800">Nhật ký thao tác đơn</h2>
+            <p className="text-sm text-slate-500 mt-1">Toàn bộ thao tác Gửi / Sửa / Hủy / In đơn của mọi tài khoản, mới nhất trước.</p>
+            <div className="flex flex-wrap gap-2 mt-4">
+              <select value={logFilterUser} onChange={(e) => setLogFilterUser(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none bg-white">
+                <option value="">Tất cả tài khoản</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.email}</option>)}
+              </select>
+              <select value={logFilterAction} onChange={(e) => setLogFilterAction(e.target.value)} className="px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none bg-white">
+                <option value="">Mọi hành động</option>
+                <option value="send">Gửi đơn</option>
+                <option value="edit">Sửa đơn</option>
+                <option value="cancel">Hủy đơn</option>
+                <option value="print">In đơn</option>
+              </select>
+              <input value={logFilterOrder} onChange={(e) => setLogFilterOrder(e.target.value)} placeholder="Lọc theo mã đơn..." className="px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none" />
+              <button onClick={() => fetchActionLogs(1)} disabled={logsLoading} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg disabled:opacity-50">Lọc</button>
+              <button onClick={() => fetchActionLogs(logPage)} disabled={logsLoading} className="px-3 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg disabled:opacity-50 flex items-center gap-1"><RefreshCcw size={14} /> Tải lại</button>
+            </div>
+            {logsLoading && logs.length === 0 ? (
+              <p className="text-sm text-slate-500 font-medium py-8 text-center flex items-center justify-center gap-2"><Loader2 size={15} className="animate-spin" /> Đang tải nhật ký...</p>
+            ) : logs.length === 0 ? (
+              <p className="text-sm text-slate-500 py-8 text-center">Chưa có thao tác nào (log chỉ ghi từ sau khi chạy migration và deploy edge mới).</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto mt-4">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                        <th className="py-3 px-4">Thời gian</th>
+                        <th className="py-3 px-4">Tài khoản</th>
+                        <th className="py-3 px-4">Hành động</th>
+                        <th className="py-3 px-4">Đơn</th>
+                        <th className="py-3 px-4">Kết quả</th>
+                        <th className="py-3 px-4">Chi tiết</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 text-slate-700">
+                      {logs.map(l => (
+                        <tr key={l.id}>
+                          <td className="py-2.5 px-4 whitespace-nowrap">{l.created_at ? new Date(l.created_at).toLocaleString('vi-VN') : ''}</td>
+                          <td className="py-2.5 px-4">{l.user_email || '—'}</td>
+                          <td className="py-2.5 px-4 font-bold">{ACTION_LABELS[l.action] || l.action}</td>
+                          <td className="py-2.5 px-4">{l.target_id || '—'}</td>
+                          <td className="py-2.5 px-4"><span className={`px-2 py-0.5 rounded text-xs font-bold ${l.result === 'failed' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>{RESULT_LABELS[l.result] || l.result || '—'}</span></td>
+                          <td className="py-2.5 px-4 text-slate-500">{fmtLogDetail(l)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center justify-between mt-4 text-sm">
+                  <span className="text-slate-500">Tổng {logsTotal} dòng · Trang {logPage} / {Math.max(1, Math.ceil(logsTotal / 50))}</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => fetchActionLogs(Math.max(1, logPage - 1))} disabled={logsLoading || logPage <= 1} className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold disabled:opacity-40">Trước</button>
+                    <button onClick={() => fetchActionLogs(logPage + 1)} disabled={logsLoading || logPage * 50 >= logsTotal} className="px-3 py-1.5 bg-white border border-slate-300 rounded-lg font-bold disabled:opacity-40">Sau</button>
+                  </div>
+                </div>
+              </>
             )}
           </div>
         </div>

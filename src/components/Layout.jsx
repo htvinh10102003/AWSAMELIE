@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { isAdminRole, isSuperAdminRole } from '../lib/roles';
 import { sessionRevokedKey, isRevokedAfterLogin } from '../lib/session';
+import { reportPresence, recordLoginHistory } from '../lib/presence';
 import { 
   TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
@@ -214,15 +215,26 @@ export default function Layout() {
 
     fetchUserAndConfigs();
 
+    // Hien dien: ghi nhan dang mo app ngay khi vao + moi 5 phut, de
+    // Owner xem duoc ai dang online o tab Quan ly Users.
+    reportPresence();
+    const presenceIntervalId = setInterval(() => { reportPresence(); }, 5 * 60 * 1000);
+
     // Kiem tra dinh ky + khi quay lai tab, de tai khoan bi xoa/doi quyen bi da ra trong vong ~1 phut
     // ngay ca khi realtime khong toi (vi du dang o tab khac).
     const intervalId = setInterval(() => { checkSessionValid(); }, 60000);
     const onFocus = () => { checkSessionValid(); };
     window.addEventListener('focus', onFocus);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!session) navigate('/login');
-      else { setUser(session.user); userRef.current = session.user; if (!sessionSnapshotRef.current) sessionSnapshotRef.current = { role: session.user.user_metadata?.role, isOwner: session.user.user_metadata?.is_owner === true }; }
+      else {
+        setUser(session.user); userRef.current = session.user;
+        if (!sessionSnapshotRef.current) sessionSnapshotRef.current = { role: session.user.user_metadata?.role, isOwner: session.user.user_metadata?.is_owner === true };
+        // Chi ghi khi dang nhap that (SIGNED_IN), khong ghi khi load lai
+        // trang (INITIAL_SESSION) hay refresh token (TOKEN_REFRESHED).
+        if (event === 'SIGNED_IN') { recordLoginHistory(); reportPresence(); }
+      }
     });
 
     const channel = supabase.channel('system_configs_listener')
@@ -267,6 +279,7 @@ export default function Layout() {
 
     return () => {
       clearInterval(intervalId);
+      clearInterval(presenceIntervalId);
       window.removeEventListener('focus', onFocus);
       subscription.unsubscribe();
       supabase.removeChannel(channel);
