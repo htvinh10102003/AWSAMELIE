@@ -13,6 +13,7 @@ alter table public.ecom_return_orders add column if not exists shop_id text;
 alter table public.ecom_return_orders add column if not exists business_id int;
 alter table public.ecom_return_orders add column if not exists return_type int;
 alter table public.ecom_return_orders add column if not exists original_ecom_order_id text;
+alter table public.ecom_return_orders add column if not exists return_tracking_number text;
 alter table public.ecom_return_orders add column if not exists reason_id text;
 alter table public.ecom_return_orders add column if not exists reason_name text;
 alter table public.ecom_return_orders add column if not exists amount double precision;

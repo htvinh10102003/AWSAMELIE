@@ -114,6 +114,12 @@ export default function Admin() {
   
   const [isSyncingReturns, setIsSyncingReturns] = useState(false);
   const [syncReturnsMessage, setSyncReturnsMessage] = useState({ text: '', type: '' });
+  const [syncReturnsFrom, setSyncReturnsFrom] = useState(() => {
+    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_ChiMinh' }).format(new Date());
+    const d = new Date(today + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 30);
+    return d.toISOString().slice(0, 10);
+  });
+  const [syncReturnsTo, setSyncReturnsTo] = useState(() => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_ChiMinh' }).format(new Date()));
 
   // --- BAO TRI (404) ---
   const [maintenanceOn, setMaintenanceOn] = useState(false);
@@ -719,6 +725,10 @@ export default function Admin() {
   };
 
   const handleSyncReturns = async () => {
+    if (syncReturnsFrom && syncReturnsTo && syncReturnsFrom > syncReturnsTo) {
+      setSyncReturnsMessage({ text: 'Từ ngày phải trước Đến ngày.', type: 'error' });
+      return;
+    }
     setIsSyncingReturns(true);
     const platforms = [{ id: 8195, name: 'Shopee' }, { id: 8855, name: 'TikTok' }, { id: 8142, name: 'Lazada' }];
     let total = 0; let hasError = false;
@@ -730,7 +740,7 @@ export default function Admin() {
             setSyncReturnsMessage({ text: `Đang cào dữ liệu ${platform.name} (Trang ${currentPage})... Đã kéo: ${total} đơn`, type: 'processing' });
             const res = await fetch(`${projectUrl}/functions/v1/sync-ecom-returns`, {
                 method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${anonKey}`, 'apikey': anonKey },
-                body: JSON.stringify({ platformId: platform.id, page: currentPage }) 
+                body: JSON.stringify({ platformId: platform.id, page: currentPage, fromDate: syncReturnsFrom || undefined, toDate: syncReturnsTo || undefined }) 
             });
             const textData = await res.text();
             let data;
@@ -1346,6 +1356,13 @@ export default function Admin() {
                 <div>
                   <h3 className="font-bold text-indigo-900 mb-1 flex items-center gap-2"><RefreshCcw size={16}/> Đồng bộ Đơn Trả Hàng (Returns)</h3>
                   <p className="text-xs text-indigo-700/70">Kéo danh sách hoàn hàng từ Shopee, TikTok, Lazada về hệ thống.</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-bold text-indigo-900">Từ ngày</span>
+                    <input type="date" value={syncReturnsFrom} onChange={e => setSyncReturnsFrom(e.target.value)} className="text-sm border border-indigo-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium bg-white" />
+                    <span className="text-xs font-bold text-indigo-900">Đến ngày</span>
+                    <input type="date" value={syncReturnsTo} onChange={e => setSyncReturnsTo(e.target.value)} className="text-sm border border-indigo-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium bg-white" />
+                    <span className="text-xs text-indigo-700/70">Theo ngày cập nhật trên Nhanh, mặc định 30 ngày gần nhất.</span>
+                  </div>
                   {syncReturnsMessage.text && <p className={`mt-2 text-xs font-bold ${syncReturnsMessage.type === 'error' ? 'text-red-500' : 'text-indigo-600'}`}>{syncReturnsMessage.text}</p>}
                 </div>
                 {cleanProgress && (

@@ -76,12 +76,24 @@ serve(async (req) => {
     const requested = Number(body.platformId);
     const platformIds = PLATFORMS[requested] ? [requested] : Object.keys(PLATFORMS).map(Number);
 
+    // Khoảng ngày do Admin chọn (yyyy-mm-dd, giờ VN, lọc theo ngày cập nhật trên Nhanh).
+    // Không truyền thì mặc định 30 ngày gần nhất (cron và nút bấm cũ vẫn chạy như trước).
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+    const fromDate = typeof body.fromDate === 'string' && body.fromDate ? body.fromDate : null;
+    const toDate = typeof body.toDate === 'string' && body.toDate ? body.toDate : null;
+    if (fromDate && !DATE_RE.test(fromDate)) throw new Error('fromDate không đúng định dạng yyyy-mm-dd');
+    if (toDate && !DATE_RE.test(toDate)) throw new Error('toDate không đúng định dạng yyyy-mm-dd');
+    const updatedFromAt = fromDate
+      ? Math.floor(Date.parse(`${fromDate}T00:00:00+07:00`) / 1000)
+      : Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+    const updatedToAt = toDate
+      ? Math.floor(Date.parse(`${toDate}T23:59:59+07:00`) / 1000)
+      : null;
+    if (updatedToAt !== null && updatedToAt < updatedFromAt) throw new Error('Đến ngày phải từ Từ ngày trở đi');
+
     const callNhanh = async (platformId: number, next: any) => {
-      // Chỉ kéo yêu cầu cập nhật trong 30 ngày gần nhất (Vinh chốt 2026-11-03:
-      // "kéo 1 tháng gần nhất thôi"; bản cũ là 7 ngày, bản đầu viết không lọc ngày).
-      const updatedFromAt = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
       const payload: any = {
-        filters: { appId: platformId, updatedFromAt },
+        filters: { appId: platformId, updatedFromAt, ...(updatedToAt !== null ? { updatedToAt } : {}) },
         paginator: { icpp: 50 },
       };
       // Phân trang cursor: gửi lại nguyên giá trị paginator.next mà Nhanh trả về
@@ -139,6 +151,7 @@ serve(async (req) => {
               business_id: item.businessId ?? null,
               return_type: item.returnType ?? null,
               original_ecom_order_id: str(item.originalEcomOrderId),
+              return_tracking_number: str(item.returnTrackingNumber),
               reason_id: str(item.reasonInfor?.reasonId),
               reason_name: item.reasonInfor?.reasonName ?? null,
               amount: item.amount ?? null,

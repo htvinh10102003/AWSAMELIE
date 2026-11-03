@@ -19,6 +19,7 @@ const KiemTraDonHoan = lazy(() => import('./pages/KiemTraDonHoan'));
 const UpdatePacker = lazy(() => import('./pages/UpdatePacker'));
 const UpdateProduct = lazy(() => import('./pages/UpdateProduct'));
 const ReturnProcessing = lazy(() => import('./pages/ReturnProcessing'));
+const TraHangHoanTien = lazy(() => import('./pages/TraHangHoanTien'));
 const PrintedOrdersToday = lazy(() => import('./pages/PrintedOrdersToday'));
 const UpdateWarehouseMap = lazy(() => import('./pages/UpdateWarehouseMap'));
 const ProductLocation = lazy(() => import('./pages/ProductLocation'));
@@ -133,6 +134,11 @@ export default function App() {
           <Route path="xu-ly-don-hoan" element={
             <FeatureGuard featureId="returns" subFeatureId="xu_ly">
               <ReturnProcessing />
+            </FeatureGuard>
+          } />
+          <Route path="tra-hang-hoan-tien" element={
+            <FeatureGuard featureId="returns" subFeatureId="tra_hang_hoan_tien">
+              <TraHangHoanTien />
             </FeatureGuard>
           } />
 

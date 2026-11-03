@@ -35,6 +35,7 @@ const ROUTE_TO_FEATURE_MAP = {
   '/bao-cao-hoan-tong-hop': { parent: 'return_orders', sub: 'bao_cao_hoan_tong_hop' },
   '/xu-ly-don-hoan': { parent: 'return_orders', sub: 'xu_ly_don_hoan' },
   '/kiem-tra-don-hoan': { parent: 'return_orders', sub: 'kiem_tra_don_hoan' },
+  '/tra-hang-hoan-tien': { parent: 'return_orders', sub: 'tra_hang_hoan_tien' },
 
   '/thong-ke-kiem-ke': { parent: 'inventory_check', sub: 'thong_ke_kiem_ke' },
   '/danh-sach-kiem-ke': { parent: 'inventory_check', sub: 'danh_sach_kiem_ke' },
@@ -143,7 +144,7 @@ export default function Layout() {
       dashboard: prev.dashboard || ['/', '/dashboard-', '/tra-cuu-luan-chuyen'].some(m => p.includes(m)),
       print_orders: prev.print_orders || ['/bao-cao-don', '/don-da-in-hom-nay', '/loc-don-theo-day-ke', '/chen-vi-tri-awb', '/in-don-spx'].some(m => p.includes(m)),
       packing: prev.packing || ['/dong-goi-', '/toc-do-dong-goi-'].some(m => p.includes(m)),
-      return_orders: prev.return_orders || ['/bao-cao-hoan-', '/kiem-tra-don-hoan', '/xu-ly-don-hoan'].some(m => p.includes(m)),
+      return_orders: prev.return_orders || ['/bao-cao-hoan-', '/kiem-tra-don-hoan', '/xu-ly-don-hoan', '/tra-hang-hoan-tien'].some(m => p.includes(m)),
       inventory_check: prev.inventory_check || ['/thong-ke-kiem-ke', '/danh-sach-kiem-ke'].some(m => p.includes(m)),
       inventory_report: prev.inventory_report || ['/bao-cao-ton-kho', '/vi-tri-san-pham'].some(m => p.includes(m)),
       complaints: prev.complaints || ['/tong-hop-khieu-nai', '/video-khieu-nai'].some(m => p.includes(m)),
@@ -472,11 +473,12 @@ export default function Layout() {
         },
         {
           id: 'return_orders', label: 'Báo cáo đơn hoàn', icon: Undo2,
-          matchRoutes: ['/bao-cao-hoan-', '/kiem-tra-don-hoan', '/xu-ly-don-hoan'],
+          matchRoutes: ['/bao-cao-hoan-', '/kiem-tra-don-hoan', '/xu-ly-don-hoan', '/tra-hang-hoan-tien'],
           subItems: [
             { path: '/bao-cao-hoan-tong-hop', label: 'Tổng hợp đơn hoàn', icon: BarChart3 },
             { path: '/xu-ly-don-hoan', label: 'Xử lý Đơn hoàn', icon: PackageMinus },
-            { path: '/kiem-tra-don-hoan', label: 'Kiểm tra & Chốt SL', icon: ScanLine }
+            { path: '/kiem-tra-don-hoan', label: 'Kiểm tra & Chốt SL', icon: ScanLine },
+            { path: '/tra-hang-hoan-tien', label: 'Trả hàng hoàn tiền', icon: Undo2 }
           ]
         },
         {
