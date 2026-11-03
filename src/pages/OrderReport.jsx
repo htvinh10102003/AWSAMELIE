@@ -2477,7 +2477,7 @@ export default function OrderReport() {
                                                 {(info?.description || info?.privateDescription || base.private_description) && (
                                                     <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
                                                         {info?.description && <p className="text-sm text-slate-700"><span className="font-bold">Ghi chú đơn: </span>{stripHtml(info.description)}</p>}
-                                                        {(info?.privateDescription || base.private_description) && <p className="text-sm text-slate-700"><span className="font-bold">Ghi chú nội bộ: </span>{stripHtml(info.privateDescription || base.private_description)}</p>}
+                                                        {(info?.privateDescription || base.private_description) && <p className="text-sm text-slate-700"><span className="font-bold">Ghi chú nội bộ: </span>{stripHtml(info?.privateDescription || base.private_description)}</p>}
                                                     </div>
                                                 )}
                                             </div>
