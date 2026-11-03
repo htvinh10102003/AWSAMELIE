@@ -192,17 +192,22 @@ serve(async (req) => {
       if (Array.isArray(payload.tagIds)) {
         info.tagIds = payload.tagIds.map((n: unknown) => parseInt(String(n), 10)).filter((n: number) => !Number.isNaN(n));
       }
-      if (Object.keys(info).length <= 1) {
+      // Ngay giao/hoan: Nhanh yeu cau ngay khi doi sang Thanh cong (60)
+      // hoac Da hoan (72); truong ngay duy nhat trong API sua don la
+      // carrier.deliveryDate (yyyy-mm-dd).
+      const carrier: Record<string, unknown> = {};
+      if (typeof payload.deliveryDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payload.deliveryDate)) carrier.deliveryDate = payload.deliveryDate;
+      if (Object.keys(info).length <= 1 && Object.keys(carrier).length === 0) {
         return json({ success: false, message: 'Chưa nhập thông tin nào cần sửa.' });
       }
-      const r = await callPos('/order/edit', { info });
+      const r = await callPos('/order/edit', Object.keys(carrier).length ? { info, carrier } : { info });
       if (r.code !== 1) return json({ success: false, message: nhanhErr(r) });
       // Chi ghi ten truong da doi, khong ghi noi dung ghi chu vao log.
       await logOrderActions([{
         action: 'edit',
         target_type: 'order',
         target_id: String(orderIds[0]),
-        details: { fields: Object.keys(info).filter((k) => k !== 'id'), status: info.status ?? null },
+        details: { fields: [...Object.keys(info).filter((k) => k !== 'id'), ...(Object.keys(carrier).length ? ['deliveryDate'] : [])], status: info.status ?? null },
         result: 'ok',
       }]);
       return json({ success: true, data: r.data });

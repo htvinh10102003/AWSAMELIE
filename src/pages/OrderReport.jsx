@@ -69,6 +69,9 @@ const LOCAL_STATUS_NAMES = {
     '71': 'Đang chuyển hoàn', '72': 'Đã chuyển hoàn', '73': 'Đổi kho xuất hàng', '74': 'Xác nhận hoàn'
 };
 
+// Thứ tự trạng thái trong dropdown Sửa đơn: theo luồng xử lý đơn.
+const EDIT_STATUS_ORDER = ['54', '55', '57', '56', '42', '40', '43', '59', '60', '61', '71', '74', '72', '68', '73', '58', '63', '64'];
+
 // Mặc định Admin > Cấu hình Lọc & Ưu tiên Đơn In khi chưa lưu cấu hình.
 const PRINT_ALLOWED_DEFAULT = ['54', '55', '56', '42', '40'];
 
@@ -308,6 +311,9 @@ export default function OrderReport() {
     const [editDescription, setEditDescription] = useState('');
     const [editPrivateDescription, setEditPrivateDescription] = useState('');
     const [editStatus, setEditStatus] = useState('');
+    // Ngày Nhanh yêu cầu khi đổi sang Thành công (60) / Đã hoàn (72),
+    // gửi qua carrier.deliveryDate (yyyy-mm-dd).
+    const [editDate, setEditDate] = useState('');
     const [cancelReason, setCancelReason] = useState('');
     // Lịch sử Nhanh.vn trong popup: mặc định ẩn, bấm mới tải về hiển thị.
     const [nhanhHistory, setNhanhHistory] = useState([]);
@@ -961,6 +967,7 @@ export default function OrderReport() {
             setEditDescription(stripHtml(detailOrder.description || ''));
             setEditPrivateDescription(stripHtml(detailOrder.private_description || ''));
             setEditStatus('');
+            setEditDate('');
         }
         if (kind === 'cancel') setCancelReason('');
         if (kind === 'send') setDetailSendDone(false);
@@ -971,6 +978,14 @@ export default function OrderReport() {
         if (editDescription !== stripHtml(detailOrder?.description || '')) body.description = editDescription;
         if (editPrivateDescription !== stripHtml(detailOrder?.private_description || '')) body.privateDescription = editPrivateDescription;
         if (editStatus) body.status = Number(editStatus);
+        // Thành công / Đã hoàn: Nhanh yêu cầu kèm ngày.
+        if (editStatus === '60' || editStatus === '72') {
+            if (!editDate) {
+                setDetailActionMsg(`Chọn ${editStatus === '60' ? 'ngày giao thành công' : 'ngày hoàn hàng'} vì Nhanh yêu cầu ngày khi đổi sang trạng thái này.`);
+                return;
+            }
+            body.deliveryDate = editDate;
+        }
         if (Object.keys(body).length === 0) {
             setDetailActionMsg('Chưa thay đổi thông tin nào.');
             return;
@@ -2455,14 +2470,28 @@ export default function OrderReport() {
                                             <label className="block text-xs font-bold text-slate-600">Ghi chú nội bộ</label>
                                             <textarea value={editPrivateDescription} onChange={(e) => setEditPrivateDescription(e.target.value)} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500" />
                                             <label className="block text-xs font-bold text-slate-600">Trạng thái</label>
-                                            <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500">
+                                            <select value={editStatus} onChange={(e) => {
+                                                const v = e.target.value;
+                                                setEditStatus(v);
+                                                // Chọn 60/72 thì mặc định ngày hôm nay (theo giờ VN),
+                                                // Vinh sửa lại nếu ngày giao/hoàn khác.
+                                                if ((v === '60' || v === '72') && !editDate) {
+                                                    const d = new Date();
+                                                    setEditDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+                                                }
+                                            }} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500">
                                                 <option value="">Giữ nguyên trạng thái</option>
-                                                <option value="56">Đã xác nhận</option>
-                                                <option value="60">Thành công</option>
-                                                <option value="63">Khách hủy</option>
-                                                <option value="64">Hệ thống hủy</option>
+                                                {EDIT_STATUS_ORDER.map(code => (
+                                                    <option key={code} value={code}>{code} - {LOCAL_STATUS_NAMES[code]}</option>
+                                                ))}
                                             </select>
-                                            <p className="text-xs text-slate-500">Nhanh.vn không cho sửa đơn đã gửi sang hãng, đơn Thành công hoặc đơn đã hoàn — trường hợp đó sẽ báo lỗi từ Nhanh.</p>
+                                            {(editStatus === '60' || editStatus === '72') && (
+                                                <>
+                                                    <label className="block text-xs font-bold text-slate-600">{editStatus === '60' ? 'Ngày giao thành công' : 'Ngày hoàn hàng'} (Nhanh yêu cầu)</label>
+                                                    <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500" />
+                                                </>
+                                            )}
+                                            <p className="text-xs text-slate-500">Nhanh.vn không cho sửa đơn đã gửi sang hãng, đơn Thành công hoặc đơn đã hoàn — trường hợp đó sẽ báo lỗi từ Nhanh. Một số trạng thái do hãng tự cập nhật (Chờ thu gom, Đang chuyển...) Nhanh có thể từ chối nếu đổi tay.</p>
                                             <button onClick={handleSaveEdit} disabled={detailActionLoading} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
                                                 {detailActionLoading && <RefreshCw size={14} className="animate-spin" />} Lưu thay đổi
                                             </button>
