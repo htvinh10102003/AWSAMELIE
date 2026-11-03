@@ -966,6 +966,8 @@ export default function OrderReport() {
         if (kind === 'edit' && detailOrder) {
             setEditDescription(stripHtml(detailOrder.description || ''));
             setEditPrivateDescription(stripHtml(detailOrder.private_description || ''));
+        }
+        if (kind === 'status') {
             setEditStatus('');
             setEditDate('');
         }
@@ -977,15 +979,6 @@ export default function OrderReport() {
         const body = {};
         if (editDescription !== stripHtml(detailOrder?.description || '')) body.description = editDescription;
         if (editPrivateDescription !== stripHtml(detailOrder?.private_description || '')) body.privateDescription = editPrivateDescription;
-        if (editStatus) body.status = Number(editStatus);
-        // Thành công / Đã hoàn: Nhanh yêu cầu kèm ngày.
-        if (editStatus === '60' || editStatus === '72') {
-            if (!editDate) {
-                setDetailActionMsg(`Chọn ${editStatus === '60' ? 'ngày giao thành công' : 'ngày hoàn hàng'} vì Nhanh yêu cầu ngày khi đổi sang trạng thái này.`);
-                return;
-            }
-            body.deliveryDate = editDate;
-        }
         if (Object.keys(body).length === 0) {
             setDetailActionMsg('Chưa thay đổi thông tin nào.');
             return;
@@ -998,11 +991,38 @@ export default function OrderReport() {
                 const patch = {};
                 if (body.description !== undefined) patch.description = body.description;
                 if (body.privateDescription !== undefined) patch.private_description = body.privateDescription;
-                if (body.status !== undefined) patch.status = body.status;
                 patchDetailRow(patch);
                 setSpecialReloadToken(t => t + 1);
                 setDetailActionMsg('Đã lưu thay đổi lên Nhanh.vn.');
             } else setDetailActionMsg(result.message || 'Nhanh.vn từ chối lưu thay đổi.');
+        } catch (err) {
+            setDetailActionMsg(`Lỗi hệ thống: ${err.message}`);
+        } finally {
+            setDetailActionLoading(false);
+        }
+    };
+    // Đổi trạng thái riêng (tách khỏi Sửa đơn): chỉ gửi status (+ ngày
+    // khi sang 60/72, Nhanh yêu cầu ngày cho 2 trạng thái này).
+    const handleSaveStatus = async () => {
+        if (!editStatus) {
+            setDetailActionMsg('Chọn 1 trạng thái trong danh sách.');
+            return;
+        }
+        if ((editStatus === '60' || editStatus === '72') && !editDate) {
+            setDetailActionMsg(`Chọn ${editStatus === '60' ? 'ngày giao thành công' : 'ngày hoàn hàng'} vì Nhanh yêu cầu ngày khi đổi sang trạng thái này.`);
+            return;
+        }
+        const body = { status: Number(editStatus) };
+        if (editStatus === '60' || editStatus === '72') body.deliveryDate = editDate;
+        setDetailActionLoading(true);
+        setDetailActionMsg('');
+        try {
+            const result = await callNhanhOrderAction('edit', body);
+            if (result.success) {
+                patchDetailRow({ status: body.status });
+                setSpecialReloadToken(t => t + 1);
+                setDetailActionMsg('Đã đổi trạng thái trên Nhanh.vn.');
+            } else setDetailActionMsg(result.message || 'Nhanh.vn từ chối đổi trạng thái.');
         } catch (err) {
             setDetailActionMsg(`Lỗi hệ thống: ${err.message}`);
         } finally {
@@ -2446,6 +2466,7 @@ export default function OrderReport() {
                                                 <button onClick={() => openDetailAction('send')} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Gửi đơn</button>
                                             )}
                                             <button onClick={() => openDetailAction('edit')} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Sửa đơn</button>
+                                            <button onClick={() => openDetailAction('status')} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Đổi trạng thái</button>
                                             <button onClick={() => { setShowDetailActionMenu(false); openNhanhPrint([{ id: detailOrder.id, carrier_code: detailOrder.carrier_code || '' }], 'A4'); }} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">In đơn</button>
                                             <button onClick={() => openDetailAction('cancel')} className="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50">Hủy đơn</button>
                                         </div>
@@ -2458,6 +2479,7 @@ export default function OrderReport() {
                                     <div className="flex items-center justify-between">
                                         <h4 className="text-sm font-bold text-slate-800">
                                             {detailAction === 'edit' && 'Sửa đơn trên Nhanh'}
+                                            {detailAction === 'status' && 'Đổi trạng thái trên Nhanh'}
                                             {detailAction === 'send' && 'Gửi đơn sang hãng vận chuyển'}
                                             {detailAction === 'cancel' && 'Hủy đơn trên Nhanh'}
                                         </h4>
@@ -2469,31 +2491,41 @@ export default function OrderReport() {
                                             <textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500" />
                                             <label className="block text-xs font-bold text-slate-600">Ghi chú nội bộ</label>
                                             <textarea value={editPrivateDescription} onChange={(e) => setEditPrivateDescription(e.target.value)} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500" />
-                                            <label className="block text-xs font-bold text-slate-600">Trạng thái</label>
-                                            <select value={editStatus} onChange={(e) => {
-                                                const v = e.target.value;
-                                                setEditStatus(v);
-                                                // Chọn 60/72 thì mặc định ngày hôm nay (theo giờ VN),
-                                                // Vinh sửa lại nếu ngày giao/hoàn khác.
-                                                if ((v === '60' || v === '72') && !editDate) {
-                                                    const d = new Date();
-                                                    setEditDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
-                                                }
-                                            }} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500">
-                                                <option value="">Giữ nguyên trạng thái</option>
-                                                {EDIT_STATUS_ORDER.map(code => (
-                                                    <option key={code} value={code}>{code} - {LOCAL_STATUS_NAMES[code]}</option>
-                                                ))}
-                                            </select>
+                                            <p className="text-xs text-slate-500">Nhanh.vn không cho sửa đơn đã gửi sang hãng, đơn Thành công hoặc đơn đã hoàn — trường hợp đó sẽ báo lỗi từ Nhanh.</p>
+                                            <button onClick={handleSaveEdit} disabled={detailActionLoading} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
+                                                {detailActionLoading && <RefreshCw size={14} className="animate-spin" />} Lưu thay đổi
+                                            </button>
+                                        </div>
+                                    )}
+                                    {detailAction === 'status' && (
+                                        <div className="space-y-2">
+                                            <p className="text-xs font-medium text-slate-600">Trạng thái hiện tại: <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${STATUS_COLORS[detailOrder?.status] || 'bg-gray-100 text-gray-600 border border-gray-200'}`}>{LOCAL_STATUS_NAMES[String(detailOrder?.status)] || detailOrder?.status}</span></p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                {EDIT_STATUS_ORDER.map(code => {
+                                                    const selected = editStatus === code;
+                                                    return (
+                                                        <button key={code} onClick={() => {
+                                                            setEditStatus(code);
+                                                            if ((code === '60' || code === '72') && !editDate) {
+                                                                const d = new Date();
+                                                                setEditDate(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+                                                            }
+                                                        }} className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-left text-sm font-medium transition ${selected ? 'border-blue-500 bg-blue-50 text-blue-800 ring-1 ring-blue-500' : 'border-slate-200 bg-white text-slate-700 hover:border-slate-400 hover:bg-slate-50'}`}>
+                                                            <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium shrink-0 ${STATUS_COLORS[code] || 'bg-gray-100 text-gray-600 border border-gray-200'}`}>{LOCAL_STATUS_NAMES[code]}</span>
+                                                            <span className="text-xs text-slate-400">{code}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
                                             {(editStatus === '60' || editStatus === '72') && (
                                                 <>
                                                     <label className="block text-xs font-bold text-slate-600">{editStatus === '60' ? 'Ngày giao thành công' : 'Ngày hoàn hàng'} (Nhanh yêu cầu)</label>
                                                     <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500" />
                                                 </>
                                             )}
-                                            <p className="text-xs text-slate-500">Nhanh.vn không cho sửa đơn đã gửi sang hãng, đơn Thành công hoặc đơn đã hoàn — trường hợp đó sẽ báo lỗi từ Nhanh. Một số trạng thái do hãng tự cập nhật (Chờ thu gom, Đang chuyển...) Nhanh có thể từ chối nếu đổi tay.</p>
-                                            <button onClick={handleSaveEdit} disabled={detailActionLoading} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
-                                                {detailActionLoading && <RefreshCw size={14} className="animate-spin" />} Lưu thay đổi
+                                            <p className="text-xs text-slate-500">Một số trạng thái do hãng tự cập nhật (Chờ thu gom, Đang chuyển...) Nhanh có thể từ chối nếu đổi tay.</p>
+                                            <button onClick={handleSaveStatus} disabled={detailActionLoading} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
+                                                {detailActionLoading && <RefreshCw size={14} className="animate-spin" />} Lưu trạng thái
                                             </button>
                                         </div>
                                     )}
