@@ -5,6 +5,7 @@ import { readBarcodesFromImageData, setZXingModuleOverrides } from 'zxing-wasm/r
 import zxingReaderWasmUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
 import { supabase } from '../lib/supabase';
 import { getUserRole, isAdminRole, isSuperAdminRole, roleLabel } from '../lib/roles';
+import { getMaintenanceMode, setMaintenanceMode } from '../lib/maintenance';
 
 // Giao diện điện thoại riêng, chỉ xem nhanh và thao tác gọn trên điện thoại.
 // - Đơn in: thẻ đơn chỉ ID, sản phẩm, trạng thái (kèm mã vận đơn nhỏ nếu có
@@ -140,6 +141,9 @@ export default function Mobile() {
     const [locksMessage, setLocksMessage] = useState('');
     const [locksSaving, setLocksSaving] = useState(false);
     const [settingsLoaded, setSettingsLoaded] = useState(false);
+    const [maintenanceOn, setMaintenanceOn] = useState(false);
+    const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+    const [maintenanceMsg, setMaintenanceMsg] = useState('');
 
     const user = session?.user || null;
     const role = getUserRole(user);
@@ -571,6 +575,7 @@ export default function Mobile() {
                 setThemes(initial);
             }
             if (isOwnerUser) {
+                setMaintenanceOn(await getMaintenanceMode());
                 const { data } = await supabase.from('system_configs').select('key, value').in('key', ['global_banner', 'global_notification']);
                 data?.forEach(row => {
                     try {
@@ -590,6 +595,25 @@ export default function Mobile() {
                 setLocks(initialLocks);
             }
         } catch (e) {}
+    };
+
+    // --- BAO TRI (404) tren mobile: chi Owner moi duoc bat/tat, dung chung
+    // ham setMaintenanceMode voi Admin desktop (ghi system_configs).
+    const handleToggleMaintenance = async () => {
+        if (!isOwnerUser) return;
+        const turningOn = !maintenanceOn;
+        if (turningOn && !window.confirm('Bật chế độ bảo trì? Khi bật, tất cả mọi người trừ Owner sẽ chỉ thấy màn hình 404, kể cả trang đăng nhập. Owner vẫn vào được để tắt lại.')) return;
+        setMaintenanceLoading(true);
+        setMaintenanceMsg('');
+        try {
+            await setMaintenanceMode(turningOn);
+            setMaintenanceOn(turningOn);
+            setMaintenanceMsg(turningOn ? 'Đã bật bảo trì: mọi người khác đang thấy trang 404.' : 'Đã tắt bảo trì: web đã mở lại bình thường.');
+        } catch (err) {
+            setMaintenanceMsg('Lỗi: ' + (err.message || err));
+        } finally {
+            setMaintenanceLoading(false);
+        }
     };
 
     const saveThemes = async () => {
@@ -989,6 +1013,22 @@ export default function Mobile() {
                             {pwMessage && <div className={`text-sm font-medium ${pwMessage.startsWith('Đã') ? 'text-green-700' : 'text-red-700'}`}>{pwMessage}</div>}
                             <button onClick={handleLogout} className="w-full py-3 bg-red-50 border border-red-200 rounded-xl text-sm font-bold text-red-700 flex items-center justify-center gap-2"><LogOut size={16} /> Đăng xuất</button>
                         </Section>
+
+                        {isOwnerUser && (
+                            <Section icon={AlertTriangle} title="Bảo trì (404)">
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm font-medium text-slate-800">Trạng thái</span>
+                                    <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${maintenanceOn ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                                        {maintenanceOn ? 'Đang bật bảo trì' : 'Đang tắt bảo trì'}
+                                    </span>
+                                </div>
+                                <button onClick={handleToggleMaintenance} disabled={maintenanceLoading} className={`w-full py-3 rounded-xl text-sm font-bold disabled:opacity-50 ${maintenanceOn ? 'bg-slate-900 text-white' : 'bg-red-600 text-white'}`}>
+                                    {maintenanceLoading ? 'Đang xử lý...' : maintenanceOn ? 'Tắt bảo trì' : 'Bật bảo trì (hiện 404)'}
+                                </button>
+                                {maintenanceMsg && <div className="text-sm font-medium text-slate-700">{maintenanceMsg}</div>}
+                                <p className="text-xs text-slate-500">Lưu ý: đang bật bảo trì thì đừng đăng xuất, nếu không sẽ không đăng nhập lại được bằng web (phải tắt bằng SQL Editor).</p>
+                            </Section>
+                        )}
 
                         {isAdminOrOwner && (
                             <Section icon={FileSpreadsheet} title="Quét Google Sheet">
