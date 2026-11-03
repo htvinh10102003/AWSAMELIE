@@ -25,17 +25,30 @@ const CHANNEL_COLORS = {
     '52': 'bg-green-100 text-green-700 border-green-200'
 };
 
+// Màu badge trạng thái theo mã Nhanh.vn (bảng màu Vinh chốt 2026-11-03).
+// Khách/HVC/Hệ thống hủy: đen nhạt; Đang chuyển: xanh lá đậm;
+// Đang hoàn/Xác nhận hoàn: vàng nhạt; Đã hoàn: cam;
+// Đã đóng gói: nâu; Đang đóng gói: xám; Chờ thu gom: hồng;
+// Đơn mới: xanh dương; Thành công: xanh lá; Thất bại: tím.
 const STATUS_COLORS = {
-    '1': 'bg-blue-700 text-white shadow-sm',
-    '2': 'bg-orange-500 text-white shadow-sm',
-    '3': 'bg-blue-100 text-blue-800 border border-blue-300',
-    '4': 'bg-gray-500 text-white shadow-sm',
-    '5': 'bg-[#8B4513] text-white shadow-sm',
-    '6': 'bg-green-600 text-white shadow-sm',
-    '7': 'bg-teal-600 text-white shadow-sm',
-    '8': 'bg-rose-100 text-rose-700 border border-rose-300',
-    '9': 'bg-red-600 text-white shadow-sm',
-    '10': 'bg-orange-100 text-orange-700',
+    '40': 'bg-[#8B4513] text-white shadow-sm',
+    '42': 'bg-gray-500 text-white shadow-sm',
+    '43': 'bg-pink-500 text-white shadow-sm',
+    '54': 'bg-blue-600 text-white shadow-sm',
+    '55': 'bg-sky-500 text-white shadow-sm',
+    '56': 'bg-cyan-600 text-white shadow-sm',
+    '57': 'bg-amber-100 text-amber-800 border border-amber-300',
+    '58': 'bg-zinc-700 text-white shadow-sm',
+    '59': 'bg-green-800 text-white shadow-sm',
+    '60': 'bg-green-500 text-white shadow-sm',
+    '61': 'bg-purple-600 text-white shadow-sm',
+    '63': 'bg-zinc-700 text-white shadow-sm',
+    '64': 'bg-zinc-700 text-white shadow-sm',
+    '68': 'bg-red-100 text-red-700 border border-red-200',
+    '71': 'bg-yellow-100 text-yellow-800 border border-yellow-300',
+    '72': 'bg-orange-500 text-white shadow-sm',
+    '73': 'bg-slate-200 text-slate-700 border border-slate-300',
+    '74': 'bg-yellow-100 text-yellow-800 border border-yellow-300',
 };
 
 const DEPOT_NAMES = {
@@ -2110,7 +2123,7 @@ export default function OrderReport() {
                                         <th className="py-3 px-4 font-semibold min-w-[200px]">Sản phẩm</th>
                                         <th className="py-3 px-4 font-semibold text-center whitespace-nowrap w-24">Số lượng</th>
                                         
-                                        {specialMode && <th className="py-3 px-4 font-semibold whitespace-nowrap">Tình trạng kho</th>}
+                                        {specialMode && <th className="py-3 px-4 font-semibold whitespace-nowrap">Tình trạng kho / Ngày tồn</th>}
                                         {!specialMode && visibleCols.includes('aging') && <th className="py-3 px-4 font-semibold whitespace-nowrap">{activeTab === 'printable' ? 'Ngày tồn' : 'Kho / Thiếu'}</th>}
                                         {visibleCols.includes('creator') && <th className="py-3 px-4 font-semibold text-center whitespace-nowrap">Nhân viên</th>}
                                     </tr>
@@ -2243,6 +2256,13 @@ export default function OrderReport() {
                                                     {specialMode && index === 0 && (
                                                         <td rowSpan={rowCount} className="py-3 px-4 align-top">
                                                             {getStockBadge(order)}
+                                                            {/* Chỉ đơn đủ hàng mới có ngày tồn, lấy từ dòng allocation
+                                                                (cùng giá trị printable_date như báo cáo cũ); không có
+                                                                ngày thì chỉ hiện badge kho, không đoán "Hôm nay". */}
+                                                            {getStockInfo(order).key === 'printable' && (() => {
+                                                                const agingDate = allocationStockById.get(order.id)?.order?.printable_date;
+                                                                return agingDate ? <div className="mt-1.5">{renderAgingBadge(agingDate)}</div> : null;
+                                                            })()}
                                                         </td>
                                                     )}
                                                     {!specialMode && visibleCols.includes('aging') && (
@@ -2339,11 +2359,9 @@ export default function OrderReport() {
                 const rawProducts = rawData?.products || null;
                 const statusName = specialStatusName(base.status);
                 const channelName = SALE_CHANNELS[base.sale_channel] || base.sale_channel || 'Khác';
-                const stockInfo = getStockInfo(detailOrder);
                 const productsForPopup = rawProducts || (base.order_products || []).map(p => ({
                     name: p.product_name, code: p.product_code, quantity: p.quantity
                 }));
-                const totalQty = productsForPopup.reduce((s, p) => s + (Number(p.quantity) || 0), 0);
                 const totalAmount = rawProducts
                     ? rawProducts.reduce((s, p) => s + (Number(p.price) || 0) * (Number(p.quantity) || 0), 0)
                     : null;
@@ -2358,11 +2376,15 @@ export default function OrderReport() {
                 );
                 return (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50" onClick={() => setDetailOrder(null)}>
-                        <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+                        <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
                             <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-start bg-slate-50">
                                 <div>
                                     <h3 className="font-bold text-lg text-slate-800">Chi tiết đơn hàng #{detailOrder.id}</h3>
-                                    <p className="text-sm text-slate-500 mt-0.5">Trạng thái: {statusName} &nbsp;|&nbsp; Kênh: {channelName} &nbsp;|&nbsp; Tình trạng kho: {stockInfo.label}</p>
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                        <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${STATUS_COLORS[base.status] || 'bg-gray-100 text-gray-600 border border-gray-200'}`}>{statusName}</span>
+                                        <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium border ${CHANNEL_COLORS[base.sale_channel] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>{channelName}</span>
+                                        {getStockBadge(detailOrder)}
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0 relative">
                                     <button onClick={() => setShowDetailActionMenu(v => !v)} className="px-3 py-1.5 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800">Thao tác</button>
@@ -2437,190 +2459,229 @@ export default function OrderReport() {
                                     {detailActionMsg && <p className="text-sm font-medium text-slate-700">{detailActionMsg}</p>}
                                 </div>
                             )}
-                            <div className="p-5 overflow-y-auto space-y-6">
-                                {detailLoading && <p className="text-sm text-slate-500 font-medium flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Đang tải đầy đủ chi tiết...</p>}
+                            <div className="p-5 overflow-y-auto">
+                                {detailLoading && <p className="text-sm text-slate-500 font-medium flex items-center gap-2 mb-4"><RefreshCw size={15} className="animate-spin" /> Đang tải đầy đủ chi tiết...</p>}
 
-                                <section>
-                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Thông tin đơn</h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-                                        <DetailRow label="ID hệ thống" value={String(info?.id ?? base.id)} />
-                                        <DetailRow label="ID đơn sàn" value={base.ecom_order_id ? String(base.ecom_order_id) : (channel?.ecomOrderId ? String(channel.ecomOrderId) : 'Chưa có')} />
-                                        <DetailRow label="Trạng thái" value={statusName} />
-                                        <DetailRow label="Kênh bán" value={channelName} />
-                                        {channel?.trafficSource?.name && <DetailRow label="Nguồn khách" value={channel.trafficSource.name} />}
-                                        <DetailRow label="Kho xuất" value={DEPOT_NAMES[String(base.depot_id)] || String(base.depot_id)} />
-                                        <DetailRow label="Nhân viên tạo" value={info?.createdBy?.name || base.created_by_name || 'Hệ thống'} />
-                                        <DetailRow label="Ngày tạo" value={info?.createdAt ? fmtUnix(info.createdAt) : fmtDateStr(base.created_at)} />
-                                        <DetailRow label="Ngày cập nhật" value={info?.updatedAt ? fmtUnix(info.updatedAt) : fmtDateStr(base.updated_at)} />
-                                        <DetailRow label="Ngày đóng gói" value={info?.packedAt ? fmtUnix(info.packedAt) : (base.packed_at ? fmtDateStr(base.packed_at) : 'Chưa có')} />
-                                        <DetailRow label="Ngày in" value={base.printed_at ? fmtDateStr(base.printed_at) : 'Chưa in'} />
-                                        <DetailRow label="Ngày đi" value={base.carrier_date ? fmtDateStr(base.carrier_date) : 'Chưa có'} />
-                                        {info?.description && <DetailRow label="Mô tả đơn" value={stripHtml(info.description)} />}
-                                        {(info?.privateDescription || base.private_description) && <DetailRow label="Ghi chú nội bộ" value={stripHtml(info?.privateDescription || base.private_description)} />}
-                                        {payment && <DetailRow label="VAT" value={fmtMoney(payment.vat?.amount)} />}
-                                        {payment && <DetailRow label="Tiền cọc" value={fmtMoney(payment.deposit?.amount)} />}
-                                        {payment && <DetailRow label="Tiền chuyển khoản" value={fmtMoney(payment.transfer?.amount)} />}
-                                        {payment && <DetailRow label="Chiết khấu đơn" value={fmtMoney(payment.discount?.amount)} />}
-                                        {payment && <DetailRow label="Điểm đã dùng" value={`${fmtMoney(payment.usedPoints?.amount)} (${payment.usedPoints?.points ?? 'Chưa có'} điểm)`} />}
-                                    </div>
-                                </section>
-
-                                <section>
-                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Thông tin khách hàng</h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-                                        <DetailRow label="Người nhận" value={shipAddr?.name || 'Chưa có'} />
-                                        <DetailRow label="Số điện thoại" value={shipAddr?.mobile || 'Chưa có'} />
-                                        <DetailRow label="Địa chỉ" value={shipAddr?.address || 'Chưa có'} />
-                                        <DetailRow label="Tỉnh / Huyện / Phường" value={shipAddr ? `${shipAddr.cityId ?? 'Chưa có'} / ${shipAddr.districtId ?? 'Chưa có'} / ${shipAddr.wardId ?? 'Chưa có'}` : 'Chưa có'} />
-                                    </div>
-                                </section>
-
-                                <section>
-                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Cước, vận chuyển &amp; mã vận đơn</h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
-                                        <DetailRow label="Hãng vận chuyển" value={carrier?.name || base.carrier_name || 'Chưa có'} />
-                                        <DetailRow label="Mã vận đơn" value={carrier?.carrierCode || base.carrier_code || 'Chưa có'} />
-                                        {carrier?.service?.name && <DetailRow label="Dịch vụ" value={carrier.service.name} />}
-                                        <DetailRow label="Phí ship" value={carrier ? fmtMoney(carrier.shipFee) : 'Chưa có'} />
-                                        <DetailRow label="Phí COD" value={carrier ? fmtMoney(carrier.codFee) : 'Chưa có'} />
-                                        <DetailRow label="Phí trả hàng" value={carrier ? fmtMoney(carrier.returnFee) : 'Chưa có'} />
-                                        <DetailRow label="Phí khai giá" value={carrier ? fmtMoney(carrier.declaredFee) : 'Chưa có'} />
-                                        <DetailRow label="Phí ship khách trả" value={carrier ? fmtMoney(carrier.customerShipFee) : 'Chưa có'} />
-                                        <DetailRow label="Phí vượt cân" value={carrier ? fmtMoney(carrier.overWeightShipFee) : 'Chưa có'} />
-                                        <DetailRow label="Khối lượng" value={carrier ? fmtWeight(carrier.weight) : 'Chưa có'} />
-                                        <DetailRow label="Ngày gửi hãng" value={carrier?.sendCarrier?.date ? fmtDateOnly(carrier.sendCarrier.date) : 'Chưa có'} />
-                                        <DetailRow label="Ngày giao dự kiến" value={carrier?.deliveryDate ? fmtDateOnly(carrier.deliveryDate) : 'Chưa có'} />
-                                        {base.tracking_url && (
-                                            <div className="py-2 sm:col-span-2">
-                                                <a href={base.tracking_url} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-700 hover:underline">Tra cứu vận đơn trên Nhanh.vn</a>
-                                            </div>
-                                        )}
-                                    </div>
-                                </section>
-
-                                <section>
-                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Thông tin sản phẩm ({totalQty} sản phẩm)</h4>
-                                    {productsForPopup.length === 0 ? (
-                                        <p className="text-sm text-slate-500 font-medium">Đơn này chưa có danh sách sản phẩm trong bảng orders.</p>
-                                    ) : (
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-sm">
-                                                <thead>
-                                                    <tr className="text-left text-slate-500 border-b border-slate-200">
-                                                        <th className="py-2 pr-3 font-semibold">Sản phẩm</th>
-                                                        <th className="py-2 pr-3 font-semibold">Mã</th>
-                                                        <th className="py-2 pr-3 font-semibold text-right">Đơn giá</th>
-                                                        <th className="py-2 pr-3 font-semibold text-right">Chiết khấu</th>
-                                                        <th className="py-2 pr-3 font-semibold text-center">Số lượng</th>
-                                                        <th className="py-2 font-semibold text-center">Tồn kho</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100">
-                                                    {productsForPopup.map((p, idx) => (
-                                                        <tr key={idx}>
-                                                            <td className="py-2 pr-3 font-semibold text-slate-800">{p.name}</td>
-                                                            <td className="py-2 pr-3 font-mono text-xs text-slate-500">{p.code}</td>
-                                                            <td className="py-2 pr-3 text-right">{p.price !== undefined ? fmtMoney(p.price) : 'Chưa có'}</td>
-                                                            <td className="py-2 pr-3 text-right">{p.discount !== undefined ? fmtMoney(p.discount) : 'Chưa có'}</td>
-                                                            <td className="py-2 pr-3 text-center font-bold">{p.quantity} {p.unit?.name || 'chiếc'}</td>
-                                                            <td className="py-2 text-center">{p.available !== undefined ? (Number(p.available) === 0 ? 'Hết hàng (0)' : String(p.available)) : 'Chưa có'}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                    {totalAmount !== null && (
-                                        <div className="mt-3 space-y-1 text-sm">
-                                            <div className="flex justify-between"><span className="text-slate-500 font-medium">Tổng tiền sản phẩm</span><span className="font-bold text-slate-800">{fmtMoney(totalAmount)}</span></div>
-                                            <div className="flex justify-between"><span className="text-slate-500 font-medium">Tổng chiết khấu sản phẩm</span><span className="font-bold text-slate-800">{fmtMoney(totalDiscount)}</span></div>
-                                        </div>
-                                    )}
-                                </section>
-
-                                <section>
-                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Lịch sử đơn hàng</h4>
-                                    {detailHistoryLoading ? (
-                                        <p className="text-sm text-slate-500 font-medium flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Đang tải lịch sử...</p>
-                                    ) : detailHistory.length === 0 ? (
-                                        <div>
-                                            <p className="text-sm text-slate-500 font-medium mb-4">Chưa có lịch sử trong bảng order_histories, chỉ có mốc tạo đơn:</p>
-                                            <ol className="relative border-l-2 border-slate-200 ml-2 space-y-4">
-                                                <li className="pl-5 relative">
-                                                    <span className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-slate-900 border-2 border-white shadow" />
-                                                    <p className="text-xs font-medium text-slate-500">{fmtDateStr(base.created_at)}</p>
-                                                    <p className="text-sm font-semibold text-slate-800">Tạo đơn: {statusName}</p>
-                                                    <p className="text-xs text-slate-500">Bởi: {base.created_by_name || 'Hệ thống'}</p>
-                                                </li>
-                                            </ol>
-                                        </div>
-                                    ) : (
-                                        <ol className="relative border-l-2 border-slate-200 ml-2 space-y-4">
-                                            {detailHistory.map(h => {
-                                                const fromName = h.status_old !== null && h.status_old !== undefined ? specialStatusName(String(h.status_old)) : null;
-                                                const toName = h.status_new !== null && h.status_new !== undefined ? specialStatusName(String(h.status_new)) : null;
-                                                const text = fromName && toName
-                                                    ? `${fromName} → ${toName}`
-                                                    : toName
-                                                        ? (fromName ? `Chuyển sang: ${toName}` : `Tạo đơn: ${toName}`)
-                                                        : 'Cập nhật đơn';
-                                                return (
-                                                    <li key={h.id} className="pl-5 relative">
-                                                        <span className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-slate-900 border-2 border-white shadow" />
-                                                        <p className="text-xs font-medium text-slate-500">{fmtDateStr(h.created_at)}</p>
-                                                        <p className="text-sm font-semibold text-slate-800">{text}</p>
-                                                        <p className="text-xs text-slate-500">Bởi: {h.created_by_name || 'Hệ thống'}</p>
-                                                    </li>
-                                                );
-                                            })}
-                                        </ol>
-                                    )}
-                                </section>
-
-                                <section>
-                                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-1 border-b border-slate-200 pb-2">Lịch sử Nhanh.vn</h4>
-                                    {!nhanhHistoryLoaded ? (
-                                        <div className="space-y-2">
-                                            <p className="text-sm text-slate-500">Lịch sử này lấy trực tiếp từ Nhanh.vn, không tự tải khi mở popup.</p>
-                                            <button onClick={handleLoadNhanhHistory} disabled={nhanhHistoryLoading} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
-                                                {nhanhHistoryLoading && <RefreshCw size={14} className="animate-spin" />} Tải lịch sử Nhanh
-                                            </button>
-                                            {nhanhHistoryMsg && <p className="text-sm font-medium text-slate-700">{nhanhHistoryMsg}</p>}
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                {['all', 'Nhanh', 'Hãng vận chuyển'].map(src => (
-                                                    <button key={src} onClick={() => setNhanhHistorySource(src)} className={`px-3 py-1 rounded-full text-xs font-bold ${nhanhHistorySource === src ? 'bg-slate-900 text-white' : 'bg-white border border-slate-300 text-slate-600'}`}>
-                                                        {src === 'all' ? 'Tất cả' : src}
-                                                    </button>
-                                                ))}
-                                                <button onClick={handleLoadNhanhHistory} disabled={nhanhHistoryLoading} className="px-3 py-1 rounded-full text-xs font-bold bg-white border border-slate-300 text-slate-600 flex items-center gap-1">
-                                                    <RefreshCw size={12} className={nhanhHistoryLoading ? 'animate-spin' : ''} /> Tải lại
-                                                </button>
-                                            </div>
-                                            {nhanhHistoryMsg && <p className="text-sm font-medium text-slate-700">{nhanhHistoryMsg}</p>}
-                                            {nhanhHistory.filter(l => nhanhHistorySource === 'all' || l.source === nhanhHistorySource).length === 0 && (
-                                                <p className="text-sm text-slate-500">Không có lịch sử nào từ Nhanh cho đơn này.</p>
-                                            )}
-                                            <div className="max-h-64 overflow-y-auto space-y-1.5">
-                                                {nhanhHistory.filter(l => nhanhHistorySource === 'all' || l.source === nhanhHistorySource).map(l => (
-                                                    <div key={l.logId} className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
-                                                        <div className="flex justify-between gap-3">
-                                                            <span className="font-bold text-slate-800">{NHANH_STEP_NAMES[l.step] || `Hành động ${l.step}`}</span>
-                                                            <span className="text-xs text-slate-400 shrink-0">{fmtUnix(l.createdAt)} · {l.source}</span>
-                                                        </div>
-                                                        <p className="text-slate-500 text-xs mt-0.5">
-                                                            {l.status?.old !== null && l.status?.old !== undefined ? `${specialStatusName(l.status.old)} → ` : ''}{l.status?.new !== null && l.status?.new !== undefined ? specialStatusName(l.status.new) : 'Không đổi trạng thái'}
-                                                            {l.createdBy ? ` · ${l.createdBy}` : ''}
-                                                        </p>
+                                <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-5 items-start">
+                                    {/* Cột trái: khách hàng, sản phẩm, vận chuyển */}
+                                    <div className="space-y-5 min-w-0">
+                                        <section className="border border-slate-200 rounded-xl overflow-hidden">
+                                            <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">Khách hàng</h4>
+                                            <div className="px-4 py-3">
+                                                <p className="font-bold text-slate-900">{shipAddr?.name || 'Chưa có'}</p>
+                                                {shipAddr?.mobile && <p className="text-sm text-slate-600 mt-0.5">{shipAddr.mobile}</p>}
+                                                <p className="text-sm text-slate-600 mt-0.5">{shipAddr?.address || 'Chưa có địa chỉ'}</p>
+                                                {shipAddr && (
+                                                    <p className="text-xs text-slate-500 mt-1">Tỉnh / Huyện / Phường: {shipAddr.cityId ?? 'Chưa có'} / {shipAddr.districtId ?? 'Chưa có'} / {shipAddr.wardId ?? 'Chưa có'}</p>
+                                                )}
+                                                {(info?.description || info?.privateDescription || base.private_description) && (
+                                                    <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+                                                        {info?.description && <p className="text-sm text-slate-700"><span className="font-bold">Ghi chú đơn: </span>{stripHtml(info.description)}</p>}
+                                                        {(info?.privateDescription || base.private_description) && <p className="text-sm text-slate-700"><span className="font-bold">Ghi chú nội bộ: </span>{stripHtml(info.privateDescription || base.private_description)}</p>}
                                                     </div>
-                                                ))}
+                                                )}
                                             </div>
-                                        </div>
-                                    )}
-                                </section>
+                                        </section>
 
+                                        <section className="border border-slate-200 rounded-xl overflow-hidden">
+                                            <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">Sản phẩm</h4>
+                                            {productsForPopup.length === 0 ? (
+                                                <p className="px-4 py-3 text-sm text-slate-500 font-medium">Đơn này chưa có danh sách sản phẩm trong bảng orders.</p>
+                                            ) : (
+                                                <>
+                                                    <div className="overflow-x-auto">
+                                                        <table className="w-full text-sm">
+                                                            <thead>
+                                                                <tr className="text-left text-slate-500 border-b border-slate-200">
+                                                                    <th className="py-2 px-4 font-semibold">#</th>
+                                                                    <th className="py-2 pr-3 font-semibold">Sản phẩm</th>
+                                                                    <th className="py-2 pr-3 font-semibold text-center">SL</th>
+                                                                    <th className="py-2 pr-3 font-semibold text-right">Giá bán</th>
+                                                                    <th className="py-2 px-4 font-semibold text-right">Tổng</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-100">
+                                                                {productsForPopup.map((p, idx) => {
+                                                                    const lineTotal = (Number(p.price) || 0) * (Number(p.quantity) || 0) - (Number(p.discount) || 0);
+                                                                    return (
+                                                                        <tr key={idx}>
+                                                                            <td className="py-2 px-4 text-slate-400">{idx + 1}</td>
+                                                                            <td className="py-2 pr-3">
+                                                                                <div className="font-semibold text-slate-800">{p.name}</div>
+                                                                                <div className="font-mono text-xs text-slate-500">{p.code}</div>
+                                                                                {p.available !== undefined && <div className="text-xs text-slate-400">Tồn: {Number(p.available) === 0 ? 'Hết hàng (0)' : p.available}</div>}
+                                                                            </td>
+                                                                            <td className="py-2 pr-3 text-center font-bold">{p.quantity} {p.unit?.name || 'chiếc'}</td>
+                                                                            <td className="py-2 pr-3 text-right">
+                                                                                {p.price !== undefined ? fmtMoney(p.price) : 'Chưa có'}
+                                                                                {p.discount ? <div className="text-xs text-red-500">- {fmtMoney(p.discount)}</div> : null}
+                                                                            </td>
+                                                                            <td className="py-2 px-4 text-right font-bold text-slate-800">{p.price !== undefined ? fmtMoney(lineTotal) : 'Chưa có'}</td>
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                    {totalAmount !== null && (
+                                                        <div className="px-4 py-3 border-t border-slate-200 space-y-1 text-sm">
+                                                            <div className="flex justify-between"><span className="text-slate-500 font-medium">Tổng tiền sản phẩm</span><span className="font-bold text-slate-800">{fmtMoney(totalAmount)}</span></div>
+                                                            <div className="flex justify-between"><span className="text-slate-500 font-medium">Tổng chiết khấu sản phẩm</span><span className="font-bold text-slate-800">{fmtMoney(totalDiscount)}</span></div>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </section>
+
+                                        <section className="border border-slate-200 rounded-xl overflow-hidden">
+                                            <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">{carrier?.name || base.carrier_name || 'Vận chuyển'}</h4>
+                                            <div className="px-4 py-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+                                                <DetailRow label="Mã vận đơn" value={carrier?.carrierCode || base.carrier_code || 'Chưa có'} />
+                                                {carrier?.service?.name && <DetailRow label="Dịch vụ" value={carrier.service.name} />}
+                                                <DetailRow label="Phí vận chuyển" value={carrier ? fmtMoney(carrier.shipFee) : 'Chưa có'} />
+                                                <DetailRow label="Phí COD" value={carrier ? fmtMoney(carrier.codFee) : 'Chưa có'} />
+                                                <DetailRow label="Phí trả hàng" value={carrier ? fmtMoney(carrier.returnFee) : 'Chưa có'} />
+                                                <DetailRow label="Phí khai giá" value={carrier ? fmtMoney(carrier.declaredFee) : 'Chưa có'} />
+                                                <DetailRow label="Phí ship khách trả" value={carrier ? fmtMoney(carrier.customerShipFee) : 'Chưa có'} />
+                                                <DetailRow label="Phí vượt cân" value={carrier ? fmtMoney(carrier.overWeightShipFee) : 'Chưa có'} />
+                                                <DetailRow label="Khối lượng" value={carrier ? fmtWeight(carrier.weight) : 'Chưa có'} />
+                                                <DetailRow label="Ngày gửi hãng" value={carrier?.sendCarrier?.date ? fmtDateOnly(carrier.sendCarrier.date) : 'Chưa có'} />
+                                                <DetailRow label="Ngày giao dự kiến" value={carrier?.deliveryDate ? fmtDateOnly(carrier.deliveryDate) : 'Chưa có'} />
+                                                {base.tracking_url && (
+                                                    <div className="py-2 sm:col-span-2">
+                                                        <a href={base.tracking_url} target="_blank" rel="noreferrer" className="text-sm font-bold text-blue-700 hover:underline">Tra cứu vận đơn trên Nhanh.vn</a>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </section>
+                                    </div>
+
+                                    {/* Cột phải: thanh toán, thông tin, lịch trình */}
+                                    <div className="space-y-5 min-w-0">
+                                        {(payment || carrier) && (
+                                            <section className="border border-slate-200 rounded-xl overflow-hidden">
+                                                <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">Thanh toán</h4>
+                                                <div className="px-4 py-2 text-sm">
+                                                    {carrier?.customerShipFee !== undefined && <div className="flex justify-between py-1"><span className="text-slate-500">Phí ship báo khách</span><span className="font-bold text-slate-800">{fmtMoney(carrier.customerShipFee)}</span></div>}
+                                                    {payment && <div className="flex justify-between py-1"><span className="text-slate-500">Chiết khấu</span><span className="font-bold text-red-500">{Number(payment.discount?.amount) ? `- ${fmtMoney(payment.discount?.amount)}` : fmtMoney(payment.discount?.amount)}</span></div>}
+                                                    {payment && <div className="flex justify-between py-1"><span className="text-slate-500">Chuyển khoản</span><span className="font-bold text-slate-800">{fmtMoney(payment.transfer?.amount)}</span></div>}
+                                                    {totalAmount !== null && <div className="flex justify-between py-1"><span className="text-slate-500">Thu người nhận</span><span className="font-bold text-slate-800">{fmtMoney(totalAmount - (totalDiscount || 0))}</span></div>}
+                                                    {carrier?.shipFee !== undefined && <div className="flex justify-between py-1"><span className="text-slate-500">Thu người gửi</span><span className="font-bold text-red-500">{Number(carrier.shipFee) ? `- ${fmtMoney(carrier.shipFee)}` : fmtMoney(carrier.shipFee)}</span></div>}
+                                                    {payment && <div className="flex justify-between py-1"><span className="text-slate-500">VAT</span><span className="font-bold text-slate-800">{fmtMoney(payment.vat?.amount)}</span></div>}
+                                                    {payment && <div className="flex justify-between py-1"><span className="text-slate-500">Tiền cọc</span><span className="font-bold text-slate-800">{fmtMoney(payment.deposit?.amount)}</span></div>}
+                                                    {payment && <div className="flex justify-between py-1"><span className="text-slate-500">Điểm đã dùng</span><span className="font-bold text-slate-800">{fmtMoney(payment.usedPoints?.amount)} ({payment.usedPoints?.points ?? 'Chưa có'} điểm)</span></div>}
+                                                </div>
+                                            </section>
+                                        )}
+
+                                        <section className="border border-slate-200 rounded-xl overflow-hidden">
+                                            <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">Thông tin</h4>
+                                            <div className="px-4 py-2">
+                                                <DetailRow label="ID đơn sàn" value={base.ecom_order_id ? String(base.ecom_order_id) : (channel?.ecomOrderId ? String(channel.ecomOrderId) : 'Chưa có')} />
+                                                <DetailRow label="Kênh bán" value={channelName} />
+                                                {channel?.trafficSource?.name && <DetailRow label="Nguồn khách" value={channel.trafficSource.name} />}
+                                                <DetailRow label="Kho xuất" value={DEPOT_NAMES[String(base.depot_id)] || String(base.depot_id)} />
+                                                <DetailRow label="Nhân viên tạo" value={info?.createdBy?.name || base.created_by_name || 'Hệ thống'} />
+                                                <DetailRow label="Ngày tạo" value={info?.createdAt ? fmtUnix(info.createdAt) : fmtDateStr(base.created_at)} />
+                                                <DetailRow label="Ngày cập nhật" value={info?.updatedAt ? fmtUnix(info.updatedAt) : fmtDateStr(base.updated_at)} />
+                                                <DetailRow label="Ngày đóng gói" value={info?.packedAt ? fmtUnix(info.packedAt) : (base.packed_at ? fmtDateStr(base.packed_at) : 'Chưa có')} />
+                                                <DetailRow label="Ngày in" value={base.printed_at ? fmtDateStr(base.printed_at) : 'Chưa in'} />
+                                                <DetailRow label="Ngày đi" value={base.carrier_date ? fmtDateStr(base.carrier_date) : 'Chưa có'} />
+                                                <div className="flex flex-col gap-0.5 py-2">
+                                                    <span className="text-xs font-medium text-slate-500">Tình trạng kho</span>
+                                                    <span>{getStockBadge(detailOrder)}</span>
+                                                </div>
+                                            </div>
+                                        </section>
+
+                                        <section className="border border-slate-200 rounded-xl overflow-hidden">
+                                            <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">Lịch trình</h4>
+                                            <div className="px-4 py-3">
+                                                {detailHistoryLoading ? (
+                                                    <p className="text-sm text-slate-500 font-medium flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Đang tải lịch sử...</p>
+                                                ) : detailHistory.length === 0 ? (
+                                                    <div>
+                                                        <p className="text-sm text-slate-500 font-medium mb-4">Chưa có lịch sử trong bảng order_histories, chỉ có mốc tạo đơn:</p>
+                                                        <ol className="relative border-l-2 border-slate-200 ml-2 space-y-4">
+                                                            <li className="pl-5 relative">
+                                                                <span className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-slate-900 border-2 border-white shadow" />
+                                                                <p className="text-xs font-medium text-slate-500">{fmtDateStr(base.created_at)}</p>
+                                                                <p className="text-sm font-semibold text-slate-800">Tạo đơn: {statusName}</p>
+                                                                <p className="text-xs text-slate-500">Bởi: {base.created_by_name || 'Hệ thống'}</p>
+                                                            </li>
+                                                        </ol>
+                                                    </div>
+                                                ) : (
+                                                    <ol className="relative border-l-2 border-slate-200 ml-2 space-y-4">
+                                                        {detailHistory.map(h => {
+                                                            const fromName = h.status_old !== null && h.status_old !== undefined ? specialStatusName(String(h.status_old)) : null;
+                                                            const toName = h.status_new !== null && h.status_new !== undefined ? specialStatusName(String(h.status_new)) : null;
+                                                            const text = fromName && toName
+                                                                ? `${fromName} → ${toName}`
+                                                                : toName
+                                                                    ? (fromName ? `Chuyển sang: ${toName}` : `Tạo đơn: ${toName}`)
+                                                                    : 'Cập nhật đơn';
+                                                            return (
+                                                                <li key={h.id} className="pl-5 relative">
+                                                                    <span className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-slate-900 border-2 border-white shadow" />
+                                                                    <p className="text-xs font-medium text-slate-500">{fmtDateStr(h.created_at)}</p>
+                                                                    <p className="text-sm font-semibold text-slate-800">{text}</p>
+                                                                    <p className="text-xs text-slate-500">Bởi: {h.created_by_name || 'Hệ thống'}</p>
+                                                                </li>
+                                                            );
+                                                        })}
+                                                    </ol>
+                                                )}
+                                            </div>
+                                        </section>
+
+                                        <section className="border border-slate-200 rounded-xl overflow-hidden">
+                                            <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">Lịch sử Nhanh.vn</h4>
+                                            <div className="px-4 py-3">
+                                                {!nhanhHistoryLoaded ? (
+                                                    <div className="space-y-2">
+                                                        <p className="text-sm text-slate-500">Lịch sử này lấy trực tiếp từ Nhanh.vn, không tự tải khi mở popup.</p>
+                                                        <button onClick={handleLoadNhanhHistory} disabled={nhanhHistoryLoading} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
+                                                            {nhanhHistoryLoading && <RefreshCw size={14} className="animate-spin" />} Tải lịch sử Nhanh
+                                                        </button>
+                                                        {nhanhHistoryMsg && <p className="text-sm font-medium text-slate-700">{nhanhHistoryMsg}</p>}
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            {['all', 'Nhanh', 'Hãng vận chuyển'].map(src => (
+                                                                <button key={src} onClick={() => setNhanhHistorySource(src)} className={`px-3 py-1 rounded-full text-xs font-bold ${nhanhHistorySource === src ? 'bg-slate-900 text-white' : 'bg-white border border-slate-300 text-slate-600'}`}>
+                                                                    {src === 'all' ? 'Tất cả' : src}
+                                                                </button>
+                                                            ))}
+                                                            <button onClick={handleLoadNhanhHistory} disabled={nhanhHistoryLoading} className="px-3 py-1 rounded-full text-xs font-bold bg-white border border-slate-300 text-slate-600 flex items-center gap-1">
+                                                                <RefreshCw size={12} className={nhanhHistoryLoading ? 'animate-spin' : ''} /> Tải lại
+                                                            </button>
+                                                        </div>
+                                                        {nhanhHistoryMsg && <p className="text-sm font-medium text-slate-700">{nhanhHistoryMsg}</p>}
+                                                        {nhanhHistory.filter(l => nhanhHistorySource === 'all' || l.source === nhanhHistorySource).length === 0 && (
+                                                            <p className="text-sm text-slate-500">Không có lịch sử nào từ Nhanh cho đơn này.</p>
+                                                        )}
+                                                        <div className="max-h-64 overflow-y-auto space-y-1.5">
+                                                            {nhanhHistory.filter(l => nhanhHistorySource === 'all' || l.source === nhanhHistorySource).map(l => (
+                                                                <div key={l.logId} className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                                                                    <div className="flex justify-between gap-3">
+                                                                        <span className="font-bold text-slate-800">{NHANH_STEP_NAMES[l.step] || `Hành động ${l.step}`}</span>
+                                                                        <span className="text-xs text-slate-400 shrink-0">{fmtUnix(l.createdAt)} · {l.source}</span>
+                                                                    </div>
+                                                                    <p className="text-slate-500 text-xs mt-0.5">
+                                                                        {l.status?.old !== null && l.status?.old !== undefined ? `${specialStatusName(l.status.old)} → ` : ''}{l.status?.new !== null && l.status?.new !== undefined ? specialStatusName(l.status.new) : 'Không đổi trạng thái'}
+                                                                        {l.createdBy ? ` · ${l.createdBy}` : ''}
+                                                                    </p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </section>
+                                    </div>
+                                </div>
                                 <div className="border-t border-slate-200 pt-3">
                                     <button onClick={() => setShowRawJson(v => !v)} className="text-sm font-bold text-slate-700 hover:text-slate-900">{showRawJson ? 'Ẩn JSON gốc' : 'Xem JSON gốc'}</button>
                                     {showRawJson && (
