@@ -120,6 +120,7 @@ serve(async (req) => {
         // Một lần gọi = kéo HẾT các trang của sàn đó bằng cursor.
         // Admin vẫn gọi theo vòng page cũ nhưng edge trả hasMoreData=false nên chỉ gọi 1 lần/sàn.
         do {
+          const sentNext = next;
           const result = await callNhanh(platformId, next);
           if (result?.code !== 1) {
             throw new Error(`Nhanh báo lỗi (${platformName}): ${nhanhMessage(result)} (code: ${result?.code})`);
@@ -163,7 +164,15 @@ serve(async (req) => {
             synced += rows.length;
           }
 
-          next = result.paginator?.next ?? null;
+          let rawNext = result.paginator?.next ?? null;
+          // Cursor rỗng (object nhưng id null) coi như hết trang.
+          if (rawNext && typeof rawNext === 'object' && !rawNext.id) rawNext = null;
+          // Cursor trả về giống hệt cursor vừa gửi = không tiến thêm được, dừng để khỏi lặp vô hạn.
+          if (rawNext && JSON.stringify(rawNext) === JSON.stringify(sentNext)) {
+            console.log(`[${platformName}] Cursor không đổi sau trang ${pages}, dừng.`);
+            rawNext = null;
+          }
+          next = rawNext;
           // Chặn vòng lặp vô hạn nếu Nhanh trả cursor không đổi.
           if (pages >= 500) {
             console.log(`[${platformName}] Dừng sau 500 trang (giới hạn an toàn), đã kéo ${synced} yêu cầu.`);
