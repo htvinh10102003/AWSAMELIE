@@ -6,10 +6,17 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // - Sửa đơn (order/edit): ghi chú, ghi chú nội bộ, trạng thái, nhãn.
 // - Danh sách nhãn (order/tags): cache trong bảng nhanh_tags, mới hơn
 //   24h thì dùng luôn, cũ hơn thì gọi API rồi ghi đè (theo tài liệu).
-// - Gửi đơn sang hãng (shipment/send) và hủy đơn (shipment/cancel):
+// - Gửi đơn sang hãng (order/sendcarrier) và hủy đơn (order/cancelcarrier):
 //   chạy được 1 đơn hoặc nhiều đơn (mảng orderIds, chạy tuần tự từng
-//   đơn). Đơn đã gửi rồi (ERR_ORDER_EXISTED) thì lấy lại mã vận đơn cũ
-//   trong data thay vì tính là lỗi.
+//   đơn). Đơn đã gửi rồi (ERR_ORDER_ALREADY_SENT_CARRIER) thì lấy lại
+//   mã vận đơn cũ trong data thay vì tính là lỗi.
+//   LƯU Ý 2026-11-03: trước đây gửi/hủy gọi shipment/send và
+//   shipment/cancel trên host ship.open.nhanh.vn, nhưng host đó chết
+//   DNS (NXDOMAIN từ 2026-11-02, đã xác nhận qua Google + Cloudflare
+//   DoH); sample Postman chính thức của Nhanh + docs cho thấy đường
+//   sống là 2 API POS trên (pos.open.nhanh.vn). API hủy không có tham
+//   số lý do hủy nên lý do chỉ lưu trong log của mình, không đẩy sang
+//   Nhanh.
 // Token Nhanh lấy từ system_configs (do nhanh-auth ghi khi Vinh cấu
 // hình ở Admin), không nằm trong code hay trả về frontend. Chỉ Tài
 // khoản Chủ được gọi (popup báo cáo đặc biệt vốn cũng chỉ owner mở).
@@ -120,15 +127,6 @@ serve(async (req) => {
       });
       return parseNhanh(res);
     };
-    // API Ship (shipment/*): Authorization dạng Bearer, theo đúng tài liệu.
-    const callShip = async (path: string, body: unknown) => {
-      const res = await fetchWithRetry(`https://ship.open.nhanh.vn/v3.0${path}?businessId=${bizId}&appId=${appId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${accessToken}` },
-        body: JSON.stringify(body),
-      });
-      return parseNhanh(res);
-    };
 
     if (action === 'history') {
       // Chỉ 1 đơn (popup chi tiết). Lấy cả 2 loại: thao tác trên Nhanh
@@ -220,10 +218,10 @@ serve(async (req) => {
       const results: any[] = [];
       for (const id of orderIds) {
         try {
-          const r = await callShip('/shipment/send', { orderId: id });
+          const r = await callPos('/order/sendcarrier', { orderId: id });
           if (r.code === 1) {
             results.push({ id, ok: true, carrierCode: r.data?.carrierCode || null });
-          } else if (r.errorCode === 'ERR_ORDER_EXISTED' && r.data?.carrierCode) {
+          } else if ((r.errorCode === 'ERR_ORDER_ALREADY_SENT_CARRIER' || r.errorCode === 'ERR_ORDER_EXISTED') && r.data?.carrierCode) {
             // Đơn đã gửi rồi: Nhanh trả lại thông tin đơn đã có bên hãng.
             results.push({ id, ok: true, existed: true, carrierCode: r.data.carrierCode });
           } else {
@@ -283,9 +281,9 @@ serve(async (req) => {
       const results: any[] = [];
       for (const id of orderIds) {
         try {
-          const body: Record<string, unknown> = { orderId: id };
-          if (reason) body.cancelReason = reason;
-          const r = await callShip('/shipment/cancel', body);
+          // cancelcarrier không có tham số lý do (theo docs); lý do chỉ
+          // lưu trong log thao tác của mình (details.reason bên dưới).
+          const r = await callPos('/order/cancelcarrier', { orderId: id });
           if (r.code === 1) {
             results.push({ id, ok: true, status: r.data?.status ?? null, statusName: r.data?.statusName || null });
           } else {
