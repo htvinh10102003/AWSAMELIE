@@ -46,7 +46,7 @@ serve(async (req) => {
     const appId = configMap['nhanh_app_id'];
     const businessId = configMap['nhanh_business_id'];
     const accessToken = configMap['nhanh_access_token'];
-    
+
     let totalSynced = 0;
     const totalChunks = Math.ceil(days / CHUNK_DAYS);
 
@@ -87,9 +87,9 @@ serve(async (req) => {
                 method: 'POST',
                 headers: {
                   'Authorization': accessToken,
-                  'Content-Type': 'application/json'  // Sửa thành JSON
+                  'Content-Type': 'application/json' // Sửa thành JSON
                 },
-                body: JSON.stringify(payload)         // Gửi thẳng JSON object
+                body: JSON.stringify(payload) // Gửi thẳng JSON object
               }
             );
             fetchError = null;
@@ -116,7 +116,7 @@ serve(async (req) => {
         // Nếu API trả lỗi, ném ra message để giao diện hiển thị.
         // Nhanh có khi trả messages là chuỗi (không phải mảng) nên không
         // được lấy messages[0] — với chuỗi đó là ký tự đầu tiên (đã từng
-        // hiện ra chỉ 1 chữ "K" và che mất lỗi thật).
+        // hiện ra chỉ chữ "K" và che mất lỗi thật).
         if (result.code !== 1) {
           const rawMsg = result.messages;
           const errMsg = (Array.isArray(rawMsg) ? rawMsg.join(', ') : rawMsg)
@@ -129,7 +129,7 @@ serve(async (req) => {
           const ordersToUpsert: any[] = [];
           const productInsertions: any[] = [];
           const orderIds: string[] = [];
-          // Nhãn đơn: info.tags của API order/list. Chỉ đơn mới đồng bộ
+          // Nhận đón: info.tags của API order/list. Chỉ đơn mới đồng bộ
           // mới có nhãn (đơn cũ bỏ qua, cào lại sau). Bảng order_tags
           // thay toàn bộ nhãn của đơn mỗi lần đồng bộ lại đơn đó.
           const tagInsertions: any[] = [];
@@ -153,11 +153,20 @@ serve(async (req) => {
               status: info.status || null,
               created_at: safeDate(info.createdAt) || new Date().toISOString(),
               carrier_code: carrier.carrierCode || '',
-              carrier_name: carrier.name || '',
+              carrier_name: carrier.carrierName || '',
               ...(carrierDate ? { carrier_date: carrierDate } : {}),
               is_declared_fee: carrier.isDeclaredFee ? 1 : 0,
               sale_channel: channel.saleChannel || null,
-              created_by_name: info.createdByName || ''
+              created_by_name: info.createdBy?.name || info.createdByName || '',
+              raw_data: order,
+              ecom_order_id: channel.ecomOrderId || channel.appOrderId || null,
+              depot_id: info.depotId || null,
+              ...(safeDate(info.updatedAt) ? { updated_at: safeDate(info.updatedAt) } : {}),
+              ...(safeDate(info.packedAt) ? { packed_at: safeDate(info.packedAt) } : {}),
+              description: info.description || '',
+              private_description: info.privateDescription || '',
+              tracking_url: info.trackingUrl || '',
+              traffic_source: channel.trafficSource?.name || channel.trafficSource || ''
             });
 
             if (Array.isArray(info.tags)) {
@@ -186,21 +195,22 @@ serve(async (req) => {
               order.products.forEach((prod: any) => {
                 productInsertions.push({
                   order_id: orderId,
+                  product_id: prod.id != null ? String(prod.id) : null,
                   product_code: String(prod.code || prod.productCode || ''),
                   product_name: prod.name || prod.productName || '',
-                  quantity: Number(prod.quantity || 0)
+                  quantity: Number(prod.quantity || 0),
+                  price: Number(prod.price || 0)
                 });
               });
             }
           });
-
           if (ordersToUpsert.length > 0) {
             await supabase.from('orders').upsert(ordersToUpsert, { onConflict: 'id' });
             if (productInsertions.length > 0) {
               await supabase.from('order_products').delete().in('order_id', orderIds);
               await supabase.from('order_products').insert(productInsertions);
             }
-            // Nhãn: xóa nhãn cũ của các đơn trong đợt rồi ghi nhãn mới.
+            // Nhận: xóa nhãn cũ của các đơn trong đợt rồi ghi nhãn mới.
             // Bảng chưa có (chưa chạy migration) thì bỏ qua, không làm
             // hỏng đợt đồng bộ.
             await supabase.from('order_tags').delete().in('order_id', orderIds).then(() => {});
@@ -212,12 +222,9 @@ serve(async (req) => {
             }
             totalSynced += ordersToUpsert.length;
           }
-
-          nextCursor = result.paginator?.next || '';
-          await new Promise(resolve => setTimeout(resolve, 300));
-        } else {
-          nextCursor = '';
         }
+        nextCursor = result.paginator?.next || '';
+        await new Promise(resolve => setTimeout(resolve, 300));
       } while (nextCursor);
     }
 
@@ -225,7 +232,6 @@ serve(async (req) => {
     return new Response(JSON.stringify({ success: true, totalSynced }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
-
   } catch (error: any) {
     return new Response(JSON.stringify({ success: false, error: error.message }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500

@@ -2751,7 +2751,7 @@ export default function OrderReport() {
                                             <div className="px-4 py-2">
                                                 <DetailRow label="ID đơn sàn" value={base.ecom_order_id ? String(base.ecom_order_id) : (channel?.ecomOrderId ? String(channel.ecomOrderId) : 'Chưa có')} />
                                                 <DetailRow label="Kênh bán" value={channelName} />
-                                                {channel?.trafficSource?.name && <DetailRow label="Nguồn khách" value={channel.trafficSource.name} />}
+                                                {(channel?.trafficSource?.name || base.traffic_source) && <DetailRow label="Nguồn khách" value={channel?.trafficSource?.name || base.traffic_source} />}
                                                 <DetailRow label="Kho xuất" value={base.depot_id ? (DEPOT_NAMES[String(base.depot_id)] || String(base.depot_id)) : 'Chưa có'} />
                                                 <DetailRow label="Nhân viên tạo" value={info?.createdBy?.name || base.created_by_name || 'Hệ thống'} />
                                                 <DetailRow label="Ngày tạo" value={info?.createdAt ? fmtUnix(info.createdAt) : fmtDateStr(base.created_at)} />
