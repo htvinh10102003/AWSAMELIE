@@ -305,6 +305,12 @@ export default function OrderReport() {
     // detailAction giữ tên panel đó, đóng panel thì về null.
     const [showDetailActionMenu, setShowDetailActionMenu] = useState(false);
     const [detailAction, setDetailAction] = useState(null); // edit | send | cancel
+    // Bảng chọn khổ in của popup chi tiết: mở từ nút "In đơn" trong menu
+    // Thao tác, tự đóng khi popup chi tiết đóng hoặc khi mở panel thao tác.
+    const [showDetailPrintChooser, setShowDetailPrintChooser] = useState(false);
+    useEffect(() => {
+        if (!detailOrder || detailAction) setShowDetailPrintChooser(false);
+    }, [detailOrder, detailAction]);
     // Đơn mà popup thao tác đang nhắm tới: từ popup chi tiết thì là
     // detailOrder, từ bút chì trên dòng bảng thì là đơn của dòng đó.
     // Tách riêng để sửa nhanh không cần mở popup chi tiết trước.
@@ -1883,12 +1889,12 @@ export default function OrderReport() {
         window.open(`/in-bill?ids=${ids.join(',')}&template=${template}`, '_blank');
         logOrderPrint(ids, `bill-${template}`);
     };
-    const BillPrintButtons = ({ items, small }) => (
+    const BillPrintButtons = ({ items, small, onDone }) => (
         <div className="flex flex-wrap items-center gap-2 pt-1">
             <span className={`${small ? 'text-xs' : 'text-sm'} font-medium text-slate-500`}>In bill tùy chỉnh:</span>
-            <button onClick={() => openBillPrint(items, 'a4')} className={`${small ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white border border-slate-300 font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2`}><Printer size={small ? 13 : 15} /> Bill A4/A5</button>
-            <button onClick={() => openBillPrint(items, 'k80')} className={`${small ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white border border-slate-300 font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2`}><Printer size={small ? 13 : 15} /> Bill K80</button>
-            <button onClick={() => openBillPrint(items, 'location')} className={`${small ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white border border-slate-300 font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2`}><Printer size={small ? 13 : 15} /> Bill có vị trí</button>
+            <button onClick={() => { openBillPrint(items, 'a4'); onDone?.(); }} className={`${small ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white border border-slate-300 font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2`}><Printer size={small ? 13 : 15} /> Bill A4/A5</button>
+            <button onClick={() => { openBillPrint(items, 'k80'); onDone?.(); }} className={`${small ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white border border-slate-300 font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2`}><Printer size={small ? 13 : 15} /> Bill K80</button>
+            <button onClick={() => { openBillPrint(items, 'location'); onDone?.(); }} className={`${small ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white border border-slate-300 font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2`}><Printer size={small ? 13 : 15} /> Bill có vị trí</button>
         </div>
     );
     const executePrint = (printSize) => {
@@ -2643,13 +2649,33 @@ export default function OrderReport() {
                                             )}
                                             <button onClick={() => openDetailAction('edit')} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Sửa đơn</button>
                                             <button onClick={() => openDetailAction('status')} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">Đổi trạng thái</button>
-                                            <button onClick={() => { setShowDetailActionMenu(false); openNhanhPrint([{ id: detailOrder.id, carrier_code: detailOrder.carrier_code || '' }], 'A4'); }} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">In đơn</button>
+                                            <button onClick={() => { setShowDetailActionMenu(false); setShowDetailPrintChooser(true); }} className="w-full text-left px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100">In đơn</button>
                                             <button onClick={() => openDetailAction('cancel')} className="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50">Hủy đơn</button>
                                         </div>
                                     )}
                                     <button onClick={() => setDetailOrder(null)} className="text-slate-400 hover:text-slate-600"><XCircle size={22} /></button>
                                 </div>
                             </div>
+                            {showDetailPrintChooser && detailOrder && (
+                                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-900/50" onClick={() => setShowDetailPrintChooser(false)}>
+                                    <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                                        <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                                            <h3 className="font-bold text-slate-800">Chọn khổ in — #{detailOrder.id}</h3>
+                                            <button onClick={() => setShowDetailPrintChooser(false)} className="text-slate-400 hover:text-slate-600"><XCircle size={20} /></button>
+                                        </div>
+                                        <div className="p-5 space-y-4">
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">In qua Nhanh.vn</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    <button onClick={() => { setShowDetailPrintChooser(false); openNhanhPrint([{ id: detailOrder.id, carrier_code: detailOrder.carrier_code || '' }], 'A4'); }} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 flex items-center gap-2"><Printer size={15} /> Khổ A4/A5</button>
+                                                    <button onClick={() => { setShowDetailPrintChooser(false); openNhanhPrint([{ id: detailOrder.id, carrier_code: detailOrder.carrier_code || '' }], 'K80'); }} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> Khổ K80</button>
+                                                </div>
+                                            </div>
+                                            <BillPrintButtons items={[{ id: detailOrder.id, carrier_code: detailOrder.carrier_code || '' }]} onDone={() => setShowDetailPrintChooser(false)} />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                             <div className="p-5 overflow-y-auto">
                                 {detailLoading && <p className="text-sm text-slate-500 font-medium flex items-center gap-2 mb-4"><RefreshCw size={15} className="animate-spin" /> Đang tải đầy đủ chi tiết...</p>}
 
