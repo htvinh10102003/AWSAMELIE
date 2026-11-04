@@ -155,6 +155,17 @@ export default function BillTemplateBuilder({ initial, onChange }) {
                                         <input type="number" value={b.height || 16} onChange={(e) => patchBlock(b.id, { height: Number(e.target.value) || 16 })} className="w-20 px-2 py-1 border border-slate-300 rounded-lg text-sm outline-none" />
                                     </label>
                                 )}
+                                {['barcode', 'barcode-id', 'qr'].includes(b.type) && (
+                                    <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-slate-700" onClick={(e) => e.stopPropagation()}>
+                                        <label className="flex items-center gap-1">Căn
+                                            <select value={b.align || 'center'} onChange={(e) => patchBlock(b.id, { align: e.target.value })} className="px-2 py-1 border border-slate-300 rounded-lg text-sm outline-none">
+                                                <option value="left">Trái</option>
+                                                <option value="center">Giữa</option>
+                                                <option value="right">Phải</option>
+                                            </select>
+                                        </label>
+                                    </div>
+                                )}
                                 {['heading', 'text', 'business', 'sender', 'recipient', 'products', 'totals'].includes(b.type) && (
                                     <div className="flex flex-wrap items-center gap-3 mt-2 text-sm text-slate-700" onClick={(e) => e.stopPropagation()}>
                                         <label className="flex items-center gap-1">Cỡ chữ
