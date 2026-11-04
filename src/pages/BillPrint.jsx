@@ -101,7 +101,7 @@ export default function BillPrint() {
                     .bill-print-root { padding: 0 !important; background: #fff !important; min-height: 0 !important; }
                     .bill-page { box-shadow: none !important; margin: 0 !important; }
                 }
-                @page { ${templateId === 'k80' ? 'size: 80mm auto; margin: 0;' : 'size: A4; margin: 0;'} }
+                @page { ${templateId === 'k80' ? 'size: 80mm auto; margin: 0;' : templateId === 'location' ? 'size: A6; margin: 0;' : 'size: A4; margin: 0;'} }
                 .bill-page { page-break-after: always; }
                 .bill-page:last-child { page-break-after: auto; }
             `}</style>
@@ -122,7 +122,7 @@ export default function BillPrint() {
                 {bills.map(b => (
                     <div key={b.id}
                         className="bill-page bg-white mx-auto mb-4 shadow-sm"
-                        style={templateId === 'k80' ? { width: '80mm', padding: '4mm' } : { width: '210mm', padding: '12mm' }}
+                        style={templateId === 'k80' ? { width: '80mm', padding: '4mm' } : templateId === 'location' ? { width: '105mm', padding: '4mm' } : { width: '210mm', padding: '12mm' }}
                         dangerouslySetInnerHTML={{ __html: b.html }} />
                 ))}
             </div>

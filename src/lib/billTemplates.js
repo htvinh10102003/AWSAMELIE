@@ -153,6 +153,7 @@ const barcodeSvg = (code) => {
     try {
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         JsBarcode(svg, String(code), { format: 'CODE128', width: 2, height: 56, displayValue: false, margin: 0 });
+        svg.setAttribute('style', 'max-width:100%;height:auto;');
         return svg.outerHTML;
     } catch { return ''; }
 };
@@ -257,14 +258,15 @@ export const blocksToHtml = (blocks) => (blocks || []).map(b => {
         case 'qr':
             return `<div style="text-align:${b.align || 'center'};">__MA_QR_DON_HANG__</div>`;
         case 'sender':
-            return `<div style="${styleOf(b)}"><strong>Người gửi:</strong> __TEN_NGUOI_GUI__ - __SDT_NGUOI_GUI__ - __DIA_CHI_NGUOI_GUI__ - __QUAN_HUYEN_NGUOI_GUI__</div>`;
+            return `<div style="${styleOf(b)}"><div><strong>Người gửi:</strong> __TEN_NGUOI_GUI__ - __SDT_NGUOI_GUI__</div><div>__DIA_CHI_NGUOI_GUI__ __QUAN_HUYEN_NGUOI_GUI__</div></div>`;
         case 'recipient':
-            return `<div style="${styleOf(b)}"><strong>Người nhận:</strong> __TEN_NGUOI_NHAN__ - __SDT_NGUOI_NHAN__ - __DIA_CHI_NGUOI_NHAN__</div>`;
+            return `<div style="${styleOf(b)}"><div><strong>Người nhận:</strong> __TEN_NGUOI_NHAN__ - __SDT_NGUOI_NHAN__</div><div>__DIA_CHI_NGUOI_NHAN__</div></div>`;
         case 'products': {
             const cols = (b.columns && b.columns.length ? b.columns : ['name', 'qty', 'price']).filter(c => PRODUCT_COLS[c]);
-            const head = b.showHeader ? `<tr>${cols.map(c => `<td><strong>${PRODUCT_COLS[c].label}</strong></td>`).join('')}</tr>` : '';
-            const row = `<tr>${cols.map(c => `<td>${PRODUCT_COLS[c].ph}</td>`).join('')}</tr>`;
-            return `<table style="border-collapse:collapse;width:100%;font-size:${b.fontSize || 14}px;">${head}${row}</table>`;
+            const cellStyle = (c) => c === 'qty' ? ' style="white-space:nowrap;text-align:center;"' : (c === 'price' || c === 'location') ? ' style="white-space:nowrap;"' : '';
+            const head = b.showHeader ? `<tr>${cols.map(c => `<td${cellStyle(c)}><strong>${PRODUCT_COLS[c].label}</strong></td>`).join('')}</tr>` : '';
+            const row = `<tr>${cols.map(c => `<td${cellStyle(c)}>${PRODUCT_COLS[c].ph}</td>`).join('')}</tr>`;
+            return `<table style="border-collapse:collapse;width:auto;max-width:100%;font-size:${b.fontSize || 14}px;">${head}${row}</table>`;
         }
         case 'totals':
             return `<div style="${styleOf(b)}"><strong>Tổng thu:</strong> __TONG_TIEN__</div>`
