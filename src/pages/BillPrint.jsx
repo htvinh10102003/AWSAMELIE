@@ -90,11 +90,15 @@ export default function BillPrint() {
     const switchTemplate = (t) => setParams({ ids: ids.join(','), template: t });
 
     return (
-        <div className="min-h-screen bg-slate-100 p-4">
+        <div className="bill-print-root min-h-screen bg-slate-100 p-4">
             <style>{`
                 @media print {
                     .no-print { display: none !important; }
                     body { background: #fff !important; }
+                    .layout-root { display: block !important; height: auto !important; overflow: visible !important; }
+                    .layout-main-col { overflow: visible !important; height: auto !important; }
+                    .layout-page-wrap { padding: 0 !important; display: block !important; }
+                    .bill-print-root { padding: 0 !important; background: #fff !important; min-height: 0 !important; }
                     .bill-page { box-shadow: none !important; margin: 0 !important; }
                 }
                 @page { ${templateId === 'k80' ? 'size: 80mm auto; margin: 0;' : 'size: A4; margin: 0;'} }
@@ -110,10 +114,10 @@ export default function BillPrint() {
                 </div>
                 <button onClick={() => window.print()} className="ml-auto px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 flex items-center gap-2"><Printer size={15} /> In ngay</button>
             </div>
-            {loading && <p className="max-w-[210mm] mx-auto text-sm text-slate-500 font-medium flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Đang vẽ bill...</p>}
-            {error && <p className="max-w-[210mm] mx-auto text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+            {loading && <p className="no-print max-w-[210mm] mx-auto text-sm text-slate-500 font-medium flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Đang vẽ bill...</p>}
+            {error && <p className="no-print max-w-[210mm] mx-auto text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
             {missing.length > 0 && <p className="no-print max-w-[210mm] mx-auto text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">Không tìm thấy đơn: {missing.join(', ')}</p>}
-            {!loading && !error && bills.length === 0 && <p className="max-w-[210mm] mx-auto text-sm text-slate-500">Không có bill nào để in.</p>}
+            {!loading && !error && bills.length === 0 && <p className="no-print max-w-[210mm] mx-auto text-sm text-slate-500">Không có bill nào để in.</p>}
             <div>
                 {bills.map(b => (
                     <div key={b.id}

@@ -682,7 +682,7 @@ export default function Layout() {
       `}</style>
 
       {bannerNotif?.enabled && bannerStyle && (
-        <div className={`absolute top-0 left-0 w-full h-10 z-[500] overflow-hidden ${bannerStyle.gradient} ${bannerStyle.shadow}`}>
+        <div className={`no-print absolute top-0 left-0 w-full h-10 z-[500] overflow-hidden ${bannerStyle.gradient} ${bannerStyle.shadow}`}>
           <div className="absolute inset-0 animate-shimmer opacity-30 pointer-events-none" />
 
           {bannerNotif.type === 'celebrate' && (
@@ -719,7 +719,7 @@ export default function Layout() {
         </div>
       )}
 
-      <div className={`flex h-screen font-sans antialiased overflow-hidden relative ${themeVars.bgImage === 'none' ? 'bg-slate-50' : 'bg-transparent'} 
+      <div className={`layout-root flex h-screen font-sans antialiased overflow-hidden relative ${themeVars.bgImage === 'none' ? 'bg-slate-50' : 'bg-transparent'} 
         ${isTopLayout ? 'flex-col' : layoutPrefs.position === 'right' ? 'flex-row-reverse' : 'flex-row'}
         ${bannerNotif?.enabled ? 'pt-10' : ''}`}
       >
@@ -746,7 +746,7 @@ export default function Layout() {
         )}
 
         <div
-          className={`flex-shrink-0 z-40 flex transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] relative ${themeVars.sidebar}
+          className={`no-print flex-shrink-0 z-40 flex transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] relative ${themeVars.sidebar}
             ${isTopLayout
               ? `w-full h-16 flex-row items-center px-4 border-b ${themeVars.headerBorder}`
               : `flex-col h-full ${layoutPrefs.position === 'left' ? 'border-r' : 'border-l'} ${sidebarExpanded ? 'w-[300px]' : 'w-[72px]'}`}
@@ -984,8 +984,8 @@ export default function Layout() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden relative h-full z-10 flex flex-col">
-          <div className="relative p-4 sm:p-8 flex-1 flex flex-col">
+        <div className="layout-main-col flex-1 overflow-y-auto overflow-x-hidden relative h-full z-10 flex flex-col">
+          <div className="layout-page-wrap relative p-4 sm:p-8 flex-1 flex flex-col">
             {isInitializing ? (
               <div className="flex flex-col items-center justify-center m-auto gap-4">
                 <Loader2 size={32} className={`animate-spin text-blue-600 ${isXmas ? 'text-white' : ''}`} />
