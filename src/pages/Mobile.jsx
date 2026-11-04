@@ -71,8 +71,11 @@ const fmtVnCreated = (iso) => {
 // Cảnh báo viền đỏ cho đơn cần bàn giao lại, theo giờ VN hiện tại:
 // - Buổi sáng (giờ hiện tại < 12h): đơn tạo ngày hôm qua (giờ VN).
 // - Buổi chiều (giờ hiện tại >= 12h, kể cả đúng 12h): đơn tạo hôm nay trước 14h (giờ VN).
+// - Chỉ kênh Shopee (42) và TikTok (48); Admin và các kênh khác bỏ qua.
 // Không áp cho danh sách hay ngày khác.
 const isHandoverWarning = (order) => {
+    const ch = String(order?.sale_channel);
+    if (ch !== '42' && ch !== '48') return false;
     const created = order?.created_at ? toVnDate(order.created_at) : null;
     if (!created) return false;
     const nowVn = toVnDate(new Date().toISOString());
