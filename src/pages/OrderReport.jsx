@@ -335,6 +335,7 @@ export default function OrderReport() {
     // allocation (trạng thái ngoài 54/55/56/42/40, hoặc chưa phân bổ)
     // thì không khớp nhóm nào.
     const [selectedStock, setSelectedStock] = useState([]);
+    const [specialAgingFilter, setSpecialAgingFilter] = useState(false);
     const STOCK_FILTER_OPTIONS = [
         { value: 'printable', label: 'Đủ hàng' },
         { value: 'holding', label: 'Giữ hàng' },
@@ -721,7 +722,7 @@ export default function OrderReport() {
         try {
             const asc = specialSortOrder === 'asc';
             const orderBy = (q) => q.order('created_at', { ascending: asc }).order('id', { ascending: asc });
-            if (selectedTags.length > 0 || selectedStock.length > 0 || debouncedSearchCustomer.trim()) {
+            if (selectedTags.length > 0 || selectedStock.length > 0 || specialAgingFilter || debouncedSearchCustomer.trim()) {
                 // Đường lọc theo id: nhãn và/hoặc tồn kho và/hoặc tên
                 // khách / SĐT. Nhãn chỉ có trong bảng order_tags cho đơn
                 // mới đồng bộ; tồn kho lấy từ wms-allocation đã tải (cùng
@@ -756,6 +757,20 @@ export default function OrderReport() {
                         if (selectedStock.includes(stock.group)) stockIds.add(String(id));
                     });
                     candidateIds = candidateIds === null ? [...stockIds] : candidateIds.filter(id => stockIds.has(id));
+                }
+                if (specialAgingFilter) {
+                    // Đơn tồn >= 2 ngày: chỉ đơn đang ở nhóm đủ hàng
+                    // (printable) của wms-allocation, tính đúng công thức
+                    // như lọc báo cáo cũ (số ngày = floor((nay - ngày đủ
+                    // hàng) / 86400000); thiếu ngày tính là 0 nên bị loại).
+                    const agingIdSet = new Set();
+                    (data.printable || []).forEach(o => {
+                        const days = o.printable_date
+                            ? Math.floor((new Date() - new Date(o.printable_date)) / (1000 * 60 * 60 * 24))
+                            : 0;
+                        if (days >= 2) agingIdSet.add(String(o.id));
+                    });
+                    candidateIds = candidateIds === null ? [...agingIdSet] : candidateIds.filter(id => agingIdSet.has(id));
                 }
                 if (debouncedSearchProduct.trim()) {
                     const pq = escapeLike(debouncedSearchProduct.trim());
@@ -923,7 +938,7 @@ export default function OrderReport() {
 
     // Đổi tab / ngày / bộ lọc / sắp xếp thì quay về trang 1 rồi mới tải,
     // để khỏi tải nhầm trang cũ với bộ lọc mới.
-    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), selectedTags.join(','), selectedStock.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0'].join('|');
+    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), selectedTags.join(','), selectedStock.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0', specialAgingFilter ? '1' : '0'].join('|');
     useEffect(() => {
         if (!specialMode) return;
         if (specialFilterSigRef.current !== specialFilterSig) {
@@ -932,7 +947,7 @@ export default function OrderReport() {
         }
         fetchSpecialData(specialPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, selectedTags, selectedStock, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialPage, specialReloadToken, data]);
+    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, selectedTags, selectedStock, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialAgingFilter, specialPage, specialReloadToken, data]);
 
     // Đổi trang thì bỏ chọn cũ để nút Copy / Xuất chỉ tính trên trang mới.
     useEffect(() => {
@@ -1496,7 +1511,7 @@ export default function OrderReport() {
         specialPageOrders.forEach(o => { if (o.depot_id !== null && o.depot_id !== undefined) m.set(String(o.depot_id), DEPOT_NAMES[o.depot_id] || `Kho ${o.depot_id}`); });
         return [...m.entries()].map(([value, label]) => ({ value, label }));
     })();
-    const activeFilterCount = (searchProduct ? 1 : 0) + (searchNote ? 1 : 0) + (searchCustomer ? 1 : 0) + selectedStatus.length + selectedCarrier.length + selectedChannel.length + selectedCreator.length + selectedDepot.length + selectedTags.length + selectedStock.length + (printedFilter ? 1 : 0) + (missingCarrierFilter ? 1 : 0);
+    const activeFilterCount = (searchProduct ? 1 : 0) + (searchNote ? 1 : 0) + (searchCustomer ? 1 : 0) + selectedStatus.length + selectedCarrier.length + selectedChannel.length + selectedCreator.length + selectedDepot.length + selectedTags.length + selectedStock.length + (printedFilter ? 1 : 0) + (missingCarrierFilter ? 1 : 0) + (specialAgingFilter ? 1 : 0);
     const handleClearSpecialFilters = () => {
         setSearchProduct('');
         setSearchNote('');
@@ -1508,6 +1523,7 @@ export default function OrderReport() {
         setSelectedDepot([]);
         setSelectedTags([]);
         setSelectedStock([]);
+        setSpecialAgingFilter(false);
         setPrintedFilter('');
         setMissingCarrierFilter(false);
         setSpecialSortOrder('desc');
@@ -2298,6 +2314,10 @@ export default function OrderReport() {
                                 <label className="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" checked={missingCarrierFilter} onChange={(e) => setMissingCarrierFilter(e.target.checked)} className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500" />
                                     <span className="text-sm font-medium text-gray-700">Chưa có Mã vận đơn</span>
+                                </label>
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" checked={specialAgingFilter} onChange={(e) => setSpecialAgingFilter(e.target.checked)} className="w-4 h-4 text-red-600 rounded border-gray-300 focus:ring-red-500" />
+                                    <span className="text-sm font-medium text-gray-700">Chỉ đơn tồn &gt;= 2 ngày (đơn đủ hàng)</span>
                                 </label>
                             </div>
                             <div className="px-5 py-4 border-t border-gray-200 flex justify-between gap-3">

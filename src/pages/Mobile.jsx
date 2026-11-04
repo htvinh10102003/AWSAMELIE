@@ -44,6 +44,47 @@ const CHANNEL_NAMES = {
     '49': 'Zalo OA', '50': 'Shopee chat', '51': 'Lazada chat', '52': 'Zalo cá nhân'
 };
 const SUPER_OWNER_EMAIL = 'contact.hotavinh@gmail.com';
+
+// Tên khách chỉ nằm trong raw_data (không có cột riêng): thử dạng envelope
+// raw_data.data.shippingAddress trước, rồi dạng trần raw_data.shippingAddress.
+// Không có tên thì trả về '' — giao diện bỏ hẳn hậu tố, không bịa tên.
+const getCustomerName = (order) => {
+    let raw = order?.raw_data;
+    if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { return ''; } }
+    const name = raw?.data?.shippingAddress?.name || raw?.shippingAddress?.name;
+    return typeof name === 'string' ? name.trim() : '';
+};
+
+// Giờ VN = UTC + 7 bằng cộng tay, KHÔNG dùng Intl timezone (trình duyệt của
+// Vinh báo 'Invalid time zone specified' rồi trắng trang nếu dùng).
+const pad2 = (n) => String(n).padStart(2, '0');
+const toVnDate = (iso) => {
+    const d = new Date(new Date(iso).getTime() + 7 * 3600 * 1000);
+    return isNaN(d.getTime()) ? null : d;
+};
+const fmtVnCreated = (iso) => {
+    const d = iso ? toVnDate(iso) : null;
+    if (!d) return '';
+    return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+};
+
+// Cảnh báo viền đỏ cho đơn cần bàn giao lại, theo giờ VN hiện tại:
+// - Buổi sáng (giờ hiện tại < 12h): đơn tạo ngày hôm qua (giờ VN).
+// - Buổi chiều (giờ hiện tại >= 12h, kể cả đúng 12h): đơn tạo hôm nay trước 14h (giờ VN).
+// Không áp cho danh sách hay ngày khác.
+const isHandoverWarning = (order) => {
+    const created = order?.created_at ? toVnDate(order.created_at) : null;
+    if (!created) return false;
+    const nowVn = toVnDate(new Date().toISOString());
+    if (!nowVn) return false;
+    const sameVnDate = (a, b) => a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
+    if (nowVn.getUTCHours() < 12) {
+        const yest = new Date(Date.UTC(nowVn.getUTCFullYear(), nowVn.getUTCMonth(), nowVn.getUTCDate()));
+        yest.setUTCDate(yest.getUTCDate() - 1);
+        return sameVnDate(created, yest);
+    }
+    return sameVnDate(created, nowVn) && created.getUTCHours() < 14;
+};
 const FEATURE_PARENTS = [
     { id: 'dashboard', name: 'Dashboard' }, { id: 'print_orders', name: 'Đơn in' },
     { id: 'packing', name: 'Đóng gói' }, { id: 'return_orders', name: 'Báo cáo đơn hoàn' },
@@ -507,7 +548,27 @@ export default function Mobile() {
                 .order('printed_at', { ascending: false })
                 .range(0, 999);
             if (reconErr) throw reconErr;
-            setReconData(rows || []);
+            let mergedRecon = rows || [];
+            // Chỉ kéo thêm raw_data cho đơn cần bàn giao lại (để lấy tên khách),
+            // chia đợt 200 ID như fetchBbDetail, không phình query chính.
+            // Lỗi ở bước này không được làm hỏng cả danh sách đối soát.
+            try {
+                const handoverIds = mergedRecon.filter(o => [42, 56, 57].includes(Number(o.status))).map(o => o.id);
+                if (handoverIds.length > 0) {
+                    const rawMap = {};
+                    for (let i = 0; i < handoverIds.length; i += 200) {
+                        const chunk = handoverIds.slice(i, i + 200);
+                        const { data: rawRows, error: rawErr } = await supabase
+                            .from('orders')
+                            .select('id, raw_data')
+                            .in('id', chunk);
+                        if (rawErr) throw rawErr;
+                        (rawRows || []).forEach(o => { rawMap[String(o.id)] = o.raw_data; });
+                    }
+                    mergedRecon = mergedRecon.map(o => (Object.prototype.hasOwnProperty.call(rawMap, String(o.id)) ? { ...o, raw_data: rawMap[String(o.id)] } : o));
+                }
+            } catch (e) { console.error('Không kéo được raw_data cho đối soát:', e.message); }
+            setReconData(mergedRecon);
         } catch (err) { setReconError(err.message || 'Không tải được đối soát.'); }
         finally { setReconLoading(false); }
     };
@@ -766,19 +827,23 @@ export default function Mobile() {
     const visibleList = currentList.slice(0, visibleCount);
     const reconVisibleList = reconTotals.needHandover.slice(0, reconVisible);
 
-    const OrderCard = ({ order, showStock = true, showChannel = false }) => {
+    const OrderCard = ({ order, showStock = true, showChannel = false, showCustomer = false, showCreated = false, warnHandover = false }) => {
         const stock = stockOf(order);
         const products = order.order_products || [];
+        const customerName = showCustomer ? getCustomerName(order) : '';
+        const createdLabel = showCreated ? fmtVnCreated(order.created_at) : '';
+        const warning = warnHandover && isHandoverWarning(order);
         const shortItem = [...(data.holding || []), ...(data.outOfStock || [])]
             .find(o => o.id === order.id)?.debug_shortItems?.[0];
         return (
-            <div className="bg-white rounded-xl border border-slate-200 p-3">
+            <div className={`bg-white rounded-xl border p-3 ${warning ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-200'}`}>
                 <div className="flex items-start justify-between gap-2">
-                    <div className="font-bold text-slate-900 text-base leading-tight">{order.id}</div>
+                    <div className="font-bold text-slate-900 text-base leading-tight">{showCustomer ? `ID: ${order.id}${customerName ? ` - [${customerName}]` : ''}` : order.id}</div>
                     {order.carrier_code && (
                         <span className="shrink-0 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded">{order.carrier_code}</span>
                     )}
                 </div>
+                {createdLabel && <div className="text-xs text-slate-500 mt-1">Tạo: {createdLabel}</div>}
                 <div className="mt-2 space-y-1">
                     {products.length === 0 && <div className="text-sm text-slate-400">Chưa có sản phẩm</div>}
                     {products.map((p, i) => (
@@ -944,7 +1009,7 @@ export default function Mobile() {
                         <div className="font-bold text-slate-900 text-sm">Cần bàn giao lại ({reconTotals.needHandover.length})</div>
                         {reconLoading && <div className="text-center text-sm text-slate-500 font-medium py-10">Đang tải...</div>}
                         {!reconLoading && reconVisibleList.length === 0 && <div className="text-center text-sm text-slate-500 py-6">Tất cả đơn in hôm nay đã được bàn giao.</div>}
-                        {!reconLoading && reconVisibleList.map(order => <OrderCard key={order.id} order={order} showStock={false} showChannel />)}
+                        {!reconLoading && reconVisibleList.map(order => <OrderCard key={order.id} order={order} showStock={false} showChannel showCustomer showCreated warnHandover />)}
                         {!reconLoading && reconTotals.needHandover.length > reconVisible && (
                             <button onClick={() => setReconVisible(c => c + 30)} className="w-full py-3 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-700">
                                 Tải thêm ({reconTotals.needHandover.length - reconVisible} đơn còn lại)

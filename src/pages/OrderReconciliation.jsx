@@ -40,6 +40,47 @@ const getChannelBadge = (channelId) => {
   );
 };
 
+// Tên khách chỉ nằm trong raw_data (không có cột riêng): thử dạng envelope
+// raw_data.data.shippingAddress trước, rồi dạng trần raw_data.shippingAddress.
+// Không có tên thì trả về '' — giao diện bỏ hẳn hậu tố, không bịa tên.
+const getCustomerName = (order) => {
+  let raw = order?.raw_data;
+  if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { return ''; } }
+  const name = raw?.data?.shippingAddress?.name || raw?.shippingAddress?.name;
+  return typeof name === 'string' ? name.trim() : '';
+};
+
+// Giờ VN = UTC + 7 bằng cộng tay, KHÔNG dùng Intl timezone (trình duyệt của
+// Vinh báo 'Invalid time zone specified' rồi trắng trang nếu dùng).
+const pad2 = (n) => String(n).padStart(2, '0');
+const toVnDate = (iso) => {
+  const d = new Date(new Date(iso).getTime() + 7 * 3600 * 1000);
+  return isNaN(d.getTime()) ? null : d;
+};
+const fmtVnCreated = (iso) => {
+  const d = iso ? toVnDate(iso) : null;
+  if (!d) return '';
+  return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+};
+
+// Cảnh báo viền đỏ cho đơn cần bàn giao lại, theo giờ VN hiện tại:
+// - Buổi sáng (giờ hiện tại < 12h): đơn tạo ngày hôm qua (giờ VN).
+// - Buổi chiều (giờ hiện tại >= 12h, kể cả đúng 12h): đơn tạo hôm nay trước 14h (giờ VN).
+// Không áp cho danh sách hay ngày khác.
+const isHandoverWarning = (order) => {
+  const created = order?.created_at ? toVnDate(order.created_at) : null;
+  if (!created) return false;
+  const nowVn = toVnDate(new Date().toISOString());
+  if (!nowVn) return false;
+  const sameVnDate = (a, b) => a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
+  if (nowVn.getUTCHours() < 12) {
+    const yest = new Date(Date.UTC(nowVn.getUTCFullYear(), nowVn.getUTCMonth(), nowVn.getUTCDate()));
+    yest.setUTCDate(yest.getUTCDate() - 1);
+    return sameVnDate(created, yest);
+  }
+  return sameVnDate(created, nowVn) && created.getUTCHours() < 14;
+};
+
 // Hàm chuẩn hóa để tương thích cả dữ liệu mới (lưu chuỗi ID) và dữ liệu cũ (lưu object)
 const extractOrderId = (item) => (typeof item === 'object' && item !== null ? item.id : item);
 
@@ -230,7 +271,7 @@ export default function OrderReconciliation() {
         if (rawSurplus.length > 0 && typeof rawSurplus[0] === 'string') {
           const { data: surplusData } = await supabase
             .from('orders')
-            .select('id, carrier_code, status, sale_channel, order_products (product_code, product_name, quantity)')
+            .select('id, created_at, carrier_code, status, sale_channel, raw_data, order_products (product_code, product_name, quantity)')
             .in('id', rawSurplus);
           
           const foundMap = {};
@@ -290,7 +331,7 @@ export default function OrderReconciliation() {
           const { data: ordersData, error: ordersError } = await supabase
             .from('orders')
             .select(`
-              id, created_at, carrier_code, status, printed_at, packed_at, carrier_date, sale_channel,
+              id, created_at, carrier_code, status, printed_at, packed_at, carrier_date, sale_channel, raw_data,
               order_products (product_code, product_name, quantity)
             `)
             .in('id', chunk);
@@ -342,7 +383,23 @@ export default function OrderReconciliation() {
         .lte('printed_at', endOfDay);
 
       if (error) throw error;
-      setTodayOrders(data || []);
+      let mergedToday = data || [];
+      // Kéo thêm raw_data (tên khách) theo đợt 200 ID, không phình query chính.
+      // Lỗi ở bước này không được làm hỏng cả danh sách đối soát.
+      const todayIds = mergedToday.map(o => o.id);
+      if (todayIds.length > 0) {
+        try {
+          const rawMap = {};
+          for (let i = 0; i < todayIds.length; i += 200) {
+            const chunk = todayIds.slice(i, i + 200);
+            const { data: rawRows, error: rawErr } = await supabase.from('orders').select('id, raw_data').in('id', chunk);
+            if (rawErr) throw rawErr;
+            (rawRows || []).forEach(o => { rawMap[String(o.id)] = o.raw_data; });
+          }
+          mergedToday = mergedToday.map(o => (Object.prototype.hasOwnProperty.call(rawMap, String(o.id)) ? { ...o, raw_data: rawMap[String(o.id)] } : o));
+        } catch (e) { console.error('Không kéo được raw_data cho đối soát:', e.message); }
+      }
+      setTodayOrders(mergedToday);
     } catch (err) {
       console.error(" Lỗi tải đơn hàng đối soát:", err.message);
     } finally {
@@ -456,7 +513,7 @@ export default function OrderReconciliation() {
     } else {
       const { data } = await supabase
         .from('orders')
-        .select(`id, carrier_code, status, sale_channel, order_products (product_code, product_name, quantity)`)
+        .select(`id, created_at, carrier_code, status, sale_channel, raw_data, order_products (product_code, product_name, quantity)`)
         .or(`id.eq.${code},carrier_code.eq.${code}`)
         .maybeSingle();
 
@@ -953,14 +1010,18 @@ export default function OrderReconciliation() {
               ) : (
                 expectedCorrect.map((order, idx) => {
                   const scanned = isScanned(order);
+                  const customerName = getCustomerName(order);
+                  const createdLabel = fmtVnCreated(order.created_at);
+                  const warning = !scanned && isHandoverWarning(order);
                   return (
-                    <div key={order.id + idx} className={`p-3 border rounded-xl transition-all duration-300 ${scanned ? 'bg-emerald-50/60 border-emerald-300' : 'bg-white border-slate-200 shadow-sm'}`}>
+                    <div key={order.id + idx} className={`p-3 border rounded-xl transition-all duration-300 ${scanned ? 'bg-emerald-50/60 border-emerald-300' : warning ? 'bg-white border-red-500 ring-1 ring-red-500 shadow-sm' : 'bg-white border-slate-200 shadow-sm'}`}>
                       <div className="flex justify-between items-start text-xs font-bold mb-2">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
-                            <span className={scanned ? 'text-emerald-700' : 'text-slate-800'}>ID: {order.id}</span>
+                            <span className={scanned ? 'text-emerald-700' : 'text-slate-800'}>ID: {order.id}{customerName ? ` - [${customerName}]` : ''}</span>
                             {getChannelBadge(order.sale_channel)}
                           </div>
+                          {createdLabel && <span className="text-xs text-slate-400 font-medium">Tạo: {createdLabel}</span>}
                           <span className="text-xs text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
                         </div>
                         {scanned ? <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold">ĐÃ TRẢ LẠI</span> 
@@ -993,14 +1054,17 @@ export default function OrderReconciliation() {
               ) : (
                 expectedCanceled.map((order, idx) => {
                   const scanned = isScanned(order);
+                  const customerName = getCustomerName(order);
+                  const createdLabel = fmtVnCreated(order.created_at);
                   return (
                     <div key={order.id + idx} className={`p-3 border rounded-xl transition-all duration-300 ${scanned ? 'bg-red-50 border-red-300' : 'bg-white border-red-200 shadow-sm'}`}>
                       <div className="flex justify-between items-start gap-2 text-xs font-bold mb-2">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
-                            <span className={scanned ? 'text-red-800' : 'text-red-600'}>ID: {order.id}</span>
+                            <span className={scanned ? 'text-red-800' : 'text-red-600'}>ID: {order.id}{customerName ? ` - [${customerName}]` : ''}</span>
                             {getChannelBadge(order.sale_channel)}
                           </div>
+                          {createdLabel && <span className="text-xs text-slate-400 font-medium">Tạo: {createdLabel}</span>}
                           <span className="text-xs text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
                         </div>
                         {scanned ? <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">ĐÃ LẤY RA</span> 
@@ -1030,17 +1094,22 @@ export default function OrderReconciliation() {
               {resolvedSurplusOrders.length === 0 ? (
                 <div className="text-center text-slate-400 text-xs py-10">Chưa quét trúng mã hàng lạc nào.</div>
               ) : (
-                resolvedSurplusOrders.map((order, idx) => (
+                resolvedSurplusOrders.map((order, idx) => {
+                  const customerName = getCustomerName(order);
+                  const createdLabel = fmtVnCreated(order.created_at);
+                  return (
                   <div key={order.id + idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
                     <div className="flex flex-col gap-1 text-xs font-bold">
                       <div className="flex items-center gap-2">
-                        <span className="text-slate-700">ID: {order.id}</span>
+                        <span className="text-slate-700">ID: {order.id}{customerName ? ` - [${customerName}]` : ''}</span>
                         {getChannelBadge(order.sale_channel)}
                       </div>
                       <span className="text-slate-500 text-xs font-medium">Trạng thái: {STATUS_MAP[order.status] || order.status}</span>
+                      {createdLabel && <span className="text-slate-400 text-xs font-medium">Tạo: {createdLabel}</span>}
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -1061,12 +1130,19 @@ export default function OrderReconciliation() {
                   <CheckCircle2 size={32} className="text-emerald-500" /><span>Đã nhận đủ đơn!</span>
                 </div>
               ) : (
-                allMissing.map((order, idx) => (
+                allMissing.map((order, idx) => {
+                  const customerName = getCustomerName(order);
+                  const createdLabel = fmtVnCreated(order.created_at);
+                  return (
                   <div key={order.id + idx} className="p-3 bg-white border border-amber-200 rounded-xl flex items-center justify-between">
-                    <div className="text-xs font-bold text-amber-800">ID: {order.id}</div>
+                    <div className="flex flex-col gap-0.5">
+                      <div className="text-xs font-bold text-amber-800">ID: {order.id}{customerName ? ` - [${customerName}]` : ''}</div>
+                      {createdLabel && <div className="text-[11px] font-medium text-amber-600/80">Tạo: {createdLabel}</div>}
+                    </div>
                     {getChannelBadge(order.sale_channel)}
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

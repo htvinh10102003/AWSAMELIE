@@ -54,6 +54,29 @@ serve(async (req) => {
       orderPage++;
     }
 
+    // Ngày đủ hàng: đọc từ bảng orders_printabledate (order_id -> printable_date).
+    // Bảng này chỉ lưu ngày đầu tiên đơn vào nhóm đủ hàng; giao diện đọc
+    // order.printable_date từ dữ liệu hàm này trả về để hiện badge "X ngày"
+    // và lọc đơn tồn >= 2 ngày. Lỗi đọc không được làm hỏng phân bổ:
+    // rơi về map rỗng và bỏ qua bước ghi mới.
+    let printableDateMap = {};
+    let printableDateReadOk = true;
+    try {
+      let pdPage = 0;
+      while (true) {
+        const { data, error } = await supabase.from('orders_printabledate').select('order_id, printable_date').range(pdPage * pageSize, (pdPage + 1) * pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        data.forEach(r => { if (r.order_id) printableDateMap[String(r.order_id)] = r.printable_date; });
+        if (data.length < pageSize) break;
+        pdPage++;
+      }
+    } catch (e) {
+      console.error('Không đọc được orders_printabledate:', e.message);
+      printableDateMap = {};
+      printableDateReadOk = false;
+    }
+
     if (!rawOrders || rawOrders.length === 0) {
       return new Response(JSON.stringify({ printable: [], holding: [], outOfStock: [], invalidCount: 0 }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
@@ -136,6 +159,23 @@ serve(async (req) => {
       if (isPacked || itemsAllocated === totalItemsNeeded) printable.push(order);
       else if (itemsAllocated > 0) holding.push(order);
       else outOfStock.push(order);
+    });
+
+    // Gắn ngày đủ hàng vào từng đơn trả về + ghi dòng mới cho đơn lần
+    // đầu vào nhóm đủ hàng (ngày đầu tiên đủ hàng). Chỉ ghi khi đã đọc
+    // được bảng (tránh ghi trùng khi không biết dòng nào đã có). Lỗi ghi
+    // chỉ log, không làm hỏng kết quả phân bổ.
+    const nowIso = new Date().toISOString();
+    if (printableDateReadOk) {
+      const missingIds = printable.filter(o => !printableDateMap[String(o.id)]).map(o => String(o.id));
+      if (missingIds.length > 0) {
+        const { error: insErr } = await supabase.from('orders_printabledate').insert(missingIds.map(id => ({ order_id: id, printable_date: nowIso })));
+        if (insErr) console.error('Không ghi được orders_printabledate:', insErr.message);
+        else missingIds.forEach(id => { printableDateMap[id] = nowIso; });
+      }
+    }
+    [printable, holding, outOfStock].forEach(list => {
+      list.forEach(o => { o.printable_date = printableDateMap[String(o.id)] || null; });
     });
 
     return new Response(JSON.stringify({ printable, holding, outOfStock, invalidCount, total_orders: rawOrders.length, total_products: rawInventory.length }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
