@@ -5,6 +5,69 @@ import {
   Truck, Home, Printer, FileSpreadsheet, UploadCloud, Download, Plus, Trash2, X, Settings2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import JsBarcode from 'jsbarcode';
+import QRCode from 'qrcode';
+
+const escapeHtml = (s) => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// Vị trí góc tem cho Số lệnh (dùng chung cho bản xem trước và bản in thật)
+const ORDER_CORNER_STYLE = {
+  'top-left': { top: '0.5mm', left: '1mm' },
+  'top-right': { top: '0.5mm', right: '1mm' },
+  'bottom-left': { bottom: '0.5mm', left: '1mm' },
+  'bottom-right': { bottom: '0.5mm', right: '1mm' },
+};
+
+// Một tem mẫu trong dải xem trước: cùng bố cục với bản in thật (35mm x 20mm),
+// chỉ khác là vẽ mã vạch/QR bằng thư viện JS ngay trong trang để xem trực tiếp.
+function PreviewLabel({ item, config }) {
+  const svgRef = useRef(null);
+  const [qrUrl, setQrUrl] = useState('');
+  const today = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+  useEffect(() => {
+    if (config.codeType !== 'barcode' || !svgRef.current) return;
+    try {
+      JsBarcode(svgRef.current, item.barcode, {
+        format: 'CODE128', width: config.barcodeWidth, height: config.barcodeHeight,
+        displayValue: false, margin: 0,
+      });
+    } catch { /* mã lỗi thì vẫn hiện chữ mã bên dưới */ }
+  }, [item.barcode, config.codeType, config.barcodeWidth, config.barcodeHeight]);
+
+  useEffect(() => {
+    if (config.codeType !== 'qrcode') return;
+    let alive = true;
+    QRCode.toDataURL(item.barcode, { width: config.qrSize * 2, margin: 0 })
+      .then(url => { if (alive) setQrUrl(url); })
+      .catch(() => { if (alive) setQrUrl(''); });
+    return () => { alive = false; };
+  }, [item.barcode, config.codeType, config.qrSize]);
+
+  const showOrder = config.showOrderNumber && config.orderNumber.trim() !== '';
+  return (
+    <div style={{ position: 'relative', width: '35mm', height: '20mm', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', textAlign: 'center', boxSizing: 'border-box', padding: '0 1mm', background: 'white', border: '1px dashed #cbd5e1' }}>
+      {config.showShopName && <div style={{ fontSize: 7, fontWeight: 'bold', marginBottom: '0.5mm', textTransform: 'uppercase', overflowWrap: 'anywhere', width: '100%' }}>{config.shopName}</div>}
+      <div style={{ transform: `scale(${config.codeScale / 100})`, transformOrigin: 'center center', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+        {config.codeType === 'barcode' ? (
+          <>
+            <svg ref={svgRef} style={{ width: '100%', maxHeight: '12mm' }} />
+            <div style={{ fontSize: 8, fontWeight: 'bold', width: '100%', wordBreak: 'break-all', overflowWrap: 'anywhere', lineHeight: 1.2 }}>{item.barcode}</div>
+          </>
+        ) : (
+          <>
+            {qrUrl ? <img src={qrUrl} alt="" style={{ width: config.qrSize, height: config.qrSize }} /> : <div style={{ width: config.qrSize, height: config.qrSize, background: '#f1f5f9' }} />}
+            <div style={{ fontSize: 8, fontWeight: 'bold', marginTop: 2, letterSpacing: '0.5px', width: '100%', wordBreak: 'break-all', overflowWrap: 'anywhere', lineHeight: 1.2 }}>{item.barcode}</div>
+          </>
+        )}
+      </div>
+      {config.showProductName && <div style={{ fontSize: 8.5, fontWeight: 'bold', lineHeight: 1.2, width: '100%', overflowWrap: 'anywhere', wordBreak: 'break-word', marginTop: '0.5mm' }}>{item.name}</div>}
+      {config.showPrintDate && <div style={{ position: 'absolute', bottom: '0.5mm', right: '1mm', fontSize: 4, color: '#333' }}>{today}</div>}
+      {showOrder && <div style={{ position: 'absolute', fontWeight: 'bold', lineHeight: 1, zIndex: 2, fontSize: config.orderFontSize, ...ORDER_CORNER_STYLE[config.orderCorner] }}>{config.orderNumber}</div>}
+    </div>
+  );
+}
 
 export default function InventoryReport() {
   // ==========================================
@@ -37,7 +100,11 @@ export default function InventoryReport() {
     barcodeWidth: 1.2,   
     barcodeHeight: 26,   
     qrSize: 45,
-    codeScale: 100       // Tỷ lệ scale tổng thể (%)
+    codeScale: 100,      // Tỷ lệ scale tổng thể (%)
+    orderNumber: '',     // Số lệnh in ở góc tem (để trống = không in)
+    showOrderNumber: true,
+    orderCorner: 'top-right', // top-left | top-right | bottom-left | bottom-right
+    orderFontSize: 7,    // Cỡ chữ số lệnh (px)
   });
 
   const searchInputRef = useRef(null);
@@ -442,6 +509,8 @@ export default function InventoryReport() {
             font-weight: bold;
             margin-bottom: 0.5mm;
             text-transform: uppercase;
+            width: 100%;
+            overflow-wrap: anywhere;
           }
           .barcode-container {
             display: flex;
@@ -460,22 +529,41 @@ export default function InventoryReport() {
              align-items: center;
              justify-content: center;
           }
+          .code-text {
+             font-size: 8px;
+             font-weight: bold;
+             width: 100%;
+             text-align: center;
+             line-height: 1.2;
+             word-break: break-all;
+             overflow-wrap: anywhere;
+          }
           .qr-text {
              font-size: 8px;
              font-weight: bold;
              margin-top: 2px;
              letter-spacing: 0.5px;
+             width: 100%;
+             word-break: break-all;
+             overflow-wrap: anywhere;
+             line-height: 1.2;
           }
           .product-name {
             font-size: 8.5px;
             font-weight: bold;
             line-height: 1.2;
             width: 100%;
-            max-height: 22px; 
-            overflow: hidden;
             white-space: normal;
             word-wrap: break-word;
+            overflow-wrap: anywhere;
+            word-break: break-word;
             margin-top: 0.5mm;
+          }
+          .order-number {
+            position: absolute;
+            font-weight: bold;
+            line-height: 1;
+            z-index: 2;
           }
           .print-date {
             position: absolute;
@@ -489,28 +577,41 @@ export default function InventoryReport() {
       <body>
     `;
 
+    // Vị trí góc tem cho Số lệnh (in HTML, cùng quy ước với bản xem trước)
+    const orderCornerStyle = {
+      'top-left': 'top:0.5mm;left:1mm;',
+      'top-right': 'top:0.5mm;right:1mm;',
+      'bottom-left': 'bottom:0.5mm;left:1mm;',
+      'bottom-right': 'bottom:0.5mm;right:1mm;',
+    }[printConfig.orderCorner] || 'top:0.5mm;right:1mm;';
+    const orderNumberHTML = (printConfig.showOrderNumber && printConfig.orderNumber.trim())
+      ? `<div class="order-number" style="${orderCornerStyle}font-size:${printConfig.orderFontSize}px;">${escapeHtml(printConfig.orderNumber)}</div>`
+      : '';
+
     chunks.forEach(chunk => {
       htmlContent += `<div class="row">`;
       chunk.forEach(item => {
         let renderCodeHTML = '';
 
         if (printConfig.codeType === 'barcode') {
+          // Chữ mã vẽ bằng HTML (không dùng chữ của JsBarcode) để mã dài tự xuống dòng trong khổ tem
           renderCodeHTML = `
-            <svg class="barcode" 
-                 jsbarcode-value="${item.barcode}"
-                 jsbarcode-displayvalue="true"
+            <svg class="barcode"
+                 jsbarcode-value="${escapeHtml(item.barcode)}"
+                 jsbarcode-displayvalue="false"
                  jsbarcode-fontsize="08"
                  jsbarcode-height="${printConfig.barcodeHeight}"
                  jsbarcode-width="${printConfig.barcodeWidth}"
                  jsbarcode-margin="0"
                  jsbarcode-textmargin="2">
             </svg>
+            <div class="code-text">${escapeHtml(item.barcode)}</div>
           `;
         } else {
           renderCodeHTML = `
             <div class="qrcode-wrapper">
-               <div class="qrcode" data-value="${item.barcode}"></div>
-               <div class="qr-text">${item.barcode}</div>
+               <div class="qrcode" data-value="${escapeHtml(item.barcode)}"></div>
+               <div class="qr-text">${escapeHtml(item.barcode)}</div>
             </div>
           `;
         }
@@ -518,14 +619,15 @@ export default function InventoryReport() {
         // ️ SỬ DỤNG transform: scale ĐỂ PHÓNG TO/THU NHỎ TOÀN BỘ CODE
         htmlContent += `
           <div class="label">
-            ${printConfig.showShopName ? `<div class="shop-name">${printConfig.shopName}</div>` : ''}
-            
+            ${printConfig.showShopName ? `<div class="shop-name">${escapeHtml(printConfig.shopName)}</div>` : ''}
+
             <div class="barcode-container" style="transform: scale(${printConfig.codeScale / 100}); transform-origin: center center;">
               ${renderCodeHTML}
             </div>
-            
-            ${printConfig.showProductName ? `<div class="product-name">${item.name}</div>` : ''}
+
+            ${printConfig.showProductName ? `<div class="product-name">${escapeHtml(item.name)}</div>` : ''}
             ${printConfig.showPrintDate ? `<div class="print-date">${today}</div>` : ''}
+            ${orderNumberHTML}
           </div>
         `;
       });
@@ -564,6 +666,14 @@ export default function InventoryReport() {
     printWindow.document.write(htmlContent);
     printWindow.document.close();
   };
+
+  // Hàng tem xem trước: 3 tem hợp lệ đầu tiên, chưa có thì dùng 1 tem mẫu + 2 ô trống
+  const previewRow = (() => {
+    const valid = printItems.filter(i => i.status === 'ok' && i.qty > 0);
+    const base = valid.length > 0 ? valid.slice(0, 3) : [{ name: 'SẢN PHẨM MẪU', barcode: '1234567890123' }];
+    while (base.length < 3) base.push({ name: '', barcode: '' });
+    return base;
+  })();
 
   return (
     <div className="space-y-6 provinces pb-10 animate-in fade-in duration-300">
@@ -922,6 +1032,77 @@ export default function InventoryReport() {
                       <input type="checkbox" checked={printConfig.showPrintDate} onChange={() => setPrintConfig({...printConfig, showPrintDate: !printConfig.showPrintDate})} className="sr-only peer" />
                       <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
                     </label>
+                  </div>
+
+                  {/* CẤU HÌNH SỐ LỆNH (in ở góc tem) */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-700">Hiển thị Số lệnh</span>
+                        <span className="text-xs text-slate-400 mt-0.5">In ở góc tem, xem trước ngay bên dưới</span>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" checked={printConfig.showOrderNumber} onChange={() => setPrintConfig({...printConfig, showOrderNumber: !printConfig.showOrderNumber})} className="sr-only peer" />
+                        <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
+                    </div>
+                    {printConfig.showOrderNumber && (
+                      <>
+                        <input
+                          type="text"
+                          value={printConfig.orderNumber}
+                          onChange={(e) => setPrintConfig({...printConfig, orderNumber: e.target.value})}
+                          placeholder="Nhập số lệnh, VD: 65-LD (để trống = không in)"
+                          className="w-full text-xs font-bold px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500 transition"
+                        />
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-bold text-slate-600">Góc tem</span>
+                          <select
+                            value={printConfig.orderCorner}
+                            onChange={e => setPrintConfig({...printConfig, orderCorner: e.target.value})}
+                            className="text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg p-1.5 outline-none focus:border-blue-500 cursor-pointer"
+                          >
+                            <option value="top-left">Trái trên</option>
+                            <option value="top-right">Phải trên</option>
+                            <option value="bottom-left">Trái dưới</option>
+                            <option value="bottom-right">Phải dưới</option>
+                          </select>
+                        </div>
+                        <div>
+                          <div className="flex justify-between mb-1">
+                            <label className="text-[11px] font-bold text-slate-600">Cỡ chữ số lệnh</label>
+                            <span className="text-[11px] font-bold text-blue-600">{printConfig.orderFontSize}px</span>
+                          </div>
+                          <input
+                            type="range" min="5" max="12" step="0.5"
+                            value={printConfig.orderFontSize}
+                            onChange={e => setPrintConfig({...printConfig, orderFontSize: Number(e.target.value)})}
+                            className="w-full accent-blue-600 cursor-pointer"
+                          />
+                        </div>
+                        <p className="text-[11px] text-slate-400">Nếu trùng góc ngày in, 2 chữ sẽ chồng nhau — chọn góc khác là hết.</p>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* XEM TRƯỚC TEM (cập nhật trực tiếp khi chỉnh cài đặt) */}
+                <div className="pt-6 mt-6 border-t border-slate-100">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-bold text-xs text-slate-700 uppercase tracking-wide">Xem trước tem</span>
+                    <span className="text-[11px] font-bold text-slate-400">{printItems.filter(i => i.status === 'ok' && i.qty > 0).length > 0 ? '3 tem đầu tiên' : 'Tem mẫu'}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mb-3">Chỉnh góc, cỡ chữ, cỡ mã ở trên — tem mẫu đổi theo ngay, chưa in gì cả.</p>
+                  <div className="overflow-x-auto bg-slate-100 rounded-xl p-3">
+                    <div style={{ width: '105mm', height: '18mm', transform: 'scale(0.9)', transformOrigin: 'top left' }}>
+                      <div style={{ display: 'flex', width: '105mm', height: '20mm' }}>
+                        {previewRow.map((it, i) => it.barcode ? (
+                          <PreviewLabel key={i} item={it} config={printConfig} />
+                        ) : (
+                          <div key={i} style={{ width: '35mm', height: '20mm', background: 'white', border: '1px dashed #cbd5e1', boxSizing: 'border-box' }} />
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
