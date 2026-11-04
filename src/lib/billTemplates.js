@@ -56,6 +56,7 @@ export const PLACEHOLDERS = [
     { key: 'PHUONG_QUAN_TINH_NGUOI_NHAN', label: 'Phường/quận/tỉnh người nhận', group: 'recipient', hint: 'Đơn chỉ lưu mã số tỉnh/huyện/xã nên mục này thường để trống, không bịa tên' },
     { key: 'MA_VACH_DON_HANG', label: 'Mã vạch đơn hàng', group: 'code', hint: 'Ảnh barcode Code128 của mã vận đơn' },
     { key: 'MA_QR_DON_HANG', label: 'Mã QR đơn hàng', group: 'code', hint: 'Ảnh QR của mã vận đơn' },
+    { key: 'MA_VACH_ID_DON_HANG', label: 'Mã vạch ID đơn hàng', group: 'code', hint: 'Ảnh barcode Code128 của ID đơn hàng' },
     { key: 'TEN_SP', label: 'Tên sản phẩm', group: 'product', hint: 'Chỉ lặp trong dòng bảng sản phẩm, ngoài bảng lấy sản phẩm đầu tiên' },
     { key: 'SO_LUONG_SP', label: 'Số lượng sản phẩm', group: 'product', hint: 'Số lượng của dòng sản phẩm đó' },
     { key: 'GIA_SP', label: 'Giá sản phẩm', group: 'product', hint: 'Đơn giá của dòng sản phẩm đó' },
@@ -185,6 +186,7 @@ export const renderBillHtml = async (templateHtml, billData) => {
     const carrierCode = scalars.MA_VAN_DON;
     html = html.split('__MA_VACH_DON_HANG__').join(barcodeSvg(carrierCode));
     html = html.split('__MA_QR_DON_HANG__').join(await qrImg(carrierCode));
+    html = html.split('__MA_VACH_ID_DON_HANG__').join(barcodeSvg(scalars.ID_DON_HANG));
     // 3. Placeholder text còn lại (sản phẩm ngoài bảng lấy sản phẩm đầu).
     const first = (products && products[0]) || {};
     const all = { ...scalars };
@@ -204,6 +206,7 @@ export const BLOCK_TYPES = [
     { type: 'business', label: 'Tên doanh nghiệp' },
     { type: 'logo', label: 'Logo doanh nghiệp' },
     { type: 'barcode', label: 'Mã vạch đơn hàng' },
+    { type: 'barcode-id', label: 'Mã vạch ID đơn' },
     { type: 'qr', label: 'Mã QR đơn hàng' },
     { type: 'text', label: 'Dòng chữ (kèm placeholder)' },
     { type: 'sender', label: 'Khối người gửi' },
@@ -220,6 +223,7 @@ export const newBlock = (type) => {
     if (type === 'heading') return { ...base, text: 'ĐƠN NGOẠI SÀN', fontSize: 20, align: 'center', bold: true };
     if (type === 'text') return { ...base, text: '' };
     if (type === 'barcode') return { ...base, align: 'center' };
+    if (type === 'barcode-id') return { ...base, align: 'center' };
     if (type === 'qr') return { ...base, align: 'center', size: 140 };
     if (type === 'logo') return { ...base, align: 'center' };
     if (type === 'business') return { ...base, fontSize: 16, align: 'center', bold: true };
@@ -248,6 +252,8 @@ export const blocksToHtml = (blocks) => (blocks || []).map(b => {
             return `<div style="text-align:${b.align || 'center'};">__LOGO_DOANH_NGHIEP__</div>`;
         case 'barcode':
             return `<div style="text-align:${b.align || 'center'};">__MA_VACH_DON_HANG__</div>`;
+        case 'barcode-id':
+            return `<div style="text-align:${b.align || 'center'};">__MA_VACH_ID_DON_HANG__</div>`;
         case 'qr':
             return `<div style="text-align:${b.align || 'center'};">__MA_QR_DON_HANG__</div>`;
         case 'sender':
@@ -298,6 +304,7 @@ const defaultLocation = mkBlocks([
     ['heading', { text: 'ĐƠN NGOẠI SÀN' }],
     ['text', { text: 'ID đơn hàng: __ID_DON_HANG__ | Mã vận đơn: __MA_VAN_DON__ | Hãng: __TEN_HANG_VC__', fontSize: 13, align: 'center' }],
     ['barcode', {}],
+    ['barcode-id', {}],
     ['sender', {}], ['recipient', {}],
     ['products', { columns: ['name', 'qty', 'location'] }],
     ['qr', {}],
