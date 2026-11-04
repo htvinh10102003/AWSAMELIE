@@ -160,7 +160,7 @@ export default function TongHopKhieuNai() {
             </div>
           </div>
 
-          <button onClick={fetchComplaints} className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2.5 rounded-xl transition-colors shrink-0 shadow-sm">
+          <button onClick={fetchComplaints} className="bg-slate-700 hover:bg-slate-800 text-white font-bold px-4 py-2.5 rounded-xl transition-colors shrink-0 shadow-sm">
             <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />
           </button>
         </div>
@@ -290,7 +290,7 @@ export default function TongHopKhieuNai() {
 
       {/* MODAL ĐỔI TRẠNG THÁI */}
       {statusModal.isOpen && statusModal.item && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-slate-800 mb-1">Cập nhật trạng thái</h3>
             <p className="text-sm text-slate-500 font-medium mb-6">Đơn: <span className="font-bold text-slate-700">{statusModal.item.nhanh_id || statusModal.item.hvc_code}</span></p>

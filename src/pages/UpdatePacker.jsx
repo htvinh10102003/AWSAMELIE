@@ -408,7 +408,7 @@ export default function UpdatePacker() {
                           <button
                             onClick={() => handleUpdateSingleOrder(order.id)}
                             disabled={updatingId === order.id || localSelections[order.id] === order.packed_by_name}
-                            className="p-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white disabled:text-slate-400 rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95 disabled:cursor-not-allowed cursor-pointer"
+                            className="p-2 bg-slate-700 hover:bg-slate-800 disabled:bg-slate-200 text-white disabled:text-slate-400 rounded-xl transition-all shadow-sm hover:shadow-md active:scale-95 disabled:cursor-not-allowed cursor-pointer"
                             title="Lưu thay đổi"
                           >
                             {updatingId === order.id ? (

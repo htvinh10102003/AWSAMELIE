@@ -350,7 +350,7 @@ export default function UpdateSchedule() {
                   <button 
                     onClick={handleSaveSchedule} 
                     disabled={loading || staff.length === 0}
-                    className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white text-sm font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
+                    className="flex items-center gap-2 px-5 py-2 bg-slate-700 hover:bg-slate-800 disabled:bg-slate-200 text-white text-sm font-bold rounded-xl shadow-md transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed"
                   >
                     {loading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                     Lưu lịch
@@ -369,7 +369,7 @@ export default function UpdateSchedule() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
                   {staff.map(member => (
-                    <div key={member.id} className="group p-4 border border-slate-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all bg-white">
+                    <div key={member.id} className="group p-4 border border-slate-200 rounded-2xl shadow-sm hover:border-indigo-300 hover:shadow-md transition-all bg-white">
                       <div className="flex items-center gap-3 mb-3">
                         <div className="w-10 h-10 rounded-full from-indigo-100 to-blue-100 flex items-center justify-center">
                           <UserPlus size={18} className="text-indigo-600" />
@@ -483,7 +483,7 @@ export default function UpdateSchedule() {
                 <button 
                   type="submit" 
                   disabled={loading} 
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 text-white font-bold py-2.5 rounded-xl text-sm shadow-md transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="w-full bg-slate-700 hover:bg-slate-800 disabled:bg-slate-200 text-white font-bold py-2.5 rounded-xl text-sm shadow-md transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {loading ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
                   {loading ? 'Đang thêm...' : 'Kích hoạt nhân viên'}

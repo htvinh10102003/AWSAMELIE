@@ -427,8 +427,8 @@ export default function Layout() {
       bgImage: "none",
       sidebar: 'bg-white border-slate-200 shadow-sm',
       textPrimary: 'text-slate-700', textMuted: 'text-slate-400',
-      activeBg: 'bg-blue-50/80', activeText: 'text-blue-700 font-bold', activeBorder: 'border-l-[3px] border-blue-600',
-      hoverBg: 'hover:bg-slate-50', iconColor: 'text-slate-400 group-hover:text-blue-600', iconActive: 'text-blue-600',
+      activeBg: 'bg-slate-100', activeText: 'text-slate-900 font-bold', activeBorder: 'border-l-[3px] border-slate-700',
+      hoverBg: 'hover:bg-slate-50', iconColor: 'text-slate-400 group-hover:text-blue-600', iconActive: 'text-slate-900',
       logoBg: 'bg-blue-600', logoIcon: 'text-white', headerBorder: 'border-slate-100'
     };
   };
@@ -795,17 +795,17 @@ export default function Layout() {
                           return (
                             <div key={item.id} className="relative group/subnav">
                               {hasSubItems ? (
-                                <button className={`w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors ${isActive ? 'text-blue-600 bg-blue-50/50' : 'text-slate-700'}`}>
+                                <button className={`w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors ${isActive ? 'text-slate-900 bg-slate-100' : 'text-slate-700'}`}>
                                   <div className="flex items-center gap-3">
-                                    <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-blue-600' : 'text-slate-400'} />
+                                    <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-slate-900' : 'text-slate-400'} />
                                     <span className={`text-sm ${isActive ? 'font-bold' : 'font-medium'}`}>{item.label}</span>
                                   </div>
-                                  <ChevronRight size={16} className={isActive ? 'text-blue-500' : 'text-slate-400'} />
+                                  <ChevronRight size={16} className={isActive ? 'text-slate-500' : 'text-slate-400'} />
                                 </button>
                               ) : (
-                                <Link to={item.path} className={`w-full flex items-center px-4 py-3 hover:bg-slate-50 transition-colors ${isActive ? 'text-blue-600 bg-blue-50/50' : 'text-slate-700'}`}>
+                                <Link to={item.path} className={`w-full flex items-center px-4 py-3 hover:bg-slate-50 transition-colors ${isActive ? 'text-slate-900 bg-slate-100' : 'text-slate-700'}`}>
                                   <div className="flex items-center gap-3">
-                                    <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-blue-600' : 'text-slate-400'} />
+                                    <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-slate-900' : 'text-slate-400'} />
                                     <span className={`text-sm ${isActive ? 'font-bold' : 'font-medium'}`}>{item.label}</span>
                                   </div>
                                 </Link>
@@ -817,11 +817,11 @@ export default function Layout() {
                                     {item.subItems.map((sub, sIdx) => {
                                       const isSubActive = location.pathname === sub.path;
                                       return (
-                                        <Link key={sIdx} to={sub.path} className={`flex items-start gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors ${isSubActive ? 'bg-blue-50 text-blue-600' : 'text-slate-700'}`}>
-                                          <sub.icon size={18} strokeWidth={isSubActive ? 2.5 : 2} className={`mt-0.5 shrink-0 ${isSubActive ? 'text-blue-600' : 'text-slate-400'} ${sub.highlight ? 'text-rose-500' : ''}`} />
+                                        <Link key={sIdx} to={sub.path} className={`flex items-start gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors ${isSubActive ? 'bg-slate-100 text-slate-900' : 'text-slate-700'}`}>
+                                          <sub.icon size={18} strokeWidth={isSubActive ? 2.5 : 2} className={`mt-0.5 shrink-0 ${isSubActive ? 'text-slate-900' : 'text-slate-400'} ${sub.highlight ? 'text-rose-500' : ''}`} />
                                           <div className="flex flex-col flex-1">
                                             <span className={`text-sm leading-tight ${isSubActive ? 'font-bold' : 'font-medium'} ${sub.highlight ? 'text-rose-600 font-bold' : ''}`}>{sub.label}</span>
-                                            {sub.subtitle && <span className="text-[11px] mt-1 text-slate-500">{sub.subtitle}</span>}
+                                            {sub.subtitle && <span className="text-xs mt-1 text-slate-500">{sub.subtitle}</span>}
                                           </div>
                                         </Link>
                                       )
@@ -851,7 +851,7 @@ export default function Layout() {
                   <div className={`
                     ${!sidebarExpanded && isAdminGroup ? 'border-[1.5px] border-red-400 rounded-2xl mx-1.5 py-1.5 bg-red-50/20 shadow-inner' : ''}
                   `}>
-                    <div className={`px-5 mb-2 text-[11px] font-bold uppercase tracking-widest transition-opacity duration-300 whitespace-nowrap ${themeVars.textMuted} ${sidebarExpanded ? 'opacity-100' : 'hidden'}`}>
+                    <div className={`px-5 mb-2 text-xs font-bold uppercase tracking-widest transition-opacity duration-300 whitespace-nowrap ${themeVars.textMuted} ${sidebarExpanded ? 'opacity-100' : 'hidden'}`}>
                       {group.groupLabel}
                     </div>
                     
@@ -903,7 +903,7 @@ export default function Layout() {
                                           {sidebarExpanded && (
                                             <div className="flex flex-col flex-1">
                                               <span className={`text-sm whitespace-normal leading-snug break-words ${isSubActive ? themeVars.activeText : `font-medium ${themeVars.textPrimary}`} ${sub.highlight ? 'text-rose-600 font-bold' : ''}`}>{sub.label}</span>
-                                              {sub.subtitle && <span className={`text-[11px] mt-0.5 whitespace-normal leading-tight ${themeVars.textMuted}`}>{sub.subtitle}</span>}
+                                              {sub.subtitle && <span className={`text-xs mt-0.5 whitespace-normal leading-tight ${themeVars.textMuted}`}>{sub.subtitle}</span>}
                                             </div>
                                           )}
                                         </Link>
@@ -956,7 +956,7 @@ export default function Layout() {
             
             <div className={`flex items-center gap-1 ${!sidebarExpanded && !isTopLayout ? 'flex-col' : ''}`}>
               <div className="relative" ref={layoutSettingsRef}>
-                <button onClick={() => setShowLayoutSettings(!showLayoutSettings)} title="Cài đặt giao diện" className={`p-2 rounded-xl transition-colors ${themeVars.textMuted} hover:${themeVars.textPrimary} hover:bg-slate-100/50`}>
+                <button onClick={() => setShowLayoutSettings(!showLayoutSettings)} title="Cài đặt giao diện" className={`p-2 rounded-lg transition-colors ${themeVars.textMuted} hover:${themeVars.textPrimary} hover:bg-slate-100/50`}>
                   <SettingsIcon size={18} />
                 </button>
                 
@@ -964,20 +964,20 @@ export default function Layout() {
                   <div className={`absolute z-50 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl w-40 p-1 
                     ${isTopLayout ? 'right-0 top-full' : layoutPrefs.position === 'left' ? 'left-full ml-2 bottom-0' : 'right-full mr-2 bottom-0'}`}>
                     <div className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">Vị trí Menu</div>
-                    <button onClick={() => changePosition('left')} className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors ${layoutPrefs.position === 'left' ? 'text-blue-600 font-bold bg-blue-50/50' : 'text-slate-600'}`}>
+                    <button onClick={() => changePosition('left')} className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors ${layoutPrefs.position === 'left' ? 'text-slate-900 font-bold bg-slate-100' : 'text-slate-600'}`}>
                       <AlignLeft size={16} /> Lề trái
                     </button>
-                    <button onClick={() => changePosition('right')} className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors ${layoutPrefs.position === 'right' ? 'text-blue-600 font-bold bg-blue-50/50' : 'text-slate-600'}`}>
+                    <button onClick={() => changePosition('right')} className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors ${layoutPrefs.position === 'right' ? 'text-slate-900 font-bold bg-slate-100' : 'text-slate-600'}`}>
                       <AlignRight size={16} /> Lề phải
                     </button>
-                    <button onClick={() => changePosition('top')} className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors ${layoutPrefs.position === 'top' ? 'text-blue-600 font-bold bg-blue-50/50' : 'text-slate-600'}`}>
+                    <button onClick={() => changePosition('top')} className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors ${layoutPrefs.position === 'top' ? 'text-slate-900 font-bold bg-slate-100' : 'text-slate-600'}`}>
                       <AlignVerticalSpaceAround size={16} /> Bên trên
                     </button>
                   </div>
                 )}
               </div>
               
-              <button onClick={() => setShowLogoutModal(true)} title="Đăng xuất" className={`p-2 rounded-xl transition-colors shrink-0 ${themeVars.textMuted} hover:text-red-500 hover:bg-red-50/20`}>
+              <button onClick={() => setShowLogoutModal(true)} title="Đăng xuất" className={`p-2 rounded-lg transition-colors shrink-0 ${themeVars.textMuted} hover:text-red-500 hover:bg-red-50/20`}>
                 <LogOut size={18} />
               </button>
             </div>
@@ -1009,7 +1009,7 @@ export default function Layout() {
                  </div>
                  <h2 className="text-2xl font-bold text-slate-800 mb-2 uppercase tracking-tight bg-white/90 backdrop-blur-md px-4 py-1.5 rounded-xl shadow-sm">Bảo trì hệ thống</h2>
                  <p className="text-slate-800 mb-8 text-sm leading-relaxed font-bold bg-white/90 backdrop-blur-md px-5 py-3 rounded-xl shadow-sm">{lockMessage || 'Tính năng này hiện đang được khóa để bảo trì.'}</p>
-                 <button onClick={() => navigate('/')} className="px-6 py-3 bg-blue-600 text-white text-sm font-bold rounded-xl hover:bg-blue-700 shadow-md transition-all flex items-center gap-2">
+                 <button onClick={() => navigate('/')} className="px-6 py-3 bg-slate-700 text-white text-sm font-bold rounded-xl hover:bg-slate-800 shadow-md transition-all flex items-center gap-2">
                    <Undo2 size={18} /> Quay về Trang chủ
                  </button>
                </div>
@@ -1031,7 +1031,7 @@ export default function Layout() {
         </div>
         
         {showLogoutModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-8 animate-in zoom-in-95 duration-200">
               <div className="flex items-center gap-4 mb-6">
                 <div className="p-3 bg-red-50 rounded-2xl">
@@ -1044,7 +1044,7 @@ export default function Layout() {
               </div>
               <p className="text-slate-600 text-sm mb-8 font-medium">Bạn có chắc chắn muốn đăng xuất khỏi hệ thống không?</p>
               <div className="flex justify-end gap-3">
-                <button onClick={() => setShowLogoutModal(false)} className="px-5 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition-colors">
+                <button onClick={() => setShowLogoutModal(false)} className="px-5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition-colors">
                   Hủy
                 </button>
                 <button onClick={handleLogout} className="px-6 py-2.5 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 shadow-md transition-colors">
@@ -1061,7 +1061,7 @@ export default function Layout() {
               <div className={`px-8 py-6 flex items-start justify-between border-b relative overflow-hidden
                 ${globalNotif.type === 'update' ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100' : 
                   globalNotif.type === 'celebrate' ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 border-amber-100' : 
-                  'bg-gradient-to-r from-slate-50 to-gray-50 border-slate-200'}`}>
+                  'bg-gradient-to-r from-slate-50 to-slate-50 border-slate-200'}`}>
                 
                 <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full opacity-10 blur-xl
                   ${globalNotif.type === 'update' ? 'bg-blue-400' : 
@@ -1095,7 +1095,7 @@ export default function Layout() {
                 
                 <button 
                   onClick={() => setGlobalNotif(null)} 
-                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-white/80 rounded-xl transition-colors shrink-0 relative z-10 active:scale-90 duration-150"
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-white/80 rounded-lg transition-colors shrink-0 relative z-10 active:scale-90 duration-150"
                 >
                   <X size={22} strokeWidth={2.5} />
                 </button>
@@ -1118,7 +1118,7 @@ export default function Layout() {
                           onChange={(e) => setDontShowAgain(e.target.checked)} 
                         />
                         <div className={`w-11 h-6 rounded-full transition-colors duration-300 
-                          ${dontShowAgain ? 'bg-blue-500' : 'bg-slate-200'} 
+                          ${dontShowAgain ? 'bg-slate-700' : 'bg-slate-200'} 
                           after:content-[''] after:absolute after:top-[2px] after:left-[2px] 
                           after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow-md 
                           after:transition-transform after:duration-300 
@@ -1137,7 +1137,7 @@ export default function Layout() {
                         ${globalNotif.type === 'celebrate' 
                           ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600' 
                           : globalNotif.type === 'update' 
-                            ? 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600' 
+                            ? 'bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900' 
                             : 'bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900'}`}
                     >
                       Đã hiểu

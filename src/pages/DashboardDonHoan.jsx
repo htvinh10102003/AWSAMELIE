@@ -178,7 +178,7 @@ export default function DashboardDonHoan() {
           ) : (
             <table className="w-full text-left text-sm whitespace-nowrap">
               <thead className="bg-white sticky top-0 z-10 border-b border-slate-200 shadow-sm">
-                <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                <tr className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                   <th className="py-4 px-6">Thông tin Đơn</th>
                   <th className="py-4 px-6 w-1/3">Chi tiết Sản phẩm</th>
                   <th className="py-4 px-6">Thời gian cập nhật</th>
@@ -199,7 +199,7 @@ export default function DashboardDonHoan() {
                           </a>
                         )}
                       </div>
-                      <div className="text-[11px] font-bold text-slate-400 mt-1 flex items-center gap-1">
+                      <div className="text-xs font-bold text-slate-400 mt-1 flex items-center gap-1">
                         Hãng vận chuyển: <span className="text-slate-600">{order.carrier_name || 'Không rõ'}</span>
                       </div>
                     </td>
@@ -226,7 +226,7 @@ export default function DashboardDonHoan() {
                         <Clock size={14} className="text-slate-400" />
                         {new Date(order.updated_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
                       </div>
-                      <div className="text-[11px] text-slate-400 font-medium pl-5 mt-0.5">
+                      <div className="text-xs text-slate-400 font-medium pl-5 mt-0.5">
                         {new Date(order.updated_at).toLocaleDateString('vi-VN')}
                       </div>
                     </td>

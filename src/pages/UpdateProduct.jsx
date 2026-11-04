@@ -382,11 +382,11 @@ export default function UpdateProduct() {
               Cấu trúc file chuẩn: Cột 1 là <strong className="text-slate-800">Mã Vạch</strong>, Cột 2 là <strong className="text-blue-600">Tên Sản Phẩm</strong>. Hệ thống sẽ quét chéo để cập nhật Tên bị lệch hoặc Barcode bị sai.
             </p>
             
-            <label className="mt-6 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md transition cursor-pointer flex items-center gap-2">
+            <label className="mt-6 px-8 py-3 bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm rounded-xl shadow-md transition cursor-pointer flex items-center gap-2">
               <UploadCloud size={18} /> Chọn file đối soát
               <input type="file" accept=".csv, .txt, .xlsx, .xls" className="hidden" onChange={handleFileUpload} />
             </label>
-            {fileName && <div className="mt-3 text-[11px] font-bold text-slate-400">File đang chọn: <span className="text-slate-700">{fileName}</span></div>}
+            {fileName && <div className="mt-3 text-xs font-bold text-slate-400">File đang chọn: <span className="text-slate-700">{fileName}</span></div>}
           </div>
 
           {/* Bảng Hiển thị sự khác biệt */}
@@ -468,7 +468,7 @@ export default function UpdateProduct() {
       {/* ️ MODAL SỬA THÔNG TIN THỦ CÔNG */}
       {/* ========================================== */}
       {editingProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
           <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-md p-6 transform transition-all animate-in zoom-in-95 duration-200">
             
             <div className="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
@@ -501,7 +501,7 @@ export default function UpdateProduct() {
 
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4 mt-2">
                 <button type="button" onClick={() => setEditingProduct(null)} className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold transition cursor-pointer">Hủy</button>
-                <button type="submit" disabled={loading} className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition shadow-md cursor-pointer flex items-center gap-1">
+                <button type="submit" disabled={loading} className="px-5 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white font-bold transition shadow-md cursor-pointer flex items-center gap-1">
                   {loading && <Loader2 size={12} className="animate-spin" />} Lưu cập nhật
                 </button>
               </div>

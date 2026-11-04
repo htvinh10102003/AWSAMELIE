@@ -387,7 +387,7 @@ export default function KPI_DataEntry() {
                             <button 
                               onClick={() => handleSaveSingleVariable(v.code)} 
                               disabled={savingVar === v.code || !isDirty} 
-                              className={`px-4 py-2.5 text-white rounded-xl shadow-md transition-all flex items-center justify-center shrink-0 ${!isDirty ? 'bg-slate-300 cursor-not-allowed shadow-none' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+                              className={`px-4 py-2.5 text-white rounded-xl shadow-md transition-all flex items-center justify-center shrink-0 ${!isDirty ? 'bg-slate-300 cursor-not-allowed shadow-none' : 'bg-slate-700 hover:bg-slate-800'}`}
                               title={isDirty ? "Lưu số liệu này" : "Đã lưu"}
                             >
                               {savingVar === v.code ? <Loader2 size={18} className="animate-spin" /> : !isDirty ? <Check size={18} /> : <Save size={18} />}
@@ -410,7 +410,7 @@ export default function KPI_DataEntry() {
                   <h4 className="text-sm font-bold text-emerald-800 uppercase tracking-widest mb-2 flex items-center gap-2">
                     <Target size={16}/> Nhập liệu Cuối tháng
                   </h4>
-                  <p className="text-[11px] text-emerald-600 font-medium mb-4">Lưu ý: Chỉ cần nhập 1 lần vào ngày cuối cùng của tháng (nhớ chọn đúng ngày ở ô chọn ngày phía trên).</p>
+                  <p className="text-xs text-emerald-600 font-medium mb-4">Lưu ý: Chỉ cần nhập 1 lần vào ngày cuối cùng của tháng (nhớ chọn đúng ngày ở ô chọn ngày phía trên).</p>
                   
                   <div className="space-y-3">
                     {globalVars.filter(v => v.source === 'monthly_manual').map(v => {

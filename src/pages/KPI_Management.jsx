@@ -373,7 +373,7 @@ export default function KPI_Management() {
               <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
                 <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
                   <h3 className="font-bold text-slate-800 text-lg">Phân bổ Chỉ tiêu</h3>
-                  <button onClick={handleCreateNewCriteria} className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl shadow-md hover:bg-blue-700 transition">
+                  <button onClick={handleCreateNewCriteria} className="flex items-center gap-2 px-5 py-2.5 bg-slate-700 text-white font-bold rounded-xl shadow-sm hover:bg-slate-800 transition">
                     <Plus size={16} /> Thêm Chỉ tiêu
                   </button>
                 </div>
@@ -427,7 +427,7 @@ export default function KPI_Management() {
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Chu kỳ tính toán</label>
-                    <select value={editingCriteria.eval_mode || 'aggregated'} onChange={e=>setEditingCriteria({...editingCriteria, eval_mode: e.target.value})} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none cursor-pointer">
+                    <select value={editingCriteria.eval_mode || 'aggregated'} onChange={e=>setEditingCriteria({...editingCriteria, eval_mode: e.target.value})} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-slate-700 cursor-pointer">
                       <option value="aggregated">Cộng dồn cả tháng</option>
                       <option value="daily_average">Trung bình cộng từng ngày</option>
                     </select>
@@ -435,11 +435,11 @@ export default function KPI_Management() {
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Tỉ trọng (%)</label>
-                      <input type="number" value={editingCriteria.weight} onChange={e=>setEditingCriteria({...editingCriteria, weight: e.target.value})} className="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl outline-none font-bold text-blue-600 text-center" />
+                      <input type="number" value={editingCriteria.weight} onChange={e=>setEditingCriteria({...editingCriteria, weight: e.target.value})} className="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-slate-700 font-bold text-blue-600 text-center" />
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Đơn vị đo</label>
-                      <select value={editingCriteria.calc_type} onChange={e=>setEditingCriteria({...editingCriteria, calc_type: e.target.value})} className="w-full px-2 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none cursor-pointer">
+                      <select value={editingCriteria.calc_type} onChange={e=>setEditingCriteria({...editingCriteria, calc_type: e.target.value})} className="w-full px-2 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-700 outline-none focus:border-slate-700 cursor-pointer">
                         <option value="count">Điểm / Số lượng</option>
                         <option value="ratio">Tỉ lệ (%)</option>
                       </select>
@@ -454,7 +454,7 @@ export default function KPI_Management() {
                 <div className="p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100 space-y-4">
                   
                   <div className="flex flex-wrap gap-2 items-center">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase w-full sm:w-auto mr-2">1. Chèn Biến:</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase w-full sm:w-auto mr-2">1. Chèn Biến:</span>
                     <button type="button" onClick={()=>insertToFormula('[TONG_LOI]')} className="text-xs font-bold bg-white border border-indigo-200 text-indigo-700 px-3 py-1.5 rounded shadow-sm hover:bg-indigo-50 transition">LỖI BỘ PHẬN</button>
                     {errorList.map(e => (
                        <button key={e.id} type="button" onClick={()=>insertToFormula(`[LOI_${e.id}]`)} className="text-xs font-bold bg-red-50 border border-red-200 text-red-700 px-3 py-1.5 rounded shadow-sm hover:bg-red-100 transition">LỖI: {e.name}</button>
@@ -465,7 +465,7 @@ export default function KPI_Management() {
                   </div>
 
                   <div className="flex flex-wrap gap-2 items-center pt-3 border-t border-indigo-100/50">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase w-full sm:w-auto mr-2">2. Hàm & Phép so sánh:</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase w-full sm:w-auto mr-2">2. Hàm & Phép so sánh:</span>
                     <button type="button" onClick={()=>insertToFormula(' IF(điều_kiện, đúng, sai) ')} className="text-xs font-bold bg-blue-600 text-white px-3 py-1.5 rounded shadow-sm hover:bg-blue-700 transition"> Hàm IF( ĐK, Đúng, Sai )</button>
                     <button type="button" onClick={()=>insertToFormula(' < ')} className="text-xs font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&lt;</button>
                     <button type="button" onClick={()=>insertToFormula(' <= ')} className="text-xs font-bold bg-slate-800 text-white px-2.5 py-1.5 rounded hover:bg-slate-700 transition">&le;</button>
@@ -506,7 +506,7 @@ export default function KPI_Management() {
                       <button 
                         type="button" 
                         onClick={runTestFormula} 
-                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg shadow transition flex items-center gap-1.5"
+                        className="px-4 py-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow transition flex items-center gap-1.5"
                       >
                         <Play size={14} /> Chạy thử
                       </button>
@@ -566,7 +566,7 @@ export default function KPI_Management() {
                       <span className="w-6 h-6 bg-blue-100 text-blue-700 flex items-center justify-center rounded-full text-xs">3</span> 
                       Luật trừ điểm (Không bắt buộc với chỉ tiêu tính Điểm trực tiếp)
                     </h4>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Nếu không thêm luật phạt nào, hệ thống sẽ lấy trực tiếp kết quả công thức làm điểm KPI.</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Nếu không thêm luật phạt nào, hệ thống sẽ lấy trực tiếp kết quả công thức làm điểm KPI.</p>
                   </div>
                   <button onClick={addRule} className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 flex items-center gap-1"><Plus size={14}/> Thêm luật</button>
                 </div>
@@ -610,7 +610,7 @@ export default function KPI_Management() {
               </div>
 
               <div className="pt-6 border-t border-slate-100 flex justify-end">
-                <button onClick={handleSaveCriteria} disabled={loading} className="px-8 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-lg hover:bg-blue-700 flex items-center gap-2">
+                <button onClick={handleSaveCriteria} disabled={loading} className="px-8 py-3 bg-slate-700 text-white font-bold rounded-xl shadow-sm hover:bg-slate-800 flex items-center gap-2">
                    <Save size={18} /> Lưu Toàn Bộ Cấu Hình
                 </button>
               </div>
@@ -710,7 +710,7 @@ export default function KPI_Management() {
               {varForm.source === 'sum_monthly' && (
                 <div className="animate-in slide-in-from-top-2">
                   <label className="block mb-1 text-amber-600 flex items-center gap-1">Chọn Biến gốc để tính tổng <span className="text-red-500">*</span></label>
-                  <select value={varForm.target_code} onChange={e=>setVarForm({...varForm, target_code: e.target.value})} className="w-full px-4 py-2.5 border border-amber-200 rounded-xl bg-amber-50 font-bold text-amber-800 outline-none cursor-pointer shadow-sm">
+                  <select value={varForm.target_code} onChange={e=>setVarForm({...varForm, target_code: e.target.value})} className="w-full px-4 py-2.5 border border-amber-200 rounded-xl bg-amber-50 font-bold text-amber-800 outline-none focus:border-slate-700 cursor-pointer shadow-sm">
                     <option value="">-- Click để chọn biến --</option>
                     {globalVars.filter(v => v.source !== 'sum_monthly' && v.code !== varForm.code).map(v => (
                       <option key={v.id} value={v.code}>[{v.code}] {v.name}</option>
@@ -723,7 +723,7 @@ export default function KPI_Management() {
               
               <div className="flex gap-2 mt-4 pt-2">
                  {varForm.id && <button type="button" onClick={handleCancelEditVariable} className="w-1/3 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl transition">Hủy</button>}
-                 <button disabled={loading} className={`${varForm.id ? 'w-2/3' : 'w-full'} py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition`}>
+                 <button disabled={loading} className={`${varForm.id ? 'w-2/3' : 'w-full'} py-3 bg-slate-700 text-white rounded-xl hover:bg-slate-800 transition`}>
                    {varForm.id ? 'Lưu thay đổi' : 'Tạo Biến'}
                  </button>
               </div>
@@ -770,7 +770,7 @@ export default function KPI_Management() {
                   {DEPARTMENTS.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
-              <button disabled={loading} className="w-full py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 mt-2">Xác nhận Thêm</button>
+              <button disabled={loading} className="w-full py-3 bg-slate-700 text-white rounded-xl hover:bg-slate-800 mt-2">Xác nhận Thêm</button>
             </form>
           </div>
 

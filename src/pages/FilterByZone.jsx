@@ -71,16 +71,16 @@ export default function FilterByZone() {
       <div className="flex items-center gap-3">
         <div className="p-3 bg-indigo-100 text-indigo-600 rounded-2xl"><Filter size={24} /></div>
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Lọc & Chia Đơn Theo Dãy Kệ</h2>
-          <p className="text-sm text-gray-500 font-medium">Tải danh sách đơn vừa in, quét mã vạch để phân loại rổ nhanh.</p>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Lọc & Chia Đơn Theo Dãy Kệ</h2>
+          <p className="text-sm text-slate-500 font-medium">Tải danh sách đơn vừa in, quét mã vạch để phân loại rổ nhanh.</p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1">
         
         {/* Cột 1: Nhập liệu */}
-        <div className="lg:col-span-1 bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-4">
-          <label className="font-bold text-gray-800 flex items-center gap-2">
+        <div className="lg:col-span-1 bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-4">
+          <label className="font-bold text-slate-800 flex items-center gap-2">
             <UploadCloud size={18} /> Dán danh sách Mã vận đơn / Mã đơn
           </label>
           <textarea
@@ -92,7 +92,7 @@ export default function FilterByZone() {
           <button
             onClick={handleLoadData}
             disabled={loading || !awbText}
-            className="w-full py-3.5 bg-gray-900 hover:bg-gray-800 text-white font-bold rounded-2xl transition-all disabled:opacity-50"
+            className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl transition-all disabled:opacity-50"
           >
             {loading ? 'Đang tải...' : 'Tải dữ liệu phân dãy'}
           </button>
@@ -117,8 +117,8 @@ export default function FilterByZone() {
 
         {/* Cột 2: Quét mã vạch & Hiển thị kết quả to */}
         <div className="lg:col-span-2 flex flex-col gap-6">
-          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-col gap-4">
-            <label className="font-bold text-gray-800 flex items-center gap-2">
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-4">
+            <label className="font-bold text-slate-800 flex items-center gap-2">
               <ScanBarcode size={18} /> Quét mã vạch tại đây
             </label>
             <input
@@ -128,14 +128,14 @@ export default function FilterByZone() {
               onChange={(e) => setScanInput(e.target.value)}
               onKeyDown={handleScan}
               placeholder="Sử dụng máy quét mã vạch..."
-              className="w-full text-2xl font-bold px-6 py-4 bg-blue-50/50 border-2 border-blue-200 rounded-2xl focus:outline-none focus:border-blue-500 focus:bg-white transition-all text-center placeholder:text-gray-400"
+              className="w-full text-2xl font-bold px-6 py-4 bg-blue-50/50 border-2 border-blue-200 rounded-2xl focus:outline-none focus:border-blue-500 focus:bg-white transition-all text-center placeholder:text-slate-400"
             />
           </div>
 
           {/* HIỂN THỊ DÃY SIÊU TO */}
-          <div className="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 p-8 flex items-center justify-center relative overflow-hidden">
+          <div className="flex-1 bg-white rounded-2xl shadow-sm border border-slate-100 p-8 flex items-center justify-center relative overflow-hidden">
             {!currentZone ? (
-              <div className="text-gray-300 flex flex-col items-center gap-4">
+              <div className="text-slate-300 flex flex-col items-center gap-4">
                 <Box size={64} strokeWidth={1} />
                 <p className="font-medium text-lg">Kết quả phân dãy sẽ hiển thị ở đây</p>
               </div>
@@ -146,7 +146,7 @@ export default function FilterByZone() {
               </div>
             ) : (
               <div className="text-center animate-in zoom-in duration-200 scale-100">
-                <p className="text-2xl font-bold text-gray-500 mb-2 tracking-widest uppercase">Phân loại vào</p>
+                <p className="text-2xl font-bold text-slate-500 mb-2 tracking-widest uppercase">Phân loại vào</p>
                 <h1 className="text-8xl md:text-[180px] leading-none font-bold text-indigo-600">
                   DÃY {currentZone}
                 </h1>

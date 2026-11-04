@@ -19,8 +19,8 @@ import {
 function FeatureItem({ text }) {
   return (
     <div className="flex items-start gap-3">
-      <div className="mt-1 flex-shrink-0 bg-orange-500/20 p-1 rounded-full">
-        <CheckCircle2 size={16} className="text-orange-400" />
+      <div className="mt-1 flex-shrink-0 bg-white/20 p-1 rounded-full">
+        <CheckCircle2 size={16} className="text-white" />
       </div>
       <p className="text-slate-200 font-medium leading-relaxed">{text}</p>
     </div>
@@ -110,7 +110,7 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-slate-50 font-sans antialiased overflow-hidden selection:bg-orange-500/30">
+    <div className="flex min-h-screen w-full bg-slate-50 font-sans antialiased overflow-hidden selection:bg-slate-500/30">
       
       {/* ================= PHẦN TRÁI: HÌNH ẢNH & GIỚI THIỆU (BRANDING) ================= */}
       <div className="hidden lg:flex relative w-1/2 flex-col justify-between overflow-hidden">
@@ -122,12 +122,12 @@ export default function Login() {
         />
         
         {/* Overlay gradient tối kết hợp màu Cam đậm để dễ đọc chữ */}
-        <div className="absolute inset-0 z-10 bg-gradient-to-br from-slate-900/95 via-slate-900/80 to-orange-950/90" />
+        <div className="absolute inset-0 z-10 bg-slate-900/90" />
 
         <div className="relative z-20 flex flex-col pt-12 px-12 xl:px-16">
           {/* Logo */}
           <div className="flex items-center gap-3 mb-20">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 shadow-lg shadow-orange-500/30">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 shadow-sm border border-white/10">
               <PackageCheck size={24} className="text-white" />
             </div>
             <span className="text-2xl font-bold text-white tracking-wider">WMS</span>
@@ -135,7 +135,7 @@ export default function Login() {
 
           <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight tracking-tight mb-6">
             Kiểm soát kho vận <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-amber-300">
+            <span className="text-white">
               Toàn diện & Chính xác
             </span>
           </h1>
@@ -164,19 +164,19 @@ export default function Login() {
         
         {/* Background Bubbles (Đốm sáng Cam mờ) */}
         <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-[-10%] right-[-5%] w-[400px] h-[400px] rounded-full bg-orange-500/10 blur-[100px]" />
-          <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] rounded-full bg-amber-500/10 blur-[100px]" />
+          <div className="absolute top-[-10%] right-[-5%] w-[400px] h-[400px] rounded-full bg-slate-500/10 blur-[100px]" />
+          <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] rounded-full bg-slate-400/10 blur-[100px]" />
         </div>
 
         {/* Card Đăng nhập */}
         <div className="relative z-10 w-full max-w-[420px]">
           
-          <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-10 shadow-2xl shadow-slate-200/50 border border-white transition-all lg:shadow-xl lg:shadow-slate-300/40">
+          <div className="bg-white rounded-2xl border border-slate-200 p-8 sm:p-10 shadow-sm border border-white transition-all">
             
             {mode === 'login' ? (
               <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="mb-8">
-                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-orange-600 mb-4 lg:hidden">
+                  <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-900 mb-4 lg:hidden">
                     <Box size={24} />
                   </div>
                   <h2 className="text-2xl font-bold tracking-tight text-slate-900">
@@ -215,7 +215,7 @@ export default function Login() {
                           if (error) setError('');
                         }}
                         placeholder="dev@vinhstudio.io.vn"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-slate-700 focus:bg-white focus:ring-4 focus:ring-slate-500/20"
                       />
                       <Mail
                         size={18}
@@ -237,7 +237,7 @@ export default function Login() {
                           setError('');
                           setMessage('');
                         }}
-                        className="text-xs font-bold text-orange-600 transition hover:text-orange-700 hover:underline"
+                        className="text-xs font-bold text-slate-900 transition hover:text-slate-700 hover:underline"
                       >
                         Quên mật khẩu?
                       </button>
@@ -252,7 +252,7 @@ export default function Login() {
                           if (error) setError('');
                         }}
                         placeholder="••••••••"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-11 text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-11 text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-slate-700 focus:bg-white focus:ring-4 focus:ring-slate-500/20"
                       />
                       <Lock
                         size={18}
@@ -279,7 +279,7 @@ export default function Login() {
                         type="checkbox"
                         checked={rememberMe}
                         onChange={(e) => setRememberMe(e.target.checked)}
-                        className="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500"
+                        className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
                       />
                       Duy trì đăng nhập
                     </label>
@@ -292,7 +292,7 @@ export default function Login() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/25 transition-all hover:shadow-orange-500/40 hover:-translate-y-0.5 disabled:opacity-50 disabled:pointer-events-none"
+                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 py-3.5 text-sm font-bold text-white shadow-sm transition-all disabled:opacity-50 disabled:pointer-events-none"
                   >
                     {loading ? (
                       'Đang xác thực...'
@@ -323,7 +323,7 @@ export default function Login() {
                 </div>
 
                 <div className="mb-8 text-center">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 shadow-lg shadow-amber-500/30">
+                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 shadow-sm">
                     <ShieldCheck size={28} className="text-white" />
                   </div>
                   <h2 className="text-2xl font-bold tracking-tight text-slate-900">
@@ -360,7 +360,7 @@ export default function Login() {
                           if (error) setError('');
                         }}
                         placeholder="admin@vinhstudio.io.vn"
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-orange-500 focus:bg-white focus:ring-4 focus:ring-orange-500/10"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-900 placeholder-slate-400 outline-none transition-all focus:border-slate-700 focus:bg-white focus:ring-4 focus:ring-slate-500/20"
                       />
                       <Mail
                         size={18}
@@ -376,7 +376,7 @@ export default function Login() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 py-3.5 text-sm font-bold text-white shadow-lg shadow-orange-500/25 transition-all hover:shadow-orange-500/40 hover:-translate-y-0.5 disabled:opacity-50 disabled:pointer-events-none"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 py-3.5 text-sm font-bold text-white shadow-sm transition-all disabled:opacity-50 disabled:pointer-events-none"
                   >
                     {loading ? 'Đang gửi yêu cầu...' : 'Nhận liên kết khôi phục'}
                   </button>

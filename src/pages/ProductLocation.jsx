@@ -290,7 +290,7 @@ const isProcessingRef = useRef(false);
           </div>
           <div className="flex-1">
             <h2 className="text-lg sm:text-xl font-bold text-slate-800 tracking-tight">Tra cứu Vị trí</h2>
-            <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">Dẫn đường nhặt hàng nhanh chóng</p>
+            <p className="text-xs sm:text-xs text-slate-500 font-medium mt-0.5">Dẫn đường nhặt hàng nhanh chóng</p>
           </div>
         </div>
 
@@ -314,7 +314,7 @@ const isProcessingRef = useRef(false);
       {/* TAB 1: TÌM KIẾM, SCAN & KẾT QUẢ */}
       {/* ========================================== */}
       {activeTab === 'map' && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 flex flex-col">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col">
             
             <div className="p-3 sm:p-5 bg-slate-50 border-b border-slate-200 rounded-t-2xl">
                 {isScanning ? (
@@ -361,7 +361,7 @@ const isProcessingRef = useRef(false);
                       <button 
                           type="submit" 
                           disabled={isSearchingMap || !mapSearchTerm.trim()}
-                          className="flex items-center justify-center px-4 sm:px-5 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-sm hover:bg-blue-700 transition disabled:opacity-50 shrink-0"
+                          className="flex items-center justify-center px-4 sm:px-5 py-3 bg-slate-700 text-white font-bold rounded-xl shadow-sm hover:bg-slate-800 transition disabled:opacity-50 shrink-0"
                       >
                           {isSearchingMap ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
                       </button>
@@ -446,7 +446,7 @@ const isProcessingRef = useRef(false);
                         >
                           <span className="font-bold text-xs sm:text-sm text-center px-1 break-words line-clamp-2">{rack.name}</span>
                           {isHighlight && (
-                            <div className="absolute -top-10 bg-gray-900 text-white text-xs font-bold px-2 py-1 rounded-md whitespace-nowrap animate-bounce z-10 shadow-lg">
+                            <div className="absolute -top-10 bg-slate-900 text-white text-xs font-bold px-2 py-1 rounded-md whitespace-nowrap animate-bounce z-10 shadow-lg">
                                LẤY HÀNG Ở ĐÂY
                             </div>
                           )}
@@ -474,7 +474,7 @@ const isProcessingRef = useRef(false);
       {/* TAB 2: DANH SÁCH (GIỮ NGUYÊN) */}
       {/* ========================================== */}
       {activeTab === 'list' && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col animate-in fade-in">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col animate-in fade-in">
             <div className="p-3 sm:p-5 bg-slate-50 border-b border-slate-200">
                 <form onSubmit={handleListSearch} className="flex gap-2 sm:gap-3">
                     <input 
@@ -519,7 +519,7 @@ const isProcessingRef = useRef(false);
                                 <tr key={p.product_code} className="hover:bg-blue-50/30 transition flex flex-col sm:table-row p-3.5 sm:p-0 border-b border-slate-100 sm:border-b-0">
                                     <td className="p-1 sm:p-4">
                                         <div className="font-bold text-slate-900 text-sm sm:text-base leading-tight break-words">{p.product_name}</div>
-                                        <div className="text-[11px] font-medium text-slate-500 mt-1 uppercase tracking-wide">Mã: {p.product_code}</div>
+                                        <div className="text-xs font-medium text-slate-500 mt-1 uppercase tracking-wide">Mã: {p.product_code}</div>
                                     </td>
                                     <td className="p-1 sm:p-4 sm:text-right mt-2 sm:mt-0">
                                         <span className={`inline-block px-3 py-1.5 border rounded-lg text-xs font-bold tracking-wide ${p.location_code ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm' : 'bg-slate-100 border-slate-200 text-slate-400'}`}>

@@ -560,7 +560,7 @@ export default function KiemTraDonHoan() {
       
       {/* POPUP XÁC NHẬN CHUNG (Tùy chỉnh) */}
       {confirmPopup.isOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transform transition-all animate-in zoom-in-95 duration-200">
             <h3 className={`text-lg font-bold mb-2 flex items-center gap-2 ${confirmPopup.isDestructive ? 'text-red-600' : 'text-slate-900'}`}>
               {confirmPopup.isDestructive ? <AlertCircle size={22} /> : <AlertCircle size={22} className="text-blue-500" />}
@@ -574,7 +574,7 @@ export default function KiemTraDonHoan() {
                 Hủy bỏ
               </button>
               <button onClick={confirmPopup.onConfirm} className={`px-4 py-2 font-bold text-sm rounded-xl transition text-white ${
-                confirmPopup.isDestructive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                confirmPopup.isDestructive ? 'bg-red-600 hover:bg-red-700' : 'bg-slate-700 hover:bg-slate-800'
               }`}>
                 Xác nhận
               </button>
@@ -658,7 +658,7 @@ export default function KiemTraDonHoan() {
               {reAuditOriginalLog ? (
                 <button
                   onClick={() => setShowComparePopup(true)}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer"
                 >
                   <GitCompare size={14} /> Xem kết quả So sánh
                 </button>
@@ -694,7 +694,7 @@ export default function KiemTraDonHoan() {
             <button onClick={downloadTemplate} className="px-6 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm rounded-xl transition cursor-pointer flex items-center gap-2">
               <Download size={16} /> Tải file mẫu
             </button>
-            <label className="px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md transition cursor-pointer flex items-center gap-2">
+            <label className="px-6 py-3.5 bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm rounded-xl shadow-md transition cursor-pointer flex items-center gap-2">
               <UploadCloud size={16} /> Chọn file dữ liệu
               <input type="file" accept=".csv, .txt, text/csv, text/plain" className="hidden" onChange={handleFileUpload} />
             </label>
@@ -822,7 +822,7 @@ export default function KiemTraDonHoan() {
                             <td className="py-3 px-4 text-center font-bold text-indigo-600">{round1Qty}</td>
                           )}
                           <td className="py-3 px-4 text-center">
-                            <span className={`px-2 py-1 rounded-md font-bold text-[11px] ${
+                            <span className={`px-2 py-1 rounded-md font-bold text-xs ${
                               isComplete ? 'bg-emerald-100 text-emerald-700' : 
                               isOver ? 'bg-amber-200 text-amber-800' : 
                               isPending ? 'bg-slate-100 text-slate-500' : 'bg-blue-100 text-blue-700'
@@ -872,7 +872,7 @@ export default function KiemTraDonHoan() {
 
       {/* MODAL LỊCH SỬ BIÊN BẢN CHỐT */}
       {showHistory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl h-[90vh] md:h-[85vh] flex flex-col animate-in zoom-in-95 duration-200">
             
             {/* HEADER MODAL */}
@@ -928,10 +928,10 @@ export default function KiemTraDonHoan() {
                       <div 
                         key={log.id} 
                         onClick={() => setSelectedLog(log)}
-                        className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between hover:border-blue-300 hover:shadow-md cursor-pointer transition relative group"
+                        className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between hover:border-blue-300 hover:shadow-md cursor-pointer transition relative group"
                       >
                         <div className="flex-1">
-                          <div className="text-[11px] text-slate-400 font-bold mb-1 flex items-center gap-2">
+                          <div className="text-xs text-slate-400 font-bold mb-1 flex items-center gap-2">
                             {new Date(log.created_at).toLocaleString('vi-VN')}
                             <span className="text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded text-xs uppercase">ID: {log.id.slice(0,8)}</span>
                           </div>
@@ -989,7 +989,7 @@ export default function KiemTraDonHoan() {
 
                   {hasMoreLogs && userRole === 'owner' && !loadingHistory && (
                     <div className="text-center pt-2">
-                      <button onClick={handleLoadMoreLogs} className="px-5 py-2 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl transition flex items-center justify-center mx-auto gap-2 shadow-sm">
+                      <button onClick={handleLoadMoreLogs} className="px-5 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-xl transition flex items-center justify-center mx-auto gap-2 shadow-sm">
                         Tải thêm các phiên cũ <ChevronRight size={14}/>
                       </button>
                     </div>
@@ -1055,7 +1055,7 @@ export default function KiemTraDonHoan() {
                         selectedLog.surplus_data.map((item, idx) => (
                           <div key={idx} className="p-2 bg-white border border-red-100 rounded-lg">
                             <div className="flex justify-between items-start gap-2 mb-1">
-                              <span className="text-[11px] font-bold text-red-700 leading-tight">{item.name}</span>
+                              <span className="text-xs font-bold text-red-700 leading-tight">{item.name}</span>
                               <span className="px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-xs font-bold">x{item.scannedQty}</span>
                             </div>
                             <div className="text-xs text-slate-400">{item.code}</div>
@@ -1074,7 +1074,7 @@ export default function KiemTraDonHoan() {
 
       {/* POPUP SO SÁNH 2 LƯỢT QUÉT */}
       {showComparePopup && reAuditOriginalLog && (
-        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden">
             
             {/* HEADER POPUP SO SÁNH */}
@@ -1109,7 +1109,7 @@ export default function KiemTraDonHoan() {
 
                 <button
                   onClick={exportComparisonCSV}
-                  className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  className="px-3.5 py-1.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm"
                 >
                   <Download size={14} /> Xuất CSV So sánh
                 </button>

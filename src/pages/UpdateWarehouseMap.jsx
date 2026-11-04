@@ -295,17 +295,17 @@ export default function UpdateWarehouseMap() {
       {/* ========================================== */}
       {activeTab === 'map' && (
          /* Phần này giữ nguyên như code cũ của bạn */
-         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-4">
+         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
             <div className="flex justify-between items-end">
                 <div>
-                <h3 className="font-bold text-gray-800">Mô phỏng mặt bằng Kho</h3>
-                <p className="text-xs text-gray-500 mt-1">Bấm "Thêm Kệ mới" sau đó dùng chuột nắm kéo thả vị trí các kệ cho giống với thực tế.</p>
+                <h3 className="font-bold text-slate-800">Mô phỏng mặt bằng Kho</h3>
+                <p className="text-xs text-slate-500 mt-1">Bấm "Thêm Kệ mới" sau đó dùng chuột nắm kéo thả vị trí các kệ cho giống với thực tế.</p>
                 </div>
                 <div className="flex gap-2">
                     <button onClick={handleAddRack} className="flex items-center gap-2 bg-slate-100 text-slate-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-200 transition">
                         <Plus size={16} /> Thêm Kệ mới
                     </button>
-                    <button onClick={handleSaveMap} disabled={isSavingMap} className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-blue-700 transition shadow-md disabled:opacity-50">
+                    <button onClick={handleSaveMap} disabled={isSavingMap} className="flex items-center gap-2 bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-800 transition shadow-md disabled:opacity-50">
                         {isSavingMap ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Lưu Bản Đồ
                     </button>
                 </div>
@@ -340,7 +340,7 @@ export default function UpdateWarehouseMap() {
                     style={{ left: rack.x, top: rack.y, width: rack.w, height: rack.h }}
                 >
                     <div className="absolute -top-3 right-0 opacity-0 hover:opacity-100 transition-opacity">
-                        <button onMouseDown={(e) => { e.stopPropagation(); handleRemoveRack(rack.id); }} className="bg-red-500 text-white p-1 rounded-full shadow-md hover:bg-red-600">
+                        <button onMouseDown={(e) => { e.stopPropagation(); handleRemoveRack(rack.id); }} className="bg-red-600 text-white p-1 rounded-full shadow-md hover:bg-red-700">
                             <Trash2 size={12} />
                         </button>
                     </div>
@@ -366,14 +366,14 @@ export default function UpdateWarehouseMap() {
       {/* ========================================== */}
       {activeTab === 'csv' && (
          /* Phần này giữ nguyên như code cũ của bạn */
-         <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200 space-y-6">
-             <div className="border-b border-gray-100 pb-4">
-                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+         <div className="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+             <div className="border-b border-slate-100 pb-4">
+                 <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                      <UploadCloud size={20} className="text-blue-500"/> Cập nhật Vị trí bằng File (Hàng loạt)
                  </h2>
              </div>
              
-             <p className="text-sm text-gray-600 font-medium leading-relaxed bg-blue-50 p-4 rounded-xl border border-blue-100">
+             <p className="text-sm text-slate-600 font-medium leading-relaxed bg-blue-50 p-4 rounded-xl border border-blue-100">
                  Tính năng này cho phép bạn tải lên 1 file Excel (đuôi <b>.csv</b>) để thiết lập vị trí cho hàng ngàn sản phẩm trong kho cùng lúc. <br/>
                  File yêu cầu bắt buộc phải có dòng tiêu đề với 2 cột: <b>"Tên sản phẩm"</b> và <b>"Mã vị trí"</b> <i>(Mã vị trí nhập vào phải khớp với tên Kệ ở Sơ đồ)</i>.
              </p>
@@ -390,7 +390,7 @@ export default function UpdateWarehouseMap() {
                  <button 
                      onClick={handleUploadLocationCsv} 
                      disabled={isUploadingCsv || !csvFile}
-                     className="mx-auto flex items-center gap-2 px-8 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-md hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer"
+                     className="mx-auto flex items-center gap-2 px-8 py-3 bg-slate-700 text-white font-bold rounded-xl shadow-md hover:bg-slate-800 transition disabled:opacity-50 cursor-pointer"
                  >
                      {isUploadingCsv ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />} 
                      {isUploadingCsv ? 'Đang ráp Data vào hệ thống...' : 'Bắt đầu Import'}
@@ -418,12 +418,12 @@ export default function UpdateWarehouseMap() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             
             {/* CỘT 1: FORM CẬP NHẬT */}
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 space-y-6">
-                <div className="border-b border-gray-100 pb-4">
-                    <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                <div className="border-b border-slate-100 pb-4">
+                    <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
                         <Edit3 size={20} className="text-blue-500"/> Chỉnh sửa Vị trí thủ công
                     </h2>
-                    <p className="text-sm text-gray-500 mt-1">Tìm kiếm và gán kệ nhanh cho sản phẩm lẻ.</p>
+                    <p className="text-sm text-slate-500 mt-1">Tìm kiếm và gán kệ nhanh cho sản phẩm lẻ.</p>
                 </div>
 
                 <form onSubmit={(e) => handleSearchProduct(e)} className="flex gap-3">
@@ -492,7 +492,7 @@ export default function UpdateWarehouseMap() {
                             <button 
                                 type="submit"
                                 disabled={isUpdatingManual || !manualLocation.trim()}
-                                className="w-full flex justify-center items-center gap-2 px-6 py-3 bg-blue-600 text-white font-bold rounded-xl shadow-md hover:bg-blue-700 transition disabled:opacity-50"
+                                className="w-full flex justify-center items-center gap-2 px-6 py-3 bg-slate-700 text-white font-bold rounded-xl shadow-md hover:bg-slate-800 transition disabled:opacity-50"
                             >
                                 {isUpdatingManual ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />} 
                                 Xác nhận Lưu Vị Trí
@@ -504,7 +504,7 @@ export default function UpdateWarehouseMap() {
 
             {/* CỘT 2: BẢNG SẢN PHẨM TỒN NHƯNG CHƯA CÓ KỆ */}
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-200/60 space-y-4">
-                <div className="flex justify-between items-center border-b border-gray-100 pb-4">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-4">
                     <div>
                         <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
                             <AlertCircle size={18} className="text-amber-500"/> Tồn kho cần gán kệ

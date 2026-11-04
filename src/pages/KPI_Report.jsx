@@ -594,7 +594,7 @@ export default function KPI_Report() {
                                     {staff.full_name} 
                                     {idx === 0 && <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded uppercase tracking-wider">Top 1</span>}
                                   </div>
-                                  <div className="text-[11px] text-slate-400 font-medium uppercase mt-0.5">{staff.role}</div>
+                                  <div className="text-xs text-slate-400 font-medium uppercase mt-0.5">{staff.role}</div>
                                 </div>
                               </div>
                             </td>
@@ -627,11 +627,11 @@ export default function KPI_Report() {
                                     <table className="w-full text-left text-sm min-w-[600px]">
                                       <thead className="bg-slate-100 border-b border-slate-200">
                                         <tr>
-                                          <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase">Tên Chỉ Tiêu</th>
-                                          <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase text-center">KQ Đo lường</th>
-                                          <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase text-center">Điểm phạt</th>
-                                          <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase text-center">Thang Điểm 100</th>
-                                          <th className="py-3 px-5 text-[11px] font-bold text-slate-500 uppercase text-center">Quy đổi Tỉ trọng</th>
+                                          <th className="py-3 px-5 text-xs font-bold text-slate-500 uppercase">Tên Chỉ Tiêu</th>
+                                          <th className="py-3 px-5 text-xs font-bold text-slate-500 uppercase text-center">KQ Đo lường</th>
+                                          <th className="py-3 px-5 text-xs font-bold text-slate-500 uppercase text-center">Điểm phạt</th>
+                                          <th className="py-3 px-5 text-xs font-bold text-slate-500 uppercase text-center">Thang Điểm 100</th>
+                                          <th className="py-3 px-5 text-xs font-bold text-slate-500 uppercase text-center">Quy đổi Tỉ trọng</th>
                                         </tr>
                                       </thead>
                                       <tbody className="divide-y divide-slate-100">
@@ -686,14 +686,14 @@ export default function KPI_Report() {
                                                 <tr>
                                                   <td colSpan="5" className="p-0 bg-indigo-50/40 border-b-2 border-indigo-100">
                                                     <div className="p-4 pl-6 animate-in slide-in-from-top-2 duration-200">
-                                                      <h5 className="text-[11px] font-bold text-indigo-800 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                                                      <h5 className="text-xs font-bold text-indigo-800 uppercase tracking-widest mb-3 flex items-center gap-1.5">
                                                         <CalendarDays size={12}/> Chi tiết điểm đo lường theo từng ngày (Tháng {selectedMonth.split('-')[1]})
                                                       </h5>
                                                       <div className="flex flex-wrap gap-1.5">
                                                         {crit.dailyDetails.map(d => (
                                                           <div key={d.date} className={`flex flex-col items-center justify-center w-11 h-11 rounded-lg border ${d.isWorkingDay ? 'bg-white border-indigo-200 shadow-sm' : 'bg-slate-50 border-slate-200 opacity-60'}`} title={d.isWorkingDay ? `Kết quả: ${Math.round(d.value*100)/100}` : 'Ngày nghỉ / Không có dữ liệu'}>
                                                             <span className="text-xs font-bold text-slate-400">{d.date.split('-')[2]}/{d.date.split('-')[1]}</span>
-                                                            <span className={`text-[11px] font-bold ${d.isWorkingDay ? 'text-indigo-600' : 'text-slate-300'}`}>
+                                                            <span className={`text-xs font-bold ${d.isWorkingDay ? 'text-indigo-600' : 'text-slate-300'}`}>
                                                               {d.isWorkingDay ? Math.round(d.value * 100) / 100 : '-'}
                                                             </span>
                                                           </div>
@@ -757,7 +757,7 @@ export default function KPI_Report() {
                             {staff.full_name}
                             {idx === 0 && <span className="text-xs bg-amber-500 text-white px-2 py-0.5 rounded uppercase tracking-wider">Top 1</span>}
                           </div>
-                          <div className="text-[11px] text-slate-400 font-medium uppercase mt-0.5">{staff.role}</div>
+                          <div className="text-xs text-slate-400 font-medium uppercase mt-0.5">{staff.role}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">

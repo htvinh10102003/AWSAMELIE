@@ -241,15 +241,15 @@ export default function TraHangHoanTien() {
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1">Từ ngày</label>
-            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium" />
+            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1">Đến ngày</label>
-            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium" />
+            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1">Sàn</label>
-            <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium bg-white">
+            <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
               {PLATFORMS.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
@@ -257,7 +257,7 @@ export default function TraHangHoanTien() {
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1">Trạng thái Nhanh</label>
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium bg-white">
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
               <option value="">Tất cả trạng thái</option>
               {Object.entries(NHANH_STATUS_NAMES).map(([id, name]) => (
                 <option key={id} value={id}>{name}</option>
@@ -273,11 +273,11 @@ export default function TraHangHoanTien() {
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleFilter(); }}
                 placeholder="Nhập mã cần tìm rồi Enter"
-                className="w-full text-sm border border-slate-200 rounded-lg pl-9 pr-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
+                className="w-full text-sm border border-slate-200 rounded-lg pl-9 pr-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium"
               />
             </div>
           </div>
-          <button onClick={handleFilter} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-sm cursor-pointer">Lọc</button>
+          <button onClick={handleFilter} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl shadow-sm cursor-pointer">Lọc</button>
         </div>
         <p className="text-xs text-slate-500 mt-3">
           Tổng: <strong className="text-slate-800">{total}</strong> yêu cầu theo bộ lọc. Ngày lọc theo ngày cập nhật trên Nhanh.
@@ -301,7 +301,7 @@ export default function TraHangHoanTien() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500">
+                <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500 sticky top-0 z-10">
                   <th className="px-4 py-3">Ngày cập nhật</th>
                   <th className="px-4 py-3">Sàn</th>
                   <th className="px-4 py-3">Mã đơn trả</th>
@@ -319,7 +319,7 @@ export default function TraHangHoanTien() {
                   const prods = productsOf(r);
                   const first = prods[0];
                   return (
-                    <tr key={r.return_id} onClick={() => openDetail(r)} className="border-t border-slate-100 hover:bg-indigo-50/50 cursor-pointer">
+                    <tr key={r.return_id} onClick={() => openDetail(r)} className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer">
                       <td className="px-4 py-3 whitespace-nowrap font-medium">{fmtDateTime(r.return_updated_at)}</td>
                       <td className="px-4 py-3 whitespace-nowrap">{r.platform_name || '—'}</td>
                       <td className="px-4 py-3 font-bold text-indigo-700">{r.return_tracking_number || r.return_id}</td>
@@ -362,7 +362,7 @@ export default function TraHangHoanTien() {
         <div className="flex flex-wrap items-end gap-3 mt-4">
           <div>
             <label className="block text-xs font-bold text-slate-500 mb-1">Ngày đối soát</label>
-            <input type="date" value={reconDate} onChange={(e) => setReconDate(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium" />
+            <input type="date" value={reconDate} onChange={(e) => setReconDate(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
           </div>
           <div className="flex-1 min-w-[260px]">
             <label className="block text-xs font-bold text-slate-500 mb-1">Bắn mã vạch / nhập mã đơn trả (Enter để thêm)</label>
@@ -371,16 +371,16 @@ export default function TraHangHoanTien() {
               onChange={(e) => setScanInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { addCode(scanInput); setScanInput(''); } }}
               placeholder="Quét hoặc nhập mã rồi Enter"
-              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium"
+              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium"
             />
           </div>
-          <button onClick={() => { if (scanInput.trim()) { addCode(scanInput); setScanInput(''); } }} disabled={scanBusy} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-sm disabled:opacity-50 cursor-pointer">Thêm mã</button>
+          <button onClick={() => { if (scanInput.trim()) { addCode(scanInput); setScanInput(''); } }} disabled={scanBusy} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl shadow-sm disabled:opacity-50 cursor-pointer">Thêm mã</button>
           <button onClick={() => setScanned([])} className="px-4 py-2.5 text-sm font-bold rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer flex items-center gap-1"><Trash2 size={14} /> Xóa hết</button>
         </div>
         <div className="mt-3">
           <label className="block text-xs font-bold text-slate-500 mb-1">Hoặc dán nhiều mã (mỗi dòng 1 mã, tối đa 100 mã)</label>
-          <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={3} placeholder={'SPXVN0123...\nSPXVN0456...'} className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium" />
-          <button onClick={handlePaste} disabled={scanBusy} className="mt-2 px-5 py-2 text-sm font-bold rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 disabled:opacity-50 cursor-pointer">Thêm nhiều mã</button>
+          <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={3} placeholder={'SPXVN0123...\nSPXVN0456...'} className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+          <button onClick={handlePaste} disabled={scanBusy} className="mt-2 px-5 py-2 text-sm font-bold rounded-xl border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 cursor-pointer">Thêm nhiều mã</button>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
@@ -397,7 +397,7 @@ export default function TraHangHoanTien() {
             <div className="overflow-x-auto border border-slate-100 rounded-xl">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500">
+                  <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500 sticky top-0 z-10">
                     <th className="px-4 py-2">Mã quét</th>
                     <th className="px-4 py-2">Kết quả</th>
                     <th className="px-4 py-2">ID đơn gốc</th>
@@ -433,7 +433,7 @@ export default function TraHangHoanTien() {
             <div className="overflow-x-auto border border-slate-100 rounded-xl">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500">
+                  <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500 sticky top-0 z-10">
                     <th className="px-4 py-2">Mã đơn trả</th>
                     <th className="px-4 py-2">ID đơn gốc</th>
                     <th className="px-4 py-2">Sàn</th>
@@ -458,8 +458,8 @@ export default function TraHangHoanTien() {
 
       {/* Popup chi tiết */}
       {selected && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setSelected(null)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] overflow-y-auto p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={() => setSelected(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto p-6 sm:p-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Chi tiết yêu cầu trả hàng</h2>
@@ -488,7 +488,7 @@ export default function TraHangHoanTien() {
               <div className="overflow-x-auto border border-slate-100 rounded-xl">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500">
+                    <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500 sticky top-0 z-10">
                       <th className="px-3 py-2">Sản phẩm</th>
                       <th className="px-3 py-2">SKU</th>
                       <th className="px-3 py-2">SL</th>

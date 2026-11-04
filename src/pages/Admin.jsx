@@ -695,7 +695,7 @@ export default function Admin() {
       return (
         <div className="mt-4 bg-white p-4 rounded-xl border border-slate-200">
           <p className="text-sm text-slate-600 font-medium">Chưa cấu hình cột riêng. Hệ thống đang quét theo cách cũ: mã lấy từ cột “Mã vận đơn” / “Mã đơn hàng” / “Mã đơn” (cột nào có trước), ngày lấy từ cột “Ngày”, tìm theo mã vận đơn trước rồi tới ID đơn.</p>
-          <button onClick={() => setMap(defaultSheetMap())} className="mt-3 px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-sm font-bold rounded-lg transition-colors cursor-pointer">Tạo cấu hình cột riêng</button>
+          <button onClick={() => setMap(defaultSheetMap())} className="mt-3 px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 text-sm font-bold rounded-lg transition-colors cursor-pointer">Tạo cấu hình cột riêng</button>
         </div>
       );
     }
@@ -709,14 +709,14 @@ export default function Admin() {
               <option value="id">ID đơn (orders.id)</option>
               <option value="carrier_code">Mã vận đơn (carrier_code)</option>
             </select>
-            <input type="text" value={row.header} onChange={e => setMap({ ...map, codeChain: map.codeChain.map((r, i) => i === idx ? { ...r, header: e.target.value } : r) })} placeholder="Tiêu đề cột trong sheet, ví dụ: ID đơn" className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium" />
+            <input type="text" value={row.header} onChange={e => setMap({ ...map, codeChain: map.codeChain.map((r, i) => i === idx ? { ...r, header: e.target.value } : r) })} placeholder="Tiêu đề cột trong sheet, ví dụ: ID đơn" className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
             <button onClick={() => setMap({ ...map, codeChain: map.codeChain.filter((_, i) => i !== idx) })} disabled={map.codeChain.length <= 1} className="px-3 py-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-40 cursor-pointer">Xóa</button>
           </div>
         ))}
         <button onClick={() => setMap({ ...map, codeChain: [...map.codeChain, { db: 'carrier_code', header: '' }] })} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 text-sm font-bold rounded-lg transition-colors cursor-pointer">Thêm cột đối chiếu</button>
         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
           <span className="text-xs font-bold text-slate-500 whitespace-nowrap w-28">Cột ngày</span>
-          <input type="text" value={map.dateHeader} onChange={e => setMap({ ...map, dateHeader: e.target.value })} placeholder="Tiêu đề cột ngày, ví dụ: Ngày" className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium" />
+          <input type="text" value={map.dateHeader} onChange={e => setMap({ ...map, dateHeader: e.target.value })} placeholder="Tiêu đề cột ngày, ví dụ: Ngày" className="flex-1 text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
           <span className="text-xs text-slate-500 font-medium">{kind === 'daily' ? 'Gán vào ngày đi đơn (carrier_date).' : 'Gán vào ngày in (printed_at).'}</span>
         </div>
         <div className="flex justify-end">
@@ -959,33 +959,33 @@ export default function Admin() {
 
         {/* Segmented Control Tabs */}
         <div className="flex bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/60 w-full md:w-auto overflow-x-auto shadow-inner hide-scrollbar">
-          <button onClick={() => { setActiveTab('configs'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'configs' ? 'bg-white text-blue-700 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}>
+          <button onClick={() => { setActiveTab('configs'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'configs' ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}>
             Cấu hình & Data
           </button>
           
           {isOwner && (
-            <button onClick={() => { setActiveTab('notifications'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'notifications' ? 'bg-white text-blue-700 shadow-sm border border-slate-200/50 flex items-center justify-center gap-1.5' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 flex items-center justify-center gap-1.5'}`}>
+            <button onClick={() => { setActiveTab('notifications'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'notifications' ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50 flex items-center justify-center gap-1.5' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 flex items-center justify-center gap-1.5'}`}>
               <BellRing size={16}/> Thông báo
             </button>
           )}
 
-          <button onClick={() => { setActiveTab('users_management'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'users_management' ? 'bg-white text-blue-700 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}>
+          <button onClick={() => { setActiveTab('users_management'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'users_management' ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}>
             Quản lý Users
           </button>
           {isOwner && (
-            <button onClick={() => { setActiveTab('action_logs'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'action_logs' ? 'bg-white text-blue-700 shadow-sm border border-slate-200/50 flex items-center justify-center gap-1.5' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 flex items-center justify-center gap-1.5'}`}>
+            <button onClick={() => { setActiveTab('action_logs'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'action_logs' ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50 flex items-center justify-center gap-1.5' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50 flex items-center justify-center gap-1.5'}`}>
               <History size={16}/> Nhật ký thao tác
             </button>
           )}
-          <button onClick={() => { setActiveTab('profile'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'profile' ? 'bg-white text-blue-700 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}>
+          <button onClick={() => { setActiveTab('profile'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'profile' ? 'bg-white text-slate-900 shadow-sm border border-slate-200/50' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}>
             Cá nhân
           </button>
         </div>
       </div>
 
       {userMessage && !['profile', 'themes', 'notifications'].includes(activeTab) && (
-        <div className={`p-4 rounded-2xl border text-sm font-bold flex items-center gap-3 shadow-sm animate-in slide-in-from-top-2 ${userMessage.includes('') || userMessage.includes('') ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-          <CheckCircle2 size={20} className="flex-shrink-0"/> {userMessage}
+        <div className={`p-4 rounded-2xl border text-sm font-bold flex items-center gap-3 shadow-sm animate-in slide-in-from-top-2 ${userMessage.includes('Lỗi') || userMessage.includes('Không thể') ? 'bg-red-50 border-red-200 text-red-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'}`}>
+          {userMessage.includes('Lỗi') || userMessage.includes('Không thể') ? <AlertCircle size={20} className="flex-shrink-0"/> : <CheckCircle2 size={20} className="flex-shrink-0"/>} {userMessage}
         </div>
       )}
 
@@ -1004,14 +1004,14 @@ export default function Admin() {
               Chèn một dải thông báo chạy liên tục ngay trên cùng màn hình của hệ thống. Phù hợp để tuyên dương, cảnh báo hoặc push sale.
             </p>
 
-            {bannerMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${bannerMessage.includes('') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {bannerMessage}</div>}
+            {bannerMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${bannerMessage.includes('Lỗi') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>{bannerMessage.includes('Lỗi') ? <AlertCircle size={18}/> : <CheckCircle2 size={18}/>} {bannerMessage}</div>}
 
             <form onSubmit={handleSaveBanner} className="space-y-6">
               
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-orange-50/50 border border-orange-200/50 rounded-2xl gap-4">
                 <div>
                   <h3 className="text-sm font-bold text-orange-900">Kích hoạt Dải chữ chạy</h3>
-                  <p className="text-[11px] text-orange-700 font-medium mt-1">Bật để hiển thị. Nội dung sẽ được cập nhật trực tiếp tới toàn bộ nhân viên kho.</p>
+                  <p className="text-xs text-orange-700 font-medium mt-1">Bật để hiển thị. Nội dung sẽ được cập nhật trực tiếp tới toàn bộ nhân viên kho.</p>
                 </div>
                 <ToggleSwitch checked={bannerNotif.enabled} onChange={(c) => setBannerNotif({...bannerNotif, enabled: c})} color="bg-orange-500" />
               </div>
@@ -1076,16 +1076,16 @@ export default function Admin() {
               Gửi thông báo bật lên chính giữa màn hình. Nhân viên phải bấm "Đã hiểu" hoặc "Tắt thông báo" để thu gọn.
             </p>
 
-            {notifMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${notifMessage.includes('') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {notifMessage}</div>}
+            {notifMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${notifMessage.includes('Lỗi') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>{notifMessage.includes('Lỗi') ? <AlertCircle size={18}/> : <CheckCircle2 size={18}/>} {notifMessage}</div>}
 
             <form onSubmit={handleSaveNotification} className="space-y-6">
               
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-5 bg-slate-50 border border-slate-200 rounded-2xl gap-4">
                 <div>
                   <h3 className="text-sm font-bold text-slate-800">Kích hoạt thông báo Popup</h3>
-                  <p className="text-[11px] text-slate-500 font-medium mt-1">Bật để hiển thị thông báo. Tắt để ẩn thông báo với tất cả mọi người.</p>
+                  <p className="text-xs text-slate-500 font-medium mt-1">Bật để hiển thị thông báo. Tắt để ẩn thông báo với tất cả mọi người.</p>
                 </div>
-                <ToggleSwitch checked={globalNotif.enabled} onChange={(c) => setGlobalNotif({...globalNotif, enabled: c})} color="bg-blue-600" />
+                <ToggleSwitch checked={globalNotif.enabled} onChange={(c) => setGlobalNotif({...globalNotif, enabled: c})} color="bg-slate-700" />
               </div>
 
               <div className={`transition-all duration-300 ${globalNotif.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
@@ -1095,7 +1095,7 @@ export default function Admin() {
                     <select 
                       value={globalNotif.type} 
                       onChange={(e) => setGlobalNotif({...globalNotif, type: e.target.value})}
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 bg-white cursor-pointer transition"
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-slate-500/20 bg-white cursor-pointer transition"
                     >
                       <option value="info">Thông báo chung (Màu Xám)</option>
                       <option value="update">Cập nhật tính năng (Màu Xanh)</option>
@@ -1110,7 +1110,7 @@ export default function Admin() {
                       value={globalNotif.title} 
                       onChange={(e) => setGlobalNotif({...globalNotif, title: e.target.value})} 
                       placeholder="VD: Cập nhật tính năng In Đơn tự động..." 
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" 
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" 
                       required={globalNotif.enabled}
                     />
                   </div>
@@ -1123,7 +1123,7 @@ export default function Admin() {
                     value={globalNotif.content} 
                     onChange={(e) => setGlobalNotif({...globalNotif, content: e.target.value})} 
                     placeholder="Nhập nội dung cần thông báo cho nhân viên..." 
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white resize-none custom-scrollbar" 
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white resize-none custom-scrollbar" 
                     required={globalNotif.enabled}
                   />
                 </div>
@@ -1137,7 +1137,7 @@ export default function Admin() {
               </div>
 
               <div className="pt-6 border-t border-slate-100 flex justify-end">
-                <button type="submit" disabled={notifLoading} className="w-full sm:w-auto px-8 py-3.5 bg-blue-600 text-white text-sm font-bold rounded-xl shadow-md hover:bg-blue-700 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
+                <button type="submit" disabled={notifLoading} className="w-full sm:w-auto px-8 py-3.5 bg-slate-700 text-white text-sm font-bold rounded-xl shadow-sm hover:bg-slate-800 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2">
                   {notifLoading ? <Loader2 size={18} className="animate-spin"/> : <Megaphone size={18}/>} Phát thông báo Popup
                 </button>
               </div>
@@ -1171,16 +1171,16 @@ export default function Admin() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">App ID</label>
-                      <input type="text" name="nhanh_app_id" value={apiConfigs.nhanh_app_id} onChange={handleApiChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium transition" />
+                      <input type="text" name="nhanh_app_id" value={apiConfigs.nhanh_app_id} onChange={handleApiChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium transition" />
                     </div>
                     <div>
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Business ID</label>
-                      <input type="text" name="nhanh_business_id" value={apiConfigs.nhanh_business_id} onChange={handleApiChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium transition" />
+                      <input type="text" name="nhanh_business_id" value={apiConfigs.nhanh_business_id} onChange={handleApiChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium transition" />
                     </div>
                 </div>
                 <div>
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Secret Key</label>
-                  <input type="password" name="nhanh_secret_key" value={apiConfigs.nhanh_secret_key} onChange={handleApiChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium transition" />
+                  <input type="password" name="nhanh_secret_key" value={apiConfigs.nhanh_secret_key} onChange={handleApiChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium transition" />
                 </div>
                 
                 <div className="bg-amber-50/50 p-5 sm:p-6 border border-amber-200/60 rounded-2xl flex flex-col md:flex-row md:items-end gap-4">
@@ -1188,7 +1188,7 @@ export default function Admin() {
                     <label className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2 block flex items-center gap-1.5"><KeyRound size={14}/> Mã Access Code mới (Hạn 15p)</label>
                     <input type="text" name="nhanh_access_code" value={apiConfigs.nhanh_access_code} onChange={handleApiChange} className="w-full px-4 py-3 border border-amber-300/60 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium transition placeholder:text-amber-300" placeholder="Paste access code lấy từ Nhanh.vn vào đây..." />
                   </div>
-                  <button type="submit" disabled={apiLoading} className="w-full md:w-auto px-8 py-3 bg-slate-900 text-white font-bold rounded-xl shadow-md hover:bg-blue-600 transition-all cursor-pointer text-sm disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap">
+                  <button type="submit" disabled={apiLoading} className="w-full md:w-auto px-8 py-3 bg-slate-900 text-white font-bold rounded-xl shadow-md hover:bg-slate-800 transition-all cursor-pointer text-sm disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap">
                     {apiLoading ? <Loader2 size={16} className="animate-spin" /> : <SaveIcon />} Lưu Token mới
                   </button>
                 </div>
@@ -1204,10 +1204,10 @@ export default function Admin() {
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Database size={20} className="text-indigo-600"/> Liên kết Google Sheets</h2>
               {isAdminOrOwner && (
                 <div className="flex gap-2">
-                  <button onClick={() => handleTriggerSyncSheets('daily')} disabled={syncDailyLoading || syncPrintLoading} className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer">
+                  <button onClick={() => handleTriggerSyncSheets('daily')} disabled={syncDailyLoading || syncPrintLoading} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer">
                     {syncDailyLoading ? <Loader2 size={16} className="animate-spin"/> : <RefreshCcw size={16}/>} Quét đơn đi
                   </button>
-                  <button onClick={() => handleTriggerSyncSheets('print')} disabled={syncDailyLoading || syncPrintLoading} className="px-4 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer">
+                  <button onClick={() => handleTriggerSyncSheets('print')} disabled={syncDailyLoading || syncPrintLoading} className="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 text-sm font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 cursor-pointer">
                     {syncPrintLoading ? <Loader2 size={16} className="animate-spin"/> : <RefreshCcw size={16}/>} Quét đơn in
                   </button>
                 </div>
@@ -1232,12 +1232,12 @@ export default function Admin() {
               <div className="mb-6 bg-white p-5 rounded-2xl border border-amber-200">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                   <h3 className="text-base font-bold text-slate-800">Log đơn in có trong sheet nhưng database không tìm thấy — {printMissing.length} dòng (chỉ Owner và Super Admin thấy)</h3>
-                  <button onClick={downloadPrintMissingCsv} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-indigo-600 transition-colors cursor-pointer whitespace-nowrap">Tải danh sách (CSV)</button>
+                  <button onClick={downloadPrintMissingCsv} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors cursor-pointer whitespace-nowrap">Tải danh sách (CSV)</button>
                 </div>
                 <p className="text-sm text-slate-500 font-medium mb-3">Bảng hiển thị tối đa 500 dòng đầu, file CSV tải về đủ toàn bộ. Dòng sheet tính từ hàng 1 là tiêu đề.</p>
                 <div className="overflow-auto max-h-96 border border-slate-100 rounded-xl">
                   <table className="w-full text-sm">
-                    <thead className="bg-slate-50 sticky top-0">
+                    <thead className="bg-slate-50 sticky top-0 z-10">
                       <tr className="text-left text-xs font-bold text-slate-500 uppercase">
                         <th className="px-3 py-2">Dòng sheet</th>
                         <th className="px-3 py-2">Mã gốc trong sheet</th>
@@ -1272,11 +1272,11 @@ export default function Admin() {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                         <div className="md:col-span-3">
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Link Sheet Đơn Đi (Log)</label>
-                            <input type="text" value={sheetDailyUrl} onChange={e => setSheetDailyUrl(e.target.value)} placeholder="https://docs.google.com/..." className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition bg-white"/>
+                            <input type="text" value={sheetDailyUrl} onChange={e => setSheetDailyUrl(e.target.value)} placeholder="https://docs.google.com/..." className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium transition bg-white"/>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Mã GID</label>
-                            <input type="text" value={sheetDailyGid} onChange={e => setSheetDailyGid(e.target.value)} placeholder="0" className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition bg-white"/>
+                            <input type="text" value={sheetDailyGid} onChange={e => setSheetDailyGid(e.target.value)} placeholder="0" className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium transition bg-white"/>
                         </div>
                     </div>
                     {dailyLastScan && <p className="mt-3 text-xs text-slate-500 font-medium">Lần quét đơn đi trước: {new Date(dailyLastScan).toLocaleString('vi-VN')}</p>}
@@ -1287,11 +1287,11 @@ export default function Admin() {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                         <div className="md:col-span-3">
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Link Sheet Đơn In (Giao việc)</label>
-                            <input type="text" value={sheetPrintUrl} onChange={e => setSheetPrintUrl(e.target.value)} placeholder="https://docs.google.com/..." className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition bg-white"/>
+                            <input type="text" value={sheetPrintUrl} onChange={e => setSheetPrintUrl(e.target.value)} placeholder="https://docs.google.com/..." className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium transition bg-white"/>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wider">Mã GID</label>
-                            <input type="text" value={sheetPrintGid} onChange={e => setSheetPrintGid(e.target.value)} placeholder="1245667" className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium transition bg-white"/>
+                            <input type="text" value={sheetPrintGid} onChange={e => setSheetPrintGid(e.target.value)} placeholder="1245667" className="w-full text-sm border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium transition bg-white"/>
                         </div>
                     </div>
                     {printLastScan && <p className="mt-3 text-xs text-slate-500 font-medium">Lần quét đơn in trước: {new Date(printLastScan).toLocaleString('vi-VN')}</p>}
@@ -1299,7 +1299,7 @@ export default function Admin() {
                 </div>
 
                 <div className="flex justify-end">
-                    <button onClick={handleSaveConfig} disabled={syncLoading} className="px-8 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl shadow-md hover:bg-indigo-600 transition-colors cursor-pointer disabled:opacity-50">
+                    <button onClick={handleSaveConfig} disabled={syncLoading} className="px-8 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl shadow-md hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50">
                         Lưu cấu hình liên kết
                     </button>
                 </div>
@@ -1324,13 +1324,13 @@ export default function Admin() {
                   <p className="text-xs text-blue-700/70 mb-4">Quét các trạng thái đơn hàng bị miss do hệ thống Nhanh quá tải.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <select value={syncDays} onChange={e => setSyncDays(e.target.value)} disabled={isSyncingOrder} className="px-4 py-2.5 border border-blue-200 bg-white rounded-xl text-sm font-bold text-blue-900 outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer disabled:opacity-50 flex-1">
+                  <select value={syncDays} onChange={e => setSyncDays(e.target.value)} disabled={isSyncingOrder} className="px-4 py-2.5 border border-blue-200 bg-white rounded-xl text-sm font-bold text-blue-900 outline-none focus:ring-2 focus:ring-slate-500/20 cursor-pointer disabled:opacity-50 flex-1">
                     <option value={1}>1 ngày qua</option>
                     <option value={3}>3 ngày qua</option>
                     <option value={7}>7 ngày qua</option>
                     <option value={30}>30 ngày qua</option>
                   </select>
-                  <button onClick={handleSyncOrdersData} disabled={isSyncingOrder} className="px-5 py-2.5 bg-blue-600 text-white text-sm font-bold rounded-xl shadow-md hover:bg-blue-700 transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2">
+                  <button onClick={handleSyncOrdersData} disabled={isSyncingOrder} className="px-5 py-2.5 bg-slate-700 text-white text-sm font-bold rounded-xl shadow-sm hover:bg-slate-800 transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2">
                     {isSyncingOrder ? <Loader2 size={16} className="animate-spin" /> : <DownloadCloud size={16} />} Kéo
                   </button>
                 </div>
@@ -1361,9 +1361,9 @@ export default function Admin() {
                   <p className="text-xs text-indigo-700/70">Kéo danh sách hoàn hàng từ Shopee, TikTok, Lazada về hệ thống.</p>
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <span className="text-xs font-bold text-indigo-900">Từ ngày</span>
-                    <input type="date" value={syncReturnsFrom} onChange={e => setSyncReturnsFrom(e.target.value)} className="text-sm border border-indigo-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium bg-white" />
+                    <input type="date" value={syncReturnsFrom} onChange={e => setSyncReturnsFrom(e.target.value)} className="text-sm border border-indigo-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white" />
                     <span className="text-xs font-bold text-indigo-900">Đến ngày</span>
-                    <input type="date" value={syncReturnsTo} onChange={e => setSyncReturnsTo(e.target.value)} className="text-sm border border-indigo-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 font-medium bg-white" />
+                    <input type="date" value={syncReturnsTo} onChange={e => setSyncReturnsTo(e.target.value)} className="text-sm border border-indigo-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white" />
                     <span className="text-xs text-indigo-700/70">Theo ngày cập nhật trên Nhanh, mặc định 30 ngày gần nhất.</span>
                   </div>
                   {syncReturnsMessage.text && <p className={`mt-2 text-xs font-bold ${syncReturnsMessage.type === 'error' ? 'text-red-500' : 'text-indigo-600'}`}>{syncReturnsMessage.text}</p>}
@@ -1376,7 +1376,7 @@ export default function Admin() {
               )}
 
               {isOwner ? (
-                  <button onClick={handleSyncReturns} disabled={isSyncingReturns} className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer flex justify-center items-center gap-2 whitespace-nowrap">
+                  <button onClick={handleSyncReturns} disabled={isSyncingReturns} className="w-full sm:w-auto px-6 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl shadow-sm transition disabled:opacity-50 cursor-pointer flex justify-center items-center gap-2 whitespace-nowrap">
                     {isSyncingReturns ? <Loader2 size={16} className="animate-spin"/> : <DownloadCloud size={16}/>} Kéo Hoàn Hàng
                   </button>
                 ) : (
@@ -1397,8 +1397,8 @@ export default function Admin() {
                 <label className="block text-sm font-bold text-slate-800 mb-3">1. Các trạng thái đơn hiển thị trên App In</label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-5 bg-slate-50/50 border border-slate-200 rounded-2xl max-h-64 overflow-y-auto custom-scrollbar">
                   {statusList.map(status => (
-                    <label key={status.id} className={`flex items-center gap-3 cursor-pointer p-3 rounded-xl border transition shadow-sm ${filterConfigs.allowed_statuses.includes(String(status.id)) ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
-                      <input type="checkbox" className="w-4 h-4 cursor-pointer accent-blue-600" checked={filterConfigs.allowed_statuses.includes(String(status.id))} onChange={() => handleStatusToggle(status.id)} />
+                    <label key={status.id} className={`flex items-center gap-3 cursor-pointer p-3 rounded-xl border transition shadow-sm ${filterConfigs.allowed_statuses.includes(String(status.id)) ? 'bg-slate-100 border-slate-300' : 'bg-white border-slate-200 hover:bg-slate-50'}`}>
+                      <input type="checkbox" className="w-4 h-4 cursor-pointer accent-slate-700" checked={filterConfigs.allowed_statuses.includes(String(status.id))} onChange={() => handleStatusToggle(status.id)} />
                       <span className="text-xs font-bold text-slate-700 leading-tight">
                         <span className="text-slate-400 mr-1 opacity-70">[{status.id}]</span><br/>{status.name}
                       </span>
@@ -1411,7 +1411,7 @@ export default function Admin() {
               <div>
                 <label className="block text-sm font-bold text-slate-800 mb-3">2. Thứ tự ưu tiên (Kéo thả để sắp xếp)</label>
                 <div className="flex flex-col sm:flex-row gap-3 mb-5">
-                    <select value={selectedNewPriority} onChange={(e) => setSelectedNewPriority(e.target.value)} className="flex-1 px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-blue-500/20 transition">
+                    <select value={selectedNewPriority} onChange={(e) => setSelectedNewPriority(e.target.value)} className="flex-1 px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 font-bold text-sm outline-none cursor-pointer focus:ring-2 focus:ring-slate-500/20 transition">
                         <option value="">-- Chọn luật ưu tiên để thêm --</option>
                         {dynamicOptions.filter(opt => !priorities.some(p => p.id === opt.id)).map(opt => (
                             <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -1424,7 +1424,7 @@ export default function Admin() {
                   {priorities.length === 0 && <p className="text-slate-400 text-sm font-medium text-center py-6 border-2 border-dashed border-slate-200 rounded-xl">Chưa có luật ưu tiên nào được chọn.</p>}
                   {priorities.map((item, index) => (
                     <div key={item.id} draggable onDragStart={(e) => handleDragStart(e, index)} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDrop(e, index)}
-                      className="flex items-center justify-between p-3.5 bg-white border border-slate-200 rounded-xl shadow-sm cursor-grab active:cursor-grabbing hover:border-blue-400 transition group"
+                      className="flex items-center justify-between p-3.5 bg-white border border-slate-200 rounded-xl shadow-sm cursor-grab active:cursor-grabbing hover:border-slate-400 transition group"
                     >
                       <div className="flex items-center gap-3">
                         <div className="text-slate-300">⋮⋮</div>
@@ -1488,7 +1488,7 @@ export default function Admin() {
                 </div>
                 
                 <div className="flex justify-end pt-2 border-t border-slate-100">
-                  <button onClick={handleSaveThemes} disabled={themeLoading} className="px-8 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl shadow-md hover:bg-indigo-600 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2">
+                  <button onClick={handleSaveThemes} disabled={themeLoading} className="px-8 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl shadow-md hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-2">
                       {themeLoading ? <Loader2 size={16} className="animate-spin"/> : <SaveIcon/>} Lưu cấu hình Giao diện
                   </button>
                 </div>
@@ -1638,16 +1638,16 @@ export default function Admin() {
               <form onSubmit={handleCreateUser} className="space-y-4">
                 <div>
                   <label className="block mb-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Họ và tên</label>
-                  <input type="text" placeholder="Nguyễn Văn A" value={userForm.fullName} onChange={e => setUserForm({...userForm, fullName: e.target.value})} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" />
+                  <input type="text" placeholder="Nguyễn Văn A" value={userForm.fullName} onChange={e => setUserForm({...userForm, fullName: e.target.value})} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" />
                 </div>
                 <div>
                   <label className="block mb-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Email đăng nhập</label>
-                  <input type="email" placeholder="username@gmail.com" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" />
+                  <input type="email" placeholder="username@gmail.com" value={userForm.email} onChange={e => setUserForm({...userForm, email: e.target.value})} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" />
                 </div>
                 <div>
                   <label className="block mb-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Mật khẩu khởi tạo</label>
                   <div className="relative">
-                    <input type={showPassword ? "text" : "password"} placeholder="••••••" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" />
+                    <input type={showPassword ? "text" : "password"} placeholder="••••••" value={userForm.password} onChange={e => setUserForm({...userForm, password: e.target.value})} className="w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/20 text-sm font-medium transition bg-slate-50 focus:bg-white" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600 cursor-pointer">
                       {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
@@ -1655,13 +1655,13 @@ export default function Admin() {
                 </div>
                 <div>
                   <label className="block mb-1.5 text-xs font-bold text-slate-500 uppercase tracking-wider">Cấp bậc ban đầu</label>
-                  <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 bg-slate-50 text-sm font-bold cursor-pointer transition focus:bg-white">
+                  <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value})} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/20 bg-slate-50 text-sm font-bold cursor-pointer transition focus:bg-white">
                     <option value="user">Nhân viên (User)</option>
                     <option value="admin">Quản trị (Admin)</option>
                     <option value="super_admin">Super Admin (Admin + Nhanh / Sheet / Giao diện)</option>
                   </select>
                 </div>
-                <button type="submit" disabled={loading} className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition cursor-pointer mt-2 flex items-center justify-center gap-2 disabled:opacity-50 text-sm">
+                <button type="submit" disabled={loading} className="w-full py-3.5 bg-slate-700 hover:bg-slate-800 text-white font-bold rounded-xl shadow-sm transition cursor-pointer mt-2 flex items-center justify-center gap-2 disabled:opacity-50 text-sm">
                   {loading ? <Loader2 size={18} className="animate-spin" /> : <UserPlus size={18} />} Tạo tài khoản
                 </button>
               </form>
@@ -1676,7 +1676,7 @@ export default function Admin() {
               <span className="text-base font-bold text-slate-800 flex items-center gap-2">
                 <Users size={20} className="text-blue-600"/> Danh sách Nhân sự <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full">{users.length}</span>
               </span>
-              <button onClick={fetchSystemUsers} className="text-sm font-bold text-slate-500 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-1.5 transition">
+              <button onClick={fetchSystemUsers} className="text-sm font-bold text-slate-500 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-lg cursor-pointer flex items-center gap-1.5 transition">
                 <RefreshCcw size={14}/> Refresh
               </button>
             </div>
@@ -1688,14 +1688,14 @@ export default function Admin() {
             ) : (
               <div className="overflow-x-auto flex-1 p-2">
                 <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                  <thead className="bg-slate-50 sticky top-0 z-10">
+                    <tr className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">
                       <th className="py-3 px-4">Họ tên & Email</th>
                       <th className="py-3 px-4 text-center">Phân quyền</th>
                       <th className="py-3 px-4 text-right">Tác vụ</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50 text-slate-700">
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
                     {users.map(u => {
                       const uRole = u.user_metadata?.role || 'user';
                       const uName = u.user_metadata?.full_name || 'Chưa cập nhật';
@@ -1703,9 +1703,9 @@ export default function Admin() {
                       const isMe = u.email === currentUserEmail;
 
                       return (
-                        <tr key={u.id} className="hover:bg-blue-50/30 transition-colors group rounded-xl">
+                        <tr key={u.id} className="hover:bg-slate-50 transition-colors group rounded-xl">
                           <td className="py-3 px-4 rounded-l-xl">
-                            <div className={`font-bold text-slate-800 flex items-center gap-2 ${isOwner ? 'cursor-pointer hover:text-blue-600' : ''}`} onClick={() => isOwner && fetchUserDetail(u)} title={isOwner ? 'Bấm để xem chi tiết tài khoản' : ''}>
+                            <div className={`font-bold text-slate-800 flex items-center gap-2 ${isOwner ? 'cursor-pointer hover:text-slate-900' : ''}`} onClick={() => isOwner && fetchUserDetail(u)} title={isOwner ? 'Bấm để xem chi tiết tài khoản' : ''}>
                               {uName} {isMe && <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-widest">(Bạn)</span>}
                             </div>
                             <div className="text-xs text-slate-500 font-medium">{u.email}</div>
@@ -1720,7 +1720,7 @@ export default function Admin() {
                             <div className="flex items-center justify-end gap-2">
                               {isOwner ? (
                                 <>
-                                  <button onClick={() => handleOpenEditModal(u)} disabled={actionLoadingId === u.id || (isTargetOwner && u.email !== SUPER_OWNER_EMAIL && currentUserEmail !== SUPER_OWNER_EMAIL)} className={`p-2 rounded-lg transition text-slate-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer disabled:opacity-30`} title="Chỉnh sửa">
+                                  <button onClick={() => handleOpenEditModal(u)} disabled={actionLoadingId === u.id || (isTargetOwner && u.email !== SUPER_OWNER_EMAIL && currentUserEmail !== SUPER_OWNER_EMAIL)} className={`p-2 rounded-lg transition text-slate-400 hover:text-slate-900 hover:bg-slate-100 cursor-pointer disabled:opacity-30`} title="Chỉnh sửa">
                                     <Pencil size={16} />
                                   </button>
                                   <button onClick={() => handleDeleteUser(u)} disabled={actionLoadingId === u.id || u.email === SUPER_OWNER_EMAIL || isMe} className={`p-2 rounded-lg transition cursor-pointer ${u.email === SUPER_OWNER_EMAIL || isMe ? 'text-slate-200' : 'text-slate-400 hover:text-red-600 hover:bg-red-50'}`} title="Xóa tài khoản">
@@ -1751,7 +1751,7 @@ export default function Admin() {
 
       {/* MODAL: CHI TIET USER (OWNER ONLY) */}
       {detailUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50" onClick={() => setDetailUser(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50" onClick={() => setDetailUser(null)}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-start bg-slate-50">
               <div>
@@ -1870,8 +1870,8 @@ export default function Admin() {
               <>
                 <div className="overflow-x-auto mt-4">
                   <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                    <thead className="bg-slate-50 sticky top-0 z-10">
+                      <tr className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">
                         <th className="py-3 px-4">Thời gian</th>
                         <th className="py-3 px-4">Tài khoản</th>
                         <th className="py-3 px-4">Hành động</th>
@@ -1880,9 +1880,9 @@ export default function Admin() {
                         <th className="py-3 px-4">Chi tiết</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50 text-slate-700">
+                    <tbody className="divide-y divide-slate-100 text-slate-700">
                       {logs.map(l => (
-                        <tr key={l.id}>
+                        <tr key={l.id} className="hover:bg-slate-50 transition-colors">
                           <td className="py-2.5 px-4 whitespace-nowrap">{l.created_at ? new Date(l.created_at).toLocaleString('vi-VN') : ''}</td>
                           <td className="py-2.5 px-4">{l.user_email || '—'}</td>
                           <td className="py-2.5 px-4 font-bold">{ACTION_LABELS[l.action] || l.action}</td>
@@ -1935,7 +1935,7 @@ export default function Admin() {
             <form onSubmit={handleUpdateProfile} className="space-y-6">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Họ và tên hiển thị</label>
-                <input type="text" value={profileName} onChange={(e) => setProfileName(e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium transition bg-slate-50 focus:bg-white" placeholder="Nhập tên..." />
+                <input type="text" value={profileName} onChange={(e) => setProfileName(e.target.value)} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium transition bg-slate-50 focus:bg-white" placeholder="Nhập tên..." />
               </div>
               
               <div className="pt-6 border-t border-slate-100 space-y-6">
@@ -1944,7 +1944,7 @@ export default function Admin() {
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mật khẩu hiện tại</label>
                       <div className="relative">
-                        <input type={showCurrentPassword ? "text" : "password"} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium transition bg-slate-50 focus:bg-white" placeholder="Bắt buộc nếu muốn đổi..." />
+                        <input type={showCurrentPassword ? "text" : "password"} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium transition bg-slate-50 focus:bg-white" placeholder="Bắt buộc nếu muốn đổi..." />
                         <button type="button" onClick={() => setShowCurrentPassword(!showCurrentPassword)} className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600">
                           {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
@@ -1953,7 +1953,7 @@ export default function Admin() {
                     <div>
                       <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mật khẩu mới</label>
                       <div className="relative">
-                        <input type={showPassword ? "text" : "password"} value={profilePassword} onChange={(e) => setProfilePassword(e.target.value)} className="w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium transition bg-slate-50 focus:bg-white" placeholder="Bỏ trống nếu không đổi..." />
+                        <input type={showPassword ? "text" : "password"} value={profilePassword} onChange={(e) => setProfilePassword(e.target.value)} className="w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium transition bg-slate-50 focus:bg-white" placeholder="Bỏ trống nếu không đổi..." />
                         <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-3.5 text-slate-400 hover:text-slate-600">
                           {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                         </button>
@@ -1963,7 +1963,7 @@ export default function Admin() {
               </div>
 
               <div className="pt-8">
-                <button type="submit" disabled={profileLoading} className="w-full py-3.5 bg-slate-900 hover:bg-blue-600 text-white font-bold rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm cursor-pointer">
+                <button type="submit" disabled={profileLoading} className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl shadow-md transition-all disabled:opacity-50 flex items-center justify-center gap-2 text-sm cursor-pointer">
                   {profileLoading ? <Loader2 size={18} className="animate-spin" /> : <SaveIcon/>} Lưu Thay Đổi
                 </button>
               </div>
@@ -1976,7 +1976,7 @@ export default function Admin() {
       {/* MODAL: EDIT USER */}
       {/* ============================================================== */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
             
             <div className="p-6 sm:p-8">
@@ -2000,7 +2000,7 @@ export default function Admin() {
                     type="text" 
                     value={editForm.fullName} 
                     onChange={e => setEditForm({...editForm, fullName: e.target.value})}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition font-medium" 
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 transition font-medium" 
                     disabled={editingUser.email === SUPER_OWNER_EMAIL && currentUserEmail !== SUPER_OWNER_EMAIL}
                   />
                 </div>
@@ -2011,7 +2011,7 @@ export default function Admin() {
                     value={editForm.role} 
                     onChange={e => setEditForm({...editForm, role: e.target.value})}
                     disabled={!isOwner || (editingUser.user_metadata?.is_owner === true)} 
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition font-bold bg-white disabled:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 transition font-bold bg-white disabled:bg-slate-50 cursor-pointer disabled:cursor-not-allowed"
                   >
                     <option value="user">Nhân viên (User)</option>
                     <option value="admin">Quản trị (Admin)</option>
@@ -2031,7 +2031,7 @@ export default function Admin() {
                           <h4 className={`text-sm font-bold flex items-center gap-1.5 ${isTargetOwner ? 'text-red-800' : 'text-amber-800'}`}>
                             <ShieldAlert size={16}/> {isTargetOwner ? 'Hạ cấp Owner' : 'Nâng cấp Owner'}
                           </h4>
-                          <p className={`text-[11px] font-medium mt-1 leading-relaxed ${isTargetOwner ? 'text-red-700/70' : 'text-amber-700/70'}`}>
+                          <p className={`text-xs font-medium mt-1 leading-relaxed ${isTargetOwner ? 'text-red-700/70' : 'text-amber-700/70'}`}>
                             {isTargetOwner ? 'Thu hồi quyền cao nhất.' : 'Cấp toàn quyền hệ thống. Cẩn thận!'}
                           </p>
                         </div>
@@ -2062,7 +2062,7 @@ export default function Admin() {
             
             <div className="bg-slate-50 p-6 flex justify-end gap-3 border-t border-slate-100">
               <button type="button" onClick={() => setEditingUser(null)} className="px-5 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-600 text-sm font-bold transition cursor-pointer">Hủy</button>
-              <button type="button" onClick={handleSaveEditedInfo} disabled={loading} className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold transition shadow-md cursor-pointer flex items-center gap-2 disabled:opacity-50">
+              <button type="button" onClick={handleSaveEditedInfo} disabled={loading} className="px-6 py-2.5 rounded-xl bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold transition shadow-sm cursor-pointer flex items-center gap-2 disabled:opacity-50">
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <SaveIcon/>} Lưu
               </button>
             </div>
@@ -2090,7 +2090,7 @@ export default function Admin() {
                 )}
                 <button 
                   onClick={dialogConfig.onConfirm} 
-                  className={`px-6 py-2.5 text-white font-bold rounded-xl transition cursor-pointer ${dialogConfig.type === 'confirm' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+                  className={`px-6 py-2.5 text-white font-bold rounded-xl transition cursor-pointer ${dialogConfig.type === 'confirm' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-slate-700 hover:bg-slate-800'}`}
                 >
                   {dialogConfig.type === 'confirm' ? 'Xác nhận' : 'Đã hiểu'}
                 </button>

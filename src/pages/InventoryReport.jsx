@@ -682,7 +682,7 @@ export default function InventoryReport() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
         <div>
           <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><Boxes size={18} /></span>
+            <span className="p-1.5 bg-slate-100 text-slate-600 rounded-lg"><Boxes size={18} /></span>
             BÁO CÁO TỒN KHO
           </h2>
           <p className="text-xs text-slate-400 font-medium mt-0.5">Theo dõi tồn kho</p>
@@ -703,7 +703,7 @@ export default function InventoryReport() {
               placeholder="Tìm theo tên sản phẩm hoặc mã SKU..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full text-xs font-semibold pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-blue-500 transition shadow-sm"
+              className="w-full text-xs font-semibold pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-slate-700 transition shadow-sm"
             />
           </div>
           <button type="submit" className="px-5 py-2 bg-slate-950 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-sm flex-shrink-0">
@@ -713,7 +713,7 @@ export default function InventoryReport() {
 
         <button 
           onClick={() => setShowPrintModal(true)}
-          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer flex items-center gap-2"
+          className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-sm transition cursor-pointer flex items-center gap-2"
         >
           <Printer size={16} /> In mã vạch (Tem 105x22mm)
         </button>
@@ -724,7 +724,7 @@ export default function InventoryReport() {
         <div className="flex-1 overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-50/80 text-slate-400 font-bold uppercase border-b border-slate-200/80">
+              <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200/80 sticky top-0 z-10">
                 <th className="p-4 w-44">Mã vạch</th>
                 <th className="p-4">Tên sản phẩm</th>
                 <th className="p-4 w-32 text-center">Tổng tồn</th>
@@ -736,7 +736,7 @@ export default function InventoryReport() {
               {loading ? (
                 <tr>
                   <td colSpan={5} className="p-20 text-center text-slate-400 animate-pulse font-bold">
-                    <RefreshCw size={18} className="animate-spin mx-auto mb-2 text-blue-500" />
+                    <RefreshCw size={18} className="animate-spin mx-auto mb-2 text-slate-500" />
                     Đang bốc tách dữ liệu kho hàng...
                   </td>
                 </tr>
@@ -750,7 +750,7 @@ export default function InventoryReport() {
               ) : (
                 inventory.map(item => (
                   <tr key={item.product_code} className="hover:bg-slate-50/50 transition">
-                    <td className="p-4 font-bold text-slate-900 tracking-wide font-mono text-[11px]">{item.product_code}</td>
+                    <td className="p-4 font-bold text-slate-900 tracking-wide font-mono text-xs">{item.product_code}</td>
                     <td className="p-4">
                       <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-slate-100 text-slate-500 rounded-md"><Package size={12} /></div>
@@ -800,7 +800,7 @@ export default function InventoryReport() {
             {/* Header Modal */}
             <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 text-blue-700 rounded-xl"><Printer size={20}/></div>
+                <div className="p-2 bg-slate-100 text-slate-700 rounded-xl"><Printer size={20}/></div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">In mã vạch / QR sản phẩm</h3>
                   <p className="text-xs text-slate-500 font-medium">Khổ giấy cuộn: 105x22mm (3 tem/hàng)</p>
@@ -819,7 +819,7 @@ export default function InventoryReport() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                   {/* Cục Tìm tay */}
                   <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col">
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">1. Tìm và Thêm thủ công</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">1. Tìm và Thêm thủ công</label>
                     <form onSubmit={searchProductForPrint} className="relative flex gap-2">
                       
                       <div className="relative flex-1">
@@ -828,17 +828,17 @@ export default function InventoryReport() {
                           ref={searchInputRef}
                           type="text" placeholder="Gõ tên hoặc mã..." value={printSearchTerm}
                           onChange={e => setPrintSearchTerm(e.target.value)}
-                          className="w-full text-xs font-bold pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-500 focus:bg-white transition"
+                          className="w-full text-xs font-bold pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-slate-700 focus:bg-white transition"
                         />
 
                         {printSearchResults.length > 0 && (
                           <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden divide-y divide-slate-100 max-h-48 overflow-y-auto z-50">
                             {printSearchResults.map(prod => (
-                              <div key={prod.product_code} className="p-2.5 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition" onClick={() => addManualPrintItem(prod)}>
+                              <div key={prod.product_code} className="p-2.5 hover:bg-slate-50 cursor-pointer flex justify-between items-center transition" onClick={() => addManualPrintItem(prod)}>
                                 <div className="flex flex-col overflow-hidden pr-2">
-                                  <span className="text-[10.5px] font-bold text-slate-800 truncate">{prod.product_name}</span>
+                                  <span className="text-xs font-bold text-slate-800 truncate">{prod.product_name}</span>
                                 </div>
-                                <Plus size={14} className="text-blue-500 flex-shrink-0" />
+                                <Plus size={14} className="text-slate-600 flex-shrink-0" />
                               </div>
                             ))}
                           </div>
@@ -853,13 +853,13 @@ export default function InventoryReport() {
 
                   {/* Cục Upload */}
                   <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative">
-                    {fileLoading && <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-blue-600 font-bold gap-2 text-xs rounded-2xl"><RefreshCw size={20} className="animate-spin" /> Xử lý...</div>}
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">2. Upload Excel / CSV (Pivot tự động)</label>
+                    {fileLoading && <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center text-slate-600 font-bold gap-2 text-xs rounded-2xl"><RefreshCw size={20} className="animate-spin" /> Xử lý...</div>}
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">2. Upload Excel / CSV (Pivot tự động)</label>
                     <div className="flex gap-2 h-8">
-                      <button onClick={downloadPrintTemplate} type="button" className="flex-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-[11px] font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1">
+                      <button onClick={downloadPrintTemplate} type="button" className="flex-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1">
                         <Download size={12} /> File Mẫu
                       </button>
-                      <label className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold rounded-lg shadow-sm transition cursor-pointer flex items-center justify-center gap-1">
+                      <label className="flex-1 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-sm transition cursor-pointer flex items-center justify-center gap-1">
                         <UploadCloud size={12} /> Tải file lên
                         <input type="file" accept=".csv, .txt, .xlsx, .xls" className="hidden" onChange={handlePrintFileUpload} />
                       </label>
@@ -882,7 +882,7 @@ export default function InventoryReport() {
                       </div>
                     ) : (
                       printItems.map((item, idx) => (
-                        <div key={idx} className={`p-3 rounded-xl flex items-center gap-3 border transition ${item.status === 'error' ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200 shadow-sm hover:border-blue-300'}`}>
+                        <div key={idx} className={`p-3 rounded-xl flex items-center gap-3 border transition ${item.status === 'error' ? 'bg-red-50 border-red-200' : 'bg-white border-slate-200 shadow-sm hover:border-slate-300'}`}>
                           <div className="flex-1 overflow-hidden">
                             <div className={`text-xs font-bold truncate ${item.status === 'error' ? 'text-red-800 line-through' : 'text-slate-800'}`} title={item.name}>{item.name}</div>
                             <div className={`text-xs font-mono tracking-widest mt-0.5 ${item.status === 'error' ? 'text-red-600 font-bold' : 'text-slate-500'}`}>{item.barcode}</div>
@@ -894,7 +894,7 @@ export default function InventoryReport() {
                               <input 
                                 type="number" min="1" value={item.qty} 
                                 onChange={(e) => updatePrintQty(idx, e.target.value)}
-                                className="w-14 text-center py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:border-blue-500"
+                                className="w-14 text-center py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:border-slate-700"
                               />
                               <button onClick={() => removePrintItem(idx)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition cursor-pointer"><X size={14}/></button>
                             </div>
@@ -927,7 +927,7 @@ export default function InventoryReport() {
                       <select 
                         value={printConfig.codeType} 
                         onChange={e => setPrintConfig({...printConfig, codeType: e.target.value})}
-                        className="text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg p-1.5 outline-none focus:border-blue-500 cursor-pointer"
+                        className="text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg p-1.5 outline-none focus:border-slate-700 cursor-pointer"
                       >
                         <option value="barcode">Mã vạch (Barcode 1D)</option>
                         <option value="qrcode">Mã vuông (QR Code)</option>
@@ -937,14 +937,14 @@ export default function InventoryReport() {
                     {/* CẤU HÌNH TỶ LỆ SCALE CHUNG */}
                     <div className="pt-2 border-t border-slate-200/60 mt-2">
                       <div className="flex justify-between mb-1">
-                        <label className="text-[11px] font-bold text-slate-600">Tỷ lệ khung mã (Scale)</label>
-                        <span className="text-[11px] font-bold text-blue-600">{printConfig.codeScale}%</span>
+                        <label className="text-xs font-bold text-slate-600">Tỷ lệ khung mã (Scale)</label>
+                        <span className="text-xs font-bold text-slate-900">{printConfig.codeScale}%</span>
                       </div>
                       <input 
                         type="range" min="50" max="150" step="5" 
                         value={printConfig.codeScale} 
                         onChange={e => setPrintConfig({...printConfig, codeScale: Number(e.target.value)})} 
-                        className="w-full accent-blue-600 cursor-pointer" 
+                        className="w-full accent-slate-700 cursor-pointer" 
                       />
                     </div>
 
@@ -953,26 +953,26 @@ export default function InventoryReport() {
                       <>
                         <div className="pt-2 border-t border-slate-200/60">
                           <div className="flex justify-between mb-1">
-                            <label className="text-[11px] font-bold text-slate-600">Độ đậm nét vạch</label>
-                            <span className="text-[11px] font-bold text-blue-600">{printConfig.barcodeWidth}</span>
+                            <label className="text-xs font-bold text-slate-600">Độ đậm nét vạch</label>
+                            <span className="text-xs font-bold text-slate-900">{printConfig.barcodeWidth}</span>
                           </div>
                           <input 
                             type="range" min="1" max="4" step="0.1" 
                             value={printConfig.barcodeWidth} 
                             onChange={e => setPrintConfig({...printConfig, barcodeWidth: Number(e.target.value)})} 
-                            className="w-full accent-blue-600 cursor-pointer" 
+                            className="w-full accent-slate-700 cursor-pointer" 
                           />
                         </div>
                         <div className="pt-2 border-t border-slate-200/60">
                           <div className="flex justify-between mb-1">
-                            <label className="text-[11px] font-bold text-slate-600">Chiều cao vạch</label>
-                            <span className="text-[11px] font-bold text-blue-600">{printConfig.barcodeHeight}px</span>
+                            <label className="text-xs font-bold text-slate-600">Chiều cao vạch</label>
+                            <span className="text-xs font-bold text-slate-900">{printConfig.barcodeHeight}px</span>
                           </div>
                           <input 
                             type="range" min="15" max="60" step="1" 
                             value={printConfig.barcodeHeight} 
                             onChange={e => setPrintConfig({...printConfig, barcodeHeight: Number(e.target.value)})} 
-                            className="w-full accent-blue-600 cursor-pointer" 
+                            className="w-full accent-slate-700 cursor-pointer" 
                           />
                         </div>
                       </>
@@ -982,14 +982,14 @@ export default function InventoryReport() {
                     {printConfig.codeType === 'qrcode' && (
                       <div className="pt-2 border-t border-slate-200/60">
                         <div className="flex justify-between mb-1">
-                          <label className="text-[11px] font-bold text-slate-600">Kích thước mã QR</label>
-                          <span className="text-[11px] font-bold text-blue-600">{printConfig.qrSize}px</span>
+                          <label className="text-xs font-bold text-slate-600">Kích thước mã QR</label>
+                          <span className="text-xs font-bold text-slate-900">{printConfig.qrSize}px</span>
                         </div>
                         <input 
                           type="range" min="30" max="80" step="1" 
                           value={printConfig.qrSize} 
                           onChange={e => setPrintConfig({...printConfig, qrSize: Number(e.target.value)})} 
-                          className="w-full accent-blue-600 cursor-pointer" 
+                          className="w-full accent-slate-700 cursor-pointer" 
                         />
                       </div>
                     )}
@@ -1001,7 +1001,7 @@ export default function InventoryReport() {
                       <span className="text-xs font-bold text-slate-700">Hiển thị Tên Shop</span>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" checked={printConfig.showShopName} onChange={() => setPrintConfig({...printConfig, showShopName: !printConfig.showShopName})} className="sr-only peer" />
-                        <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-slate-700"></div>
                       </label>
                     </div>
                     {printConfig.showShopName && (
@@ -1010,7 +1010,7 @@ export default function InventoryReport() {
                         value={printConfig.shopName}
                         onChange={(e) => setPrintConfig({...printConfig, shopName: e.target.value})}
                         placeholder="Nhập tên shop..."
-                        className="w-full text-xs font-bold px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500 transition uppercase"
+                        className="w-full text-xs font-bold px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-slate-700 transition uppercase"
                       />
                     )}
                   </div>
@@ -1019,7 +1019,7 @@ export default function InventoryReport() {
                     <span className="text-xs font-bold text-slate-700">Hiển thị Tên Sản Phẩm</span>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" checked={printConfig.showProductName} onChange={() => setPrintConfig({...printConfig, showProductName: !printConfig.showProductName})} className="sr-only peer" />
-                      <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-slate-700"></div>
                     </label>
                   </div>
 
@@ -1030,7 +1030,7 @@ export default function InventoryReport() {
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input type="checkbox" checked={printConfig.showPrintDate} onChange={() => setPrintConfig({...printConfig, showPrintDate: !printConfig.showPrintDate})} className="sr-only peer" />
-                      <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                      <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-slate-700"></div>
                     </label>
                   </div>
 
@@ -1043,7 +1043,7 @@ export default function InventoryReport() {
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input type="checkbox" checked={printConfig.showOrderNumber} onChange={() => setPrintConfig({...printConfig, showOrderNumber: !printConfig.showOrderNumber})} className="sr-only peer" />
-                        <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        <div className="w-9 h-5 bg-slate-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-slate-700"></div>
                       </label>
                     </div>
                     {printConfig.showOrderNumber && (
@@ -1053,14 +1053,14 @@ export default function InventoryReport() {
                           value={printConfig.orderNumber}
                           onChange={(e) => setPrintConfig({...printConfig, orderNumber: e.target.value})}
                           placeholder="Nhập số lệnh, VD: 65-LD (để trống = không in)"
-                          className="w-full text-xs font-bold px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-blue-500 transition"
+                          className="w-full text-xs font-bold px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-slate-700 transition"
                         />
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-[11px] font-bold text-slate-600">Góc tem</span>
+                          <span className="text-xs font-bold text-slate-600">Góc tem</span>
                           <select
                             value={printConfig.orderCorner}
                             onChange={e => setPrintConfig({...printConfig, orderCorner: e.target.value})}
-                            className="text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg p-1.5 outline-none focus:border-blue-500 cursor-pointer"
+                            className="text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg p-1.5 outline-none focus:border-slate-700 cursor-pointer"
                           >
                             <option value="top-left">Trái trên</option>
                             <option value="top-right">Phải trên</option>
@@ -1070,17 +1070,17 @@ export default function InventoryReport() {
                         </div>
                         <div>
                           <div className="flex justify-between mb-1">
-                            <label className="text-[11px] font-bold text-slate-600">Cỡ chữ số lệnh</label>
-                            <span className="text-[11px] font-bold text-blue-600">{printConfig.orderFontSize}px</span>
+                            <label className="text-xs font-bold text-slate-600">Cỡ chữ số lệnh</label>
+                            <span className="text-xs font-bold text-slate-900">{printConfig.orderFontSize}px</span>
                           </div>
                           <input
                             type="range" min="5" max="12" step="0.5"
                             value={printConfig.orderFontSize}
                             onChange={e => setPrintConfig({...printConfig, orderFontSize: Number(e.target.value)})}
-                            className="w-full accent-blue-600 cursor-pointer"
+                            className="w-full accent-slate-700 cursor-pointer"
                           />
                         </div>
-                        <p className="text-[11px] text-slate-400">Nếu trùng góc ngày in, 2 chữ sẽ chồng nhau — chọn góc khác là hết.</p>
+                        <p className="text-xs text-slate-400">Nếu trùng góc ngày in, 2 chữ sẽ chồng nhau — chọn góc khác là hết.</p>
                       </>
                     )}
                   </div>
@@ -1090,9 +1090,9 @@ export default function InventoryReport() {
                 <div className="pt-6 mt-6 border-t border-slate-100">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-bold text-xs text-slate-700 uppercase tracking-wide">Xem trước tem</span>
-                    <span className="text-[11px] font-bold text-slate-400">{printItems.filter(i => i.status === 'ok' && i.qty > 0).length > 0 ? '3 tem đầu tiên' : 'Tem mẫu'}</span>
+                    <span className="text-xs font-bold text-slate-400">{printItems.filter(i => i.status === 'ok' && i.qty > 0).length > 0 ? '3 tem đầu tiên' : 'Tem mẫu'}</span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mb-3">Chỉnh góc, cỡ chữ, cỡ mã ở trên — tem mẫu đổi theo ngay, chưa in gì cả.</p>
+                  <p className="text-xs text-slate-400 mb-3">Chỉnh góc, cỡ chữ, cỡ mã ở trên — tem mẫu đổi theo ngay, chưa in gì cả.</p>
                   <div className="overflow-x-auto bg-slate-100 rounded-xl p-3">
                     <div style={{ width: '105mm', height: '18mm', transform: 'scale(0.9)', transformOrigin: 'top left' }}>
                       <div style={{ display: 'flex', width: '105mm', height: '20mm' }}>
@@ -1110,7 +1110,7 @@ export default function InventoryReport() {
                   <button 
                     onClick={generatePrintJob}
                     disabled={printItems.filter(i => i.status === 'ok' && i.qty > 0).length === 0}
-                    className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-bold shadow-lg shadow-blue-500/30 transition cursor-pointer flex items-center justify-center gap-2 hover:-translate-y-0.5 disabled:translate-y-0 disabled:shadow-none"
+                    className="w-full py-3.5 rounded-xl bg-slate-700 hover:bg-slate-800 disabled:bg-slate-300 text-white text-sm font-bold shadow-sm transition cursor-pointer flex items-center justify-center gap-2 disabled:translate-y-0 disabled:shadow-none"
                   >
                     <Printer size={18} /> Tạo bản in
                   </button>

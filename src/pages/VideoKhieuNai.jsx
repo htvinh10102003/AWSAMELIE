@@ -177,7 +177,7 @@ export default function VideoKhieuNai() {
             <button
               type="submit"
               disabled={isLoading}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-bold px-6 py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shrink-0 shadow-sm"
+              className="bg-slate-700 hover:bg-slate-800 disabled:bg-slate-300 text-white font-bold px-6 py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shrink-0 shadow-sm"
             >
               {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Tra cứu'}
             </button>
@@ -211,7 +211,7 @@ export default function VideoKhieuNai() {
                 <div className="flex justify-between items-center mb-5 pb-4 border-b border-slate-100">
                   <div className="flex items-center gap-4">
                     {getStatusBadge(item.status)}
-                    <span className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
+                    <span className="flex items-center gap-1.5 text-xs font-bold text-slate-400">
                       <Calendar size={14} /> {new Date(item.created_at).toLocaleString('vi-VN', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}
                     </span>
                   </div>
@@ -314,7 +314,7 @@ export default function VideoKhieuNai() {
 
       {/* MODAL ĐỔI TRẠNG THÁI */}
       {statusModal.isOpen && statusModal.item && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-slate-800 mb-1">Cập nhật trạng thái</h3>
             <p className="text-sm text-slate-500 font-medium mb-6">Đơn: <span className="font-bold text-slate-700">{statusModal.item.nhanh_id || statusModal.item.hvc_code}</span></p>

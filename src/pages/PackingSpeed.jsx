@@ -234,7 +234,7 @@ export default function PackingSpeed() {
     const renderComparisonBadge = (percent) => {
         const isUp = percent >= 0;
         return (
-            <div className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded mt-1.5 border transition-all ${
+            <div className={`inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded mt-1.5 border transition-all ${
                 isUp ? 'bg-emerald-50/80 text-emerald-700 border-emerald-200' : 'bg-rose-50/80 text-rose-700 border-rose-200'
             }`}>
                 <span>{isUp ? '↑' : '↓'}</span>
@@ -358,7 +358,7 @@ export default function PackingSpeed() {
                                         <span className="text-3xl font-bold text-slate-800">{dayMetrics.staffCount}</span>
                                         <span className="text-sm font-bold text-slate-400">người</span>
                                     </div>
-                                    <div className="text-[11px] font-semibold text-slate-500 truncate mt-2 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 inline-block max-w-full" title={dayMetrics.staffList.join(', ')}>
+                                    <div className="text-xs font-semibold text-slate-500 truncate mt-2 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 inline-block max-w-full" title={dayMetrics.staffList.join(', ')}>
                                         {dayMetrics.staffList.length > 0 ? dayMetrics.staffList.join(', ') : 'Chưa có lịch trực'}
                                     </div>
                                 </div>
@@ -416,7 +416,7 @@ export default function PackingSpeed() {
                         
                         <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                             <table className="w-full text-sm text-left">
-                                <thead className="bg-slate-50 text-slate-400 font-bold border-b border-slate-200 text-[11px] uppercase tracking-wider sticky top-0 z-10 shadow-sm">
+                                <thead className="bg-slate-50 text-slate-400 font-bold border-b border-slate-200 text-xs uppercase tracking-wider sticky top-0 z-10 shadow-sm">
                                     <tr>
                                         <th className="py-4 px-6">Ngày</th>
                                         <th className="py-4 px-6 text-center">Số lượng đơn</th>
@@ -439,7 +439,7 @@ export default function PackingSpeed() {
                                                 {row.staffDetails.length > 0 ? (
                                                     <div className="flex flex-wrap gap-2">
                                                         {row.staffDetails.map((staff, i) => (
-                                                            <span key={i} className="inline-block bg-white text-[11px] font-bold text-slate-600 px-2.5 py-1 rounded-md border border-slate-200 shadow-sm">
+                                                            <span key={i} className="inline-block bg-white text-xs font-bold text-slate-600 px-2.5 py-1 rounded-md border border-slate-200 shadow-sm">
                                                                 {staff}
                                                             </span>
                                                         ))}

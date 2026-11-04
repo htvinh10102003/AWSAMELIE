@@ -721,7 +721,7 @@ export default function AWBProcessor() {
               <button
                 onClick={processPDF}
                 disabled={!file || isProcessing}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:bg-slate-300 transition-all shadow-sm"
+                className="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 disabled:bg-slate-300 transition-all shadow-sm"
               >
                 {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <LayoutTemplate size={18} />}
                 {isProcessing ? `Đang xử lý PDF ${progress.current}/${progress.total}` : 'Bắt đầu Xử Lý PDF'}
@@ -821,7 +821,7 @@ export default function AWBProcessor() {
 
           <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-sm overflow-hidden flex flex-col h-[200px]">
             <div className="p-3 bg-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0">Trạng thái hệ thống</div>
-            <div className="p-3 overflow-y-auto flex-1 space-y-1 font-mono text-[11px]">
+            <div className="p-3 overflow-y-auto flex-1 space-y-1 font-mono text-xs">
               {logs.map((log, idx) => (
                 <div key={idx} className={`flex items-start gap-1.5 ${log.type === 'error' ? 'text-red-400' : log.type === 'success' ? 'text-green-400' : log.type === 'warning' ? 'text-amber-400' : 'text-blue-300'}`}>
                   <span>[{log.time.toLocaleTimeString('vi-VN')}]</span>

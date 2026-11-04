@@ -16,13 +16,13 @@ const CHANNEL_COLORS = {
     '10': 'bg-violet-100/80 text-violet-700', '20': 'bg-blue-100/80 text-blue-700',
     '21': 'bg-pink-100/80 text-pink-700', '41': 'bg-orange-100/80 text-orange-700',
     '42': 'bg-red-100/80 text-red-700', '43': 'bg-cyan-100/80 text-cyan-700',
-    '45': 'bg-teal-100/80 text-teal-700', '48': 'bg-gray-100/80 text-gray-700',
+    '45': 'bg-teal-100/80 text-teal-700', '48': 'bg-slate-100/80 text-slate-700',
     '49': 'bg-blue-100/80 text-blue-700', '50': 'bg-red-100/80 text-red-700',
     '51': 'bg-orange-100/80 text-orange-700', '52': 'bg-green-100/80 text-green-700'
 };
 
 const STATUS_COLORS = {
-    '1': 'bg-gray-100/80 text-gray-700', '2': 'bg-yellow-100/80 text-yellow-700',
+    '1': 'bg-slate-100/80 text-slate-700', '2': 'bg-yellow-100/80 text-yellow-700',
     '3': 'bg-blue-100/80 text-blue-700', '4': 'bg-purple-100/80 text-purple-700',
     '5': 'bg-indigo-100/80 text-indigo-700', '6': 'bg-green-100/80 text-green-700',
     '7': 'bg-teal-100/80 text-teal-700', '8': 'bg-rose-100/80 text-rose-700',
@@ -63,22 +63,22 @@ const MultiSelect = ({ options, selected, onChange, placeholder }) => {
     return (
         <div className="relative" ref={ref}>
             <button type="button" onClick={() => setIsOpen(!isOpen)} className="w-full px-4 py-2.5 text-sm border border-white/30 rounded-2xl bg-white/60 backdrop-blur-xl hover:bg-white/80 focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 transition-all text-left flex items-center justify-between shadow-sm h-11">
-                <span className={`${selected.length === 0 ? 'text-gray-400' : 'text-gray-700 font-medium truncate pr-2'}`}>{selected.length === 0 ? placeholder : `Đã chọn ${selected.length}`}</span>
-                <ChevronDown size={16} className="text-gray-400 flex-shrink-0" />
+                <span className={`${selected.length === 0 ? 'text-slate-400' : 'text-slate-700 font-medium truncate pr-2'}`}>{selected.length === 0 ? placeholder : `Đã chọn ${selected.length}`}</span>
+                <ChevronDown size={16} className="text-slate-400 flex-shrink-0" />
             </button>
             {isOpen && (
                 <div className="absolute z-50 mt-2 w-full min-w-[200px] bg-white/90 backdrop-blur-2xl border border-white/30 rounded-2xl shadow-2xl max-h-60 overflow-y-auto">
-                    <label className="flex items-center gap-2 px-4 py-2.5 hover:bg-blue-50/50 cursor-pointer border-b border-gray-100/50">
-                        <input type="checkbox" checked={isAllSelected} onChange={handleSelectAll} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                        <span className="text-sm font-bold text-gray-700">Chọn tất cả</span>
+                    <label className="flex items-center gap-2 px-4 py-2.5 hover:bg-blue-50/50 cursor-pointer border-b border-slate-100/50">
+                        <input type="checkbox" checked={isAllSelected} onChange={handleSelectAll} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        <span className="text-sm font-bold text-slate-700">Chọn tất cả</span>
                     </label>
                     {options.map(opt => {
                         const val = getValue(opt);
                         const label = getLabel(opt);
                         return (
                             <label key={val} className="flex items-center gap-2 px-4 py-2.5 hover:bg-blue-50/50 cursor-pointer transition-colors">
-                                <input type="checkbox" checked={selected.includes(val)} onChange={() => toggleOption(val)} className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                                <span className="text-sm text-gray-700">{label}</span>
+                                <input type="checkbox" checked={selected.includes(val)} onChange={() => toggleOption(val)} className="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                                <span className="text-sm text-slate-700">{label}</span>
                             </label>
                         );
                     })}
@@ -242,10 +242,10 @@ export default function PrintedOrdersByDate() {
             {/* TIÊU ĐỀ & NÚT XUẤT EXCEL */}
             <div className="bg-white/70 backdrop-blur-2xl border border-white/30 px-8 py-6 rounded-2xl shadow-[0_8px_32px_rgba(0,0,0,0.04)] flex flex-col md:flex-row justify-between items-start md:items-center gap-4 transition-shadow hover:shadow-[0_8px_40px_rgba(0,0,0,0.08)]">
                 <div>
-                    <h2 className="text-2xl font-bold text-gray-900 tracking-tight flex items-center gap-3">
+                    <h2 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-3">
                         <PackageCheck className="text-green-600" size={28} /> Đơn đã in ({formattedDate})
                     </h2>
-                    <p className="text-gray-500 text-sm mt-1 flex items-center gap-2">
+                    <p className="text-slate-500 text-sm mt-1 flex items-center gap-2">
                         <CalendarDays size={14} /> Danh sách toàn bộ các đơn hàng đã được in phiếu xuất kho.
                     </p>
                 </div>
@@ -277,7 +277,7 @@ export default function PrintedOrdersByDate() {
                         type="date"
                         value={selectedDate}
                         onChange={(e) => setSelectedDate(e.target.value)}
-                        className="w-full px-4 h-11 text-sm font-medium text-gray-700 border border-white/30 rounded-2xl outline-none focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 bg-white/60 backdrop-blur-xl shadow-sm transition-all"
+                        className="w-full px-4 h-11 text-sm font-medium text-slate-700 border border-white/30 rounded-2xl outline-none focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 bg-white/60 backdrop-blur-xl shadow-sm transition-all"
                     />
                 </div>
 
@@ -290,7 +290,7 @@ export default function PrintedOrdersByDate() {
                             placeholder="Tìm ID Nhanh hoặc Mã Vận Đơn..." 
                             className="w-full pl-10 pr-4 h-11 text-sm border border-white/30 rounded-2xl outline-none focus:border-blue-400/50 focus:ring-2 focus:ring-blue-400/20 bg-white/60 backdrop-blur-xl shadow-sm transition-all"
                         />
-                        <Search className="absolute left-3.5 top-3 text-gray-400" size={18} />
+                        <Search className="absolute left-3.5 top-3 text-slate-400" size={18} />
                     </div>
                 </div>
                 <div className="w-full sm:w-48">
@@ -310,17 +310,17 @@ export default function PrintedOrdersByDate() {
                     {loading ? (
                         <div className="p-20 text-center flex flex-col items-center justify-center gap-3">
                             <Loader2 size={32} className="animate-spin text-blue-500" />
-                            <p className="text-gray-500 font-medium text-sm">Đang tải dữ liệu...</p>
+                            <p className="text-slate-500 font-medium text-sm">Đang tải dữ liệu...</p>
                         </div>
                     ) : paginatedOrders.length === 0 ? (
                         <div className="p-20 text-center flex flex-col items-center justify-center gap-3">
                             <div className="p-4 bg-slate-100 rounded-full text-slate-400"><Search size={32} /></div>
-                            <p className="text-gray-500 font-medium text-lg">Chưa có đơn nào được in trong ngày này.</p>
+                            <p className="text-slate-500 font-medium text-lg">Chưa có đơn nào được in trong ngày này.</p>
                         </div>
                     ) : (
                         <table className="w-full text-sm text-left">
                             <thead>
-                                <tr className="bg-white/60 backdrop-blur-md text-gray-700 font-bold border-b border-gray-100/70 text-sm">
+                                <tr className="bg-white/60 backdrop-blur-md text-slate-700 font-bold border-b border-slate-100/70 text-sm">
                                     <th className="py-4 px-5 whitespace-nowrap">Mã Đơn Nhanh</th>
                                     <th className="py-4 px-5 whitespace-nowrap">Mã Vận Đơn</th>
                                     <th className="py-4 px-5 w-80">Sản phẩm</th>
@@ -329,32 +329,32 @@ export default function PrintedOrdersByDate() {
                                     <th className="py-4 px-5 whitespace-nowrap">Trạng thái</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100/70">
+                            <tbody className="divide-y divide-slate-100/70">
                                 {paginatedOrders.map((order, idx) => {
                                     const products = order.order_products || [];
                                     const rowCount = Math.max(1, products.length);
                                     const statusName = statusDict[order.status] || `Mã ${order.status}`;
                                     const channelName = SALE_CHANNELS[order.sale_channel] || order.sale_channel || 'Khác';
-                                    const channelColorClass = CHANNEL_COLORS[order.sale_channel] || 'bg-gray-100/80 text-gray-600';
-                                    const statusColorClass = STATUS_COLORS[order.status] || 'bg-gray-100/80 text-gray-600';
+                                    const channelColorClass = CHANNEL_COLORS[order.sale_channel] || 'bg-slate-100/80 text-slate-600';
+                                    const statusColorClass = STATUS_COLORS[order.status] || 'bg-slate-100/80 text-slate-600';
 
                                     return products.map((prod, index) => (
                                         <tr key={`${order.id}-${index}`} className="hover:bg-white/50 transition-colors duration-200 font-medium">
                                             {index === 0 && (
                                                 <>
-                                                    <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-gray-100/50">
+                                                    <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-slate-100/50">
                                                         <div className="font-bold text-blue-600 text-base">{order.id}</div>
                                                     </td>
-                                                    <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-gray-100/50">
-                                                        <div className="font-bold text-gray-800">{order.carrier_code || <span className="text-gray-400 italic font-normal">Chưa có mã</span>}</div>
-                                                        <div className="text-[11px] text-gray-500 mt-1 uppercase font-bold">{order.carrier_name || ''}</div>
+                                                    <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-slate-100/50">
+                                                        <div className="font-bold text-slate-800">{order.carrier_code || <span className="text-slate-400 italic font-normal">Chưa có mã</span>}</div>
+                                                        <div className="text-xs text-slate-500 mt-1 uppercase font-bold">{order.carrier_name || ''}</div>
                                                     </td>
                                                 </>
                                             )}
                                             
                                             <td className="py-3 px-5 align-top font-bold text-slate-800">
                                                 <div>{prod.product_name}</div>
-                                                <div className="text-[11px] text-gray-400 font-normal mt-0.5">{prod.product_code}</div>
+                                                <div className="text-xs text-slate-400 font-normal mt-0.5">{prod.product_code}</div>
                                             </td>
                                             <td className="py-3 px-5 align-top text-center font-bold text-slate-900 text-base">
                                                 {prod.quantity}
@@ -362,7 +362,7 @@ export default function PrintedOrdersByDate() {
 
                                             {index === 0 && (
                                                 <>
-                                                    <td rowSpan={rowCount} className="py-4 px-5 align-top border-l border-gray-100/50">
+                                                    <td rowSpan={rowCount} className="py-4 px-5 align-top border-l border-slate-100/50">
                                                         <div className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold backdrop-blur-sm ${channelColorClass}`}>
                                                             {channelName}
                                                         </div>
@@ -384,14 +384,14 @@ export default function PrintedOrdersByDate() {
 
                 {/* PHÂN TRANG */}
                 {!loading && filteredOrders.length > 0 && (
-                    <div className="bg-white/50 backdrop-blur-md px-6 py-4 border-t border-white/30 flex flex-col sm:flex-row items-center justify-between text-sm font-medium text-gray-600 gap-4">
+                    <div className="bg-white/50 backdrop-blur-md px-6 py-4 border-t border-white/30 flex flex-col sm:flex-row items-center justify-between text-sm font-medium text-slate-600 gap-4">
                         <div className="flex items-center gap-4 flex-wrap">
-                            <span className="text-gray-500">
-                                Hiển thị <b className="text-gray-700">{(currentPage - 1) * pageSize + 1}</b> - <b className="text-gray-700">{Math.min(currentPage * pageSize, filteredOrders.length)}</b> trên tổng <b className="text-gray-700">{filteredOrders.length}</b> đơn
+                            <span className="text-slate-500">
+                                Hiển thị <b className="text-slate-700">{(currentPage - 1) * pageSize + 1}</b> - <b className="text-slate-700">{Math.min(currentPage * pageSize, filteredOrders.length)}</b> trên tổng <b className="text-slate-700">{filteredOrders.length}</b> đơn
                             </span>
-                            <div className="flex items-center gap-2 border-l border-gray-200/50 pl-4">
-                                <span className="text-xs font-bold uppercase text-gray-400 tracking-wide">Số dòng:</span>
-                                <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="px-3 py-1.5 border border-white/30 bg-white/60 backdrop-blur-md rounded-xl font-medium text-gray-700 outline-none focus:ring-2 focus:ring-blue-400/20 transition shadow-sm">
+                            <div className="flex items-center gap-2 border-l border-slate-200/50 pl-4">
+                                <span className="text-xs font-bold uppercase text-slate-400 tracking-wide">Số dòng:</span>
+                                <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="px-3 py-1.5 border border-white/30 bg-white/60 backdrop-blur-md rounded-xl font-medium text-slate-700 outline-none focus:ring-2 focus:ring-blue-400/20 transition shadow-sm">
                                     <option value={20}>20</option>
                                     <option value={50}>50</option>
                                     <option value={100}>100</option>
@@ -402,11 +402,11 @@ export default function PrintedOrdersByDate() {
 
                         <div className="flex items-center gap-1.5">
                             <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className="p-2.5 border border-white/30 bg-white/60 backdrop-blur-md rounded-xl hover:bg-white/80 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-sm">
-                                <ChevronLeft size={16} className="text-gray-600" />
+                                <ChevronLeft size={16} className="text-slate-600" />
                             </button>
-                            <span className="px-4 text-gray-500 font-bold text-sm">Trang {currentPage} / {totalPages}</span>
+                            <span className="px-4 text-slate-500 font-bold text-sm">Trang {currentPage} / {totalPages}</span>
                             <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages} className="p-2.5 border border-white/30 bg-white/60 backdrop-blur-md rounded-xl hover:bg-white/80 disabled:opacity-40 disabled:cursor-not-allowed transition shadow-sm">
-                                <ChevronRight size={16} className="text-gray-600" />
+                                <ChevronRight size={16} className="text-slate-600" />
                             </button>
                         </div>
                     </div>

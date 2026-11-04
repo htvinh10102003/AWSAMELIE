@@ -532,7 +532,7 @@ export default function StatusTransitionTracker() {
         <button
           onClick={handleSearch}
           disabled={isLoading}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 font-bold transition-all shadow-sm"
+          className="w-full flex items-center justify-center gap-2 py-3 bg-slate-700 text-white rounded-xl hover:bg-slate-800 disabled:opacity-50 font-bold transition-all shadow-sm"
         >
           {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Filter className="w-5 h-5" />}
           {isLoading ? 'Đang truy vấn dữ liệu...' : 'Lọc dữ liệu (Tối đa 50 dòng/trang)'}

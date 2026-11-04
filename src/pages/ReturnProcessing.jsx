@@ -289,7 +289,7 @@ export default function ReturnProcessing() {
                   <h3 className={`text-sm font-bold uppercase tracking-wide ${currentOrder.isExternal ? 'text-amber-800' : 'text-rose-800'}`}>
                     {currentOrder.isExternal ? '️ CHẾ ĐỘ: ĐƠN HOÀN NGOÀI' : `ĐƠN GỐC: #${currentOrder.id}`}
                   </h3>
-                  <p className="text-[11px] font-medium text-slate-600 mt-1">Khách hàng: <strong className="text-slate-800">{currentOrder.customerName}</strong> - {currentOrder.customerMobile}</p>
+                  <p className="text-xs font-medium text-slate-600 mt-1">Khách hàng: <strong className="text-slate-800">{currentOrder.customerName}</strong> - {currentOrder.customerMobile}</p>
                 </div>
               </div>
 
@@ -303,7 +303,7 @@ export default function ReturnProcessing() {
                       {currentOrder.products?.map((p, idx) => (
                         <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
                           <span className="text-xs font-bold text-slate-700">{p.productName}</span>
-                          <span className="text-[11px] font-bold bg-white px-2 py-1 border border-slate-200 rounded text-slate-500">x{p.quantity}</span>
+                          <span className="text-xs font-bold bg-white px-2 py-1 border border-slate-200 rounded text-slate-500">x{p.quantity}</span>
                         </div>
                       ))}
                     </div>

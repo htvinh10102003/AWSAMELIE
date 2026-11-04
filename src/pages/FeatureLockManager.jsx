@@ -232,7 +232,7 @@ export default function FeatureLockManager() {
             <p className="text-sm text-slate-500 font-medium mt-1">Quyền Owner: Tùy chỉnh chi tiết thông báo cho từng phân hệ con.</p>
           </div>
         </div>
-        <button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-bold shadow-lg shadow-blue-500/30 transition-all disabled:opacity-50">
+        <button onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 px-6 py-3 bg-slate-700 text-white rounded-xl hover:bg-slate-800 font-bold shadow-lg shadow-blue-500/30 transition-all disabled:opacity-50">
           {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}Lưu thay đổi
         </button>
       </div>

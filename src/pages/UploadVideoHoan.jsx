@@ -427,7 +427,7 @@ export default function UploadVideoHoan() {
                         <FileVideo size={24} />
                       </div>
                       <p className="text-sm font-bold text-slate-600">Chọn video đóng hàng</p>
-                      <p className="text-[11px] font-medium text-slate-400 mt-1">MP4, MOV (Tối đa 500MB)</p>
+                      <p className="text-xs font-medium text-slate-400 mt-1">MP4, MOV (Tối đa 500MB)</p>
                     </div>
                   ) : (
                     <div className="flex flex-col justify-center h-40 bg-blue-50/50 border border-blue-200 p-4 rounded-2xl relative group">
@@ -460,7 +460,7 @@ export default function UploadVideoHoan() {
                         <FileVideo size={24} />
                       </div>
                       <p className="text-sm font-bold text-slate-600">Chọn video bóc hoàn</p>
-                      <p className="text-[11px] font-medium text-slate-400 mt-1">MP4, MOV (Tối đa 500MB)</p>
+                      <p className="text-xs font-medium text-slate-400 mt-1">MP4, MOV (Tối đa 500MB)</p>
                     </div>
                   ) : (
                     <div className="flex flex-col justify-center h-40 bg-rose-50/50 border border-rose-200 p-4 rounded-2xl relative group">
@@ -488,7 +488,7 @@ export default function UploadVideoHoan() {
               <button
                 onClick={handleSubmit}
                 disabled={isUploading || (!packingVideo && !returnVideo)}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 disabled:bg-slate-300 transition-all shadow-sm"
+                className="w-full bg-slate-700 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 disabled:bg-slate-300 transition-all shadow-sm"
               >
                 {isUploading ? <Loader2 size={18} className="animate-spin" /> : <UploadCloud size={18} />}
                 {isUploading ? 'Hệ thống đang xử lý, vui lòng không tắt trang...' : 'Tải lên & Lưu hệ thống'}
@@ -518,7 +518,7 @@ export default function UploadVideoHoan() {
             <div className="p-3 bg-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider shrink-0 flex items-center gap-2">
               <Settings size={14} /> Trạng thái tiến trình
             </div>
-            <div className="p-4 overflow-y-auto flex-1 space-y-2 font-mono text-[11px] bg-slate-950">
+            <div className="p-4 overflow-y-auto flex-1 space-y-2 font-mono text-xs bg-slate-950">
               {logs.length === 0 ? (
                 <div className="text-slate-600 h-full flex items-center justify-center">Chưa có tiến trình nào...</div>
               ) : (

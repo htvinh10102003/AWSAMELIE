@@ -161,7 +161,7 @@ export default function DeclaredFeeReport() {
 
         {/* ️ KHỐI BỘ LỌC DROPDOWN NÂNG CAO ĐA CHIỀU */}
         <div className="flex flex-wrap gap-2 w-full lg:w-auto items-center justify-start lg:justify-end">
-          <div className="flex items-center gap-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
+          <div className="flex items-center gap-1 text-xs font-bold text-slate-400 uppercase tracking-wider mr-1">
             <Filter size={12} /> Lọc nhanh:
           </div>
 
@@ -169,7 +169,7 @@ export default function DeclaredFeeReport() {
           <select 
             value={selectedChannel} 
             onChange={e => { setSelectedChannel(e.target.value); setCurrentPage(0); }}
-            className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none text-slate-700 cursor-pointer hover:bg-slate-100"
+            className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none focus:border-slate-700 text-slate-700 cursor-pointer hover:bg-slate-100"
           >
             <option value="all">Tất cả Kênh (1 & 2)</option>
             <option value="1">Kênh Bán 1</option>
@@ -180,7 +180,7 @@ export default function DeclaredFeeReport() {
           <select 
             value={selectedCarrier} 
             onChange={e => { setSelectedCarrier(e.target.value); setCurrentPage(0); }}
-            className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none text-slate-700 cursor-pointer hover:bg-slate-100"
+            className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none focus:border-slate-700 text-slate-700 cursor-pointer hover:bg-slate-100"
           >
             <option value="all">Tất cả Nhà xe</option>
             <option value="Viettel Post">Viettel Post</option>
@@ -191,7 +191,7 @@ export default function DeclaredFeeReport() {
           <select 
             value={selectedStatus} 
             onChange={e => { setSelectedStatus(e.target.value); setCurrentPage(0); }}
-            className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none text-slate-700 cursor-pointer hover:bg-slate-100 max-w-[160px]"
+            className="text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2 outline-none focus:border-slate-700 text-slate-700 cursor-pointer hover:bg-slate-100 max-w-[160px]"
           >
             <option value="all">Tất cả Trạng thái</option>
             {Object.entries(STATUS_MAP).map(([code, name]) => (
@@ -283,14 +283,14 @@ export default function DeclaredFeeReport() {
               <button 
                 onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
                 disabled={currentPage === 0 || loading}
-                className="p-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition cursor-pointer"
+                className="p-2 bg-white border border-slate-300 rounded-xl text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition cursor-pointer"
               >
                 <ChevronLeft size={16} />
               </button>
               <button 
                 onClick={() => setCurrentPage(prev => Math.min(totalPages - 1, prev + 1))}
                 disabled={currentPage === totalPages - 1 || loading}
-                className="p-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition cursor-pointer"
+                className="p-2 bg-white border border-slate-300 rounded-xl text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition cursor-pointer"
               >
                 <ChevronRight size={16} />
               </button>

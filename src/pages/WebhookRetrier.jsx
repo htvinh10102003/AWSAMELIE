@@ -142,7 +142,7 @@ export default function WebhookRetrier() {
           <button
             onClick={handleStart}
             disabled={isProcessing || !inputText.trim()}
-            className="flex items-center justify-center gap-2 w-full py-3.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-bold transition-all shadow-sm"
+            className="flex items-center justify-center gap-2 w-full py-3.5 bg-slate-700 text-white rounded-xl hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed font-bold transition-all shadow-sm"
           >
             {isProcessing ? (
               <>

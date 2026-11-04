@@ -157,30 +157,30 @@ export default function Dashboard() {
   const avgShipped = chartData.length > 0 ? Math.round(totalShippedInRange / chartData.length) : 0;
 
   return (
-    <div className="min-h-screen from-slate-50 via-white to-blue-50/30 p-3 sm:p-6 md:p-8">
+    <div className="min-h-screen p-3 sm:p-6 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8 pb-16 animate-in fade-in duration-300">
         
         {/* HEADER & THANH BỘ LỌC NGÀY (Responsive) */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Báo cáo đơn đi hàng ngày</h2>
-            <p className="text-xs sm:text-sm text-gray-500 font-medium mt-1">Tổng quan đơn đi hàng ngày theo khoảng thời gian đã chọn</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Báo cáo đơn đi hàng ngày</h2>
+            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">Tổng quan đơn đi hàng ngày theo khoảng thời gian đã chọn</p>
           </div>
           
           <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 bg-white border border-slate-200 p-2 sm:p-2.5 rounded-2xl shadow-sm w-full lg:w-auto">
-            <Calendar size={18} className="text-gray-400 ml-1.5 hidden sm:block" />
+            <Calendar size={18} className="text-slate-400 ml-1.5 hidden sm:block" />
             <input 
               type="date" 
               value={startDate} 
               onChange={e => setStartDate(e.target.value)} 
-              className="flex-1 bg-transparent text-xs sm:text-sm font-semibold text-gray-700 outline-none cursor-pointer" 
+              className="flex-1 bg-transparent text-xs sm:text-sm font-semibold text-slate-700 outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-500/20 cursor-pointer" 
             />
-            <span className="text-gray-300 font-bold text-xs sm:text-sm px-1">đến</span>
+            <span className="text-slate-300 font-bold text-xs sm:text-sm px-1">đến</span>
             <input 
               type="date" 
               value={endDate} 
               onChange={e => setEndDate(e.target.value)} 
-              className="flex-1 bg-transparent text-xs sm:text-sm font-semibold text-gray-700 outline-none cursor-pointer" 
+              className="flex-1 bg-transparent text-xs sm:text-sm font-semibold text-slate-700 outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-500/20 cursor-pointer" 
             />
           </div>
         </div>
@@ -192,8 +192,8 @@ export default function Dashboard() {
               <Printer size={24} />
             </div>
             <div>
-              <span className="text-xs sm:text-xs font-bold text-gray-400 uppercase tracking-wider">Tổng đơn đã in</span>
-              <h4 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{loading ? "..." : totalPrintedInRange} <span className="text-sm sm:text-base font-medium text-gray-400">đơn</span></h4>
+              <span className="text-xs sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Tổng đơn đã in</span>
+              <h4 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">{loading ? "..." : totalPrintedInRange} <span className="text-sm sm:text-base font-medium text-slate-400">đơn</span></h4>
             </div>
           </div>
 
@@ -202,8 +202,8 @@ export default function Dashboard() {
               <Truck size={24} />
             </div>
             <div>
-              <span className="text-xs sm:text-xs font-bold text-gray-400 uppercase tracking-wider">Tổng đơn đã đi</span>
-              <h4 className="text-2xl sm:text-3xl font-bold text-gray-900 mt-1">{loading ? "..." : totalShippedInRange} <span className="text-sm sm:text-base font-medium text-gray-400">đơn</span></h4>
+              <span className="text-xs sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Tổng đơn đã đi</span>
+              <h4 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">{loading ? "..." : totalShippedInRange} <span className="text-sm sm:text-base font-medium text-slate-400">đơn</span></h4>
             </div>
           </div>
 
@@ -212,14 +212,14 @@ export default function Dashboard() {
               <Layers size={24} />
             </div>
             <div className="flex-1">
-              <span className="text-xs sm:text-xs font-bold text-gray-400 uppercase tracking-wider">Số lượng đơn tồn</span>
+              <span className="text-xs sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Số lượng đơn tồn</span>
               <div className="text-2xl sm:text-3xl font-bold text-amber-600 mt-1 flex items-baseline gap-x-2">
                 <span>{loading ? "..." : totalPendingNow}</span>
-                <span className="text-sm sm:text-base font-medium text-gray-400">đơn</span>
+                <span className="text-sm sm:text-base font-medium text-slate-400">đơn</span>
               </div>
               <div className="flex flex-wrap gap-1.5 mt-2">
-                {totalCanceledNow > 0 && <span className="text-xs sm:text-[11px] font-bold text-red-600 bg-red-50/80 px-2 py-0.5 rounded-full border border-red-100/50">{totalCanceledNow} hủy</span>}
-                {totalDispatchedNow > 0 && <span className="text-xs sm:text-[11px] font-bold text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded-full border border-blue-100/50">{totalDispatchedNow} đã đi</span>}
+                {totalCanceledNow > 0 && <span className="text-xs sm:text-xs font-bold text-red-600 bg-red-50/80 px-2 py-0.5 rounded-full border border-red-100/50">{totalCanceledNow} hủy</span>}
+                {totalDispatchedNow > 0 && <span className="text-xs sm:text-xs font-bold text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded-full border border-blue-100/50">{totalDispatchedNow} đã đi</span>}
               </div>
             </div>
           </div>
@@ -227,18 +227,18 @@ export default function Dashboard() {
 
         {/* 1. BIỂU ĐỒ BIẾN ĐỘNG (CÓ ĐƯỜNG TRUNG BÌNH) */}
         <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm">
-          <h3 className="text-sm sm:text-base font-bold text-gray-800 uppercase tracking-wider mb-6 flex items-center gap-2">
+          <h3 className="text-sm sm:text-base font-bold text-slate-800 uppercase tracking-wider mb-6 flex items-center gap-2">
             <div className="w-1.5 h-5 bg-blue-600 rounded-full" /> Tương quan Đơn in và Đơn đi
           </h3>
           <div className="w-full h-64 sm:h-80 -ml-2 sm:ml-0">
             {loading ? (
-              <div className="w-full h-full flex items-center justify-center text-gray-400 font-semibold animate-pulse text-xs sm:text-sm">Đang quét phân trang dữ liệu...</div>
+              <div className="w-full h-full flex items-center justify-center text-slate-400 font-semibold animate-pulse text-xs sm:text-sm">Đang quét phân trang dữ liệu...</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData} margin={{ top: 20, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" opacity={0.5} />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }} />
-                  <YAxis tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }} />
+                  <XAxis dataKey="date" tick={{ fontSize: 12, fontWeight: 600, fill: '#94a3b8' }} />
+                  <YAxis tick={{ fontSize: 12, fontWeight: 600, fill: '#94a3b8' }} />
                   <Tooltip 
                     contentStyle={{ backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }} 
                   />
@@ -274,28 +274,28 @@ export default function Dashboard() {
           
           {/* 2. BẢNG THỐNG KÊ ĐƠN TỒN */}
           <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col h-[400px] sm:h-[480px]">
-            <h3 className="text-sm sm:text-base font-bold text-gray-800 uppercase tracking-wider mb-4 flex items-center gap-2">
+            <h3 className="text-sm sm:text-base font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
               <div className="w-1.5 h-5 bg-amber-500 rounded-full" /> Đơn đã in chưa đi
             </h3>
             {/* ️ Bọc overflow-x-auto để cuộn ngang trên mobile */}
             <div className="flex-1 overflow-auto rounded-2xl border border-slate-100 bg-white/50">
               <table className="w-full text-left text-sm border-collapse min-w-[400px]">
                 <thead>
-                  <tr className="bg-slate-50/80 sticky top-0 backdrop-blur-md text-gray-500 font-bold text-xs sm:text-xs uppercase z-10">
+                  <tr className="bg-slate-50/80 sticky top-0 backdrop-blur-md text-slate-500 font-bold text-xs sm:text-xs uppercase z-10">
                     <th className="p-3 sm:p-4">Ngày in</th>
                     <th className="p-3 sm:p-4 text-center">Trạng thái tồn</th>
                     <th className="p-3 sm:p-4 text-right">Hành động</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
+                <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
                   {loading ? (
-                    <tr><td colSpan={3} className="text-center p-10 text-gray-400 animate-pulse text-xs">Đang bóc tách số liệu...</td></tr>
+                    <tr><td colSpan={3} className="text-center p-10 text-slate-400 animate-pulse text-xs">Đang bóc tách số liệu...</td></tr>
                   ) : pendingShippingData.length === 0 ? (
-                    <tr><td colSpan={3} className="text-center p-10 text-gray-400 text-xs sm:text-sm">Không có đơn tồn.</td></tr>
+                    <tr><td colSpan={3} className="text-center p-10 text-slate-400 text-xs sm:text-sm">Không có đơn tồn.</td></tr>
                   ) : (
                     pendingShippingData.map(item => (
-                      <tr key={item.date} className="hover:bg-blue-50/30 transition">
-                        <td className="p-3 sm:p-4 text-xs sm:text-sm font-bold text-gray-900 whitespace-nowrap">{item.date}</td>
+                      <tr key={item.date} className="hover:bg-slate-50 transition">
+                        <td className="p-3 sm:p-4 text-xs sm:text-sm font-bold text-slate-900 whitespace-nowrap">{item.date}</td>
                         <td className="p-3 sm:p-4 text-center flex flex-col items-center gap-1">
                           <span className="px-2.5 py-1 bg-amber-50 border border-amber-200/50 text-amber-700 rounded-full text-xs sm:text-xs font-bold whitespace-nowrap">
                             {item.count} đơn tổng tồn
@@ -308,7 +308,7 @@ export default function Dashboard() {
                         <td className="p-3 sm:p-4 text-right">
                           <button 
                             onClick={() => { setSelectedModalDate(item.date); setModalOrdersList(item.ordersList); }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs sm:text-xs font-bold shadow-sm transition"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-xs sm:text-xs font-bold shadow-sm transition"
                           >
                             <Eye size={14} /> <span className="hidden sm:inline">Xem</span>
                           </button>
@@ -324,13 +324,13 @@ export default function Dashboard() {
           {/* 3. BÁO CÁO TOP SẢN PHẨM */}
           <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col h-[400px] sm:h-[480px]">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-3">
-              <h3 className="text-sm sm:text-base font-bold text-gray-800 uppercase tracking-wider flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                 <div className="w-1.5 h-5 bg-emerald-500 rounded-full" /> Top {topProductLimit} Xuất kho
               </h3>
               <select 
                 value={topProductLimit} 
                 onChange={(e) => setTopProductLimit(Number(e.target.value))}
-                className="w-full sm:w-auto text-[11px] sm:text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none text-gray-700 cursor-pointer"
+                className="w-full sm:w-auto text-xs sm:text-xs font-bold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 outline-none text-slate-700 cursor-pointer"
               >
                 <option value={5}>Xem Top 5</option>
                 <option value={10}>Xem Top 10</option>
@@ -340,9 +340,9 @@ export default function Dashboard() {
 
             <div className="flex-1 overflow-y-auto space-y-4 pr-2 py-1">
               {loading ? (
-                <div className="text-center text-gray-400 animate-pulse text-xs sm:text-sm py-10">Đang sắp xếp kho hàng...</div>
+                <div className="text-center text-slate-400 animate-pulse text-xs sm:text-sm py-10">Đang sắp xếp kho hàng...</div>
               ) : topProductsData.length === 0 ? (
-                <div className="text-center text-gray-400 text-xs sm:text-sm py-10">Chưa có sản phẩm xuất kho.</div>
+                <div className="text-center text-slate-400 text-xs sm:text-sm py-10">Chưa có sản phẩm xuất kho.</div>
               ) : (
                 topProductsData.map((prod, idx) => {
                   const maxQty = topProductsData[0]?.quantity || 1;
@@ -352,13 +352,13 @@ export default function Dashboard() {
                     <div key={prod.code} className="space-y-1.5">
                       <div className="flex justify-between items-start text-xs font-bold">
                         <div className="flex items-start sm:items-center gap-2 sm:gap-3 max-w-[75%]">
-                          <span className="shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-gray-500 font-bold text-xs sm:text-[11px] mt-0.5 sm:mt-0">{idx + 1}</span>
+                          <span className="shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs sm:text-xs mt-0.5 sm:mt-0">{idx + 1}</span>
                           <div className="flex flex-col truncate">
-                            <span className="text-gray-900 truncate font-semibold text-[11px] sm:text-sm">{prod.name}</span>
-                            <span className="text-xs sm:text-[11px] text-gray-400 font-medium mt-0.5">SKU: {prod.code}</span>
+                            <span className="text-slate-900 truncate font-semibold text-xs sm:text-sm">{prod.name}</span>
+                            <span className="text-xs sm:text-xs text-slate-400 font-medium mt-0.5">SKU: {prod.code}</span>
                           </div>
                         </div>
-                        <span className="shrink-0 text-gray-900 font-bold bg-slate-50 border border-slate-200 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-xs sm:text-sm">{prod.quantity} <span className="hidden sm:inline text-xs text-gray-400 font-medium">cái</span></span>
+                        <span className="shrink-0 text-slate-900 font-bold bg-slate-50 border border-slate-200 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-xs sm:text-sm">{prod.quantity} <span className="hidden sm:inline text-xs text-slate-400 font-medium">cái</span></span>
                       </div>
                       <div className="w-full bg-slate-100 h-1.5 sm:h-2 rounded-full overflow-hidden">
                         <div 
@@ -377,13 +377,13 @@ export default function Dashboard() {
 
         {/* 4. POPUP MODAL (Responsive Table) */}
         {selectedModalDate && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 animate-in zoom-in-95 duration-200">
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 animate-in zoom-in-95 duration-200">
             <div className="bg-white w-full max-w-4xl rounded-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[90vh] sm:max-h-[85vh]">
               
               <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl sm:rounded-t-3xl">
                 <div>
                   <h4 className="text-base sm:text-lg font-bold text-slate-800">Chi tiết đơn tồn: {selectedModalDate}</h4>
-                  <p className="text-[11px] sm:text-sm text-slate-500 font-medium mt-0.5">Tìm thấy {modalOrdersList.length} đơn hàng</p>
+                  <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">Tìm thấy {modalOrdersList.length} đơn hàng</p>
                 </div>
                 <button 
                   onClick={() => { setSelectedModalDate(null); setModalOrdersList([]); }} 
@@ -395,7 +395,7 @@ export default function Dashboard() {
 
               {/* ️ Bọc overflow-x-auto cho bảng trên điện thoại */}
               <div className="flex-1 overflow-auto p-0 sm:p-6">
-                <table className="w-full text-left text-[11px] sm:text-sm border-collapse min-w-[500px]">
+                <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[500px]">
                   <thead>
                     <tr className="bg-slate-50 text-slate-500 font-bold uppercase text-xs sm:text-xs sticky top-0 z-10">
                       <th className="p-3 sm:p-4">ID Đơn</th>

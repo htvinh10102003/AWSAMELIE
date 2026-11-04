@@ -32,7 +32,7 @@ const SALE_CHANNEL_MAP = {
 
 const getChannelBadge = (channelId) => {
   if (channelId === null || channelId === undefined) return null;
-  const channel = SALE_CHANNEL_MAP[channelId] || { name: `Kênh ${channelId}`, style: 'bg-gray-100 text-gray-600 border-gray-200' };
+  const channel = SALE_CHANNEL_MAP[channelId] || { name: `Kênh ${channelId}`, style: 'bg-slate-100 text-slate-600 border-slate-200' };
   return (
     <span className={`px-1.5 py-0.5 rounded text-xs font-bold border ${channel.style} flex items-center gap-1 w-fit`}>
       <Store size={10} /> {channel.name}
@@ -722,7 +722,7 @@ export default function OrderReconciliation() {
                 {dialogConfig.type === 'confirm' && (
                   <button 
                     onClick={() => { dialogConfig.onConfirm && dialogConfig.onConfirm(); closeDialog(); }} 
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-md transition"
+                    className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl shadow-sm transition"
                   >
                     Xác nhận
                   </button>
@@ -746,9 +746,9 @@ export default function OrderReconciliation() {
           <div className="flex flex-col sm:flex-row gap-3 items-end p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
             <div className="flex-1 w-full">
               <label className="block text-xs font-bold text-slate-700 mb-1">Ngày dữ liệu đơn in cần đối soát mới</label>
-              <input type="date" value={newAuditDate} onChange={e => setNewAuditDate(e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium outline-none focus:border-blue-500" />
+              <input type="date" value={newAuditDate} onChange={e => setNewAuditDate(e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium outline-none focus:border-slate-700" />
             </div>
-            <button onClick={handleCreateSession} className="w-full sm:w-auto px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg shadow-sm transition flex items-center justify-center gap-2">
+            <button onClick={handleCreateSession} className="w-full sm:w-auto px-6 py-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm rounded-xl shadow-sm transition flex items-center justify-center gap-2">
               <Plus size={18} /> Tạo Biên Bản Mới
             </button>
           </div>
@@ -759,9 +759,9 @@ export default function OrderReconciliation() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
               <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2"><Filter size={16}/> Lịch sử đối soát</h3>
               <div className="flex items-center gap-2 w-full sm:w-auto">
-                <input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="w-full sm:w-32 px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none" title="Từ ngày" />
+                <input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="w-full sm:w-32 px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-500/20" title="Từ ngày" />
                 <span className="text-slate-400 text-xs">-</span>
-                <input type="date" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} className="w-full sm:w-32 px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none" title="Đến ngày" />
+                <input type="date" value={filterEndDate} onChange={e => setFilterEndDate(e.target.value)} className="w-full sm:w-32 px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-500/20" title="Đến ngày" />
               </div>
             </div>
 
@@ -772,9 +772,9 @@ export default function OrderReconciliation() {
             ) : (
               <div className="space-y-3">
                 {sessions.map(session => (
-                  <div key={session.id} onClick={() => handleOpenSession(session)} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border border-slate-200 rounded-xl hover:border-blue-400 hover:shadow-md transition cursor-pointer bg-white group">
+                  <div key={session.id} onClick={() => handleOpenSession(session)} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border border-slate-200 rounded-2xl shadow-sm hover:border-slate-400 transition cursor-pointer bg-white group">
                     <div>
-                      <h4 className="font-bold text-slate-800 group-hover:text-blue-700">{session.session_name}</h4>
+                      <h4 className="font-bold text-slate-800 group-hover:text-slate-900">{session.session_name}</h4>
                       <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
                         <Calendar size={12} /> Date: {session.audit_date}
                         <span className="mx-1">•</span>
@@ -798,7 +798,7 @@ export default function OrderReconciliation() {
                 ))}
                 
                 {hasMore && (
-                  <button onClick={() => fetchSessions(true)} disabled={loadingSessions} className="w-full py-2.5 text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition">
+                  <button onClick={() => fetchSessions(true)} disabled={loadingSessions} className="w-full py-2.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition">
                     {loadingSessions ? 'Đang tải...' : 'Tải thêm'}
                   </button>
                 )}
@@ -832,7 +832,7 @@ export default function OrderReconciliation() {
               {dialogConfig.type === 'confirm' && (
                 <button 
                   onClick={() => { dialogConfig.onConfirm && dialogConfig.onConfirm(); closeDialog(); }} 
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-md transition"
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl shadow-sm transition"
                 >
                   Xác nhận
                 </button>
@@ -898,11 +898,11 @@ export default function OrderReconciliation() {
                 onPaste={handlePasteDropBlock} 
                 onDrop={handlePasteDropBlock} 
                 disabled={isCameraOpen}
-                className="flex-1 text-center text-sm font-bold tracking-wide py-2.5 sm:py-3 px-3 sm:px-4 bg-slate-50 border-2 border-dashed border-blue-400 rounded-xl outline-none focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-100 transition disabled:opacity-50"
+                className="flex-1 text-center text-sm font-bold tracking-wide py-2.5 sm:py-3 px-3 sm:px-4 bg-slate-50 border-2 border-dashed border-slate-400 rounded-xl outline-none focus:bg-white focus:border-slate-700 focus:ring-4 focus:ring-slate-500/20 transition disabled:opacity-50"
               />
               <button type="button" onClick={handleToggleCamera} disabled={showDuplicatePopup}
                 className={`p-2.5 sm:p-3 rounded-xl border-2 font-bold text-xs flex items-center gap-1.5 transition ${
-                  isCameraOpen ? 'bg-red-50 border-red-300 text-red-600 hover:bg-red-100' : 'bg-blue-50 border-blue-300 text-blue-600 hover:bg-blue-100'
+                  isCameraOpen ? 'bg-red-50 border-red-300 text-red-600 hover:bg-red-100' : 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
                 } disabled:opacity-50`}
               >
                 {isCameraOpen ? <CameraOff size={18} /> : <Camera size={18} />}
@@ -921,13 +921,13 @@ export default function OrderReconciliation() {
             )}
             {isCameraOpen && !cameraErrorMsg && (
               <div className="mt-4 flex flex-col items-center">
-                <div id="camera-container" ref={cameraContainerRef} className="w-full max-w-xs sm:max-w-sm rounded-xl overflow-hidden border-2 border-blue-200 shadow-lg" style={{ minHeight: '200px' }} />
+                <div id="camera-container" ref={cameraContainerRef} className="w-full max-w-xs sm:max-w-sm rounded-xl overflow-hidden border-2 border-slate-200 shadow-lg" style={{ minHeight: '200px' }} />
               </div>
             )}
 
             <div className="flex justify-center gap-2 sm:gap-3 pt-4 flex-wrap border-t border-slate-100 mt-4">
               <button onClick={handleConfirmSession} disabled={loading}
-                className="px-4 sm:px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition disabled:opacity-50">
+                className="px-4 sm:px-5 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-sm transition disabled:opacity-50">
                 {loading ? 'Đang lưu...' : ' Chốt biên bản & Lưu Log'}
               </button>
               <button onClick={handleResetAudit} className="px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition flex items-center gap-1.5">
@@ -985,7 +985,7 @@ export default function OrderReconciliation() {
           <button
             onClick={handleLoadConfirmedDetails}
             disabled={isLoadingDetails}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold text-sm rounded-xl shadow-md transition inline-flex items-center gap-2"
+            className="px-6 py-3 bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold text-sm rounded-xl shadow-sm transition inline-flex items-center gap-2"
           >
             {isLoadingDetails ? (
               <>
@@ -1033,7 +1033,7 @@ export default function OrderReconciliation() {
                       {/* Danh sách SP */}
                       <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
                         {order.order_products?.length > 0 ? order.order_products.map((p, i) => (
-                          <div key={i} className="text-[11px] text-slate-600 flex justify-between">
+                          <div key={i} className="text-xs text-slate-600 flex justify-between">
                             <span className="truncate pr-2">• {p.product_name}</span>
                             <span className="font-bold whitespace-nowrap">x{p.quantity}</span>
                           </div>
@@ -1075,7 +1075,7 @@ export default function OrderReconciliation() {
                       </div>
                       <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
                         {order.order_products?.length > 0 ? order.order_products.map((p, i) => (
-                          <div key={i} className="text-[11px] text-slate-600 flex justify-between">
+                          <div key={i} className="text-xs text-slate-600 flex justify-between">
                             <span className="truncate pr-2">• {p.product_name}</span>
                             <span className="font-bold whitespace-nowrap">x{p.quantity}</span>
                           </div>
@@ -1140,7 +1140,7 @@ export default function OrderReconciliation() {
                   <div key={order.id + idx} className="p-3 bg-white border border-amber-200 rounded-xl flex items-center justify-between">
                     <div className="flex flex-col gap-0.5">
                       <div className="text-xs font-bold text-amber-800">ID: {order.id}{customerName ? ` - [${customerName}]` : ''}</div>
-                      {createdLabel && <div className="text-[11px] font-medium text-amber-600/80">Tạo: {createdLabel}</div>}
+                      {createdLabel && <div className="text-xs font-medium text-amber-600/80">Tạo: {createdLabel}</div>}
                     </div>
                     {getChannelBadge(order.sale_channel)}
                   </div>
