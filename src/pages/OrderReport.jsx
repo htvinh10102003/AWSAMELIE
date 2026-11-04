@@ -1858,6 +1858,23 @@ export default function OrderReport() {
         });
         setPrintCopied(false);
     };
+    // In bill tùy chỉnh: mở trang /in-bill vẽ theo mẫu đã lưu trong Cài
+    // đặt in (A4/A5, K80 hoặc Có vị trí). Khác openNhanhPrint ở chỗ mẫu
+    // này do mình vẽ, không mở trang in của web Nhanh.
+    const openBillPrint = (printItems, template) => {
+        const ids = (printItems || []).map(item => typeof item === 'object' ? item.id : item).filter(Boolean);
+        if (ids.length === 0) return;
+        window.open(`/in-bill?ids=${ids.join(',')}&template=${template}`, '_blank');
+        logOrderPrint(ids, `bill-${template}`);
+    };
+    const BillPrintButtons = ({ items, small }) => (
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className={`${small ? 'text-xs' : 'text-sm'} font-medium text-slate-500`}>In bill tùy chỉnh:</span>
+            <button onClick={() => openBillPrint(items, 'a4')} className={`${small ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white border border-slate-300 font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2`}><Printer size={small ? 13 : 15} /> Bill A4/A5</button>
+            <button onClick={() => openBillPrint(items, 'k80')} className={`${small ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white border border-slate-300 font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2`}><Printer size={small ? 13 : 15} /> Bill K80</button>
+            <button onClick={() => openBillPrint(items, 'location')} className={`${small ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm'} bg-white border border-slate-300 font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2`}><Printer size={small ? 13 : 15} /> Bill có vị trí</button>
+        </div>
+    );
     const executePrint = (printSize) => {
         // Lấy mã vận đơn từ dòng đơn đang hiển thị (trang hiện tại ở
         // báo cáo đặc biệt, toàn bộ list đã lọc ở báo cáo cũ).
@@ -2883,10 +2900,13 @@ export default function OrderReport() {
                                 </div>
                             )}
                             {(bulkSendResult.results || []).filter(r => r.ok).length > 0 && (
+                                <>
                                 <div className="flex gap-2 pt-2">
                                     <button onClick={() => openNhanhPrint((bulkSendResult.results || []).filter(r => r.ok).map(r => ({ id: r.id, carrier_code: r.carrierCode || '' })), 'A4')} className="px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 flex items-center gap-2"><Printer size={15} /> In đơn hàng (A4/A5)</button>
                                     <button onClick={() => openNhanhPrint((bulkSendResult.results || []).filter(r => r.ok).map(r => ({ id: r.id, carrier_code: r.carrierCode || '' })), 'K80')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
                                 </div>
+                                <BillPrintButtons items={(bulkSendResult.results || []).filter(r => r.ok).map(r => ({ id: r.id, carrier_code: r.carrierCode || '' }))} />
+                                </>
                             )}
                             <button onClick={() => { setShowBulkSendModal(false); handleOpenSendHistory(); }} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 self-start">Xem lịch sử gửi</button>
                             <p className="text-xs text-slate-500">Mã vận đơn sẽ hiện trong bảng sau khi hệ thống đồng bộ đơn từ Nhanh về.</p>
@@ -2989,6 +3009,7 @@ export default function OrderReport() {
                                                 className="px-3 py-1.5 bg-white border border-slate-300 text-xs font-bold rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1"
                                             ><Printer size={13} /> In lại (K80)</button>
                                         </div>
+                                        {okItems.length > 0 && <BillPrintButtons small items={okItems.map(it => ({ id: it.id, carrier_code: it.carrierCode || '' }))} />}
                                     </div>
                                 );
                             })}
@@ -3068,9 +3089,12 @@ export default function OrderReport() {
                                         {detailActionLoading && <RefreshCw size={14} className="animate-spin" />} Xác nhận gửi sang hãng
                                     </button>
                                     {detailSendDone && (
-                                        <div className="flex gap-2 pt-1">
+                                        <div className="space-y-2 pt-1">
+                                        <div className="flex gap-2">
                                             <button onClick={() => openNhanhPrint([{ id: actionOrder.id, carrier_code: actionOrder.carrier_code || '' }], 'A4')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In đơn hàng (A4/A5)</button>
                                             <button onClick={() => openNhanhPrint([{ id: actionOrder.id, carrier_code: actionOrder.carrier_code || '' }], 'K80')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
+                                        </div>
+                                        <BillPrintButtons items={[{ id: actionOrder.id, carrier_code: actionOrder.carrier_code || '' }]} />
                                         </div>
                                     )}
                                 </div>

@@ -3,13 +3,14 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import { isAdminRole, isSuperAdminRole, roleLabel } from '../lib/roles';
 import { sessionRevokedKey } from '../lib/session';
 import { getMaintenanceMode, setMaintenanceMode } from '../lib/maintenance';
-import { 
+import {
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
   Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert,
   Palette, TreePine, PartyPopper, MoonStar, Flag, Database, HardDrive, Trash2, AlertTriangle, Info,
-  BellRing, Megaphone, MonitorPlay, Ban, History, LogOut
+  BellRing, Megaphone, MonitorPlay, Ban, History, LogOut, Printer
 } from 'lucide-react';
 import { shortDeviceName } from '../lib/presence';
+import PrintSettings from '../components/PrintSettings';
 
 // --- UTILS ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -1494,6 +1495,16 @@ export default function Admin() {
               </div>
             ) : (
               <LockedFeature msg="Chỉ Chủ sở hữu (Owner) hoặc Super Admin mới được quyền thay đổi nền giao diện." />
+            )}
+          </div>
+
+          {/* SECTION: CÀI ĐẶT IN (mẫu bill + thông tin người gửi) */}
+          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border border-slate-200/80">
+            <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-6"><Printer size={20} className="text-blue-600" /> Cài đặt in</h2>
+            {canEditSensitiveConfig ? (
+              <PrintSettings />
+            ) : (
+              <LockedFeature msg="Chỉ Chủ sở hữu (Owner) hoặc Super Admin mới được quyền thay đổi cài đặt in." />
             )}
           </div>
 

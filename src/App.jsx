@@ -32,6 +32,7 @@ const WebhookRetrier = lazy(() => import('./pages/WebhookRetrier'));
 const DashboardDonHoan = lazy(() => import('./pages/DashboardDonHoan'));
 const AWBProcessor = lazy(() => import('./pages/AWBProcessor'));
 const SpxPrinter = lazy(() => import('./pages/SpxPrinter'));
+const BillPrint = lazy(() => import('./pages/BillPrint'));
 const StatusTransitionTracker = lazy(() => import('./pages/StatusTransitionTracker'));
 const FeatureLockManager = lazy(() => import('./pages/FeatureLockManager'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -101,6 +102,7 @@ export default function App() {
               <SpxPrinter />
             </FeatureGuard>
           } />
+          <Route path="in-bill" element={<BillPrint />} />
 
           {/* 📦 TAB ĐÓNG GÓI - Cụm featureId="packing" */}
           <Route path="dong-goi-don-hang" element={
