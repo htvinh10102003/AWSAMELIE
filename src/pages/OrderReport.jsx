@@ -973,7 +973,7 @@ export default function OrderReport() {
             // chứa JSON gốc của Nhanh (ví dụ raw_data / data / payload),
             // select('*') sẽ lấy được nó và popup sẽ dùng nó làm nguồn chính.
             // Nếu không có cột đó, popup dùng các trường đã làm phẳng.
-            const { data: full, error } = await supabase.from('orders').select('*').eq('id', order.id).single();
+            const { data: full, error } = await supabase.from('orders').select('*, order_products(product_code, product_name, quantity)').eq('id', order.id).single();
             if (!error && full) setDetailData(full);
         } catch (err) {
             console.error('Lỗi tải chi tiết đơn:', err);
@@ -2752,7 +2752,7 @@ export default function OrderReport() {
                                                 <DetailRow label="ID đơn sàn" value={base.ecom_order_id ? String(base.ecom_order_id) : (channel?.ecomOrderId ? String(channel.ecomOrderId) : 'Chưa có')} />
                                                 <DetailRow label="Kênh bán" value={channelName} />
                                                 {channel?.trafficSource?.name && <DetailRow label="Nguồn khách" value={channel.trafficSource.name} />}
-                                                <DetailRow label="Kho xuất" value={DEPOT_NAMES[String(base.depot_id)] || String(base.depot_id)} />
+                                                <DetailRow label="Kho xuất" value={base.depot_id ? (DEPOT_NAMES[String(base.depot_id)] || String(base.depot_id)) : 'Chưa có'} />
                                                 <DetailRow label="Nhân viên tạo" value={info?.createdBy?.name || base.created_by_name || 'Hệ thống'} />
                                                 <DetailRow label="Ngày tạo" value={info?.createdAt ? fmtUnix(info.createdAt) : fmtDateStr(base.created_at)} />
                                                 <DetailRow label="Ngày cập nhật" value={info?.updatedAt ? fmtUnix(info.updatedAt) : fmtDateStr(base.updated_at)} />
