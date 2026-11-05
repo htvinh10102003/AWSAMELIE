@@ -57,3 +57,10 @@ button, input, select, textarea { font: inherit; }
 }
 .ui-input:focus { outline: 2px solid #cbd5e1; border-color: var(--wms-primary); }
 .ui-label { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--wms-muted); margin-bottom: 6px; }
+/* Tieu de nhom/section dung chung (vong 2): chi dinh kieu chu (12px,
+   dam, in hoa, tracking rong); mau chu lay theo theme tai cho dung,
+   de khong pha theme le (nen toi Xmas can chu nhat). */
+.ui-section-title {
+  font-size: 12px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase; line-height: 1.25;
+}

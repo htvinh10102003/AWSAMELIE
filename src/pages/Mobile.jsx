@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Printer, AlertTriangle, MapPin, Search, ScanLine, Settings, ClipboardList, RefreshCw, Package, Pencil, X, LogOut, Save, Lock, Bell, Palette, FileSpreadsheet, User } from 'lucide-react';
+import { Printer, AlertTriangle, MapPin, Search, ScanLine, Settings, ClipboardList, RefreshCw, Package, Pencil, X, LogOut, Save, Lock, Bell, FileSpreadsheet, User } from 'lucide-react';
 import { readBarcodesFromImageData, setZXingModuleOverrides } from 'zxing-wasm/reader';
 import zxingReaderWasmUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
 import { supabase } from '../lib/supabase';
-import { getUserRole, isAdminRole, isSuperAdminRole, roleLabel } from '../lib/roles';
+import { getUserRole, isAdminRole, roleLabel } from '../lib/roles';
 import { sessionRevokedKey, isRevokedAfterLogin } from '../lib/session';
 import { reportPresence, recordLoginHistory } from '../lib/presence';
 import { getMaintenanceMode, setMaintenanceMode } from '../lib/maintenance';
@@ -28,7 +28,7 @@ import { getMaintenanceMode, setMaintenanceMode } from '../lib/maintenance';
 //   gói (40), Đang chuyển (59) và các trạng thái khác đã giao cho đơn vị vận
 //   chuyển rồi nên không cần bàn giao lại.
 // - Cài đặt: tài khoản (xem thông tin, đổi mật khẩu, đăng xuất) cho mọi người;
-//   quét Google Sheet cho admin/owner; giao diện lễ hội cho owner/super_admin;
+//   quét Google Sheet cho admin/owner;
 //   thông báo toàn hệ thống và khóa tính năng cho owner (đúng phân quyền bản máy tính).
 const LOCAL_STATUS_NAMES = {
     '40': 'Đã đóng gói', '42': 'Đang đóng gói', '43': 'Chờ thu gom',
@@ -96,12 +96,6 @@ const FEATURE_PARENTS = [
     { id: 'standalone_khai_gia', name: 'Đơn không khai giá' }, { id: 'admin_sys', name: 'Quản trị Hệ thống' },
     { id: 'kpi', name: 'Quản lý KPI & Lỗi' }, { id: 'system_adjust', name: 'Cập nhật & Hiệu chỉnh' },
 ];
-const THEME_DEFS = [
-    { key: 'theme_national_day', field: 'isNationalDayEnabled', label: 'Quốc Khánh' },
-    { key: 'theme_mid_autumn', field: 'isMidAutumnEnabled', label: 'Trung Thu' },
-    { key: 'theme_christmas', field: 'isXmasEnabled', label: 'Giáng Sinh' },
-    { key: 'theme_tet', field: 'isTetEnabled', label: 'Tết Nguyên Đán' },
-];
 const TABS = [
     { id: 'print', label: 'Đơn in', icon: Printer },
     { id: 'location', label: 'Vị trí', icon: MapPin },
@@ -112,8 +106,8 @@ const TABS = [
 
 // Đặt ngoài component chính để tránh remount làm mất focus khi gõ vào ô nhập trong Section.
 const Section = ({ icon: Icon, title, children }) => (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 space-y-3">
-        <div className="font-bold text-slate-900 text-sm flex items-center gap-2"><Icon size={16} className="text-slate-500" /> {title}</div>
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <div className="font-bold text-slate-900 text-sm flex items-center gap-2 border-b border-slate-100 pb-2.5"><span className="flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-50 text-emerald-700 shrink-0"><Icon size={16} /></span> {title}</div>
         {children}
     </div>
 );
@@ -176,9 +170,6 @@ export default function Mobile() {
     const [sheetPrintMsg, setSheetPrintMsg] = useState('');
     const [sheetDailyLoading, setSheetDailyLoading] = useState(false);
     const [sheetPrintLoading, setSheetPrintLoading] = useState(false);
-    const [themes, setThemes] = useState({});
-    const [themesMessage, setThemesMessage] = useState('');
-    const [themesSaving, setThemesSaving] = useState(false);
     const [banner, setBanner] = useState({ enabled: false, type: 'info', content: '', speed: 15 });
     const [popupNotif, setPopupNotif] = useState({ enabled: false, type: 'info', title: '', content: '' });
     const [notifMessage, setNotifMessage] = useState('');
@@ -195,7 +186,6 @@ export default function Mobile() {
     const role = getUserRole(user);
     const isOwnerUser = user?.user_metadata?.is_owner === true || user?.email === SUPER_OWNER_EMAIL;
     const isAdminOrOwner = isOwnerUser || isAdminRole(role);
-    const canEditSensitive = isOwnerUser || isSuperAdminRole(role);
     const canEditLocation = isAdminOrOwner;
 
     useEffect(() => {
@@ -652,14 +642,6 @@ export default function Mobile() {
     const loadSettings = async () => {
         setSettingsLoaded(true);
         try {
-            if (canEditSensitive) {
-                const { data } = await supabase.from('system_configs').select('key, value').in('key', THEME_DEFS.map(t => t.key));
-                const map = {};
-                data?.forEach(row => { try { map[row.key] = JSON.parse(row.value); } catch (e) {} });
-                const initial = {};
-                THEME_DEFS.forEach(t => { initial[t.key] = !!map[t.key]?.[t.field]; });
-                setThemes(initial);
-            }
             if (isOwnerUser) {
                 setMaintenanceOn(await getMaintenanceMode());
                 const { data } = await supabase.from('system_configs').select('key, value').in('key', ['global_banner', 'global_notification']);
@@ -700,30 +682,6 @@ export default function Mobile() {
         } finally {
             setMaintenanceLoading(false);
         }
-    };
-
-    const saveThemes = async () => {
-        setThemesSaving(true); setThemesMessage('');
-        try {
-            const rows = THEME_DEFS.map(t => {
-                const obj = {};
-                obj[t.field] = themes[t.key] ? true : false;
-                // Chỉ bật 1 theme, tắt 3 cái còn lại (đúng bản máy tính)
-                return { key: t.key, value: JSON.stringify(obj) };
-            });
-            const { error } = await supabase.from('system_configs').upsert(rows, { onConflict: 'key' });
-            if (error) throw error;
-            setThemesMessage('Đã lưu giao diện lễ hội.');
-        } catch (err) { setThemesMessage('Lỗi: ' + err.message); }
-        finally { setThemesSaving(false); }
-    };
-
-    const toggleTheme = (key) => {
-        setThemes(prev => {
-            const next = {};
-            THEME_DEFS.forEach(t => { next[t.key] = t.key === key ? !prev[key] : false; });
-            return next;
-        });
     };
 
     const saveBanner = async () => {
@@ -838,16 +796,20 @@ export default function Mobile() {
         const warning = warnHandover && isHandoverWarning(order);
         const shortItem = [...(data.holding || []), ...(data.outOfStock || [])]
             .find(o => o.id === order.id)?.debug_shortItems?.[0];
+        const hasSecondaryPills = (showChannel && order.sale_channel) || (showStock && stock) || (showStock && shortItem);
         return (
-            <div className={`bg-white rounded-2xl border shadow-sm p-3 ${warning ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-200'}`}>
+            <div className={`bg-white rounded-2xl border shadow-sm p-4 ${warning ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-200'}`}>
                 <div className="flex items-start justify-between gap-2">
-                    <div className="font-bold text-slate-900 text-base leading-tight">{showCustomer ? `ID: ${order.id}${customerName ? ` - [${customerName}]` : ''}` : order.id}</div>
-                    {order.carrier_code && (
-                        <span className="shrink-0 text-xs font-bold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">{order.carrier_code}</span>
-                    )}
+                    <div className="font-bold text-slate-900 text-lg leading-tight min-w-0">
+                        {showCustomer ? (<>ID: <span className="font-mono">{order.id}</span>{customerName ? ` - [${customerName}]` : ''}</>) : (<span className="font-mono">{order.id}</span>)}
+                    </div>
+                    <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 border border-slate-200 text-slate-700">{statusName(order.status)}</span>
                 </div>
-                {createdLabel && <div className="text-xs text-slate-500 mt-1">Tạo: {createdLabel}</div>}
-                <div className="mt-2 space-y-1">
+                {order.carrier_code && (
+                    <div className="mt-2 text-sm"><span className="text-slate-500">Mã vận đơn: </span><span className="font-mono font-bold text-slate-900 break-all">{order.carrier_code}</span></div>
+                )}
+                {createdLabel && <div className="text-sm text-slate-500 mt-1">Tạo: {createdLabel}</div>}
+                <div className="mt-3 pt-3 border-t border-slate-100 space-y-1">
                     {products.length === 0 && <div className="text-sm text-slate-400">Chưa có sản phẩm</div>}
                     {products.map((p, i) => (
                         <div key={i} className="flex justify-between gap-2 text-sm">
@@ -856,14 +818,15 @@ export default function Mobile() {
                         </div>
                     ))}
                 </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 border border-slate-200 text-slate-700">{statusName(order.status)}</span>
-                    {showChannel && order.sale_channel && <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700">{CHANNEL_NAMES[String(order.sale_channel)] || `Kênh ${order.sale_channel}`}</span>}
-                    {showStock && stock && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${stock.cls}`}>{stock.label}</span>}
-                    {showStock && shortItem && (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 border border-red-200 text-red-600">Thiếu {shortItem.missing}, tồn {shortItem.remaining}</span>
-                    )}
-                </div>
+                {hasSecondaryPills && (
+                    <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5">
+                        {showChannel && order.sale_channel && <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700">{CHANNEL_NAMES[String(order.sale_channel)] || `Kênh ${order.sale_channel}`}</span>}
+                        {showStock && stock && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${stock.cls}`}>{stock.label}</span>}
+                        {showStock && shortItem && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 border border-red-200 text-red-600">Thiếu {shortItem.missing}, tồn {shortItem.remaining}</span>
+                        )}
+                    </div>
+                )}
             </div>
         );
     };
@@ -876,24 +839,28 @@ export default function Mobile() {
                         <div className="font-bold text-base leading-tight">WMS</div>
                         <div className="text-xs text-slate-300">Xem nhanh trên điện thoại</div>
                     </div>
-                    <button onClick={tab === 'reconcile' ? () => { fetchRecon(); fetchBbSessions(); } : fetchAllocation} disabled={loading || reconLoading} className="p-2 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50" aria-label="Làm mới">
+                    <button onClick={tab === 'reconcile' ? () => { fetchRecon(); fetchBbSessions(); } : fetchAllocation} disabled={loading || reconLoading} className="p-3 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50" aria-label="Làm mới">
                         <RefreshCw size={18} className={(loading || reconLoading) ? 'animate-spin' : ''} />
                     </button>
                 </header>
                 {tab === 'print' && (
                     <div className="bg-slate-100 px-3 pt-2 pb-2 space-y-2 border-b border-slate-200">
+                        <div className="flex items-baseline justify-between px-1">
+                            <span className="font-bold text-slate-900 text-base">Đơn in</span>
+                            <span className="text-xs font-bold text-slate-500">{data.printable.length} đơn đủ hàng</span>
+                        </div>
                         <div className="grid grid-cols-3 gap-2">
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-2.5 text-center">
-                                <div className="text-lg font-bold text-green-700">{data.printable.length}</div>
-                                <div className="text-xs font-medium text-slate-500">Đủ hàng</div>
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center">
+                                <div className="text-xl font-bold text-green-700">{data.printable.length}</div>
+                                <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Đủ hàng</div>
                             </div>
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-2.5 text-center">
-                                <div className="text-lg font-bold text-yellow-700">{data.holding.length}</div>
-                                <div className="text-xs font-medium text-slate-500">Tạm giữ</div>
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center">
+                                <div className="text-xl font-bold text-yellow-700">{data.holding.length}</div>
+                                <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tạm giữ</div>
                             </div>
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-2.5 text-center">
-                                <div className="text-lg font-bold text-red-700">{data.outOfStock.length}</div>
-                                <div className="text-xs font-medium text-slate-500">Hết hàng</div>
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center">
+                                <div className="text-xl font-bold text-red-700">{data.outOfStock.length}</div>
+                                <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Hết hàng</div>
                             </div>
                         </div>
                         <div className="relative">
@@ -932,7 +899,7 @@ export default function Mobile() {
                                 <input type="text" value={locQuery} onChange={(e) => setLocQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleLocationSearch(); }} placeholder="Tìm tên hoặc mã sản phẩm..." className="w-full pl-10 pr-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" />
                                 <Package className="absolute left-3 top-3.5 text-slate-400" size={18} />
                             </div>
-                            <button onClick={handleLocationSearch} disabled={locLoading} className="px-4 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50">Tìm</button>
+                            <button onClick={handleLocationSearch} disabled={locLoading} className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50">Tìm</button>
                         </div>
                         {locLoading && <div className="text-center text-sm text-slate-500 font-medium py-6">Đang tìm...</div>}
                         {!locLoading && locSearched && locResults.length === 0 && <div className="text-center text-sm text-slate-500 py-6">Không tìm thấy sản phẩm nào.</div>}
@@ -955,9 +922,9 @@ export default function Mobile() {
 
                 {tab === 'search' && (
                     <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-2 bg-white border border-slate-300 rounded-2xl p-1">
-                            <button onClick={() => { setSearchMode('carrier'); setDbSearched(false); setDbSearchResults([]); }} className={`py-2.5 rounded-lg text-sm font-bold ${searchMode === 'carrier' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>Mã vận đơn</button>
-                            <button onClick={() => { setSearchMode('id'); setDbSearched(false); setDbSearchResults([]); }} className={`py-2.5 rounded-lg text-sm font-bold ${searchMode === 'id' ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>ID đơn</button>
+                        <div className="grid grid-cols-2 gap-2 bg-slate-100 border border-slate-200 rounded-2xl p-1.5">
+                            <button onClick={() => { setSearchMode('carrier'); setDbSearched(false); setDbSearchResults([]); }} className={`py-3 rounded-xl text-sm font-bold ${searchMode === 'carrier' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:bg-white'}`}>Mã vận đơn</button>
+                            <button onClick={() => { setSearchMode('id'); setDbSearched(false); setDbSearchResults([]); }} className={`py-3 rounded-xl text-sm font-bold ${searchMode === 'id' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:bg-white'}`}>ID đơn</button>
                         </div>
                         <form onSubmit={(e) => { e.preventDefault(); handleDbSearch(); }} className="space-y-2">
                             <div className="flex gap-2">
@@ -965,9 +932,9 @@ export default function Mobile() {
                                     <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={searchMode === 'carrier' ? 'Nhập mã vận đơn...' : 'Nhập ID đơn...'} className="w-full pl-10 pr-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" />
                                     <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
                                 </div>
-                                <button type="button" onClick={startScanner} className="px-4 py-3 bg-slate-900 text-white rounded-xl text-sm font-bold flex items-center gap-1.5"><ScanLine size={18} /> Quét</button>
+                                <button type="button" onClick={startScanner} className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold flex items-center gap-1.5"><ScanLine size={18} /> Quét</button>
                             </div>
-                            <button type="submit" disabled={dbSearching || !search.trim()} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50">Tìm đơn</button>
+                            <button type="submit" disabled={dbSearching || !search.trim()} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50">Tìm đơn</button>
                         </form>
                         {dbSearching && <div className="text-center text-sm text-slate-500 font-medium py-10">Đang tìm...</div>}
                         {!dbSearching && !dbSearched && <div className="text-center text-sm text-slate-500 py-10">Nhập {searchMode === 'carrier' ? 'mã vận đơn' : 'ID đơn'} rồi bấm Tìm đơn, hoặc bấm Quét để quét mã trên đơn.</div>}
@@ -1002,14 +969,15 @@ export default function Mobile() {
 
                 {tab === 'reconcile' && (
                     <div className="space-y-3">
+                        <div className="font-bold text-slate-900 text-base border-b border-slate-200 pb-2">Tổng quan hôm nay</div>
                         <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-slate-900">{reconTotals.totalPrint}</div><div className="text-xs font-medium text-slate-500">Tổng in</div></div>
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-slate-900">{reconTotals.totalPacked}</div><div className="text-xs font-medium text-slate-500">Tổng đóng</div></div>
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-red-700">{reconTotals.totalCanceled}</div><div className="text-xs font-medium text-slate-500">Tổng hủy</div></div>
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-green-700">{reconTotals.totalHanded}</div><div className="text-xs font-medium text-slate-500">Tổng bàn giao</div></div>
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-slate-900">{reconTotals.totalPrint}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng in</div></div>
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-slate-900">{reconTotals.totalPacked}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng đóng</div></div>
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-red-700">{reconTotals.totalCanceled}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng hủy</div></div>
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-green-700">{reconTotals.totalHanded}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng bàn giao</div></div>
                         </div>
                         {reconError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm font-medium text-red-700">{reconError}</div>}
-                        <div className="font-bold text-slate-900 text-sm">Cần bàn giao lại ({reconTotals.needHandover.length})</div>
+                        <div className="font-bold text-slate-900 text-base border-b border-slate-200 pb-2">Cần bàn giao lại ({reconTotals.needHandover.length})</div>
                         {reconLoading && <div className="text-center text-sm text-slate-500 font-medium py-10">Đang tải...</div>}
                         {!reconLoading && reconVisibleList.length === 0 && <div className="text-center text-sm text-slate-500 py-6">Tất cả đơn in hôm nay đã được bàn giao.</div>}
                         {!reconLoading && reconVisibleList.map(order => <OrderCard key={order.id} order={order} showStock={false} showChannel showCustomer showCreated warnHandover />)}
@@ -1019,7 +987,7 @@ export default function Mobile() {
                             </button>
                         )}
                         <div className="pt-2">
-                            <div className="font-bold text-slate-900 text-sm">Biên bản đối soát (từ PC)</div>
+                            <div className="font-bold text-slate-900 text-base border-b border-slate-200 pb-2">Biên bản đối soát (từ PC)</div>
                             <div className="text-xs text-slate-500 mt-0.5">Chỉ xem lại, không tạo hay chốt trên điện thoại. Hiển thị 30 biên bản gần nhất.</div>
                             {bbLoading && <div className="text-center text-sm text-slate-500 font-medium py-6">Đang tải biên bản...</div>}
                             {bbError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm font-medium text-red-700 mt-2">{bbError}</div>}
@@ -1097,7 +1065,7 @@ export default function Mobile() {
                                     <input type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} placeholder="Mật khẩu hiện tại" className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" required />
                                     <input type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} placeholder="Mật khẩu mới (từ 6 ký tự)" className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" required />
                                     <input type="password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} placeholder="Nhập lại mật khẩu mới" className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" required />
-                                    <button type="submit" disabled={pwSaving} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50">Lưu mật khẩu mới</button>
+                                    <button type="submit" disabled={pwSaving} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50">Lưu mật khẩu mới</button>
                                 </form>
                             )}
                             {pwMessage && <div className={`text-sm font-medium ${pwMessage.startsWith('Đã') ? 'text-green-700' : 'text-red-700'}`}>{pwMessage}</div>}
@@ -1122,23 +1090,10 @@ export default function Mobile() {
 
                         {isAdminOrOwner && (
                             <Section icon={FileSpreadsheet} title="Quét Google Sheet">
-                                <button onClick={() => handleSheetScan('daily')} disabled={sheetDailyLoading} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50">Quét đơn đi</button>
+                                <button onClick={() => handleSheetScan('daily')} disabled={sheetDailyLoading} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50">Quét đơn đi</button>
                                 {sheetDailyMsg && <div className="text-sm font-medium text-slate-700">{sheetDailyMsg}</div>}
                                 <button onClick={() => handleSheetScan('print')} disabled={sheetPrintLoading} className="w-full py-3 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl text-sm font-bold text-slate-700 disabled:opacity-50">Quét đơn in</button>
                                 {sheetPrintMsg && <div className="text-sm font-medium text-slate-700">{sheetPrintMsg}</div>}
-                            </Section>
-                        )}
-
-                        {canEditSensitive && (
-                            <Section icon={Palette} title="Giao diện lễ hội (chỉ chọn 1)">
-                                {THEME_DEFS.map(t => (
-                                    <div key={t.key} className="flex items-center justify-between gap-2 py-1">
-                                        <span className="text-sm font-medium text-slate-800">{t.label}</span>
-                                        <Toggle checked={!!themes[t.key]} onChange={() => toggleTheme(t.key)} />
-                                    </div>
-                                ))}
-                                {themesMessage && <div className="text-sm font-medium text-slate-700">{themesMessage}</div>}
-                                <button onClick={saveThemes} disabled={themesSaving} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"><Save size={16} /> Lưu giao diện</button>
                             </Section>
                         )}
 
@@ -1151,7 +1106,6 @@ export default function Mobile() {
                                     </div>
                                     <select value={banner.type} onChange={(e) => setBanner({ ...banner, type: e.target.value })} className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white">
                                         <option value="info">Thông tin chung</option>
-                                        <option value="celebrate">Khen thưởng & Chúc mừng</option>
                                         <option value="alert">Báo động khẩn</option>
                                         <option value="warning">Cảnh báo</option>
                                     </select>
@@ -1160,7 +1114,7 @@ export default function Mobile() {
                                         <span className="text-sm text-slate-500 shrink-0">Tốc độ (giây)</span>
                                         <input type="number" min={5} max={60} value={banner.speed} onChange={(e) => setBanner({ ...banner, speed: Number(e.target.value) })} className="flex-1 px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" />
                                     </div>
-                                    <button onClick={saveBanner} disabled={notifSaving} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50">Lưu dải thông báo</button>
+                                    <button onClick={saveBanner} disabled={notifSaving} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50">Lưu dải thông báo</button>
                                 </Section>
 
                                 <Section icon={Bell} title="Thông báo popup toàn hệ thống">
@@ -1171,11 +1125,10 @@ export default function Mobile() {
                                     <select value={popupNotif.type} onChange={(e) => setPopupNotif({ ...popupNotif, type: e.target.value })} className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white">
                                         <option value="info">Thông báo chung</option>
                                         <option value="update">Cập nhật tính năng</option>
-                                        <option value="celebrate">Sự kiện / Chúc mừng</option>
                                     </select>
                                     <input type="text" value={popupNotif.title} onChange={(e) => setPopupNotif({ ...popupNotif, title: e.target.value })} placeholder="Tiêu đề" className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" />
                                     <textarea rows={3} value={popupNotif.content} onChange={(e) => setPopupNotif({ ...popupNotif, content: e.target.value })} placeholder="Nội dung chi tiết" className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white resize-none" />
-                                    <button onClick={savePopupNotif} disabled={notifSaving} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50">Phát thông báo</button>
+                                    <button onClick={savePopupNotif} disabled={notifSaving} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50">Phát thông báo</button>
                                     {notifMessage && <div className="text-sm font-medium text-slate-700">{notifMessage}</div>}
                                 </Section>
 
@@ -1187,7 +1140,7 @@ export default function Mobile() {
                                         </div>
                                     ))}
                                     {locksMessage && <div className="text-sm font-medium text-slate-700">{locksMessage}</div>}
-                                    <button onClick={saveLocks} disabled={locksSaving} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"><Save size={16} /> Lưu khóa tính năng</button>
+                                    <button onClick={saveLocks} disabled={locksSaving} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"><Save size={16} /> Lưu khóa tính năng</button>
                                 </Section>
                             </>
                         )}
@@ -1197,32 +1150,38 @@ export default function Mobile() {
 
             <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>
                 <div className="mx-auto max-w-[480px] grid grid-cols-5">
-                    {TABS.map(({ id, label, icon: Icon }) => (
-                        <button key={id} onClick={() => setTab(id)} className={`relative flex flex-col items-center gap-0.5 py-2.5 text-xs font-bold ${tab === id ? 'text-slate-900' : 'text-slate-400'}`}>
-                            {tab === id && <div className="absolute top-0 left-1/2 -translate-x-1/2 h-[3px] w-8 bg-slate-900 rounded-full" />}
-                            <Icon size={22} />
-                            {label}
-                        </button>
-                    ))}
+                    {TABS.map(({ id, label, icon: Icon }) => {
+                        const active = tab === id;
+                        return (
+                            <button key={id} onClick={() => setTab(id)} aria-current={active ? 'page' : undefined} className={`relative flex flex-col items-center gap-0.5 py-3 text-xs ${active ? 'bg-emerald-50 text-emerald-700 font-extrabold' : 'text-slate-500 font-bold'}`}>
+                                {active && <div className="absolute top-0 left-1/2 -translate-x-1/2 h-1 w-10 bg-emerald-600 rounded-full" />}
+                                <Icon size={22} strokeWidth={active ? 2.5 : 2} />
+                                {label}
+                            </button>
+                        );
+                    })}
                 </div>
             </nav>
 
             {locEdit && (
                 <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-end justify-center" onClick={() => setLocEdit(null)}>
                     <div className="w-full max-w-[480px] bg-white rounded-t-2xl p-4 space-y-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                             <div className="font-bold text-slate-900 text-sm leading-tight pr-2">{locEdit.product_name}</div>
-                            <button onClick={() => setLocEdit(null)} className="p-1 text-slate-400"><X size={20} /></button>
+                            <button onClick={() => setLocEdit(null)} className="p-2 text-slate-400"><X size={20} /></button>
                         </div>
                         <div className="text-xs text-slate-500 font-mono">{locEdit.product_code}</div>
                         <form onSubmit={saveLocEdit} className="space-y-3">
+                            <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Mã vị trí mới</div>
                             <input type="text" value={locNew} onChange={(e) => setLocNew(e.target.value)} placeholder="Nhập mã vị trí, ví dụ A1-01" className="w-full px-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" />
                             <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
                                 <input type="checkbox" checked={locAllSizes} onChange={(e) => setLocAllSizes(e.target.checked)} className="w-4 h-4" />
                                 Áp dụng cho các size khác (S/M/L)
                             </label>
                             {locMessage && <div className="text-sm font-medium text-slate-700">{locMessage}</div>}
-                            <button type="submit" disabled={locSaving} className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-bold disabled:opacity-50">Lưu vị trí</button>
+                            <div className="border-t border-slate-100 pt-3">
+                                <button type="submit" disabled={locSaving} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50">Lưu vị trí</button>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -1249,9 +1208,9 @@ export default function Mobile() {
             {detailOrder && (
                 <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-end justify-center" onClick={closeOrderDetail}>
                     <div className="w-full max-w-[480px] bg-white rounded-t-2xl p-4 space-y-3 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                             <div className="font-bold text-slate-900 text-base leading-tight">Đơn #{detailOrder.id}</div>
-                            <button onClick={closeOrderDetail} className="p-1 text-slate-400"><X size={20} /></button>
+                            <button onClick={closeOrderDetail} className="p-2 text-slate-400"><X size={20} /></button>
                         </div>
                         {detailLoading && <div className="text-center text-sm text-slate-500 py-6">Đang tải chi tiết...</div>}
                         {detailError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm font-medium text-red-700">{detailError}</div>}
@@ -1261,7 +1220,7 @@ export default function Mobile() {
                                     <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 border border-slate-200 text-slate-700">{statusName(detailOrder.status)}</span>
                                     {detailOrder.sale_channel && <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700">{CHANNEL_NAMES[String(detailOrder.sale_channel)] || `Kênh ${detailOrder.sale_channel}`}</span>}
                                 </div>
-                                <div className="text-sm space-y-1">
+                                <div className="text-sm space-y-1 border-b border-slate-100 pb-3">
                                     <div><span className="text-slate-500">Mã vận đơn: </span><span className="font-bold text-slate-900 break-all">{detailOrder.carrier_code || 'Chưa có'}</span></div>
                                     {detailOrder.carrier_name && <div><span className="text-slate-500">Hãng vận chuyển: </span><span className="font-bold text-slate-900">{detailOrder.carrier_name}</span></div>}
                                     {detailOrder.ecom_order_id && <div><span className="text-slate-500">Mã sàn: </span><span className="font-bold text-slate-900 break-all">{detailOrder.ecom_order_id}</span></div>}
@@ -1271,8 +1230,8 @@ export default function Mobile() {
                                     <div><span className="text-slate-500">Ngày đóng: </span><span className="font-bold text-slate-900">{detailOrder.packed_at ? formatOrderDate(detailOrder.packed_at) : '—'}</span></div>
                                     <div><span className="text-slate-500">Ngày bàn giao: </span><span className="font-bold text-slate-900">{detailOrder.carrier_date ? formatOrderDate(detailOrder.carrier_date) : '—'}</span></div>
                                 </div>
-                                <div>
-                                    <div className="font-bold text-sm text-slate-900">Sản phẩm</div>
+                                <div className="border-b border-slate-100 pb-3">
+                                    <div className="font-bold text-sm text-slate-900 border-b border-slate-100 pb-1.5">Sản phẩm</div>
                                     {(detailOrder.order_products || []).length === 0 && <div className="text-sm text-slate-400 mt-1">Chưa có sản phẩm</div>}
                                     {(detailOrder.order_products || []).map((p, i) => (
                                         <div key={i} className="flex justify-between gap-2 text-sm py-1 border-b border-slate-100">
@@ -1286,8 +1245,8 @@ export default function Mobile() {
                                     const ship = raw?.shippingAddress;
                                     if (!ship) return null;
                                     return (
-                                        <div>
-                                            <div className="font-bold text-sm text-slate-900">Khách hàng</div>
+                                        <div className="border-b border-slate-100 pb-3">
+                                            <div className="font-bold text-sm text-slate-900 border-b border-slate-100 pb-1.5">Khách hàng</div>
                                             <div className="text-sm space-y-1 mt-1">
                                                 {ship.name && <div><span className="text-slate-500">Tên: </span><span className="font-bold text-slate-900">{ship.name}</span></div>}
                                                 {ship.mobile && <div><span className="text-slate-500">SĐT: </span><span className="font-bold text-slate-900">{ship.mobile}</span></div>}
@@ -1297,14 +1256,14 @@ export default function Mobile() {
                                     );
                                 })()}
                                 {(detailOrder.description || detailOrder.private_description) && (
-                                    <div>
-                                        <div className="font-bold text-sm text-slate-900">Ghi chú</div>
+                                    <div className="border-b border-slate-100 pb-3">
+                                        <div className="font-bold text-sm text-slate-900 border-b border-slate-100 pb-1.5">Ghi chú</div>
                                         {detailOrder.description && <div className="text-sm text-slate-800 mt-1">{detailOrder.description}</div>}
                                         {detailOrder.private_description && <div className="text-sm text-slate-500 mt-1">Nội bộ: {detailOrder.private_description}</div>}
                                     </div>
                                 )}
                                 <div>
-                                    <div className="font-bold text-sm text-slate-900">Lịch sử đơn hàng</div>
+                                    <div className="font-bold text-sm text-slate-900 border-b border-slate-100 pb-1.5">Lịch sử đơn hàng</div>
                                     {detailHistory.length === 0 && <div className="text-sm text-slate-400 mt-1">Chưa có lịch sử.</div>}
                                     {detailHistory.map(h => (
                                         <div key={h.id} className="text-sm py-1 border-b border-slate-100">

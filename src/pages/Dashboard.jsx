@@ -163,7 +163,7 @@ export default function Dashboard() {
         {/* HEADER & THANH BỘ LỌC NGÀY (Responsive) */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Báo cáo đơn đi hàng ngày</h2>
+            <h2 className="text-[28px] sm:text-3xl font-bold text-slate-900 tracking-tight">Báo cáo đơn đi hàng ngày</h2>
             <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">Tổng quan đơn đi hàng ngày theo khoảng thời gian đã chọn</p>
           </div>
           
@@ -187,33 +187,35 @@ export default function Dashboard() {
 
         {/* KHỐI THẺ KPI (Responsive Grid) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          <div className="p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-transform hover:-translate-y-1">
+          <div className="p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-colors hover:border-slate-300">
             <div className="p-3 sm:p-4 bg-blue-100/70 rounded-2xl text-blue-600 shadow-sm shrink-0">
               <Printer size={24} />
             </div>
             <div>
-              <span className="text-xs sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Tổng đơn đã in</span>
-              <h4 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">{loading ? "..." : totalPrintedInRange} <span className="text-sm sm:text-base font-medium text-slate-400">đơn</span></h4>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tổng đơn đã in</span>
+              <h4 className="text-[28px] leading-tight font-bold text-slate-900 mt-1">{loading ? "..." : totalPrintedInRange} <span className="text-sm sm:text-base font-medium text-slate-400">đơn</span></h4>
+              <p className="text-xs font-semibold text-slate-400 mt-1">TB {loading ? "..." : avgPrinted} đơn/ngày</p>
             </div>
           </div>
 
-          <div className="p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-transform hover:-translate-y-1">
-            <div className="p-3 sm:p-4 bg-emerald-100/70 rounded-2xl text-emerald-600 shadow-sm shrink-0">
+          <div className="p-5 sm:p-6 bg-emerald-50 border-2 border-emerald-300 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-colors hover:border-emerald-400">
+            <div className="p-3 sm:p-4 bg-emerald-100 rounded-2xl text-emerald-700 shadow-sm shrink-0">
               <Truck size={24} />
             </div>
             <div>
-              <span className="text-xs sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Tổng đơn đã đi</span>
-              <h4 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">{loading ? "..." : totalShippedInRange} <span className="text-sm sm:text-base font-medium text-slate-400">đơn</span></h4>
+              <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Tổng đơn đã đi</span>
+              <h4 className="text-[32px] leading-tight font-bold text-slate-900 mt-1">{loading ? "..." : totalShippedInRange} <span className="text-sm sm:text-base font-medium text-slate-500">đơn</span></h4>
+              <p className="text-xs font-semibold text-emerald-700/80 mt-1">TB {loading ? "..." : avgShipped} đơn/ngày</p>
             </div>
           </div>
 
-          <div className="p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-transform hover:-translate-y-1 sm:col-span-2 lg:col-span-1">
+          <div className="p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-colors hover:border-slate-300 sm:col-span-2 lg:col-span-1">
             <div className="p-3 sm:p-4 bg-amber-100/70 rounded-2xl text-amber-600 shadow-sm shrink-0">
               <Layers size={24} />
             </div>
             <div className="flex-1">
-              <span className="text-xs sm:text-xs font-bold text-slate-400 uppercase tracking-wider">Số lượng đơn tồn</span>
-              <div className="text-2xl sm:text-3xl font-bold text-amber-600 mt-1 flex items-baseline gap-x-2">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Số lượng đơn tồn</span>
+              <div className="text-[28px] leading-tight font-bold text-amber-600 mt-1 flex items-baseline gap-x-2">
                 <span>{loading ? "..." : totalPendingNow}</span>
                 <span className="text-sm sm:text-base font-medium text-slate-400">đơn</span>
               </div>
@@ -227,9 +229,10 @@ export default function Dashboard() {
 
         {/* 1. BIỂU ĐỒ BIẾN ĐỘNG (CÓ ĐƯỜNG TRUNG BÌNH) */}
         <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm">
-          <h3 className="text-sm sm:text-base font-bold text-slate-800 uppercase tracking-wider mb-6 flex items-center gap-2">
-            <div className="w-1.5 h-5 bg-blue-600 rounded-full" /> Tương quan Đơn in và Đơn đi
-          </h3>
+          <div className="border-b border-slate-200 pb-4 mb-6 flex items-center gap-2">
+            <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Tương quan Đơn in và Đơn đi</h3>
+          </div>
           <div className="w-full h-64 sm:h-80 -ml-2 sm:ml-0">
             {loading ? (
               <div className="w-full h-full flex items-center justify-center text-slate-400 font-semibold animate-pulse text-xs sm:text-sm">Đang quét phân trang dữ liệu...</div>
@@ -274,14 +277,15 @@ export default function Dashboard() {
           
           {/* 2. BẢNG THỐNG KÊ ĐƠN TỒN */}
           <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col h-[400px] sm:h-[480px]">
-            <h3 className="text-sm sm:text-base font-bold text-slate-800 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <div className="w-1.5 h-5 bg-amber-500 rounded-full" /> Đơn đã in chưa đi
-            </h3>
+            <div className="border-b border-slate-200 pb-4 mb-4 flex items-center gap-2">
+              <div className="w-1.5 h-6 bg-amber-500 rounded-full" />
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight">Đơn đã in chưa đi</h3>
+            </div>
             {/* ️ Bọc overflow-x-auto để cuộn ngang trên mobile */}
             <div className="flex-1 overflow-auto rounded-2xl border border-slate-100 bg-white/50">
               <table className="w-full text-left text-sm border-collapse min-w-[400px]">
                 <thead>
-                  <tr className="bg-slate-50/80 sticky top-0 backdrop-blur-md text-slate-500 font-bold text-xs sm:text-xs uppercase z-10">
+                  <tr className="bg-slate-50/80 sticky top-0 backdrop-blur-md text-slate-500 font-bold text-xs sm:text-xs uppercase z-10 border-b border-slate-200">
                     <th className="p-3 sm:p-4">Ngày in</th>
                     <th className="p-3 sm:p-4 text-center">Trạng thái tồn</th>
                     <th className="p-3 sm:p-4 text-right">Hành động</th>
@@ -323,9 +327,9 @@ export default function Dashboard() {
 
           {/* 3. BÁO CÁO TOP SẢN PHẨM */}
           <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col h-[400px] sm:h-[480px]">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-3">
-              <h3 className="text-sm sm:text-base font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                <div className="w-1.5 h-5 bg-emerald-500 rounded-full" /> Top {topProductLimit} Xuất kho
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-200 pb-4 mb-5 gap-3">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                <div className="w-1.5 h-6 bg-emerald-500 rounded-full" /> Top {topProductLimit} Xuất kho
               </h3>
               <select 
                 value={topProductLimit} 
@@ -382,7 +386,7 @@ export default function Dashboard() {
               
               <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 rounded-t-2xl sm:rounded-t-3xl">
                 <div>
-                  <h4 className="text-base sm:text-lg font-bold text-slate-800">Chi tiết đơn tồn: {selectedModalDate}</h4>
+                  <h4 className="text-lg sm:text-xl font-bold text-slate-900">Chi tiết đơn tồn: {selectedModalDate}</h4>
                   <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">Tìm thấy {modalOrdersList.length} đơn hàng</p>
                 </div>
                 <button 
@@ -397,7 +401,7 @@ export default function Dashboard() {
               <div className="flex-1 overflow-auto p-0 sm:p-6">
                 <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[500px]">
                   <thead>
-                    <tr className="bg-slate-50 text-slate-500 font-bold uppercase text-xs sm:text-xs sticky top-0 z-10">
+                    <tr className="bg-slate-50 text-slate-500 font-bold uppercase text-xs sm:text-xs sticky top-0 z-10 border-b border-slate-200">
                       <th className="p-3 sm:p-4">ID Đơn</th>
                       <th className="p-3 sm:p-4">Mã vận đơn</th>
                       <th className="p-3 sm:p-4">Trạng thái</th>

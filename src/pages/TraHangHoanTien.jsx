@@ -10,11 +10,11 @@ const NHANH_STATUS_NAMES = {
   5: 'Đang hoàn tiền',
 };
 const NHANH_STATUS_BADGE = {
-  1: 'bg-green-100 text-green-800',
-  2: 'bg-amber-100 text-amber-800',
-  3: 'bg-zinc-200 text-zinc-800',
-  4: 'bg-purple-100 text-purple-800',
-  5: 'bg-sky-100 text-sky-800',
+  1: 'bg-green-100 text-green-800 border border-green-200',
+  2: 'bg-amber-100 text-amber-800 border border-amber-200',
+  3: 'bg-zinc-200 text-zinc-800 border border-zinc-300',
+  4: 'bg-purple-100 text-purple-800 border border-purple-200',
+  5: 'bg-sky-100 text-sky-800 border border-sky-200',
 };
 const RETURN_TYPE_NAMES = {
   1: 'Hoàn tiền ngay',
@@ -230,25 +230,25 @@ export default function TraHangHoanTien() {
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
-        <h1 className="text-xl font-bold text-slate-900">Trả hàng hoàn tiền</h1>
-        <p className="text-sm text-slate-500 mt-1">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Trả hàng hoàn tiền</h1>
+        <p className="text-sm text-slate-600 mt-1">
           Yêu cầu trả hàng hoàn tiền trên sàn, đồng bộ từ Nhanh.vn. Bấm vào một dòng để xem chi tiết, lý do và phản hồi của khách.
         </p>
       </div>
 
       {/* Bộ lọc */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
+      <div className="bg-slate-50 rounded-2xl shadow-sm border border-slate-200 p-6">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1">Từ ngày</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Từ ngày</label>
             <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1">Đến ngày</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Đến ngày</label>
             <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1">Sàn</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Sàn</label>
             <select value={platform} onChange={(e) => setPlatform(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
               {PLATFORMS.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
@@ -256,7 +256,7 @@ export default function TraHangHoanTien() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-500 mb-1">Trạng thái Nhanh</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Trạng thái Nhanh</label>
             <select value={status} onChange={(e) => setStatus(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
               <option value="">Tất cả trạng thái</option>
               {Object.entries(NHANH_STATUS_NAMES).map(([id, name]) => (
@@ -265,7 +265,7 @@ export default function TraHangHoanTien() {
             </select>
           </div>
           <div className="flex-1 min-w-[220px]">
-            <label className="block text-xs font-bold text-slate-500 mb-1">Tìm mã đơn trả / ID đơn gốc / mã yêu cầu</label>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Tìm mã đơn trả / ID đơn gốc / mã yêu cầu</label>
             <div className="relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -277,7 +277,7 @@ export default function TraHangHoanTien() {
               />
             </div>
           </div>
-          <button onClick={handleFilter} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl shadow-sm cursor-pointer">Lọc</button>
+          <button onClick={handleFilter} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer">Lọc</button>
         </div>
         <p className="text-xs text-slate-500 mt-3">
           Tổng: <strong className="text-slate-800">{total}</strong> yêu cầu theo bộ lọc. Ngày lọc theo ngày cập nhật trên Nhanh.
@@ -301,17 +301,17 @@ export default function TraHangHoanTien() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500 sticky top-0 z-10">
-                  <th className="px-4 py-3">Ngày cập nhật</th>
-                  <th className="px-4 py-3">Sàn</th>
-                  <th className="px-4 py-3">Mã đơn trả</th>
-                  <th className="px-4 py-3">ID đơn gốc</th>
-                  <th className="px-4 py-3">Sản phẩm</th>
-                  <th className="px-4 py-3">SL</th>
-                  <th className="px-4 py-3">Lý do</th>
-                  <th className="px-4 py-3">Trạng thái Nhanh</th>
-                  <th className="px-4 py-3">Trạng thái sàn</th>
-                  <th className="px-4 py-3 text-right">Tiền hoàn</th>
+                <tr className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500 sticky top-0 z-10">
+                  <th className="px-5 py-3.5">Ngày cập nhật</th>
+                  <th className="px-5 py-3.5">Sàn</th>
+                  <th className="px-5 py-3.5">Mã đơn trả</th>
+                  <th className="px-5 py-3.5">ID đơn gốc</th>
+                  <th className="px-5 py-3.5">Sản phẩm</th>
+                  <th className="px-5 py-3.5">SL</th>
+                  <th className="px-5 py-3.5">Lý do</th>
+                  <th className="px-5 py-3.5">Trạng thái Nhanh</th>
+                  <th className="px-5 py-3.5">Trạng thái sàn</th>
+                  <th className="px-5 py-3.5 text-right">Tiền hoàn</th>
                 </tr>
               </thead>
               <tbody>
@@ -319,23 +319,23 @@ export default function TraHangHoanTien() {
                   const prods = productsOf(r);
                   const first = prods[0];
                   return (
-                    <tr key={r.return_id} onClick={() => openDetail(r)} className="border-t border-slate-100 hover:bg-slate-50 cursor-pointer">
-                      <td className="px-4 py-3 whitespace-nowrap font-medium">{fmtDateTime(r.return_updated_at)}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">{r.platform_name || '—'}</td>
-                      <td className="px-4 py-3 font-bold text-indigo-700">{r.return_tracking_number || r.return_id}</td>
-                      <td className="px-4 py-3">{r.original_ecom_order_id || '—'}</td>
-                      <td className="px-4 py-3">
+                    <tr key={r.return_id} onClick={() => openDetail(r)} className="border-t border-slate-100 hover:bg-slate-100 cursor-pointer">
+                      <td className="px-5 py-3.5 whitespace-nowrap font-medium">{fmtDateTime(r.return_updated_at)}</td>
+                      <td className="px-5 py-3.5 whitespace-nowrap">{r.platform_name || '—'}</td>
+                      <td className="px-5 py-3.5 font-mono font-bold text-indigo-700">{r.return_tracking_number || r.return_id}</td>
+                      <td className="px-5 py-3.5 font-mono">{r.original_ecom_order_id || '—'}</td>
+                      <td className="px-5 py-3.5">
                         {first ? (<span>{first.name}{prods.length > 1 ? ` (+${prods.length - 1} SP)` : ''}</span>) : '—'}
                       </td>
-                      <td className="px-4 py-3 font-bold">{totalQty(r) || '—'}</td>
-                      <td className="px-4 py-3">{r.reason_name || '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${NHANH_STATUS_BADGE[r.nhanh_status_id] || 'bg-slate-100 text-slate-700'}`}>
+                      <td className="px-5 py-3.5 font-bold">{totalQty(r) || '—'}</td>
+                      <td className="px-5 py-3.5">{r.reason_name || '—'}</td>
+                      <td className="px-5 py-3.5 whitespace-nowrap">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${NHANH_STATUS_BADGE[r.nhanh_status_id] || 'bg-slate-100 text-slate-700'}`}>
                           {r.nhanh_status_name || NHANH_STATUS_NAMES[r.nhanh_status_id] || '—'}
                         </span>
                       </td>
-                      <td className="px-4 py-3">{r.ecom_status_name || '—'}</td>
-                      <td className="px-4 py-3 text-right font-bold">{fmtMoney(r.amount)}</td>
+                      <td className="px-5 py-3.5">{r.ecom_status_name || '—'}</td>
+                      <td className="px-5 py-3.5 text-right font-mono font-bold">{fmtMoney(r.amount)}</td>
                     </tr>
                   );
                 })}
@@ -346,15 +346,15 @@ export default function TraHangHoanTien() {
         <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
           <span className="text-xs font-bold text-slate-500">Trang {page} / {totalPages} — {total} yêu cầu</span>
           <div className="flex gap-2">
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-200 disabled:opacity-40 cursor-pointer flex items-center gap-1"><ChevronLeft size={14} /> Trước</button>
-            <button disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-200 disabled:opacity-40 cursor-pointer flex items-center gap-1">Sau <ChevronRight size={14} /></button>
+            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1"><ChevronLeft size={14} /> Trước</button>
+            <button disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1">Sau <ChevronRight size={14} /></button>
           </div>
         </div>
       </div>
 
       {/* Đối soát shipper */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
-        <h2 className="text-base font-bold text-slate-900 flex items-center gap-2"><ScanLine size={18} /> Đối soát shipper</h2>
+        <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100"><ScanLine size={18} /> Đối soát shipper</h2>
         <p className="text-xs text-slate-500 mt-1">
           Shipper trả bao nhiêu kiện thì bắn mã vạch từng kiện vào đây, hệ thống đối chiếu với danh sách đơn trả trong ngày.
           Đối soát theo dữ liệu Nhanh; check trạng thái thành công theo hãng vận chuyển sẽ bổ sung sau.
@@ -374,8 +374,8 @@ export default function TraHangHoanTien() {
               className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium"
             />
           </div>
-          <button onClick={() => { if (scanInput.trim()) { addCode(scanInput); setScanInput(''); } }} disabled={scanBusy} className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl shadow-sm disabled:opacity-50 cursor-pointer">Thêm mã</button>
-          <button onClick={() => setScanned([])} className="px-4 py-2.5 text-sm font-bold rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer flex items-center gap-1"><Trash2 size={14} /> Xóa hết</button>
+          <button onClick={() => { if (scanInput.trim()) { addCode(scanInput); setScanInput(''); } }} disabled={scanBusy} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md disabled:opacity-50 cursor-pointer">Thêm mã</button>
+          <button onClick={() => setScanned([])} className="px-4 py-2.5 text-sm font-bold rounded-xl border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer flex items-center gap-1"><Trash2 size={14} /> Xóa hết</button>
         </div>
         <div className="mt-3">
           <label className="block text-xs font-bold text-slate-500 mb-1">Hoặc dán nhiều mã (mỗi dòng 1 mã, tối đa 100 mã)</label>
@@ -384,10 +384,10 @@ export default function TraHangHoanTien() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5">
-          <div className="bg-slate-50 rounded-xl p-4"><div className="text-2xl font-bold text-slate-900">{scanned.length}</div><div className="text-xs font-bold text-slate-500">Đã quét</div></div>
-          <div className="bg-green-50 rounded-xl p-4"><div className="text-2xl font-bold text-green-700">{matchedCount}</div><div className="text-xs font-bold text-slate-500">Khớp trong hệ thống</div></div>
-          <div className="bg-red-50 rounded-xl p-4"><div className="text-2xl font-bold text-red-600">{unknownCount}</div><div className="text-xs font-bold text-slate-500">Mã lạ (không có trong hệ thống)</div></div>
-          <div className="bg-amber-50 rounded-xl p-4"><div className="text-2xl font-bold text-amber-700">{missingRows.length}</div><div className="text-xs font-bold text-slate-500">Trong ngày chưa quét</div></div>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4"><div className="text-3xl font-bold text-slate-900">{scanned.length}</div><div className="text-xs font-bold text-slate-500">Đã quét</div></div>
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4"><div className="text-3xl font-bold text-green-700">{matchedCount}</div><div className="text-xs font-bold text-slate-500">Khớp trong hệ thống</div></div>
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4"><div className="text-3xl font-bold text-red-600">{unknownCount}</div><div className="text-xs font-bold text-slate-500">Mã lạ (không có trong hệ thống)</div></div>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4"><div className="text-3xl font-bold text-amber-700">{missingRows.length}</div><div className="text-xs font-bold text-slate-500">Trong ngày chưa quét</div></div>
         </div>
         {reconLoading && <p className="text-xs font-bold text-slate-500 mt-3 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Đang tải danh sách trong ngày...</p>}
 
@@ -408,7 +408,7 @@ export default function TraHangHoanTien() {
                 <tbody>
                   {scanned.map((s) => (
                     <tr key={s.norm} className="border-t border-slate-100">
-                      <td className="px-4 py-2 font-bold">{s.code}</td>
+                      <td className="px-4 py-3 font-mono font-bold">{s.code}</td>
                       <td className="px-4 py-2">
                         {s.found
                           ? (<span className="text-xs font-bold text-green-700">Khớp{s.today ? ' (hôm nay)' : ' (ngày khác)'}</span>)
@@ -443,7 +443,7 @@ export default function TraHangHoanTien() {
                 <tbody>
                   {missingRows.map((r) => (
                     <tr key={r.return_id} className="border-t border-slate-100">
-                      <td className="px-4 py-2 font-bold">{r.return_tracking_number || r.return_id}</td>
+                      <td className="px-4 py-3 font-mono font-bold">{r.return_tracking_number || r.return_id}</td>
                       <td className="px-4 py-2">{r.original_ecom_order_id || '—'}</td>
                       <td className="px-4 py-2">{r.platform_name || '—'}</td>
                       <td className="px-4 py-2">{r.nhanh_status_name || NHANH_STATUS_NAMES[r.nhanh_status_id] || '—'}</td>
@@ -462,7 +462,7 @@ export default function TraHangHoanTien() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-y-auto p-6 sm:p-8" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">Chi tiết yêu cầu trả hàng</h2>
+                <h2 className="text-xl font-bold tracking-tight text-slate-900">Chi tiết yêu cầu trả hàng</h2>
                 <p className="text-sm text-slate-500">Mã yêu cầu: <strong className="text-slate-800">{selected.return_id}</strong></p>
               </div>
               <button onClick={() => setSelected(null)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={20} /></button>

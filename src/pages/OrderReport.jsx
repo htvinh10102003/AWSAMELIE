@@ -219,7 +219,7 @@ const MultiSelect = ({ options, selected, onChange, placeholder }) => {
 
     return (
         <div className="relative w-full" ref={ref}>
-            <button type="button" onClick={() => setIsOpen(!isOpen)} className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white hover:bg-slate-50 focus:border-slate-700 focus:ring-1 focus:ring-slate-500 transition-all text-left flex items-center justify-between shadow-sm">
+            <button type="button" onClick={() => setIsOpen(!isOpen)} className="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-xl bg-white hover:bg-slate-50 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500 transition-all text-left flex items-center justify-between shadow-sm">
                 <span className={`truncate mr-2 ${selected.length === 0 ? 'text-slate-400' : 'text-slate-700 font-medium'}`}>{selected.length === 0 ? placeholder : `Đã chọn ${selected.length}`}</span>
                 <ChevronDown size={14} className="text-slate-400 shrink-0" />
             </button>
@@ -1936,10 +1936,10 @@ export default function OrderReport() {
             <div className="max-w-[1400px] mx-auto space-y-6">
                 
                 {/* Header Area */}
-                <div className="flex flex-wrap justify-between items-center gap-4 bg-white border border-slate-200 rounded-2xl px-6 py-5 shadow-sm">
+                <div className="flex flex-wrap justify-between items-center gap-4 bg-slate-900 border border-slate-900 rounded-2xl px-6 py-6 shadow-md">
                     <div>
-                        <h2 className="text-xl font-bold text-slate-800">Quản lý kho & Đơn hàng</h2>
-                        <p className="text-slate-500 text-sm mt-1">Phân bổ tự động dựa trên tồn kho thực tế</p>
+                        <h2 className="text-2xl font-bold tracking-tight text-white">Quản lý kho & Đơn hàng</h2>
+                        <p className="text-slate-300 text-sm mt-1">Phân bổ tự động dựa trên tồn kho thực tế</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                         {isOwner && (
@@ -1957,26 +1957,26 @@ export default function OrderReport() {
                         )}
                         {isOwner && (
                             <div
-                                className="flex items-center gap-2 bg-white border border-slate-300 rounded-lg px-3 py-2 shadow-sm"
+                                className="flex items-center gap-2 bg-white/10 border border-white/20 rounded-xl px-3 py-2"
                                 title="Chỉ Owner thấy nút gạt này. Bật để xem báo cáo đặc biệt, tắt để quay về báo cáo cũ."
                             >
-                                <span className={`text-sm font-bold ${!specialMode ? 'text-slate-900' : 'text-slate-400'}`}>Báo cáo cũ</span>
+                                <span className={`text-sm font-bold ${!specialMode ? 'text-white' : 'text-slate-400'}`}>Báo cáo cũ</span>
                                 <button
                                     type="button"
                                     role="switch"
                                     aria-checked={specialMode}
                                     onClick={handleToggleSpecialMode}
-                                    className={`relative w-12 h-6 rounded-full transition-colors shrink-0 cursor-pointer ${specialMode ? 'bg-slate-900' : 'bg-slate-300'}`}
+                                    className={`relative w-12 h-6 rounded-full transition-colors shrink-0 cursor-pointer ${specialMode ? 'bg-emerald-500' : 'bg-slate-600'}`}
                                 >
                                     <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${specialMode ? 'left-6' : 'left-0.5'}`} />
                                 </button>
-                                <span className={`text-sm font-bold ${specialMode ? 'text-slate-900' : 'text-slate-400'}`}>Báo cáo đặc biệt</span>
+                                <span className={`text-sm font-bold ${specialMode ? 'text-white' : 'text-slate-400'}`}>Báo cáo đặc biệt</span>
                             </div>
                         )}
                         <button
                             onClick={() => fetchAllocation(statusDict)}
                             disabled={loading || isUpdatingMissingCarrier}
-                            className="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 focus:ring-2 focus:ring-slate-200 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
+                            className="bg-emerald-600 border border-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-700 focus:ring-2 focus:ring-emerald-300 transition-all flex items-center gap-2 shadow-sm disabled:opacity-50"
                         >
                             <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
                             Làm mới dữ liệu
@@ -1988,18 +1988,18 @@ export default function OrderReport() {
                 {specialMode && (
                     <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-3 space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                            <h3 className="text-base font-bold text-slate-800">Báo cáo đặc biệt</h3>
+                            <h3 className="text-lg font-bold tracking-tight text-slate-900">Báo cáo đặc biệt</h3>
                             <div className="flex flex-wrap items-center gap-2">
                                 <label className="flex items-center gap-1 text-xs font-medium text-slate-600">
                                     Từ
-                                    <input type="date" value={specialStartDate} onChange={(e) => setSpecialStartDate(e.target.value)} className="px-2 py-1 text-xs border border-slate-300 rounded-lg outline-none focus:border-slate-700" />
+                                    <input type="date" value={specialStartDate} onChange={(e) => setSpecialStartDate(e.target.value)} className="px-3 py-2 text-sm border border-slate-300 rounded-xl outline-none focus:border-slate-700" />
                                 </label>
                                 <label className="flex items-center gap-1 text-xs font-medium text-slate-600">
                                     Đến
-                                    <input type="date" value={specialEndDate} onChange={(e) => setSpecialEndDate(e.target.value)} className="px-2 py-1 text-xs border border-slate-300 rounded-lg outline-none focus:border-slate-700" />
+                                    <input type="date" value={specialEndDate} onChange={(e) => setSpecialEndDate(e.target.value)} className="px-3 py-2 text-sm border border-slate-300 rounded-xl outline-none focus:border-slate-700" />
                                 </label>
-                                <button onClick={() => setSpecialReloadToken(t => t + 1)} disabled={specialLoading} className="px-2 py-1 bg-slate-700 text-white hover:bg-slate-800 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1">
-                                    <RefreshCw size={13} className={specialLoading ? 'animate-spin' : ''} /> Tải lại
+                                <button onClick={() => setSpecialReloadToken(t => t + 1)} disabled={specialLoading} className="px-3 py-2 bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-bold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2">
+                                    <RefreshCw size={14} className={specialLoading ? 'animate-spin' : ''} /> Tải lại
                                 </button>
                             </div>
                         </div>
@@ -2018,7 +2018,7 @@ export default function OrderReport() {
                                     <button
                                         key={tab.id}
                                         onClick={() => { setSpecialTab(tab.id); setSpecialOnlyMissingPrint(false); }}
-                                        className={`px-3 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 border ${specialTab === tab.id ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                                        className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 border ${specialTab === tab.id ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
                                     >
                                         {tab.label}
                                         <span className={`px-2 py-0.5 rounded-md text-xs font-bold ${specialTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'}`}>{count === null ? '…' : count}</span>
@@ -2046,17 +2046,17 @@ export default function OrderReport() {
 
                 {/* Dashboard Tabs */}
                 {!specialMode && (<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div onClick={() => setActiveTab('printable')} className={`cursor-pointer p-5 rounded-2xl border bg-white flex items-center gap-4 transition-all ${activeTab === 'printable' ? 'ring-2 ring-green-500 border-transparent shadow-md' : 'border-slate-200 hover:border-green-300 shadow-sm'}`}>
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${activeTab === 'printable' ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
-                            <CheckCircle size={24} />
+                    <div onClick={() => setActiveTab('printable')} className={`cursor-pointer p-6 rounded-2xl border bg-emerald-50/60 flex items-center gap-4 transition-all ${activeTab === 'printable' ? 'ring-2 ring-emerald-600 border-emerald-600 shadow-md' : 'border-emerald-200 hover:border-emerald-400 shadow-sm'}`}>
+                        <div className="w-14 h-14 rounded-2xl flex items-center justify-center bg-emerald-600 text-white shadow-sm shrink-0">
+                            <CheckCircle size={26} />
                         </div>
                         <div>
-                            <div className="text-2xl font-bold text-slate-800">{data.printable?.length || 0}</div>
-                            <div className="text-sm text-slate-500 font-medium">Đủ hàng (Có thể in)</div>
+                            <div className="text-3xl font-bold tracking-tight text-slate-900">{data.printable?.length || 0}</div>
+                            <div className="text-sm text-slate-700 font-bold">Đủ hàng (Có thể in)</div>
                         </div>
                     </div>
-                    <div onClick={() => setActiveTab('holding')} className={`cursor-pointer p-5 rounded-2xl border bg-white flex items-center gap-4 transition-all ${activeTab === 'holding' ? 'ring-2 ring-yellow-500 border-transparent shadow-md' : 'border-slate-200 hover:border-yellow-300 shadow-sm'}`}>
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${activeTab === 'holding' ? 'bg-yellow-100 text-yellow-600' : 'bg-slate-100 text-slate-500'}`}>
+                    <div onClick={() => setActiveTab('holding')} className={`cursor-pointer p-5 rounded-2xl border bg-white flex items-center gap-4 transition-all ${activeTab === 'holding' ? 'ring-2 ring-amber-500 border-transparent shadow-md' : 'border-slate-200 hover:border-amber-300 shadow-sm'}`}>
+                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-amber-100 text-amber-700 shrink-0">
                             <AlertTriangle size={24} />
                         </div>
                         <div>
@@ -2065,7 +2065,7 @@ export default function OrderReport() {
                         </div>
                     </div>
                     <div onClick={() => setActiveTab('outOfStock')} className={`cursor-pointer p-5 rounded-2xl border bg-white flex items-center gap-4 transition-all ${activeTab === 'outOfStock' ? 'ring-2 ring-red-500 border-transparent shadow-md' : 'border-slate-200 hover:border-red-300 shadow-sm'}`}>
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${activeTab === 'outOfStock' ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-red-100 text-red-600 shrink-0">
                             <XCircle size={24} />
                         </div>
                         <div>
@@ -2085,23 +2085,23 @@ export default function OrderReport() {
                 )}
 
                 {/* Filters & Actions Bar */}
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 space-y-4">
+                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="flex flex-wrap items-center gap-3 flex-1">
                             {/* Search Inputs */}
                             <div className="relative min-w-[240px]">
-                                <input type="text" value={searchId} onChange={(e) => setSearchId(e.target.value)} placeholder="Tìm ID, Mã Sàn, Mã Vận Đơn..." className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-slate-700 focus:ring-1 focus:ring-slate-500 bg-slate-50 hover:bg-white transition-colors" />
+                                <input type="text" value={searchId} onChange={(e) => setSearchId(e.target.value)} placeholder="Tìm ID, Mã Sàn, Mã Vận Đơn..." className="w-full pl-10 pr-3 py-2.5 text-sm border border-slate-300 rounded-xl outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500 bg-white transition-colors" />
                                 <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
                             </div>
                             {specialMode ? (
-                                <button onClick={() => setShowFilterPopup(true)} className="px-4 py-2 bg-white border border-slate-300 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                                <button onClick={() => setShowFilterPopup(true)} className="px-4 py-2.5 bg-emerald-600 border border-emerald-600 rounded-xl text-sm font-bold text-white hover:bg-emerald-700 flex items-center gap-2 shadow-sm">
                                     Bộ lọc
-                                    {activeFilterCount > 0 && <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-slate-900 text-white">{activeFilterCount}</span>}
+                                    {activeFilterCount > 0 && <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-white/20 text-white">{activeFilterCount}</span>}
                                 </button>
                             ) : (
                                 <>
                                     <div className="relative min-w-[200px]">
-                                        <input type="text" value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} placeholder="Tìm tên/mã SP..." className="w-full pl-9 pr-3 py-2 text-sm border border-slate-300 rounded-lg outline-none focus:border-slate-700 focus:ring-1 focus:ring-slate-500 bg-slate-50 hover:bg-white transition-colors" />
+                                        <input type="text" value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} placeholder="Tìm tên/mã SP..." className="w-full pl-10 pr-3 py-2.5 text-sm border border-slate-300 rounded-xl outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500 bg-white transition-colors" />
                                         <PackageSearch className="absolute left-3 top-2.5 text-slate-400" size={16} />
                                     </div>
                                     <div className="w-[150px]">
@@ -2130,7 +2130,7 @@ export default function OrderReport() {
                                 <button 
                                     onClick={() => setShowCopyMenu(!showCopyMenu)} 
                                     disabled={copyTargetCount === 0} 
-                                    className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${copyTargetCount > 0 ? 'bg-slate-700 text-white hover:bg-slate-800' : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'}`}
+                                    className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${copyTargetCount > 0 ? 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50' : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'}`}
                                 >
                                     <Copy size={15} /> Copy ({copyTargetCount}) <ChevronDown size={14} />
                                 </button>
@@ -2174,7 +2174,7 @@ export default function OrderReport() {
                             <button
                                 onClick={handleExportExcel}
                                 disabled={isExporting || targetOrdersAction.length === 0}
-                                className={`px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-sm ${targetOrdersAction.length > 0 ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'}`}
+                                className={`px-4 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-sm ${targetOrdersAction.length > 0 ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'}`}
                             >
                                 {isExporting ? <RefreshCw size={15} className="animate-spin" /> : <Download size={15} />} 
                                 Xuất Excel
@@ -2205,7 +2205,7 @@ export default function OrderReport() {
                                             <button 
                                                 onClick={handleSaveColumnConfig}
                                                 disabled={isSavingCols}
-                                                className="w-full py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-xl text-sm font-bold transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
+                                                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-colors flex justify-center items-center gap-2 disabled:opacity-70"
                                             >
                                                 {isSavingCols ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
                                                 Lưu cấu hình
@@ -2217,14 +2217,14 @@ export default function OrderReport() {
 
                             {/* Lịch sử gửi sang hãng: chỉ owner, để gửi xong lỡ load lại trang vẫn mở ra check lại được */}
                             {isOwner && (
-                                <button onClick={handleOpenSendHistory} className="px-4 py-2 rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50">
+                                <button onClick={handleOpenSendHistory} className="px-4 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-sm bg-white border border-slate-300 text-slate-700 hover:bg-slate-50">
                                     <Send size={15} /> Lịch sử gửi
                                 </button>
                             )}
 
                             {/* Actions Dropdown */}
                             <div className="relative" onMouseLeave={() => setShowActionMenu(false)}>
-                                <button onClick={() => setShowActionMenu(!showActionMenu)} disabled={selectedOrders.length === 0 || sendingOrder || updatingSelected} className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${selectedOrders.length > 0 ? 'bg-slate-700 text-white hover:bg-slate-800' : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'}`}>
+                                <button onClick={() => setShowActionMenu(!showActionMenu)} disabled={selectedOrders.length === 0 || sendingOrder || updatingSelected} className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${selectedOrders.length > 0 ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'}`}>
                                     {sendingOrder || updatingSelected ? <RefreshCw size={16} className="animate-spin" /> : "Thao tác"} ({selectedOrders.length}) <ChevronDown size={14} />
                                 </button>
                                 {showActionMenu && selectedOrders.length > 0 && (
@@ -2247,15 +2247,15 @@ export default function OrderReport() {
                         </div>
                     </div>
 
-                    {!specialMode && (<div className="flex flex-wrap items-center gap-3 pt-2 border-t border-slate-100">
-                        <input type="text" value={searchNote} onChange={(e) => setSearchNote(e.target.value)} placeholder="Lọc nội dung ghi chú..." className="w-[240px] px-3 py-1.5 text-sm border border-slate-300 rounded-lg outline-none focus:border-slate-700 focus:ring-1 focus:ring-slate-500 bg-slate-50 hover:bg-white" />
-                        <input type="text" value={searchCustomer} onChange={(e) => setSearchCustomer(e.target.value)} placeholder="Tìm tên khách / SĐT..." className="w-[240px] px-3 py-1.5 text-sm border border-slate-300 rounded-lg outline-none focus:border-slate-700 focus:ring-1 focus:ring-slate-500 bg-slate-50 hover:bg-white" />
-                        <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className="w-[160px] px-3 py-1.5 text-sm border border-slate-300 rounded-lg outline-none focus:border-slate-700 focus:ring-1 focus:ring-slate-500 bg-slate-50">
+                    {!specialMode && (<div className="flex flex-wrap items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl px-3 py-3">
+                        <input type="text" value={searchNote} onChange={(e) => setSearchNote(e.target.value)} placeholder="Lọc nội dung ghi chú..." className="w-[240px] px-3 py-2 text-sm border border-slate-300 rounded-xl outline-none focus:border-slate-700 focus:ring-1 focus:ring-slate-500 bg-white hover:bg-white" />
+                        <input type="text" value={searchCustomer} onChange={(e) => setSearchCustomer(e.target.value)} placeholder="Tìm tên khách / SĐT..." className="w-[240px] px-3 py-2 text-sm border border-slate-300 rounded-xl outline-none focus:border-slate-700 focus:ring-1 focus:ring-slate-500 bg-white hover:bg-white" />
+                        <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className="w-[160px] px-3 py-2 text-sm border border-slate-300 rounded-xl outline-none focus:border-slate-700 focus:ring-1 focus:ring-slate-500 bg-white">
                             <option value="">Sắp xếp mặc định</option>
                             <option value="asc">Cũ nhất trước</option>
                             <option value="desc">Mới nhất trước</option>
                         </select>
-                        <select value={printedFilter} onChange={(e) => setPrintedFilter(e.target.value)} className="w-[180px] px-3 py-1.5 text-sm border border-slate-300 rounded-lg outline-none focus:border-slate-700 focus:ring-1 focus:ring-slate-500 bg-slate-50">
+                        <select value={printedFilter} onChange={(e) => setPrintedFilter(e.target.value)} className="w-[180px] px-3 py-2 text-sm border border-slate-300 rounded-xl outline-none focus:border-slate-700 focus:ring-1 focus:ring-slate-500 bg-white">
                             <option value="">Lọc theo Trạng thái in</option>
                             <option value="not_printed">Chưa có ngày in gần nhất</option>
                             <option value="printed">Đã có ngày in</option>
@@ -2283,9 +2283,9 @@ export default function OrderReport() {
                 {specialMode && showFilterPopup && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50" onClick={() => setShowFilterPopup(false)}>
                         <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-                            <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                                <h3 className="font-bold text-slate-800">Bộ lọc</h3>
-                                <button onClick={() => setShowFilterPopup(false)} className="text-slate-400 hover:text-slate-600"><XCircle size={20} /></button>
+                            <div className="px-6 py-4 border-b border-slate-900 flex justify-between items-center bg-slate-900">
+                                <h3 className="font-bold text-white">Bộ lọc</h3>
+                                <button onClick={() => setShowFilterPopup(false)} className="text-slate-300 hover:text-white"><XCircle size={20} /></button>
                             </div>
                             <div className="p-5 overflow-y-auto space-y-4">
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2328,7 +2328,7 @@ export default function OrderReport() {
                             </div>
                             <div className="px-5 py-4 border-t border-slate-200 flex justify-between gap-3">
                                 <button onClick={handleClearSpecialFilters} className="px-4 py-2 bg-white border border-slate-300 rounded-lg text-sm font-bold text-slate-700 hover:bg-slate-50">Xóa bộ lọc</button>
-                                <button onClick={() => setShowFilterPopup(false)} className="px-4 py-2 bg-slate-700 text-white rounded-lg text-sm font-bold hover:bg-slate-800">Áp dụng</button>
+                                <button onClick={() => setShowFilterPopup(false)} className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700">Áp dụng</button>
                             </div>
                         </div>
                     </div>
@@ -2352,23 +2352,23 @@ export default function OrderReport() {
                             <div className="p-16 text-center text-slate-400 text-sm">Không tìm thấy đơn hàng nào phù hợp.</div>
                         ) : (
                             <table className="w-full text-sm text-left border-collapse">
-                                <thead className="sticky top-0 z-10 bg-slate-50 border-b border-slate-200 text-slate-600">
+                                <thead className="sticky top-0 z-10 bg-slate-900 border-b border-slate-900 text-slate-100">
                                     <tr>
-                                        <th className="py-3 px-4 w-12 text-center">
-                                            <input type="checkbox" checked={isAllSelected} onChange={handleSelectAll} className="w-4 h-4 text-slate-700 rounded border-slate-300 focus:ring-slate-500 cursor-pointer" />
+                                        <th className="py-3.5 px-5 w-12 text-center">
+                                            <input type="checkbox" checked={isAllSelected} onChange={handleSelectAll} className="w-4 h-4 rounded border-slate-400 cursor-pointer" />
                                         </th>
-                                        <th className="py-3 px-4 font-semibold whitespace-nowrap min-w-[140px]">Thông tin Đơn</th>
-                                        
-                                        {visibleCols.includes('carrier') && <th className="py-3 px-4 font-semibold whitespace-nowrap">Vận chuyển</th>}
-                                        {visibleCols.includes('source') && <th className="py-3 px-4 font-semibold whitespace-nowrap">Kênh & Nguồn</th>}
-                                        {visibleCols.includes('notes') && <th className="py-3 px-4 font-semibold w-64">Ghi chú</th>}
-                                        
-                                        <th className="py-3 px-4 font-semibold min-w-[200px]">Sản phẩm</th>
-                                        <th className="py-3 px-4 font-semibold text-center whitespace-nowrap w-24">Số lượng</th>
-                                        
-                                        {specialMode && <th className="py-3 px-4 font-semibold whitespace-nowrap">Tình trạng kho / Ngày tồn</th>}
-                                        {!specialMode && visibleCols.includes('aging') && <th className="py-3 px-4 font-semibold whitespace-nowrap">{activeTab === 'printable' ? 'Ngày tồn' : 'Kho / Thiếu'}</th>}
-                                        {visibleCols.includes('creator') && <th className="py-3 px-4 font-semibold text-center whitespace-nowrap">Nhân viên</th>}
+                                        <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap min-w-[140px]">Thông tin Đơn</th>
+
+                                        {visibleCols.includes('carrier') && <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap">Vận chuyển</th>}
+                                        {visibleCols.includes('source') && <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap">Kênh & Nguồn</th>}
+                                        {visibleCols.includes('notes') && <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider w-64">Ghi chú</th>}
+
+                                        <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider min-w-[200px]">Sản phẩm</th>
+                                        <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider text-center whitespace-nowrap w-24">Số lượng</th>
+
+                                        {specialMode && <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap">Tình trạng kho / Ngày tồn</th>}
+                                        {!specialMode && visibleCols.includes('aging') && <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap">{activeTab === 'printable' ? 'Ngày tồn' : 'Kho / Thiếu'}</th>}
+                                        {visibleCols.includes('creator') && <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider text-center whitespace-nowrap">Nhân viên</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -2390,24 +2390,24 @@ export default function OrderReport() {
 
                                             return (
                                                 <tr key={`${order.id}-${index}`} 
-                                                    className={`${isChecked ? 'bg-slate-100' : isAgingOrder ? 'bg-red-50/40' : 'hover:bg-slate-50/50'} transition-colors`}
+                                                    className={`${isChecked ? 'bg-emerald-50' : isAgingOrder ? 'bg-red-50/40' : 'hover:bg-slate-50'} transition-colors`}
                                                 >
                                                     {/* Cột 1: Checkbox */}
                                                     {index === 0 && (
-                                                        <td rowSpan={rowCount} className="py-3 px-4 align-top border-r border-slate-100 text-center">
+                                                        <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-slate-100 text-center">
                                                             <input type="checkbox" checked={isChecked} onChange={() => handleSelectOne(order.id)} className="w-4 h-4 mt-1 text-slate-700 rounded border-slate-300 focus:ring-slate-500 cursor-pointer" />
                                                         </td>
                                                     )}
 
                                                     {/* Cột 2: Gộp ID */}
                                                     {index === 0 && (
-                                                        <td rowSpan={rowCount} className="py-3 px-4 align-top border-r border-slate-100">
+                                                        <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-slate-100">
                                                             {specialMode ? (
-                                                                <button className="font-mono font-bold text-blue-700 hover:underline mb-1 text-left" onClick={() => openOrderDetail(order)} title="Bấm để xem popup chi tiết đơn">
+                                                                <button className="font-mono font-bold text-base text-blue-700 hover:underline mb-1 text-left" onClick={() => openOrderDetail(order)} title="Bấm để xem popup chi tiết đơn">
                                                                     {order.id}
                                                                 </button>
                                                             ) : (
-                                                                <div className="font-mono font-bold text-slate-800 cursor-pointer hover:text-blue-600 mb-1" onClick={() => handleSelectOne(order.id)}>
+                                                                <div className="font-mono font-bold text-base text-slate-900 cursor-pointer hover:text-blue-600 mb-1" onClick={() => handleSelectOne(order.id)}>
                                                                     {order.id}
                                                                 </div>
                                                             )}
@@ -2439,10 +2439,10 @@ export default function OrderReport() {
 
                                                     {/* Cột 3 (Tùy chọn): Vận chuyển */}
                                                     {index === 0 && visibleCols.includes('carrier') && (
-                                                        <td rowSpan={rowCount} className="py-3 px-4 align-top border-r border-slate-100">
+                                                        <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-slate-100">
                                                             <div className="font-semibold text-slate-700 text-sm mb-1.5">{order.carrier_name || 'Chưa phân bổ'}</div>
                                                             <div className="group flex items-center gap-1">
-                                                                <div className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium ${statusColorClass}`}>
+                                                                <div className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${statusColorClass}`}>
                                                                     {statusName}
                                                                 </div>
                                                                 {isOwner && (
@@ -2454,8 +2454,8 @@ export default function OrderReport() {
 
                                                     {/* Cột 4 (Tùy chọn): Kênh & Nguồn */}
                                                     {index === 0 && visibleCols.includes('source') && (
-                                                        <td rowSpan={rowCount} className="py-3 px-4 align-top border-r border-slate-100">
-                                                            <div className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium border mb-1.5 ${channelColorClass}`}>
+                                                        <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-slate-100">
+                                                            <div className={`inline-block px-3 py-1 rounded-full text-xs font-bold border mb-1.5 ${channelColorClass}`}>
                                                                 {channelName}
                                                             </div>
                                                             {order.traffic_source && (
@@ -2468,7 +2468,7 @@ export default function OrderReport() {
 
                                                     {/* Cột 5 (Tùy chọn): Ghi chú */}
                                                     {index === 0 && visibleCols.includes('notes') && (
-                                                        <td rowSpan={rowCount} className="py-3 px-4 align-top border-r border-slate-100">
+                                                        <td rowSpan={rowCount} className="py-4 px-5 align-top border-r border-slate-100">
                                                             <div className="group space-y-1.5 text-xs">
                                                                 {order.description && (
                                                                     <div className="flex gap-1.5 text-slate-700">
@@ -2493,19 +2493,19 @@ export default function OrderReport() {
                                                     )}
 
                                                     {/* Cột 6: Sản phẩm */}
-                                                    <td className="py-2.5 px-4 align-top">
+                                                    <td className="py-3.5 px-5 align-top">
                                                         <div className="font-medium text-slate-800 text-sm leading-tight mb-1">{prod.product_name}</div>
                                                         <div className="text-xs text-slate-500 font-mono">{prod.product_code}</div>
                                                     </td>
 
                                                     {/* Cột 7: Số lượng */}
-                                                    <td className="py-2.5 px-4 align-top text-center font-bold text-slate-900">
+                                                    <td className="py-3.5 px-5 align-top text-center font-bold text-slate-900">
                                                         {prod.quantity}
                                                     </td>
 
                                                     {/* Cột 8: Báo cáo đặc biệt luôn hiển thị tình trạng kho, báo cáo cũ giữ theo cột đã chọn */}
                                                     {specialMode && index === 0 && (
-                                                        <td rowSpan={rowCount} className="py-3 px-4 align-top">
+                                                        <td rowSpan={rowCount} className="py-4 px-5 align-top">
                                                             {getStockBadge(order)}
                                                             {/* Chỉ đơn đủ hàng mới có ngày tồn, lấy từ dòng allocation
                                                                 (cùng giá trị printable_date như báo cáo cũ); không có
@@ -2517,7 +2517,7 @@ export default function OrderReport() {
                                                         </td>
                                                     )}
                                                     {!specialMode && visibleCols.includes('aging') && (
-                                                        <td className="py-2.5 px-4 align-top">
+                                                        <td className="py-3.5 px-5 align-top">
                                                             {activeTab === 'printable' ? (
                                                                 renderAgingBadge(order.printable_date)
                                                             ) : shortItem ? (
@@ -2535,7 +2535,7 @@ export default function OrderReport() {
 
                                                     {/* Cột 9 (Tùy chọn): Nhân viên */}
                                                     {index === 0 && visibleCols.includes('creator') && (
-                                                        <td rowSpan={rowCount} className="py-3 px-4 align-top text-center border-l border-slate-100">
+                                                        <td rowSpan={rowCount} className="py-4 px-5 align-top text-center border-l border-slate-100">
                                                             <div className="inline-flex items-center gap-1.5 text-slate-600 bg-slate-50 px-2 py-1 rounded text-xs">
                                                                 <User size={13} className="text-slate-400 shrink-0" /> 
                                                                 <span title={order.created_by_name || 'Hệ thống'}>{order.created_by_name || 'Hệ thống'}</span>
@@ -2623,25 +2623,25 @@ export default function OrderReport() {
                 // không có thì khớp tên (đã tải trong openOrderDetail).
                 const prodLocation = (p) => (p.code ? productLocations[`code:${p.code}`] : null) || (p.name ? productLocations[`name:${p.name}`] : null);
                 const DetailRow = ({ label, value }) => (
-                    <div className="flex flex-col gap-0.5 py-2 border-b border-slate-100 last:border-0">
-                        <span className="text-xs font-medium text-slate-500">{label}</span>
+                    <div className="flex flex-col gap-0.5 py-2.5 border-b border-slate-100 last:border-0">
+                        <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{label}</span>
                         <span className={`text-sm font-semibold text-slate-800 whitespace-pre-line break-words ${(label === 'Mã vận đơn' || label === 'ID đơn sàn') ? 'font-mono' : ''}`}>{value}</span>
                     </div>
                 );
                 return (
                     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50" onClick={() => setDetailOrder(null)}>
                         <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-                            <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-start bg-slate-50">
+                            <div className="px-6 py-5 border-b border-slate-900 flex justify-between items-start bg-slate-900">
                                 <div>
-                                    <h3 className="font-bold text-lg text-slate-800">Chi tiết đơn hàng #{detailOrder.id}</h3>
-                                    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                                        <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium ${STATUS_COLORS[base.status] || 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{statusName}</span>
-                                        <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium border ${CHANNEL_COLORS[base.sale_channel] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{channelName}</span>
+                                    <h3 className="font-bold text-xl tracking-tight text-white">Chi tiết đơn hàng #{detailOrder.id}</h3>
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${STATUS_COLORS[base.status] || 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{statusName}</span>
+                                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold border ${CHANNEL_COLORS[base.sale_channel] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{channelName}</span>
                                         {getStockBadge(detailOrder)}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0 relative">
-                                    <button onClick={() => setShowDetailActionMenu(v => !v)} className="px-3 py-1.5 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800">Thao tác</button>
+                                    <button onClick={() => setShowDetailActionMenu(v => !v)} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700">Thao tác</button>
                                     {showDetailActionMenu && (
                                         <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1" onClick={(e) => e.stopPropagation()}>
                                             {isAdminChannel(detailOrder) && (
@@ -2653,21 +2653,21 @@ export default function OrderReport() {
                                             <button onClick={() => openDetailAction('cancel')} className="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50">Hủy đơn</button>
                                         </div>
                                     )}
-                                    <button onClick={() => setDetailOrder(null)} className="text-slate-400 hover:text-slate-600"><XCircle size={22} /></button>
+                                    <button onClick={() => setDetailOrder(null)} className="text-slate-300 hover:text-white"><XCircle size={22} /></button>
                                 </div>
                             </div>
                             {showDetailPrintChooser && detailOrder && (
                                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50" onClick={() => setShowDetailPrintChooser(false)}>
                                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                                        <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                                            <h3 className="font-bold text-slate-800">Chọn khổ in — #{detailOrder.id}</h3>
-                                            <button onClick={() => setShowDetailPrintChooser(false)} className="text-slate-400 hover:text-slate-600"><XCircle size={20} /></button>
+                                        <div className="px-6 py-4 border-b border-slate-900 flex justify-between items-center bg-slate-900">
+                                            <h3 className="font-bold text-white">Chọn khổ in — #{detailOrder.id}</h3>
+                                            <button onClick={() => setShowDetailPrintChooser(false)} className="text-slate-300 hover:text-white"><XCircle size={20} /></button>
                                         </div>
                                         <div className="p-5 space-y-4">
                                             <div>
                                                 <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">In qua Nhanh.vn</p>
                                                 <div className="flex flex-wrap gap-2">
-                                                    <button onClick={() => { setShowDetailPrintChooser(false); openNhanhPrint([{ id: detailOrder.id, carrier_code: detailOrder.carrier_code || '' }], 'A4'); }} className="px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 flex items-center gap-2"><Printer size={15} /> Khổ A4/A5</button>
+                                                    <button onClick={() => { setShowDetailPrintChooser(false); openNhanhPrint([{ id: detailOrder.id, carrier_code: detailOrder.carrier_code || '' }], 'A4'); }} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 flex items-center gap-2"><Printer size={15} /> Khổ A4/A5</button>
                                                     <button onClick={() => { setShowDetailPrintChooser(false); openNhanhPrint([{ id: detailOrder.id, carrier_code: detailOrder.carrier_code || '' }], 'K80'); }} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> Khổ K80</button>
                                                 </div>
                                             </div>
@@ -2683,7 +2683,7 @@ export default function OrderReport() {
                                     {/* Cột trái: khách hàng, sản phẩm, vận chuyển */}
                                     <div className="space-y-5 min-w-0">
                                         <section className="border border-slate-200 rounded-2xl overflow-hidden">
-                                            <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">Khách hàng</h4>
+                                            <h4 className="px-5 py-3 bg-slate-100 border-b border-slate-200 text-base font-bold text-slate-900">Khách hàng</h4>
                                             <div className="px-4 py-3">
                                                 <p className="font-bold text-slate-900">{shipAddr?.name || 'Chưa có'}</p>
                                                 {shipAddr?.mobile && <p className="text-sm text-slate-600 mt-0.5">{shipAddr.mobile}</p>}
@@ -2701,7 +2701,7 @@ export default function OrderReport() {
                                         </section>
 
                                         <section className="border border-slate-200 rounded-2xl overflow-hidden">
-                                            <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">Sản phẩm</h4>
+                                            <h4 className="px-5 py-3 bg-slate-100 border-b border-slate-200 text-base font-bold text-slate-900">Sản phẩm</h4>
                                             {productsForPopup.length === 0 ? (
                                                 <p className="px-4 py-3 text-sm text-slate-500 font-medium">Đơn này chưa có danh sách sản phẩm trong bảng orders.</p>
                                             ) : (
@@ -2752,7 +2752,7 @@ export default function OrderReport() {
                                         </section>
 
                                         <section className="border border-slate-200 rounded-2xl overflow-hidden">
-                                            <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">{carrier?.name || base.carrier_name || 'Vận chuyển'}</h4>
+                                            <h4 className="px-5 py-3 bg-slate-100 border-b border-slate-200 text-base font-bold text-slate-900">{carrier?.name || base.carrier_name || 'Vận chuyển'}</h4>
                                             <div className="px-4 py-2 grid grid-cols-1 sm:grid-cols-2 gap-x-6">
                                                 <DetailRow label="Mã vận đơn" value={carrier?.carrierCode || base.carrier_code || 'Chưa có'} />
                                                 {carrier?.service?.name && <DetailRow label="Dịch vụ" value={carrier.service.name} />}
@@ -2778,7 +2778,7 @@ export default function OrderReport() {
                                     <div className="space-y-5 min-w-0">
                                         {(payment || carrier) && (
                                             <section className="border border-slate-200 rounded-2xl overflow-hidden">
-                                                <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">Thanh toán</h4>
+                                                <h4 className="px-5 py-3 bg-slate-100 border-b border-slate-200 text-base font-bold text-slate-900">Thanh toán</h4>
                                                 <div className="px-4 py-2 text-sm">
                                                     {carrier?.customerShipFee !== undefined && <div className="flex justify-between py-1"><span className="text-slate-500">Phí ship báo khách</span><span className="font-bold text-slate-800">{fmtMoney(carrier.customerShipFee)}</span></div>}
                                                     {payment && <div className="flex justify-between py-1"><span className="text-slate-500">Chiết khấu</span><span className="font-bold text-red-500">{Number(payment.discount?.amount) ? `- ${fmtMoney(payment.discount?.amount)}` : fmtMoney(payment.discount?.amount)}</span></div>}
@@ -2793,7 +2793,7 @@ export default function OrderReport() {
                                         )}
 
                                         <section className="border border-slate-200 rounded-2xl overflow-hidden">
-                                            <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">Thông tin</h4>
+                                            <h4 className="px-5 py-3 bg-slate-100 border-b border-slate-200 text-base font-bold text-slate-900">Thông tin</h4>
                                             <div className="px-4 py-2">
                                                 <DetailRow label="ID đơn sàn" value={base.ecom_order_id ? String(base.ecom_order_id) : (channel?.ecomOrderId ? String(channel.ecomOrderId) : 'Chưa có')} />
                                                 <DetailRow label="Kênh bán" value={channelName} />
@@ -2813,7 +2813,7 @@ export default function OrderReport() {
                                         </section>
 
                                         <section className="border border-slate-200 rounded-2xl overflow-hidden">
-                                            <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">Lịch trình</h4>
+                                            <h4 className="px-5 py-3 bg-slate-100 border-b border-slate-200 text-base font-bold text-slate-900">Lịch trình</h4>
                                             <div className="px-4 py-3">
                                                 {detailHistoryLoading ? (
                                                     <p className="text-sm text-slate-500 font-medium flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Đang tải lịch sử...</p>
@@ -2854,12 +2854,12 @@ export default function OrderReport() {
                                         </section>
 
                                         <section className="border border-slate-200 rounded-2xl overflow-hidden">
-                                            <h4 className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 text-sm font-bold text-slate-800">Lịch sử Nhanh.vn</h4>
+                                            <h4 className="px-5 py-3 bg-slate-100 border-b border-slate-200 text-base font-bold text-slate-900">Lịch sử Nhanh.vn</h4>
                                             <div className="px-4 py-3">
                                                 {!nhanhHistoryLoaded ? (
                                                     <div className="space-y-2">
                                                         <p className="text-sm text-slate-500">Lịch sử này lấy trực tiếp từ Nhanh.vn, không tự tải khi mở popup.</p>
-                                                        <button onClick={handleLoadNhanhHistory} disabled={nhanhHistoryLoading} className="px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
+                                                        <button onClick={handleLoadNhanhHistory} disabled={nhanhHistoryLoading} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">
                                                             {nhanhHistoryLoading && <RefreshCw size={14} className="animate-spin" />} Tải lịch sử Nhanh
                                                         </button>
                                                         {nhanhHistoryMsg && <p className="text-sm font-medium text-slate-700">{nhanhHistoryMsg}</p>}
@@ -2916,9 +2916,9 @@ export default function OrderReport() {
             {showBulkSendModal && bulkSendResult && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50" onClick={() => setShowBulkSendModal(false)}>
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-                        <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                            <h3 className="font-bold text-slate-800">Kết quả gửi đơn sang hãng</h3>
-                            <button onClick={() => setShowBulkSendModal(false)} className="text-slate-400 hover:text-slate-600"><XCircle size={20} /></button>
+                        <div className="px-6 py-4 border-b border-slate-900 flex justify-between items-center bg-slate-900">
+                            <h3 className="font-bold text-white">Kết quả gửi đơn sang hãng</h3>
+                            <button onClick={() => setShowBulkSendModal(false)} className="text-slate-300 hover:text-white"><XCircle size={20} /></button>
                         </div>
                         <div className="p-5 overflow-y-auto space-y-3">
                             <p className="text-sm font-medium text-slate-700">
@@ -2948,7 +2948,7 @@ export default function OrderReport() {
                             {(bulkSendResult.results || []).filter(r => r.ok).length > 0 && (
                                 <>
                                 <div className="flex gap-2 pt-2">
-                                    <button onClick={() => openNhanhPrint((bulkSendResult.results || []).filter(r => r.ok).map(r => ({ id: r.id, carrier_code: r.carrierCode || '' })), 'A4')} className="px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 flex items-center gap-2"><Printer size={15} /> In đơn hàng (A4/A5)</button>
+                                    <button onClick={() => openNhanhPrint((bulkSendResult.results || []).filter(r => r.ok).map(r => ({ id: r.id, carrier_code: r.carrierCode || '' })), 'A4')} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 flex items-center gap-2"><Printer size={15} /> In đơn hàng (A4/A5)</button>
                                     <button onClick={() => openNhanhPrint((bulkSendResult.results || []).filter(r => r.ok).map(r => ({ id: r.id, carrier_code: r.carrierCode || '' })), 'K80')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In khổ K80</button>
                                 </div>
                                 <BillPrintButtons items={(bulkSendResult.results || []).filter(r => r.ok).map(r => ({ id: r.id, carrier_code: r.carrierCode || '' }))} />
@@ -2965,9 +2965,9 @@ export default function OrderReport() {
             {showBulkCancelModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50" onClick={() => !bulkCancelRunning && setShowBulkCancelModal(false)}>
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-                        <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                            <h3 className="font-bold text-slate-800">Hủy {selectedOrders.length} đơn đã chọn</h3>
-                            <button onClick={() => !bulkCancelRunning && setShowBulkCancelModal(false)} disabled={bulkCancelRunning} className="text-slate-400 hover:text-slate-600"><XCircle size={20} /></button>
+                        <div className="px-6 py-4 border-b border-slate-900 flex justify-between items-center bg-slate-900">
+                            <h3 className="font-bold text-white">Hủy {selectedOrders.length} đơn đã chọn</h3>
+                            <button onClick={() => !bulkCancelRunning && setShowBulkCancelModal(false)} disabled={bulkCancelRunning} className="text-slate-300 hover:text-white"><XCircle size={20} /></button>
                         </div>
                         <div className="p-5 overflow-y-auto space-y-3">
                             {!bulkCancelResult ? (
@@ -2993,7 +2993,7 @@ export default function OrderReport() {
                                         </div>
                                     )}
                                     {bulkCancelResult.message && <p className="text-sm text-red-600">{bulkCancelResult.message}</p>}
-                                    <button onClick={() => setShowBulkCancelModal(false)} className="px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800">Đóng</button>
+                                    <button onClick={() => setShowBulkCancelModal(false)} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50">Đóng</button>
                                 </>
                             )}
                         </div>
@@ -3005,9 +3005,9 @@ export default function OrderReport() {
             {showSendHistoryModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50" onClick={() => setShowSendHistoryModal(false)}>
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-                        <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                            <h3 className="font-bold text-slate-800">Lịch sử gửi sang hãng (5 lần gần nhất)</h3>
-                            <button onClick={() => setShowSendHistoryModal(false)} className="text-slate-400 hover:text-slate-600"><XCircle size={20} /></button>
+                        <div className="px-6 py-4 border-b border-slate-900 flex justify-between items-center bg-slate-900">
+                            <h3 className="font-bold text-white">Lịch sử gửi sang hãng (5 lần gần nhất)</h3>
+                            <button onClick={() => setShowSendHistoryModal(false)} className="text-slate-300 hover:text-white"><XCircle size={20} /></button>
                         </div>
                         <div className="p-5 overflow-y-auto space-y-4">
                             {sendHistoryLoading && <p className="text-sm text-slate-500 font-medium flex items-center gap-2"><RefreshCw size={15} className="animate-spin" /> Đang tải lịch sử...</p>}
@@ -3047,7 +3047,7 @@ export default function OrderReport() {
                                             <button
                                                 disabled={okItems.length === 0}
                                                 onClick={() => openNhanhPrint(okItems.map(it => ({ id: it.id, carrier_code: it.carrierCode || '' })), 'A4')}
-                                                className="px-3 py-1.5 bg-slate-700 text-white text-xs font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-1"
+                                                className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1"
                                             ><Printer size={13} /> In lại (A4/A5)</button>
                                             <button
                                                 disabled={okItems.length === 0}
@@ -3071,17 +3071,17 @@ export default function OrderReport() {
             {detailAction && actionOrder && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50" onClick={closeActionModal}>
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-                        <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                        <div className="px-6 py-4 border-b border-slate-900 flex justify-between items-center bg-slate-900">
                             <div>
-                                <h3 className="font-bold text-slate-800">
+                                <h3 className="font-bold text-white">
                                     {detailAction === 'edit' && 'Sửa ghi chú đơn'}
                                     {detailAction === 'status' && 'Đổi trạng thái đơn'}
                                     {detailAction === 'send' && 'Gửi đơn sang hãng vận chuyển'}
                                     {detailAction === 'cancel' && 'Hủy đơn trên Nhanh'}
                                 </h3>
-                                <p className="text-xs text-slate-500 mt-1">Đơn #{actionOrder.id} · Trạng thái hiện tại: <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-medium ${STATUS_COLORS[actionOrder.status] || 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{LOCAL_STATUS_NAMES[String(actionOrder.status)] || actionOrder.status}</span></p>
+                                <p className="text-xs text-slate-300 mt-1">Đơn #{actionOrder.id} · Trạng thái hiện tại: <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${STATUS_COLORS[actionOrder.status] || 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{LOCAL_STATUS_NAMES[String(actionOrder.status)] || actionOrder.status}</span></p>
                             </div>
-                            <button onClick={closeActionModal} className="text-slate-400 hover:text-slate-600"><XCircle size={20} /></button>
+                            <button onClick={closeActionModal} className="text-slate-300 hover:text-white"><XCircle size={20} /></button>
                         </div>
                         <div className="p-5 overflow-y-auto space-y-3">
                             {detailAction === 'edit' && (
@@ -3091,7 +3091,7 @@ export default function OrderReport() {
                                     <label className="block text-xs font-bold text-slate-600">Ghi chú nội bộ</label>
                                     <textarea value={editPrivateDescription} onChange={(e) => setEditPrivateDescription(e.target.value)} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-slate-700" />
                                     <p className="text-xs text-slate-500">Nhanh.vn không cho sửa đơn đã gửi sang hãng, đơn Thành công hoặc đơn đã hoàn — trường hợp đó sẽ báo lỗi từ Nhanh.</p>
-                                    <button onClick={handleSaveEdit} disabled={detailActionLoading} className="px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
+                                    <button onClick={handleSaveEdit} disabled={detailActionLoading} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">
                                         {detailActionLoading && <RefreshCw size={14} className="animate-spin" />} Lưu thay đổi
                                     </button>
                                 </div>
@@ -3122,7 +3122,7 @@ export default function OrderReport() {
                                         </>
                                     )}
                                     <p className="text-xs text-slate-500">Một số trạng thái do hãng tự cập nhật (Chờ thu gom, Đang chuyển...) Nhanh có thể từ chối nếu đổi tay.</p>
-                                    <button onClick={handleSaveStatus} disabled={detailActionLoading} className="px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
+                                    <button onClick={handleSaveStatus} disabled={detailActionLoading} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">
                                         {detailActionLoading && <RefreshCw size={14} className="animate-spin" />} Lưu trạng thái
                                     </button>
                                 </div>
@@ -3131,7 +3131,7 @@ export default function OrderReport() {
                                 <div className="space-y-2">
                                     {hasRealCarrier(actionOrder) && <p className="text-sm font-medium text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Đơn đã có mã vận đơn {actionOrder.carrier_code}, Nhanh sẽ trả lại mã cũ nếu đơn đã gửi rồi.</p>}
                                     <p className="text-sm text-slate-600">Gửi đơn này sang hãng vận chuyển để lấy mã vận đơn trên Nhanh.</p>
-                                    <button onClick={handleSendShip} disabled={detailActionLoading} className="px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2">
+                                    <button onClick={handleSendShip} disabled={detailActionLoading} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">
                                         {detailActionLoading && <RefreshCw size={14} className="animate-spin" />} Xác nhận gửi sang hãng
                                     </button>
                                     {detailSendDone && (
@@ -3168,13 +3168,13 @@ export default function OrderReport() {
             {printList && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50" onClick={() => setPrintList(null)}>
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-                        <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                            <h3 className="font-bold text-slate-800">
+                        <div className="px-6 py-4 border-b border-slate-900 flex justify-between items-center bg-slate-900">
+                            <h3 className="font-bold text-white">
                                 {printList.size === 'K80'
                                     ? `List ID đơn vừa in (khổ K80) — ${printList.items.length} đơn`
                                     : `List mã vận đơn vừa in (khổ A4/A5) — ${printList.items.length} đơn`}
                             </h3>
-                            <button onClick={() => setPrintList(null)} className="text-slate-400 hover:text-slate-600"><XCircle size={20} /></button>
+                            <button onClick={() => setPrintList(null)} className="text-slate-300 hover:text-white"><XCircle size={20} /></button>
                         </div>
                         <div className="p-5 overflow-y-auto space-y-1.5">
                             {printList.items.map(item => (
@@ -3190,7 +3190,7 @@ export default function OrderReport() {
                             ))}
                         </div>
                         <div className="px-5 py-4 border-t border-slate-200 flex gap-2">
-                            <button onClick={handleCopyPrintList} className="px-4 py-2 bg-slate-700 text-white text-sm font-bold rounded-lg hover:bg-slate-800">{printCopied ? 'Đã sao chép' : 'Sao chép list'}</button>
+                            <button onClick={handleCopyPrintList} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700">{printCopied ? 'Đã sao chép' : 'Sao chép list'}</button>
                             <button onClick={() => setPrintList(null)} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50">Đóng</button>
                         </div>
                     </div>
@@ -3201,9 +3201,9 @@ export default function OrderReport() {
             {showMissedModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]">
-                        <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                            <h3 className="font-bold text-slate-800">Cảnh báo Đơn hàng lỗi (Miss Webhook)</h3>
-                            <button onClick={() => !isUpdatingWebhooks && setShowMissedModal(false)} disabled={isUpdatingWebhooks} className="text-slate-400 hover:text-slate-600"><XCircle size={20} /></button>
+                        <div className="px-6 py-4 border-b border-slate-900 flex justify-between items-center bg-slate-900">
+                            <h3 className="font-bold text-white">Cảnh báo Đơn hàng lỗi (Miss Webhook)</h3>
+                            <button onClick={() => !isUpdatingWebhooks && setShowMissedModal(false)} disabled={isUpdatingWebhooks} className="text-slate-300 hover:text-white"><XCircle size={20} /></button>
                         </div>
                         <div className="p-5 overflow-y-auto space-y-4">
                             <div className="bg-blue-50 text-blue-800 p-4 rounded-lg flex flex-col gap-3">
@@ -3211,7 +3211,7 @@ export default function OrderReport() {
                                 <button
                                     onClick={handleAutoUpdateWebhooks}
                                     disabled={isUpdatingWebhooks}
-                                    className="self-start flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-colors disabled:opacity-60"
+                                    className="self-start flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition-colors disabled:opacity-60"
                                 >
                                     <RefreshCw size={16} className={isUpdatingWebhooks ? "animate-spin" : ""} />
                                     {isUpdatingWebhooks ? "Đang xử lý..." : "Cập nhật dữ liệu từ Nhanh.vn"}

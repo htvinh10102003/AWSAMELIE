@@ -681,15 +681,15 @@ export default function InventoryReport() {
       {/* 1. HEADER */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <span className="p-1.5 bg-slate-100 text-slate-600 rounded-lg"><Boxes size={18} /></span>
+          <h2 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+            <span className="p-2 bg-emerald-50 text-emerald-700 rounded-lg"><Boxes size={20} /></span>
             BÁO CÁO TỒN KHO
           </h2>
-          <p className="text-xs text-slate-400 font-medium mt-0.5">Theo dõi tồn kho</p>
+          <p className="text-sm text-slate-500 font-medium mt-1">Theo dõi tồn kho</p>
         </div>
 
-        <div className="text-xs font-bold text-slate-500 bg-slate-100 border border-slate-200/60 px-4 py-2.5 rounded-xl shadow-inner">
-          Tổng số mặt hàng (SKU): <span className="text-blue-600 font-bold text-sm">{totalCount}</span> mã
+        <div className="text-sm font-bold text-slate-600 bg-emerald-50 border border-emerald-200 px-5 py-2.5 rounded-full">
+          Tổng số mặt hàng (SKU): <span className="text-emerald-700 font-bold text-base">{totalCount}</span> mã
         </div>
       </div>
 
@@ -703,17 +703,17 @@ export default function InventoryReport() {
               placeholder="Tìm theo tên sản phẩm hoặc mã SKU..." 
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full text-xs font-semibold pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-slate-700 transition shadow-sm"
+              className="w-full text-sm font-semibold pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/15 transition shadow-sm"
             />
           </div>
-          <button type="submit" className="px-5 py-2 bg-slate-950 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition cursor-pointer shadow-sm flex-shrink-0">
+          <button type="submit" className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl transition cursor-pointer shadow-md flex-shrink-0">
             Tìm kiếm
           </button>
         </form>
 
         <button 
           onClick={() => setShowPrintModal(true)}
-          className="px-5 py-2.5 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-sm transition cursor-pointer flex items-center gap-2"
+          className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md transition cursor-pointer flex items-center gap-2"
         >
           <Printer size={16} /> In mã vạch (Tem 105x22mm)
         </button>
@@ -724,12 +724,12 @@ export default function InventoryReport() {
         <div className="flex-1 overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200/80 sticky top-0 z-10">
-                <th className="p-4 w-44">Mã vạch</th>
-                <th className="p-4">Tên sản phẩm</th>
-                <th className="p-4 w-32 text-center">Tổng tồn</th>
-                <th className="p-4 w-32 text-center">Đang chuyển</th>
-                <th className="p-4 w-36 text-center">Tồn trong kho</th>
+              <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 sticky top-0 z-10">
+                <th className="px-5 py-4 w-44">Mã vạch</th>
+                <th className="px-5 py-4">Tên sản phẩm</th>
+                <th className="px-5 py-4 w-32 text-center">Tổng tồn</th>
+                <th className="px-5 py-4 w-32 text-center">Đang chuyển</th>
+                <th className="px-5 py-4 w-36 text-center">Tồn trong kho</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
@@ -749,26 +749,26 @@ export default function InventoryReport() {
                 </tr>
               ) : (
                 inventory.map(item => (
-                  <tr key={item.product_code} className="hover:bg-slate-50/50 transition">
-                    <td className="p-4 font-bold text-slate-900 tracking-wide font-mono text-xs">{item.product_code}</td>
-                    <td className="p-4">
+                  <tr key={item.product_code} className="hover:bg-slate-100 transition">
+                    <td className="px-5 py-4 font-bold text-slate-900 tracking-wide font-mono text-sm">{item.product_code}</td>
+                    <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-slate-100 text-slate-500 rounded-md"><Package size={12} /></div>
-                        <span className="font-bold text-slate-800 text-xs truncate max-w-sm" title={item.product_name}>{item.product_name}</span>
+                        <span className="font-bold text-slate-800 text-sm truncate max-w-sm" title={item.product_name}>{item.product_name}</span>
                       </div>
                     </td>
-                    <td className="p-4 text-center">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-bold min-w-[56px] justify-center">
+                    <td className="px-5 py-4 text-center">
+                      <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-bold min-w-[56px] justify-center">
                         {item.remain}
                       </span>
                     </td>
-                    <td className="p-4 text-center">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold min-w-[56px] justify-center border ${Number(item.shipping) > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-slate-50 border-slate-100 text-slate-400 font-medium'}`}>
+                    <td className="px-5 py-4 text-center">
+                      <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold min-w-[56px] justify-center border ${Number(item.shipping) > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-slate-50 border-slate-100 text-slate-400 font-medium'}`}>
                         {Number(item.shipping) > 0 && <Truck size={10} />} {item.shipping}
                       </span>
                     </td>
-                    <td className="p-4 text-center">
-                      <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-bold min-w-[64px] justify-center border ${Number(item.on_hand) > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600 text-sm' : 'bg-red-50 border-red-100 text-red-500'}`}>
+                    <td className="px-5 py-4 text-center">
+                      <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold min-w-[64px] justify-center border ${Number(item.on_hand) > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600 text-sm' : 'bg-red-50 border-red-100 text-red-500'}`}>
                         {Number(item.on_hand) > 0 && <Home size={10} />} {item.on_hand}
                       </span>
                     </td>
@@ -802,7 +802,7 @@ export default function InventoryReport() {
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-slate-100 text-slate-700 rounded-xl"><Printer size={20}/></div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wide">In mã vạch / QR sản phẩm</h3>
+                  <h3 className="text-base font-bold text-slate-900 uppercase tracking-wide">In mã vạch / QR sản phẩm</h3>
                   <p className="text-xs text-slate-500 font-medium">Khổ giấy cuộn: 105x22mm (3 tem/hàng)</p>
                 </div>
               </div>
@@ -845,7 +845,7 @@ export default function InventoryReport() {
                         )}
                       </div>
 
-                      <button type="submit" disabled={isSearchingPrint} className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg transition cursor-pointer flex-shrink-0">
+                      <button type="submit" disabled={isSearchingPrint} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition cursor-pointer flex-shrink-0">
                         Tìm
                       </button>
                     </form>
@@ -859,7 +859,7 @@ export default function InventoryReport() {
                       <button onClick={downloadPrintTemplate} type="button" className="flex-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-1">
                         <Download size={12} /> File Mẫu
                       </button>
-                      <label className="flex-1 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-lg shadow-sm transition cursor-pointer flex items-center justify-center gap-1">
+                      <label className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-sm transition cursor-pointer flex items-center justify-center gap-1">
                         <UploadCloud size={12} /> Tải file lên
                         <input type="file" accept=".csv, .txt, .xlsx, .xls" className="hidden" onChange={handlePrintFileUpload} />
                       </label>
@@ -1110,7 +1110,7 @@ export default function InventoryReport() {
                   <button 
                     onClick={generatePrintJob}
                     disabled={printItems.filter(i => i.status === 'ok' && i.qty > 0).length === 0}
-                    className="w-full py-3.5 rounded-xl bg-slate-700 hover:bg-slate-800 disabled:bg-slate-300 text-white text-sm font-bold shadow-sm transition cursor-pointer flex items-center justify-center gap-2 disabled:translate-y-0 disabled:shadow-none"
+                    className="w-full py-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white text-sm font-bold shadow-md transition cursor-pointer flex items-center justify-center gap-2 disabled:translate-y-0 disabled:shadow-none"
                   >
                     <Printer size={18} /> Tạo bản in
                   </button>

@@ -2,7 +2,7 @@
 // - user: nhan vien, chi vao cac trang FeatureGuard cho phep.
 // - admin: vao duoc cac trang ProtectedRoute, Admin, KPI, cap nhat...
 // - super_admin: giong het admin, CONG THEM 3 quyen rieng trong Admin:
-//   thay doi lien ket Nhanh.vn, link Google Sheet don in / don di, va nen giao dien (Festive Themes).
+//   thay doi lien ket Nhanh.vn, link Google Sheet don in / don di, va cai dat in.
 // - owner: co rieng, khong phai 1 role ma la co user_metadata.is_owner (hoac email owner goc).
 //   Owner giu nguyen cac quyen rieng khac: don dep DB, cap/xoa tai khoan, thong bao global, dong bo hoan...
 //   Super admin KHONG co cac quyen owner do.

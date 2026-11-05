@@ -34,7 +34,7 @@ const getChannelBadge = (channelId) => {
   if (channelId === null || channelId === undefined) return null;
   const channel = SALE_CHANNEL_MAP[channelId] || { name: `Kênh ${channelId}`, style: 'bg-slate-100 text-slate-600 border-slate-200' };
   return (
-    <span className={`px-1.5 py-0.5 rounded text-xs font-bold border ${channel.style} flex items-center gap-1 w-fit`}>
+    <span className={`px-2 py-1 rounded-full text-xs font-bold border ${channel.style} flex items-center gap-1 w-fit`}>
       <Store size={10} /> {channel.name}
     </span>
   );
@@ -722,7 +722,7 @@ export default function OrderReconciliation() {
                 {dialogConfig.type === 'confirm' && (
                   <button 
                     onClick={() => { dialogConfig.onConfirm && dialogConfig.onConfirm(); closeDialog(); }} 
-                    className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl shadow-sm transition"
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md transition"
                   >
                     Xác nhận
                   </button>
@@ -734,11 +734,11 @@ export default function OrderReconciliation() {
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><List size={20} /></span>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <span className="p-2 bg-emerald-50 text-emerald-700 rounded-lg"><List size={20} /></span>
               QUẢN LÝ BIÊN BẢN ĐỐI SOÁT
             </h2>
-            <p className="text-xs text-slate-400 font-medium mt-1">Tạo biên bản mới hoặc chọn biên bản cũ để tiếp tục làm việc</p>
+            <p className="text-sm text-slate-500 font-medium mt-1">Tạo biên bản mới hoặc chọn biên bản cũ để tiếp tục làm việc</p>
           </div>
         </div>
 
@@ -748,7 +748,7 @@ export default function OrderReconciliation() {
               <label className="block text-xs font-bold text-slate-700 mb-1">Ngày dữ liệu đơn in cần đối soát mới</label>
               <input type="date" value={newAuditDate} onChange={e => setNewAuditDate(e.target.value)} className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm font-medium outline-none focus:border-slate-700" />
             </div>
-            <button onClick={handleCreateSession} className="w-full sm:w-auto px-6 py-2 bg-slate-700 hover:bg-slate-800 text-white font-bold text-sm rounded-xl shadow-sm transition flex items-center justify-center gap-2">
+            <button onClick={handleCreateSession} className="w-full sm:w-auto px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
               <Plus size={18} /> Tạo Biên Bản Mới
             </button>
           </div>
@@ -757,7 +757,7 @@ export default function OrderReconciliation() {
 
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-              <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2"><Filter size={16}/> Lịch sử đối soát</h3>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100"><Filter size={16}/> Lịch sử đối soát</h3>
               <div className="flex items-center gap-2 w-full sm:w-auto">
                 <input type="date" value={filterStartDate} onChange={e => setFilterStartDate(e.target.value)} className="w-full sm:w-32 px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-500/20" title="Từ ngày" />
                 <span className="text-slate-400 text-xs">-</span>
@@ -772,7 +772,7 @@ export default function OrderReconciliation() {
             ) : (
               <div className="space-y-3">
                 {sessions.map(session => (
-                  <div key={session.id} onClick={() => handleOpenSession(session)} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 border border-slate-200 rounded-2xl shadow-sm hover:border-slate-400 transition cursor-pointer bg-white group">
+                  <div key={session.id} onClick={() => handleOpenSession(session)} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-5 border border-slate-200 rounded-2xl shadow-sm hover:border-slate-300 hover:bg-slate-50 transition cursor-pointer bg-white group">
                     <div>
                       <h4 className="font-bold text-slate-800 group-hover:text-slate-900">{session.session_name}</h4>
                       <p className="text-xs text-slate-500 mt-1 flex items-center gap-2">
@@ -783,9 +783,9 @@ export default function OrderReconciliation() {
                     </div>
                     <div className="mt-3 sm:mt-0 flex items-center gap-2">
                       {session.status === 'completed' ? (
-                        <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-lg flex items-center gap-1"><CheckCircle2 size={14}/> Đã chốt</span>
+                        <span className="px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold rounded-full flex items-center gap-1"><CheckCircle2 size={14}/> Đã chốt</span>
                       ) : (
-                        <span className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold rounded-lg flex items-center gap-1"><RefreshCw size={14} className="animate-spin-slow"/> Đang quét</span>
+                        <span className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 text-xs font-bold rounded-full flex items-center gap-1"><RefreshCw size={14} className="animate-spin-slow"/> Đang quét</span>
                       )}
                       
                       {isAdminOrOwner && (
@@ -798,7 +798,7 @@ export default function OrderReconciliation() {
                 ))}
                 
                 {hasMore && (
-                  <button onClick={() => fetchSessions(true)} disabled={loadingSessions} className="w-full py-2.5 text-sm font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition">
+                  <button onClick={() => fetchSessions(true)} disabled={loadingSessions} className="w-full py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl transition">
                     {loadingSessions ? 'Đang tải...' : 'Tải thêm'}
                   </button>
                 )}
@@ -832,7 +832,7 @@ export default function OrderReconciliation() {
               {dialogConfig.type === 'confirm' && (
                 <button 
                   onClick={() => { dialogConfig.onConfirm && dialogConfig.onConfirm(); closeDialog(); }} 
-                  className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-bold rounded-xl shadow-sm transition"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md transition"
                 >
                   Xác nhận
                 </button>
@@ -848,11 +848,11 @@ export default function OrderReconciliation() {
             <ChevronLeft size={20} />
           </button>
           <div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-              <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg"><ScanBarcode size={18} /></span>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+              <span className="p-2 bg-emerald-50 text-emerald-700 rounded-lg"><ScanBarcode size={20} /></span>
               ĐỐI SOÁT PHIẾU IN
             </h2>
-            <p className="text-xs text-slate-400 font-medium mt-0.5">{currentSession?.session_name}</p>
+            <p className="text-sm text-slate-500 font-medium mt-1">{currentSession?.session_name}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl shadow-inner font-bold text-slate-700 text-sm">
@@ -927,10 +927,10 @@ export default function OrderReconciliation() {
 
             <div className="flex justify-center gap-2 sm:gap-3 pt-4 flex-wrap border-t border-slate-100 mt-4">
               <button onClick={handleConfirmSession} disabled={loading}
-                className="px-4 sm:px-5 py-2 bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold rounded-xl shadow-sm transition disabled:opacity-50">
+                className="px-5 sm:px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md transition disabled:opacity-50">
                 {loading ? 'Đang lưu...' : ' Chốt biên bản & Lưu Log'}
               </button>
-              <button onClick={handleResetAudit} className="px-3 sm:px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition flex items-center gap-1.5">
+              <button onClick={handleResetAudit} className="px-4 sm:px-5 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-bold rounded-xl transition flex items-center gap-1.5">
                 <Trash2 size={13} /> Quét lại
               </button>
             </div>
@@ -940,29 +940,29 @@ export default function OrderReconciliation() {
 
       {/* 5 Ô THỐNG KÊ SỐ LƯỢNG */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
-        <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl text-center">
+        <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm text-center">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Tổng đơn in</span>
-          <span className="text-base sm:text-lg font-bold text-slate-900 block mt-0.5">{loading ? "..." : totalPrintedCount}</span>
+          <span className="text-2xl font-bold text-slate-900 block mt-1">{loading ? "..." : totalPrintedCount}</span>
         </div>
-        <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl text-center">
+        <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm text-center">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Đơn cần trả</span>
-          <span className="text-base sm:text-lg font-bold text-emerald-600 block mt-0.5">
+          <span className="text-2xl font-bold text-emerald-600 block mt-1">
             {isConfirmed && !isDetailsVisible ? totalExpectedCount : `${scannedCorrectCount} / ${totalExpectedCount}`}
           </span>
         </div>
-        <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl text-center">
+        <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm text-center">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Đơn bị hủy</span>
-          <span className="text-base sm:text-lg font-bold text-red-600 block mt-0.5">
+          <span className="text-2xl font-bold text-red-600 block mt-1">
             {isConfirmed && !isDetailsVisible ? totalCanceledCount : `${scannedCanceledCount} / ${totalCanceledCount}`}
           </span>
         </div>
-        <div className="p-3 sm:p-4 bg-white border border-slate-200 rounded-xl text-center">
+        <div className="p-5 bg-white border border-slate-200 rounded-xl shadow-sm text-center">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Đơn thừa</span>
-          <span className="text-base sm:text-lg font-bold text-slate-500 block mt-0.5">{totalSurplusCount}</span>
+          <span className="text-2xl font-bold text-slate-500 block mt-1">{totalSurplusCount}</span>
         </div>
-        <div className="p-3 sm:p-4 bg-amber-50 border border-amber-200 rounded-xl text-center">
+        <div className="p-5 bg-amber-50 border border-amber-200 rounded-xl shadow-sm text-center">
           <span className="text-xs font-bold text-amber-600 uppercase tracking-wider block">Đơn thiếu</span>
-          <span className="text-base sm:text-lg font-bold text-amber-700 block mt-0.5">{isConfirmed ? totalMissingCount : '?'}</span>
+          <span className="text-2xl font-bold text-amber-700 block mt-1">{isConfirmed ? totalMissingCount : '?'}</span>
         </div>
       </div>
 
@@ -985,7 +985,7 @@ export default function OrderReconciliation() {
           <button
             onClick={handleLoadConfirmedDetails}
             disabled={isLoadingDetails}
-            className="px-6 py-3 bg-slate-700 hover:bg-slate-800 disabled:bg-slate-400 text-white font-bold text-sm rounded-xl shadow-sm transition inline-flex items-center gap-2"
+            className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white font-bold text-sm rounded-xl shadow-md transition inline-flex items-center gap-2"
           >
             {isLoadingDetails ? (
               <>
@@ -1004,7 +1004,7 @@ export default function OrderReconciliation() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Đơn đúng cần trả */}
           <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
-            <h3 className="text-xs sm:text-sm font-bold text-emerald-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <h3 className="text-base font-bold text-emerald-700 uppercase tracking-wider mb-4 pb-3 border-b border-slate-100 flex items-center gap-1.5">
               <span className="p-1 bg-emerald-50 rounded-md"><CheckCircle size={14} /></span> Đơn tồn ({expectedCorrect.length})
             </h3>
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[450px]">
@@ -1017,7 +1017,7 @@ export default function OrderReconciliation() {
                   const createdLabel = fmtVnCreated(order.created_at);
                   const warning = !scanned && isHandoverWarning(order);
                   return (
-                    <div key={order.id + idx} className={`p-3 border rounded-xl transition-all duration-300 ${scanned ? 'bg-emerald-50/60 border-emerald-300' : warning ? 'bg-white border-red-500 ring-1 ring-red-500 shadow-sm' : 'bg-white border-slate-200 shadow-sm'}`}>
+                    <div key={order.id + idx} className={`p-4 border rounded-xl transition-all duration-300 ${scanned ? 'bg-emerald-50/60 border-emerald-300' : warning ? 'bg-white border-red-500 ring-1 ring-red-500 shadow-sm' : 'bg-white border-slate-200 shadow-sm'}`}>
                       <div className="flex justify-between items-start text-xs font-bold mb-2">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
@@ -1025,10 +1025,10 @@ export default function OrderReconciliation() {
                             {getChannelBadge(order.sale_channel)}
                           </div>
                           {createdLabel && <span className="text-xs text-slate-400 font-medium">Tạo: {createdLabel}</span>}
-                          <span className="text-xs text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
+                          <span className="text-xs text-slate-400 font-medium font-mono">MVD: {order.carrier_code || '---'}</span>
                         </div>
-                        {scanned ? <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded font-bold">ĐÃ TRẢ LẠI</span> 
-                                 : <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs rounded font-bold">CHƯA THẤY</span>}
+                        {scanned ? <span className="text-xs bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-bold">ĐÃ TRẢ LẠI</span> 
+                                 : <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-xs rounded-full font-bold">CHƯA THẤY</span>}
                       </div>
                       {/* Danh sách SP */}
                       <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
@@ -1048,7 +1048,7 @@ export default function OrderReconciliation() {
 
           {/* Đơn hủy */}
           <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
-            <h3 className="text-xs sm:text-sm font-bold text-red-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <h3 className="text-base font-bold text-red-600 uppercase tracking-wider mb-4 pb-3 border-b border-slate-100 flex items-center gap-1.5">
               <span className="p-1 bg-red-50 rounded-md"><XCircle size={14} /></span> Đơn bị hủy ({expectedCanceled.length})
             </h3>
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[450px]">
@@ -1060,7 +1060,7 @@ export default function OrderReconciliation() {
                   const customerName = getCustomerName(order);
                   const createdLabel = fmtVnCreated(order.created_at);
                   return (
-                    <div key={order.id + idx} className={`p-3 border rounded-xl transition-all duration-300 ${scanned ? 'bg-red-50 border-red-300' : 'bg-white border-red-200 shadow-sm'}`}>
+                    <div key={order.id + idx} className={`p-4 border rounded-xl transition-all duration-300 ${scanned ? 'bg-red-50 border-red-300' : 'bg-white border-red-200 shadow-sm'}`}>
                       <div className="flex justify-between items-start gap-2 text-xs font-bold mb-2">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
@@ -1068,10 +1068,10 @@ export default function OrderReconciliation() {
                             {getChannelBadge(order.sale_channel)}
                           </div>
                           {createdLabel && <span className="text-xs text-slate-400 font-medium">Tạo: {createdLabel}</span>}
-                          <span className="text-xs text-slate-400 font-medium">MVD: {order.carrier_code || '---'}</span>
+                          <span className="text-xs text-slate-400 font-medium font-mono">MVD: {order.carrier_code || '---'}</span>
                         </div>
-                        {scanned ? <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded font-bold">ĐÃ LẤY RA</span> 
-                                 : <span className="px-2 py-0.5 bg-slate-100 text-slate-500 text-xs rounded font-bold animate-pulse text-red-500">CẦN TÌM GẤP</span>}
+                        {scanned ? <span className="text-xs bg-red-100 text-red-700 px-2.5 py-1 rounded-full font-bold">ĐÃ LẤY RA</span> 
+                                 : <span className="px-2.5 py-1 bg-slate-100 text-slate-500 text-xs rounded-full font-bold animate-pulse text-red-500">CẦN TÌM GẤP</span>}
                       </div>
                       <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
                         {order.order_products?.length > 0 ? order.order_products.map((p, i) => (
@@ -1090,7 +1090,7 @@ export default function OrderReconciliation() {
 
           {/* Hàng thừa */}
           <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
-            <h3 className="text-xs sm:text-sm font-bold text-slate-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <h3 className="text-base font-bold text-slate-600 uppercase tracking-wider mb-4 pb-3 border-b border-slate-100 flex items-center gap-1.5">
               <span className="p-1 bg-slate-50 rounded-md"><PackagePlus size={14} /></span> Hàng thừa ({resolvedSurplusOrders.length})
             </h3>
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[350px]">
@@ -1101,7 +1101,7 @@ export default function OrderReconciliation() {
                   const customerName = getCustomerName(order);
                   const createdLabel = fmtVnCreated(order.created_at);
                   return (
-                  <div key={order.id + idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <div key={order.id + idx} className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
                     <div className="flex flex-col gap-1 text-xs font-bold">
                       <div className="flex items-center gap-2">
                         <span className="text-slate-700">ID: {order.id}{customerName ? ` - [${customerName}]` : ''}</span>
@@ -1119,7 +1119,7 @@ export default function OrderReconciliation() {
 
           {/* Hàng thiếu */}
           <div className="p-4 sm:p-6 bg-amber-50/50 border border-amber-200/50 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
-            <h3 className="text-xs sm:text-sm font-bold text-amber-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <h3 className="text-base font-bold text-amber-600 uppercase tracking-wider mb-4 pb-3 border-b border-slate-100 flex items-center gap-1.5">
               <span className="p-1 bg-amber-100 rounded-md"><PackageMinus size={14} /></span> Hàng thiếu ({isConfirmed ? allMissing.length : '?'})
             </h3>
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[350px]">
@@ -1137,7 +1137,7 @@ export default function OrderReconciliation() {
                   const customerName = getCustomerName(order);
                   const createdLabel = fmtVnCreated(order.created_at);
                   return (
-                  <div key={order.id + idx} className="p-3 bg-white border border-amber-200 rounded-xl flex items-center justify-between">
+                  <div key={order.id + idx} className="p-4 bg-white border border-amber-200 rounded-xl flex items-center justify-between">
                     <div className="flex flex-col gap-0.5">
                       <div className="text-xs font-bold text-amber-800">ID: {order.id}{customerName ? ` - [${customerName}]` : ''}</div>
                       {createdLabel && <div className="text-xs font-medium text-amber-600/80">Tạo: {createdLabel}</div>}

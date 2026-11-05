@@ -9,7 +9,7 @@ import {
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
   BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2, 
   LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2,
-  Filter, FileEdit, LayoutGrid, Webhook, History, ShieldAlert, Settings2, Loader2, Info, PartyPopper,
+  Filter, FileEdit, LayoutGrid, Webhook, History, ShieldAlert, Settings2, Loader2, Info,
   AlignLeft, AlignRight, AlignVerticalSpaceAround, Settings as SettingsIcon,
   Megaphone, Bell, Sparkles, Gift, Rocket, Flame, Star, Zap, Lock,
   MessageSquareWarning, Video, UploadCloud
@@ -122,11 +122,6 @@ export default function Layout() {
 
   const [activeTooltip, setActiveTooltip] = useState(null);
 
-  const [xmasTheme, setXmasTheme] = useState({ isXmasEnabled: false });
-  const [tetTheme, setTetTheme] = useState({ isTetEnabled: false });
-  const [midAutumnTheme, setMidAutumnTheme] = useState({ isMidAutumnEnabled: false });
-  const [nationalDayTheme, setNationalDayTheme] = useState({ isNationalDayEnabled: false });
-
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (layoutSettingsRef.current && !layoutSettingsRef.current.contains(event.target)) {
@@ -167,7 +162,7 @@ export default function Layout() {
       
       if (user) {
         const userConfigKey = `layout_pref_${user.id}`;
-        const keys = ['theme_christmas', 'theme_tet', 'theme_mid_autumn', 'theme_national_day', 'global_notification', 'global_banner', userConfigKey];
+        const keys = ['global_notification', 'global_banner', userConfigKey];
         
         // CÁCH FETCH AN TOÀN ĐỂ KHÔNG BAO GIỜ BỊ CRASH GIAO DIỆN
         const [normalConfigs, lockConfigs] = await Promise.all([
@@ -181,11 +176,7 @@ export default function Layout() {
           const loadedLocks = {};
           data.forEach(item => {
             try {
-              if (item.key === 'theme_christmas') setXmasTheme(JSON.parse(item.value));
-              else if (item.key === 'theme_tet') setTetTheme(JSON.parse(item.value));
-              else if (item.key === 'theme_mid_autumn') setMidAutumnTheme(JSON.parse(item.value));
-              else if (item.key === 'theme_national_day') setNationalDayTheme(JSON.parse(item.value));
-              else if (item.key === userConfigKey) {
+              if (item.key === userConfigKey) {
                 const parsedPrefs = JSON.parse(item.value);
                 setLayoutPrefs(parsedPrefs);
                 localStorage.setItem('amelie_layout_prefs', JSON.stringify(parsedPrefs)); 
@@ -249,11 +240,7 @@ export default function Layout() {
               }
               return;
             }
-            if (payload.new.key === 'theme_christmas') setXmasTheme(JSON.parse(payload.new.value));
-            else if (payload.new.key === 'theme_tet') setTetTheme(JSON.parse(payload.new.value));
-            else if (payload.new.key === 'theme_mid_autumn') setMidAutumnTheme(JSON.parse(payload.new.value));
-            else if (payload.new.key === 'theme_national_day') setNationalDayTheme(JSON.parse(payload.new.value));
-            else if (payload.new.key === 'global_banner') {
+            if (payload.new.key === 'global_banner') {
               setBannerNotif(JSON.parse(payload.new.value));
             }
             else if (payload.new.key === 'global_notification') {
@@ -354,81 +341,13 @@ export default function Layout() {
     }
   }
 
-  const isTet = tetTheme?.isTetEnabled || false;
-  const isMidAutumn = (midAutumnTheme?.isMidAutumnEnabled || false) && !isTet;
-  const isNationalDay = (nationalDayTheme?.isNationalDayEnabled || false) && !isTet && !isMidAutumn;
-  const isXmas = (xmasTheme?.isXmasEnabled || false) && !isTet && !isMidAutumn && !isNationalDay;
-
-  useEffect(() => {
-    const changeFavicon = (iconPath) => {
-      let link = document.querySelector("link[rel~='icon']");
-      if (!link) {
-        link = document.createElement('link');
-        link.rel = 'icon';
-        document.head.appendChild(link);
-      }
-      link.href = iconPath;
-      if (iconPath.endsWith('.svg')) {
-        link.type = 'image/svg+xml';
-      } else if (iconPath.endsWith('.png')) {
-        link.type = 'image/png';
-      } else if (iconPath.endsWith('.ico')) {
-        link.type = 'image/x-icon';
-      }
-    };
-
-    if (isTet) {
-      changeFavicon('/icon-tet.png');
-    } else if (isMidAutumn) {
-      changeFavicon('/icon-mid-autumn.png');
-    } else if (isNationalDay) {
-      changeFavicon('/icon-national-day.png');
-    } else if (isXmas) {
-      changeFavicon('/icon-xmas.png');
-    } else {
-      changeFavicon('/icon.svg');
-    }
-  }, [isTet, isMidAutumn, isNationalDay, isXmas]);
-
   const getThemeVars = () => {
-    if (isTet) return {
-      bgImage: "url('/assets/bg-tet.jpg')",
-      sidebar: 'bg-[#fff8f0]/95 backdrop-blur-xl border-red-100/50 shadow-[4px_0_24px_rgba(220,38,38,0.05)]',
-      textPrimary: 'text-slate-800', textMuted: 'text-slate-500',
-      activeBg: 'bg-red-50', activeText: 'text-red-700 font-bold', activeBorder: 'border-l-[3px] border-red-600',
-      hoverBg: 'hover:bg-red-50/50', iconColor: 'text-slate-400 group-hover:text-red-500', iconActive: 'text-red-600',
-      logoBg: 'bg-red-600', logoIcon: 'text-white', headerBorder: 'border-red-100/50'
-    };
-    if (isMidAutumn) return {
-      bgImage: "url('/assets/bg-mid-autumn.jpg')",
-      sidebar: 'bg-[#fffaf0]/95 backdrop-blur-xl border-orange-200/50 shadow-[4px_0_24px_rgba(234,88,12,0.05)]',
-      textPrimary: 'text-slate-800', textMuted: 'text-slate-500',
-      activeBg: 'bg-orange-50', activeText: 'text-orange-600 font-bold', activeBorder: 'border-l-[3px] border-orange-500',
-      hoverBg: 'hover:bg-orange-50/50', iconColor: 'text-slate-400 group-hover:text-orange-500', iconActive: 'text-orange-600',
-      logoBg: 'bg-orange-500', logoIcon: 'text-white', headerBorder: 'border-orange-200/50'
-    };
-    if (isNationalDay) return {
-      bgImage: "url('/assets/bg-national-day.jpg')",
-      sidebar: 'bg-[#fffcfc]/95 backdrop-blur-xl border-red-100/50 shadow-[4px_0_24px_rgba(220,38,38,0.05)]',
-      textPrimary: 'text-slate-800', textMuted: 'text-slate-500',
-      activeBg: 'bg-red-50', activeText: 'text-red-700 font-bold', activeBorder: 'border-l-[3px] border-red-600',
-      hoverBg: 'hover:bg-red-50/50', iconColor: 'text-slate-400 group-hover:text-red-500', iconActive: 'text-red-600',
-      logoBg: 'bg-red-600', logoIcon: 'text-white', headerBorder: 'border-red-100/50'
-    };
-    if (isXmas) return {
-      bgImage: "url('/assets/bg-christmas.jpg')",
-      sidebar: 'bg-[#0a231c]/95 backdrop-blur-xl border-[#1a4034] shadow-[4px_0_24px_rgba(0,0,0,0.2)]',
-      textPrimary: 'text-slate-100', textMuted: 'text-slate-400',
-      activeBg: 'bg-[#133d30]', activeText: 'text-emerald-400 font-bold', activeBorder: 'border-l-[3px] border-emerald-500',
-      hoverBg: 'hover:bg-[#133d30]/70', iconColor: 'text-slate-400 group-hover:text-emerald-400', iconActive: 'text-emerald-400',
-      logoBg: 'bg-white', logoIcon: 'text-[#0a231c]', headerBorder: 'border-[#1a4034]'
-    };
     return {
-      bgImage: "none",
       sidebar: 'bg-white border-slate-200 shadow-sm',
       textPrimary: 'text-slate-700', textMuted: 'text-slate-400',
-      activeBg: 'bg-slate-100', activeText: 'text-slate-900 font-bold', activeBorder: 'border-l-[3px] border-slate-700',
-      hoverBg: 'hover:bg-slate-50', iconColor: 'text-slate-400 group-hover:text-blue-600', iconActive: 'text-slate-900',
+      activeBg: 'bg-slate-900', activeText: 'text-white font-bold', activeBorder: 'shadow-[inset_4px_0_0_0_#059669]',
+      hoverBg: 'hover:bg-slate-100', iconColor: 'text-slate-400 group-hover:text-blue-600', iconActive: 'text-white',
+      activeBar: 'shadow-[inset_4px_0_0_0_#059669]', sectionLabel: 'text-slate-500',
       logoBg: 'bg-blue-600', logoIcon: 'text-white', headerBorder: 'border-slate-100'
     };
   };
@@ -583,13 +502,6 @@ export default function Layout() {
 
   const getBannerStyle = (type) => {
     switch (type) {
-      case 'celebrate':
-        return {
-          gradient: 'bg-gradient-to-r from-violet-600 via-fuchsia-600 to-pink-500',
-          icon: PartyPopper,
-          badgeText: ' SỰ KIỆN',
-          shadow: 'shadow-[0_4px_20px_rgba(192,38,211,0.4)]'
-        };
       case 'alert':
         return {
           gradient: 'bg-gradient-to-r from-rose-600 via-red-600 to-red-500',
@@ -657,51 +569,10 @@ export default function Layout() {
         .animate-icon-bounce {
           animation: iconBounce 1.5s ease-in-out infinite;
         }
-
-        @keyframes shimmer {
-          0% { background-position: -200% center; }
-          100% { background-position: 200% center; }
-        }
-        .animate-shimmer {
-          background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0) 100%);
-          background-size: 200% auto;
-          animation: shimmer 2.5s linear infinite;
-        }
-
-        @keyframes confettiFall {
-          0% { transform: translateY(-10px) rotate(0deg); opacity: 1; }
-          100% { transform: translateY(100px) rotate(360deg); opacity: 0; }
-        }
-        .confetti-particle {
-          position: absolute;
-          width: 6px;
-          height: 6px;
-          border-radius: 2px;
-          animation: confettiFall 2s ease-in infinite;
-        }
       `}</style>
 
       {bannerNotif?.enabled && bannerStyle && (
         <div className={`no-print absolute top-0 left-0 w-full h-10 z-[500] overflow-hidden ${bannerStyle.gradient} ${bannerStyle.shadow}`}>
-          <div className="absolute inset-0 animate-shimmer opacity-30 pointer-events-none" />
-
-          {bannerNotif.type === 'celebrate' && (
-            <div className="absolute inset-0 pointer-events-none overflow-hidden">
-              {[...Array(12)].map((_, i) => (
-                <div
-                  key={i}
-                  className="confetti-particle"
-                  style={{
-                    left: `${(i * 8.3) % 100}%`,
-                    animationDelay: `${(i * 0.35) % 2}s`,
-                    backgroundColor: ['#fff', '#fbbf24', '#f472b6', '#34d399', '#60a5fa'][i % 5],
-                    top: '-5px'
-                  }}
-                />
-              ))}
-            </div>
-          )}
-
           <div className="absolute left-2 top-1/2 -translate-y-1/2 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 shadow-inner pointer-events-none">
             <span className="text-xs font-bold tracking-wider text-white drop-shadow-sm">
               {bannerStyle.badgeText}
@@ -719,7 +590,7 @@ export default function Layout() {
         </div>
       )}
 
-      <div className={`layout-root flex h-screen font-sans antialiased overflow-hidden relative ${themeVars.bgImage === 'none' ? 'bg-slate-50' : 'bg-transparent'} 
+      <div className={`layout-root flex h-screen font-sans antialiased overflow-hidden relative bg-slate-50 
         ${isTopLayout ? 'flex-col' : layoutPrefs.position === 'right' ? 'flex-row-reverse' : 'flex-row'}
         ${bannerNotif?.enabled ? 'pt-10' : ''}`}
       >
@@ -738,11 +609,6 @@ export default function Layout() {
               ${layoutPrefs.position === 'left' ? 'right-full border-r-slate-800' : 'left-full border-l-slate-800'}
             `} />
           </div>
-        )}
-
-        {themeVars.bgImage !== 'none' && (
-          <div className="fixed inset-0 z-0 bg-no-repeat bg-center pointer-events-none transition-all duration-700"
-               style={{ backgroundImage: themeVars.bgImage, backgroundSize: 'cover' }} />
         )}
 
         <div
@@ -770,19 +636,24 @@ export default function Layout() {
             )}
           </div>
 
-          <div className={`${isTopLayout ? 'flex-1 flex items-center h-full px-2' : 'flex-1 overflow-y-auto overflow-x-hidden py-4 scrollbar-thin'}`}>
+          <div className={`${isTopLayout ? 'flex-1 flex items-center h-full px-2' : 'flex-1 overflow-y-auto overflow-x-hidden py-5 scrollbar-thin'}`}>
             
             {isTopLayout && (
               <div className="flex h-full items-center gap-2 relative">
                 {visibleMenuConfig.map((group, gIdx) => {
                   const isAdminGroup = group.groupLabel === 'Hệ thống Quản trị';
+                  const groupIsActive = group.items.some((it) => it.subItems
+                    ? (it.matchRoutes?.some((route) => location.pathname.includes(route)) || (location.pathname === '/' && it.id === 'dashboard'))
+                    : location.pathname === it.path);
                   return (
                     <div key={gIdx} className="h-full flex items-center group/mainnav">
                       <button className={`h-10 px-4 flex items-center gap-2 rounded-xl text-sm font-bold transition-all
-                        ${isAdminGroup ? 'text-red-700 bg-red-50 hover:bg-red-100' : `${themeVars.textPrimary} hover:bg-slate-100/60`}
+                        ${isAdminGroup
+                          ? (groupIsActive ? 'text-white bg-red-700 hover:bg-red-800' : 'text-red-700 bg-red-50 hover:bg-red-100')
+                          : (groupIsActive ? 'text-white bg-slate-900 shadow-[inset_4px_0_0_0_#059669]' : `${themeVars.textPrimary} hover:bg-slate-100`)}
                       `}>
                         {group.groupLabel}
-                        <ChevronDown size={16} className={isAdminGroup ? 'text-red-500' : themeVars.textMuted} />
+                        <ChevronDown size={16} className={groupIsActive ? (isAdminGroup ? 'text-red-200' : 'text-white') : (isAdminGroup ? 'text-red-500' : themeVars.textMuted)} />
                       </button>
 
                       <div className="absolute top-full left-0 mt-1 w-64 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 z-[100] py-2 opacity-0 invisible group-hover/mainnav:opacity-100 group-hover/mainnav:visible transition-all duration-200">
@@ -795,17 +666,17 @@ export default function Layout() {
                           return (
                             <div key={item.id} className="relative group/subnav">
                               {hasSubItems ? (
-                                <button className={`w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors ${isActive ? 'text-slate-900 bg-slate-100' : 'text-slate-700'}`}>
+                                <button className={`w-full flex items-center justify-between px-4 py-3 transition-colors ${isActive ? 'bg-slate-900 text-white shadow-[inset_4px_0_0_0_#059669]' : 'text-slate-700 hover:bg-slate-100'}`}>
                                   <div className="flex items-center gap-3">
-                                    <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-slate-900' : 'text-slate-400'} />
+                                    <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-white' : 'text-slate-400'} />
                                     <span className={`text-sm ${isActive ? 'font-bold' : 'font-medium'}`}>{item.label}</span>
                                   </div>
-                                  <ChevronRight size={16} className={isActive ? 'text-slate-500' : 'text-slate-400'} />
+                                  <ChevronRight size={16} className={isActive ? 'text-white' : 'text-slate-400'} />
                                 </button>
                               ) : (
-                                <Link to={item.path} className={`w-full flex items-center px-4 py-3 hover:bg-slate-50 transition-colors ${isActive ? 'text-slate-900 bg-slate-100' : 'text-slate-700'}`}>
+                                <Link to={item.path} className={`w-full flex items-center px-4 py-3 transition-colors ${isActive ? 'bg-slate-900 text-white shadow-[inset_4px_0_0_0_#059669]' : 'text-slate-700 hover:bg-slate-100'}`}>
                                   <div className="flex items-center gap-3">
-                                    <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-slate-900' : 'text-slate-400'} />
+                                    <item.icon size={20} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-white' : 'text-slate-400'} />
                                     <span className={`text-sm ${isActive ? 'font-bold' : 'font-medium'}`}>{item.label}</span>
                                   </div>
                                 </Link>
@@ -817,11 +688,11 @@ export default function Layout() {
                                     {item.subItems.map((sub, sIdx) => {
                                       const isSubActive = location.pathname === sub.path;
                                       return (
-                                        <Link key={sIdx} to={sub.path} className={`flex items-start gap-3 px-4 py-2.5 hover:bg-slate-50 transition-colors ${isSubActive ? 'bg-slate-100 text-slate-900' : 'text-slate-700'}`}>
-                                          <sub.icon size={18} strokeWidth={isSubActive ? 2.5 : 2} className={`mt-0.5 shrink-0 ${isSubActive ? 'text-slate-900' : 'text-slate-400'} ${sub.highlight ? 'text-rose-500' : ''}`} />
+                                        <Link key={sIdx} to={sub.path} className={`flex items-start gap-3 px-4 py-2.5 transition-colors ${isSubActive ? 'bg-slate-900 text-white shadow-[inset_4px_0_0_0_#059669]' : 'text-slate-700 hover:bg-slate-100'}`}>
+                                          <sub.icon size={18} strokeWidth={isSubActive ? 2.5 : 2} className={`mt-0.5 shrink-0 ${isSubActive ? 'text-white' : (sub.highlight ? 'text-rose-500' : 'text-slate-400')}`} />
                                           <div className="flex flex-col flex-1">
-                                            <span className={`text-sm leading-tight ${isSubActive ? 'font-bold' : 'font-medium'} ${sub.highlight ? 'text-rose-600 font-bold' : ''}`}>{sub.label}</span>
-                                            {sub.subtitle && <span className="text-xs mt-1 text-slate-500">{sub.subtitle}</span>}
+                                            <span className={`text-sm leading-tight ${isSubActive ? 'font-bold text-white' : `font-medium ${sub.highlight ? 'text-rose-600 font-bold' : ''}`}`}>{sub.label}</span>
+                                            {sub.subtitle && <span className={`text-xs mt-1 ${isSubActive ? 'text-slate-300' : 'text-slate-500'}`}>{sub.subtitle}</span>}
                                           </div>
                                         </Link>
                                       )
@@ -843,7 +714,10 @@ export default function Layout() {
               const isAdminGroup = group.groupLabel === 'Hệ thống Quản trị';
               
               return (
-                <div key={gIdx} className="mb-6">
+                <div key={gIdx} className="mb-8">
+                  {gIdx > 0 && (sidebarExpanded || !isAdminGroup) && (
+                    <div aria-hidden="true" className="mx-5 mb-6 border-t border-slate-200" />
+                  )}
                   {!sidebarExpanded && isAdminGroup && (
                     <hr className="border-t-2 border-dashed border-slate-200 mx-4 my-4" />
                   )}
@@ -851,11 +725,12 @@ export default function Layout() {
                   <div className={`
                     ${!sidebarExpanded && isAdminGroup ? 'border-[1.5px] border-red-400 rounded-2xl mx-1.5 py-1.5 bg-red-50/20 shadow-inner' : ''}
                   `}>
-                    <div className={`px-5 mb-2 text-xs font-bold uppercase tracking-widest transition-opacity duration-300 whitespace-nowrap ${themeVars.textMuted} ${sidebarExpanded ? 'opacity-100' : 'hidden'}`}>
-                      {group.groupLabel}
+                    <div className={`px-5 mb-3 flex items-center gap-3 transition-opacity duration-300 whitespace-nowrap ${sidebarExpanded ? 'opacity-100' : 'hidden'}`}>
+                      <span className={`ui-section-title ${themeVars.sectionLabel}`}>{group.groupLabel}</span>
+                      <span aria-hidden="true" className="h-px flex-1 bg-slate-200" />
                     </div>
                     
-                    <nav className={`${sidebarExpanded ? 'space-y-1 px-3' : 'space-y-1'}`}>
+                    <nav className={`${sidebarExpanded ? 'space-y-1.5 px-3' : 'space-y-1.5'}`}>
                       {group.items.map(item => {
                         const hasSubItems = !!item.subItems;
                         const isActive = hasSubItems 
@@ -870,7 +745,7 @@ export default function Layout() {
                                 onClick={() => toggleSubmenu(item.id)} 
                                 onMouseEnter={(e) => handleMouseEnter(e, item.label)}
                                 onMouseLeave={handleMouseLeave}
-                                className={`w-full flex items-center rounded-xl cursor-pointer transition-all ${sidebarExpanded ? 'px-3 py-3' : 'p-3 justify-center'} ${themeVars.hoverBg} ${isActive && !isOpen ? themeVars.activeBg : ''}`}
+                                className={`w-full flex items-center rounded-xl cursor-pointer transition-all ${sidebarExpanded ? 'px-3 py-3' : 'p-3 justify-center'} ${isActive ? `${themeVars.activeBg} ${themeVars.activeBar}` : themeVars.hoverBg}`}
                               >
                                 <div className={`shrink-0 flex items-center justify-center w-8`}>
                                   <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors ${isActive ? themeVars.iconActive : themeVars.iconColor}`} />
@@ -896,13 +771,13 @@ export default function Layout() {
                                           to={sub.path} 
                                           onMouseEnter={(e) => handleMouseEnter(e, sub.label)}
                                           onMouseLeave={handleMouseLeave}
-                                          className={`relative group flex items-start rounded-xl transition-all ${sidebarExpanded ? 'px-3 py-2.5 gap-3 w-full' : 'p-2 justify-center w-10 h-10'} ${themeVars.hoverBg} ${isSubActive ? themeVars.activeBg + ' ' + (sidebarExpanded ? themeVars.activeBorder : 'shadow-sm') : ''}`}
+                                          className={`relative group flex items-start rounded-xl transition-all ${sidebarExpanded ? 'px-3 py-2.5 gap-3 w-full' : 'p-2 justify-center w-10 h-10'} ${isSubActive ? themeVars.activeBg + ' ' + (sidebarExpanded ? themeVars.activeBorder : 'shadow-sm') : themeVars.hoverBg}`}
                                         >
-                                          <sub.icon size={sidebarExpanded ? 16 : 18} strokeWidth={isSubActive ? 2.5 : 2} className={`${sidebarExpanded ? 'mt-0.5' : ''} shrink-0 ${isSubActive ? themeVars.iconActive : themeVars.textMuted} ${sub.highlight ? 'text-rose-500' : ''}`} />
+                                          <sub.icon size={sidebarExpanded ? 16 : 18} strokeWidth={isSubActive ? 2.5 : 2} className={`${sidebarExpanded ? 'mt-0.5' : ''} shrink-0 ${isSubActive ? themeVars.iconActive : (sub.highlight ? 'text-rose-500' : themeVars.textMuted)}`} />
                                           
                                           {sidebarExpanded && (
                                             <div className="flex flex-col flex-1">
-                                              <span className={`text-sm whitespace-normal leading-snug break-words ${isSubActive ? themeVars.activeText : `font-medium ${themeVars.textPrimary}`} ${sub.highlight ? 'text-rose-600 font-bold' : ''}`}>{sub.label}</span>
+                                              <span className={`text-sm whitespace-normal leading-snug break-words ${isSubActive ? themeVars.activeText : `font-medium ${themeVars.textPrimary} ${sub.highlight ? 'text-rose-600 font-bold' : ''}`}`}>{sub.label}</span>
                                               {sub.subtitle && <span className={`text-xs mt-0.5 whitespace-normal leading-tight ${themeVars.textMuted}`}>{sub.subtitle}</span>}
                                             </div>
                                           )}
@@ -922,7 +797,7 @@ export default function Layout() {
                               to={item.path} 
                               onMouseEnter={(e) => handleMouseEnter(e, item.label)}
                               onMouseLeave={handleMouseLeave}
-                              className={`flex items-center rounded-xl transition-all ${sidebarExpanded ? 'px-3 py-3 w-full' : 'p-3 justify-center'} ${themeVars.hoverBg} ${isActive ? themeVars.activeBg : ''}`}
+                              className={`flex items-center rounded-xl transition-all ${sidebarExpanded ? 'px-3 py-3 w-full' : 'p-3 justify-center'} ${isActive ? `${themeVars.activeBg} ${themeVars.activeBar}` : themeVars.hoverBg}`}
                             >
                               <div className={`shrink-0 flex items-center justify-center w-8`}>
                                 <item.icon size={24} strokeWidth={isActive ? 2.5 : 2} className={`transition-colors ${isActive ? themeVars.iconActive : themeVars.iconColor}`} />
@@ -941,7 +816,7 @@ export default function Layout() {
             })}
           </div>
 
-          <div className={`relative ${isTopLayout ? 'flex items-center pl-4 border-l' : 'p-4 border-t'} ${themeVars.headerBorder} flex items-center justify-between transition-all duration-300 ${!sidebarExpanded && !isTopLayout ? 'flex-col gap-3 py-4' : ''}`}>
+          <div className={`relative ${isTopLayout ? 'flex items-center pl-4 border-l' : 'p-5 border-t'} ${themeVars.headerBorder} flex items-center justify-between transition-all duration-300 ${!sidebarExpanded && !isTopLayout ? 'flex-col gap-3 py-4' : ''}`}>
             <div className={`flex items-center gap-3 overflow-hidden ${!sidebarExpanded && !isTopLayout ? 'justify-center' : ''}`}>
               <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shrink-0 relative ${themeVars.logoBg} ${themeVars.logoIcon}`}>
                 {avatarLetter}
@@ -961,16 +836,16 @@ export default function Layout() {
                 </button>
                 
                 {showLayoutSettings && (
-                  <div className={`absolute z-50 mt-2 bg-white border border-slate-200 rounded-xl shadow-xl w-40 p-1 
+                  <div className={`absolute z-50 mt-2 bg-white border border-slate-200 rounded-2xl shadow-xl w-40 p-1 
                     ${isTopLayout ? 'right-0 top-full' : layoutPrefs.position === 'left' ? 'left-full ml-2 bottom-0' : 'right-full mr-2 bottom-0'}`}>
-                    <div className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 mb-1">Vị trí Menu</div>
-                    <button onClick={() => changePosition('left')} className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors ${layoutPrefs.position === 'left' ? 'text-slate-900 font-bold bg-slate-100' : 'text-slate-600'}`}>
+                    <div className="px-3 py-2 ui-section-title text-slate-500 border-b border-slate-200 mb-1">Vị trí Menu</div>
+                    <button onClick={() => changePosition('left')} className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${layoutPrefs.position === 'left' ? 'text-white font-bold bg-slate-900 shadow-[inset_4px_0_0_0_#059669]' : 'text-slate-600 hover:bg-slate-100'}`}>
                       <AlignLeft size={16} /> Lề trái
                     </button>
-                    <button onClick={() => changePosition('right')} className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors ${layoutPrefs.position === 'right' ? 'text-slate-900 font-bold bg-slate-100' : 'text-slate-600'}`}>
+                    <button onClick={() => changePosition('right')} className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${layoutPrefs.position === 'right' ? 'text-white font-bold bg-slate-900 shadow-[inset_4px_0_0_0_#059669]' : 'text-slate-600 hover:bg-slate-100'}`}>
                       <AlignRight size={16} /> Lề phải
                     </button>
-                    <button onClick={() => changePosition('top')} className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg hover:bg-slate-50 transition-colors ${layoutPrefs.position === 'top' ? 'text-slate-900 font-bold bg-slate-100' : 'text-slate-600'}`}>
+                    <button onClick={() => changePosition('top')} className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg transition-colors ${layoutPrefs.position === 'top' ? 'text-white font-bold bg-slate-900 shadow-[inset_4px_0_0_0_#059669]' : 'text-slate-600 hover:bg-slate-100'}`}>
                       <AlignVerticalSpaceAround size={16} /> Bên trên
                     </button>
                   </div>
@@ -985,11 +860,11 @@ export default function Layout() {
         </div>
 
         <div className="layout-main-col flex-1 overflow-y-auto overflow-x-hidden relative h-full z-10 flex flex-col">
-          <div className="layout-page-wrap relative p-4 sm:p-8 flex-1 flex flex-col">
+          <div className="layout-page-wrap relative p-6 sm:p-8 flex-1 flex flex-col">
             {isInitializing ? (
               <div className="flex flex-col items-center justify-center m-auto gap-4">
-                <Loader2 size={32} className={`animate-spin text-blue-600 ${isXmas ? 'text-white' : ''}`} />
-                <span className={`text-sm font-bold uppercase tracking-widest ${isXmas ? 'text-white/80' : 'text-slate-500'}`}>Đang tải phân quyền...</span>
+                <Loader2 size={32} className="animate-spin text-blue-600" />
+                <span className="text-sm font-bold uppercase tracking-widest text-slate-500">Đang tải phân quyền...</span>
               </div>
             ) : !hasAccess ? (
                <div className="flex flex-col items-center justify-center m-auto text-center animate-in fade-in zoom-in-95 duration-500 max-w-md w-full">
@@ -1032,7 +907,7 @@ export default function Layout() {
         
         {showLogoutModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 sm:p-8 animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-sm p-6 sm:p-8 animate-in zoom-in-95 duration-200">
               <div className="flex items-center gap-4 mb-6">
                 <div className="p-3 bg-red-50 rounded-2xl">
                   <LogOut size={24} className="text-red-600" />
@@ -1057,35 +932,28 @@ export default function Layout() {
 
         {globalNotif && (
           <div className={`fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-300 ${isNotifClosing ? 'pointer-events-none' : ''}`}>
-            <div className={`bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden ${isNotifClosing ? 'animate-notif-out' : 'animate-notif-in'}`}>
+            <div className={`bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-lg overflow-hidden ${isNotifClosing ? 'animate-notif-out' : 'animate-notif-in'}`}>
               <div className={`px-8 py-6 flex items-start justify-between border-b relative overflow-hidden
-                ${globalNotif.type === 'update' ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100' : 
-                  globalNotif.type === 'celebrate' ? 'bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 border-amber-100' : 
+                ${globalNotif.type === 'update' ? 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-100' :
                   'bg-gradient-to-r from-slate-50 to-slate-50 border-slate-200'}`}>
-                
+
                 <div className={`absolute -right-4 -top-4 w-24 h-24 rounded-full opacity-10 blur-xl
-                  ${globalNotif.type === 'update' ? 'bg-blue-400' : 
-                    globalNotif.type === 'celebrate' ? 'bg-orange-400' : 'bg-slate-400'}`} />
-                
+                  ${globalNotif.type === 'update' ? 'bg-blue-400' : 'bg-slate-400'}`} />
+
                 <div className="flex items-center gap-4 relative z-10">
                   <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg shrink-0
-                    ${globalNotif.type === 'update' ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white' : 
-                      globalNotif.type === 'celebrate' ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white' : 
+                    ${globalNotif.type === 'update' ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white' :
                       'bg-gradient-to-br from-slate-600 to-slate-700 text-white'}`}>
                     {globalNotif.type === 'update' ? (
                       <Settings size={26} className="animate-icon-bounce" strokeWidth={2} />
-                    ) : globalNotif.type === 'celebrate' ? (
-                      <PartyPopper size={26} className="animate-icon-bounce" strokeWidth={2} />
                     ) : (
                       <Info size={26} strokeWidth={2} />
                     )}
                   </div>
                   <div>
                     <span className={`text-xs font-bold uppercase tracking-[0.2em] block mb-1
-                      ${globalNotif.type === 'update' ? 'text-blue-500' : 
-                        globalNotif.type === 'celebrate' ? 'text-orange-500' : 'text-slate-400'}`}>
-                      {globalNotif.type === 'update' ? 'Cập nhật hệ thống' : 
-                       globalNotif.type === 'celebrate' ? 'Tin vui' : 'Thông báo'}
+                      ${globalNotif.type === 'update' ? 'text-blue-500' : 'text-slate-400'}`}>
+                      {globalNotif.type === 'update' ? 'Cập nhật hệ thống' : 'Thông báo'}
                     </span>
                     <h3 className="text-2xl font-bold text-slate-800 leading-tight">
                       {globalNotif.title || 'Thông báo mới'}
@@ -1102,8 +970,7 @@ export default function Layout() {
               </div>
 
               <div className="p-8">
-                <div className={`text-slate-600 text-[15px] font-medium leading-relaxed whitespace-pre-wrap mb-8 
-                  ${globalNotif.type === 'celebrate' ? 'text-slate-700' : ''}`}>
+                <div className="text-slate-600 text-[15px] font-medium leading-relaxed whitespace-pre-wrap mb-8">
                   {globalNotif.content}
                 </div>
                 
@@ -1130,15 +997,9 @@ export default function Layout() {
                       </span>
                     </label>
                     
-                    <button 
-                      onClick={handleCloseGlobalNotif} 
-                      className={`w-full sm:w-auto px-8 py-3.5 text-white font-bold rounded-2xl shadow-lg 
-                        transition-all duration-300 hover:shadow-xl active:scale-95
-                        ${globalNotif.type === 'celebrate' 
-                          ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600' 
-                          : globalNotif.type === 'update' 
-                            ? 'bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900' 
-                            : 'bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900'}`}
+                    <button
+                      onClick={handleCloseGlobalNotif}
+                      className="w-full sm:w-auto px-8 py-3.5 text-white font-bold rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl active:scale-95 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900"
                     >
                       Đã hiểu
                     </button>
