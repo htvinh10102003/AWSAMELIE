@@ -1931,6 +1931,22 @@ export default function OrderReport() {
         return <span className="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold border border-red-300 shadow-sm animate-pulse">{diffDays} ngày</span>;
     };
 
+    // Tieu de bang gop vao cum loc: cot tinh theo trong so, % tu dong chuan hoa theo cot dang hien
+    const headerCols = [
+        { id: 'check', label: null, w: 3, show: true },
+        { id: 'info', label: 'Thông tin Đơn', w: 15, show: true },
+        { id: 'carrier', label: 'Vận chuyển', w: 11, show: visibleCols.includes('carrier') },
+        { id: 'source', label: 'Kênh & Nguồn', w: 11, show: visibleCols.includes('source') },
+        { id: 'notes', label: 'Ghi chú', w: 13, show: visibleCols.includes('notes') },
+        { id: 'product', label: 'Sản phẩm', w: 24, show: true },
+        { id: 'qty', label: 'Số lượng', w: 7, show: true },
+        { id: 'stock', label: 'Tình trạng kho / Ngày tồn', w: 11, show: specialMode },
+        { id: 'aging', label: activeTab === 'printable' ? 'Ngày tồn' : 'Kho / Thiếu', w: 11, show: !specialMode && visibleCols.includes('aging') },
+        { id: 'creator', label: 'Nhân viên', w: 5, show: visibleCols.includes('creator') },
+    ].filter(c => c.show);
+    const headerTotalW = headerCols.reduce((sum, c) => sum + c.w, 0);
+    const headerGridCols = headerCols.map(c => `${(c.w / headerTotalW * 100).toFixed(2)}%`).join(' ');
+
     return (
         <div className="min-h-screen p-4 md:p-6 font-sans">
             <div className="max-w-[1400px] mx-auto space-y-6">
@@ -2277,6 +2293,18 @@ export default function OrderReport() {
                             </label>
                         )}
                     </div>)}
+                {/* Tieu de bang gop vao cum loc: dinh cung thanh loc, cot theo dung % cua colgroup */}
+                <div className="-mx-5 -mb-5 grid bg-slate-900 text-slate-100 rounded-b-2xl overflow-hidden" style={{ gridTemplateColumns: headerGridCols }}>
+                    {headerCols.map(col => (
+                        <div key={col.id} className={`py-3.5 px-5 text-xs font-bold uppercase tracking-wider min-w-0 overflow-hidden flex items-center ${col.id === 'check' ? 'justify-center' : ''} ${col.id === 'stock' || col.id === 'aging' ? '' : 'whitespace-nowrap'}`}>
+                            {col.id === 'check' ? (
+                                <input type="checkbox" checked={isAllSelected} onChange={handleSelectAll} className="w-4 h-4 rounded border-slate-400 cursor-pointer" />
+                            ) : (
+                                <span className={col.id === 'qty' || col.id === 'creator' ? 'text-center w-full' : ''}>{col.label}</span>
+                            )}
+                        </div>
+                    ))}
+                </div>
                 </div>
 
                 {/* Popup bộ lọc báo cáo đặc biệt */}
@@ -2351,26 +2379,8 @@ export default function OrderReport() {
                         ) : paginatedOrders.length === 0 ? (
                             <div className="p-16 text-center text-slate-400 text-sm">Không tìm thấy đơn hàng nào phù hợp.</div>
                         ) : (
-                            <table className="w-full text-sm text-left border-collapse">
-                                <thead className="bg-slate-900 border-b border-slate-900 text-slate-100">
-                                    <tr>
-                                        <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 w-12 text-center`}>
-                                            <input type="checkbox" checked={isAllSelected} onChange={handleSelectAll} className="w-4 h-4 rounded border-slate-400 cursor-pointer" />
-                                        </th>
-                                        <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap min-w-[140px]`}>Thông tin Đơn</th>
-
-                                        {visibleCols.includes('carrier') && <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap`}>Vận chuyển</th>}
-                                        {visibleCols.includes('source') && <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap`}>Kênh & Nguồn</th>}
-                                        {visibleCols.includes('notes') && <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider w-64`}>Ghi chú</th>}
-
-                                        <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider min-w-[200px]`}>Sản phẩm</th>
-                                        <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider text-center whitespace-nowrap w-24`}>Số lượng</th>
-
-                                        {specialMode && <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap`}>Tình trạng kho / Ngày tồn</th>}
-                                        {!specialMode && visibleCols.includes('aging') && <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap`}>{activeTab === 'printable' ? 'Ngày tồn' : 'Kho / Thiếu'}</th>}
-                                        {visibleCols.includes('creator') && <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider text-center whitespace-nowrap`}>Nhân viên</th>}
-                                    </tr>
-                                </thead>
+                            <table className="w-full text-sm text-left border-collapse table-fixed"><colgroup>{headerCols.map(col => (<col key={col.id} style={{ width: `${(col.w / headerTotalW * 100).toFixed(2)}%` }} />))}</colgroup>
+                                
                                 <tbody className="divide-y divide-slate-100">
                                     {paginatedOrders.map(order => {
                                         const products = order.order_products || [];
