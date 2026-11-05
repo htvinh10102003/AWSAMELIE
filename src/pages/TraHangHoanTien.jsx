@@ -301,17 +301,17 @@ export default function TraHangHoanTien() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500 sticky top-[290px] z-10">
-                  <th className="px-5 py-3.5">Ngày cập nhật</th>
-                  <th className="px-5 py-3.5">Sàn</th>
-                  <th className="px-5 py-3.5">Mã đơn trả</th>
-                  <th className="px-5 py-3.5">ID đơn gốc</th>
-                  <th className="px-5 py-3.5">Sản phẩm</th>
-                  <th className="px-5 py-3.5">SL</th>
-                  <th className="px-5 py-3.5">Lý do</th>
-                  <th className="px-5 py-3.5">Trạng thái Nhanh</th>
-                  <th className="px-5 py-3.5">Trạng thái sàn</th>
-                  <th className="px-5 py-3.5 text-right">Tiền hoàn</th>
+                <tr className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
+                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Ngày cập nhật</th>
+                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Sàn</th>
+                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Mã đơn trả</th>
+                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">ID đơn gốc</th>
+                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Sản phẩm</th>
+                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">SL</th>
+                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Lý do</th>
+                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Trạng thái Nhanh</th>
+                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Trạng thái sàn</th>
+                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5 text-right">Tiền hoàn</th>
                 </tr>
               </thead>
               <tbody>
@@ -397,12 +397,12 @@ export default function TraHangHoanTien() {
             <div className="overflow-x-auto border border-slate-100 rounded-xl">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500 sticky top-[290px] z-10">
-                    <th className="px-4 py-2">Mã quét</th>
-                    <th className="px-4 py-2">Kết quả</th>
-                    <th className="px-4 py-2">ID đơn gốc</th>
-                    <th className="px-4 py-2">Trạng thái Nhanh</th>
-                    <th className="px-4 py-2"></th>
+                  <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500">
+                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">Mã quét</th>
+                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">Kết quả</th>
+                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">ID đơn gốc</th>
+                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">Trạng thái Nhanh</th>
+                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -433,11 +433,11 @@ export default function TraHangHoanTien() {
             <div className="overflow-x-auto border border-slate-100 rounded-xl">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500 sticky top-[290px] z-10">
-                    <th className="px-4 py-2">Mã đơn trả</th>
-                    <th className="px-4 py-2">ID đơn gốc</th>
-                    <th className="px-4 py-2">Sàn</th>
-                    <th className="px-4 py-2">Trạng thái Nhanh</th>
+                  <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500">
+                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">Mã đơn trả</th>
+                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">ID đơn gốc</th>
+                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">Sàn</th>
+                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">Trạng thái Nhanh</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -488,11 +488,11 @@ export default function TraHangHoanTien() {
               <div className="overflow-x-auto border border-slate-100 rounded-xl">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500 sticky top-0 z-10">
-                      <th className="px-3 py-2">Sản phẩm</th>
-                      <th className="px-3 py-2">SKU</th>
-                      <th className="px-3 py-2">SL</th>
-                      <th className="px-3 py-2 text-right">Giá</th>
+                    <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500">
+                      <th className="sticky top-0 z-10 bg-slate-50 px-3 py-2">Sản phẩm</th>
+                      <th className="sticky top-0 z-10 bg-slate-50 px-3 py-2">SKU</th>
+                      <th className="sticky top-0 z-10 bg-slate-50 px-3 py-2">SL</th>
+                      <th className="sticky top-0 z-10 bg-slate-50 px-3 py-2 text-right">Giá</th>
                     </tr>
                   </thead>
                   <tbody>

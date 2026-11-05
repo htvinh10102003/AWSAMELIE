@@ -2352,23 +2352,23 @@ export default function OrderReport() {
                             <div className="p-16 text-center text-slate-400 text-sm">Không tìm thấy đơn hàng nào phù hợp.</div>
                         ) : (
                             <table className="w-full text-sm text-left border-collapse">
-                                <thead className={`sticky z-10 bg-slate-900 border-b border-slate-900 text-slate-100 ${specialMode ? 'top-[380px]' : 'top-[292px]'}`}>
+                                <thead className="bg-slate-900 border-b border-slate-900 text-slate-100">
                                     <tr>
-                                        <th className="py-3.5 px-5 w-12 text-center">
+                                        <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 w-12 text-center`}>
                                             <input type="checkbox" checked={isAllSelected} onChange={handleSelectAll} className="w-4 h-4 rounded border-slate-400 cursor-pointer" />
                                         </th>
-                                        <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap min-w-[140px]">Thông tin Đơn</th>
+                                        <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap min-w-[140px]`}>Thông tin Đơn</th>
 
-                                        {visibleCols.includes('carrier') && <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap">Vận chuyển</th>}
-                                        {visibleCols.includes('source') && <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap">Kênh & Nguồn</th>}
-                                        {visibleCols.includes('notes') && <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider w-64">Ghi chú</th>}
+                                        {visibleCols.includes('carrier') && <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap`}>Vận chuyển</th>}
+                                        {visibleCols.includes('source') && <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap`}>Kênh & Nguồn</th>}
+                                        {visibleCols.includes('notes') && <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider w-64`}>Ghi chú</th>}
 
-                                        <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider min-w-[200px]">Sản phẩm</th>
-                                        <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider text-center whitespace-nowrap w-24">Số lượng</th>
+                                        <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider min-w-[200px]`}>Sản phẩm</th>
+                                        <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider text-center whitespace-nowrap w-24`}>Số lượng</th>
 
-                                        {specialMode && <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap">Tình trạng kho / Ngày tồn</th>}
-                                        {!specialMode && visibleCols.includes('aging') && <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap">{activeTab === 'printable' ? 'Ngày tồn' : 'Kho / Thiếu'}</th>}
-                                        {visibleCols.includes('creator') && <th className="py-3.5 px-5 text-xs font-bold uppercase tracking-wider text-center whitespace-nowrap">Nhân viên</th>}
+                                        {specialMode && <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap`}>Tình trạng kho / Ngày tồn</th>}
+                                        {!specialMode && visibleCols.includes('aging') && <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider whitespace-nowrap`}>{activeTab === 'printable' ? 'Ngày tồn' : 'Kho / Thiếu'}</th>}
+                                        {visibleCols.includes('creator') && <th className={`sticky z-10 bg-slate-900 border-b border-slate-900 ${specialMode ? 'top-[380px]' : 'top-[292px]'} py-3.5 px-5 text-xs font-bold uppercase tracking-wider text-center whitespace-nowrap`}>Nhân viên</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">

@@ -724,12 +724,12 @@ export default function InventoryReport() {
         <div className="flex-1 overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 sticky top-[200px] z-10">
-                <th className="px-5 py-4 w-44">Mã vạch</th>
-                <th className="px-5 py-4">Tên sản phẩm</th>
-                <th className="px-5 py-4 w-32 text-center">Tổng tồn</th>
-                <th className="px-5 py-4 w-32 text-center">Đang chuyển</th>
-                <th className="px-5 py-4 w-36 text-center">Tồn trong kho</th>
+              <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
+                <th className="sticky top-[200px] z-10 bg-slate-50 border-b border-slate-200 px-5 py-4 w-44">Mã vạch</th>
+                <th className="sticky top-[200px] z-10 bg-slate-50 border-b border-slate-200 px-5 py-4">Tên sản phẩm</th>
+                <th className="sticky top-[200px] z-10 bg-slate-50 border-b border-slate-200 px-5 py-4 w-32 text-center">Tổng tồn</th>
+                <th className="sticky top-[200px] z-10 bg-slate-50 border-b border-slate-200 px-5 py-4 w-32 text-center">Đang chuyển</th>
+                <th className="sticky top-[200px] z-10 bg-slate-50 border-b border-slate-200 px-5 py-4 w-36 text-center">Tồn trong kho</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
