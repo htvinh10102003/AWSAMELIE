@@ -358,7 +358,7 @@ export default function Mobile() {
             const term = locQuery.trim();
             const { data: rows, error: locErr } = await supabase
                 .from('product_inventories')
-                .select('product_id, product_name, product_code, location_code')
+                .select('product_id, product_name, product_code, location_code, on_hand')
                 .or(`product_name.ilike.%${term}%,product_code.ilike.%${term}%`)
                 .limit(50);
             if (locErr) throw locErr;
@@ -930,6 +930,7 @@ export default function Mobile() {
                                 <div className="min-w-0">
                                     <div className="font-bold text-slate-900 text-sm leading-tight">{p.product_name}</div>
                                     <div className="text-xs text-slate-500 font-mono mt-0.5">{p.product_code}</div>
+                                    <div className={`text-xs font-bold mt-0.5 ${Number(p.on_hand) > 0 ? 'text-emerald-700' : 'text-red-500'}`}>Tồn trong kho: {p.on_hand ?? '—'}</div>
                                 </div>
                                 <span className="flex items-center gap-1.5 shrink-0">
                                     {canEditLocation && <Pencil size={14} className="text-slate-400" />}
