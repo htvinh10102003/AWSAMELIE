@@ -1934,21 +1934,21 @@ export default function OrderReport() {
     // Tieu de bang gop vao cum loc: cot tinh theo trong so, % tu dong chuan hoa theo cot dang hien
     const headerCols = [
         { id: 'check', label: null, w: 3, show: true },
-        { id: 'info', label: 'Thông tin Đơn', w: 15, show: true },
+        { id: 'info', label: 'Thông tin Đơn', w: 13, show: true },
         { id: 'carrier', label: 'Vận chuyển', w: 11, show: visibleCols.includes('carrier') },
         { id: 'source', label: 'Kênh & Nguồn', w: 11, show: visibleCols.includes('source') },
-        { id: 'notes', label: 'Ghi chú', w: 13, show: visibleCols.includes('notes') },
-        { id: 'product', label: 'Sản phẩm', w: 24, show: true },
+        { id: 'notes', label: 'Ghi chú', w: 12, show: visibleCols.includes('notes') },
+        { id: 'product', label: 'Sản phẩm', w: 20, show: true },
         { id: 'qty', label: 'Số lượng', w: 7, show: true },
         { id: 'stock', label: 'Tình trạng kho / Ngày tồn', w: 11, show: specialMode },
         { id: 'aging', label: activeTab === 'printable' ? 'Ngày tồn' : 'Kho / Thiếu', w: 11, show: !specialMode && visibleCols.includes('aging') },
-        { id: 'creator', label: 'Nhân viên', w: 5, show: visibleCols.includes('creator') },
+        { id: 'creator', label: 'Nhân viên', w: 12, show: visibleCols.includes('creator') },
     ].filter(c => c.show);
     const headerTotalW = headerCols.reduce((sum, c) => sum + c.w, 0);
     const headerGridCols = headerCols.map(c => `${(c.w / headerTotalW * 100).toFixed(2)}%`).join(' ');
 
     return (
-        <div className="min-h-screen p-4 md:p-6 font-sans">
+        <div className="min-h-screen px-2 py-4 md:px-3 md:py-6 font-sans">
             <div className="max-w-[1400px] mx-auto space-y-6">
                 
                 {/* Header Area */}
@@ -2546,7 +2546,7 @@ export default function OrderReport() {
                                                     {/* Cột 9 (Tùy chọn): Nhân viên */}
                                                     {index === 0 && visibleCols.includes('creator') && (
                                                         <td rowSpan={rowCount} className="py-4 px-5 align-top text-center border-l border-slate-100">
-                                                            <div className="inline-flex items-center gap-1.5 text-slate-600 bg-slate-50 px-2 py-1 rounded text-xs">
+                                                            <div className="inline-flex items-center gap-1.5 text-slate-600 bg-slate-50 px-1.5 py-1 rounded text-xs">
                                                                 <User size={13} className="text-slate-400 shrink-0" /> 
                                                                 <span title={order.created_by_name || 'Hệ thống'}>{order.created_by_name || 'Hệ thống'}</span>
                                                             </div>
