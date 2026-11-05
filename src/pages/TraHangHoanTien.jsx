@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import { Search, X, Trash2, ChevronLeft, ChevronRight, Loader2, ScanLine, Package, DownloadCloud } from 'lucide-react';
+import { mapTiktokProduct } from '../lib/tiktokProductMap';
 
 const NHANH_STATUS_NAMES = {
   1: 'Đã hoàn tiền',
@@ -79,12 +80,21 @@ function totalQty(row) {
 
 export default function TraHangHoanTien() {
   // --- Bảng báo cáo ---
-  const [fromDate, setFromDate] = useState(() => addDaysStr(vnTodayStr(), -30));
-  const [toDate, setToDate] = useState(() => vnTodayStr());
+  const [updFrom, setUpdFrom] = useState(() => addDaysStr(vnTodayStr(), -30));
+  const [updTo, setUpdTo] = useState(() => vnTodayStr());
+  const [crtFrom, setCrtFrom] = useState('');
+  const [crtTo, setCrtTo] = useState('');
   const [platform, setPlatform] = useState('');
+  const [shop, setShop] = useState('');
   const [status, setStatus] = useState('');
+  const [ecomStatus, setEcomStatus] = useState('');
+  const [product, setProduct] = useState('');
   const [search, setSearch] = useState('');
   const [applied, setApplied] = useState(null);
+  // Danh sách giá trị cho 2 dropdown lọc mới (lấy 1 lần lúc mở trang).
+  const [ecomStatusOptions, setEcomStatusOptions] = useState([]);
+  const [productOptions, setProductOptions] = useState([]);
+  const [shopOptions, setShopOptions] = useState([]);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -109,13 +119,18 @@ export default function TraHangHoanTien() {
   const [reconLoading, setReconLoading] = useState(false);
   const [scanBusy, setScanBusy] = useState(false);
 
-  const filters = applied || { fromDate, toDate, platform, status, search };
+  const filters = applied || { updFrom, updTo, crtFrom, crtTo, platform, shop, status, ecomStatus, product, search };
 
   function applyFiltersToQuery(query, f) {
-    if (f.fromDate) query = query.gte('return_updated_at', `${f.fromDate}T00:00:00+07:00`);
-    if (f.toDate) query = query.lt('return_updated_at', `${addDaysStr(f.toDate, 1)}T00:00:00+07:00`);
+    if (f.updFrom) query = query.gte('return_updated_at', `${f.updFrom}T00:00:00+07:00`);
+    if (f.updTo) query = query.lt('return_updated_at', `${addDaysStr(f.updTo, 1)}T00:00:00+07:00`);
+    if (f.crtFrom) query = query.gte('return_created_at', `${f.crtFrom}T00:00:00+07:00`);
+    if (f.crtTo) query = query.lt('return_created_at', `${addDaysStr(f.crtTo, 1)}T00:00:00+07:00`);
     if (f.platform !== '') query = query.eq('platform_id', Number(f.platform));
+    if (f.shop) query = query.eq('shop_id', f.shop);
     if (f.status !== '') query = query.eq('nhanh_status_id', Number(f.status));
+    if (f.ecomStatus) query = query.eq('ecom_status_id', f.ecomStatus);
+    if (f.product) query = query.contains('products', [{ name: f.product }]);
     if (f.search && f.search.trim()) {
       const q = escapeLike(f.search.trim());
       query = query.or(`return_tracking_number.ilike.%${q}%,return_id.ilike.%${q}%,original_ecom_order_id.ilike.%${q}%`);
@@ -159,9 +174,64 @@ export default function TraHangHoanTien() {
     return () => { alive = false; };
   }, []);
 
+  // Nạp danh sách Trạng thái sàn + Sản phẩm cho dropdown lọc (1 lần lúc mở trang).
+  // Trạng thái sàn lấy distinct theo id; sản phẩm lấy tên distinct trong 2000 đơn mới nhất.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('ecom_return_orders')
+          .select('ecom_status_id,ecom_status_name')
+          .not('ecom_status_id', 'is', null)
+          .limit(2000);
+        if (!alive) return;
+        const seen = new Map();
+        (data || []).forEach((r) => {
+          if (r.ecom_status_id && !seen.has(String(r.ecom_status_id))) {
+            seen.set(String(r.ecom_status_id), r.ecom_status_name || String(r.ecom_status_id));
+          }
+        });
+        setEcomStatusOptions([...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'vi')));
+      } catch (e) { console.error('Lỗi nạp trạng thái sàn:', e); }
+      try {
+        const { data } = await supabase
+          .from('ecom_return_orders')
+          .select('platform_id,products')
+          .order('return_updated_at', { ascending: false })
+          .limit(2000);
+        if (!alive) return;
+        const byName = new Map();
+        (data || []).forEach((r) => productsOf(r).forEach((p) => {
+          const nm = p.name ? String(p.name).trim() : '';
+          if (!nm || byName.has(nm)) return;
+          const mapped = r.platform_id === 8855 ? mapTiktokProduct(nm, p.sku) : null;
+          byName.set(nm, mapped ? mapped.label : '');
+        }));
+        setProductOptions([...byName.entries()].map(([name, mapped]) => ({ name, mapped })).sort((a, b) => a.name.localeCompare(b.name, 'vi')));
+      } catch (e) { console.error('Lỗi nạp danh sách sản phẩm:', e); }
+      try {
+        const { data } = await supabase
+          .from('ecom_return_orders')
+          .select('shop_id,platform_name')
+          .not('shop_id', 'is', null)
+          .limit(2000);
+        if (!alive) return;
+        const seen = new Map();
+        (data || []).forEach((r) => {
+          if (r.shop_id && !seen.has(String(r.shop_id))) {
+            seen.set(String(r.shop_id), r.platform_name || '');
+          }
+        });
+        setShopOptions([...seen.entries()].map(([id, platformName]) => ({ id, platformName })).sort((a, b) => a.id.localeCompare(b.id)));
+      } catch (e) { console.error('Lỗi nạp danh sách shop:', e); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   function handleFilter() {
     setPage(1);
-    setApplied({ fromDate, toDate, platform, status, search });
+    setApplied({ updFrom, updTo, crtFrom, crtTo, platform, shop, status, ecomStatus, product, search });
   }
 
   // Kéo dữ liệu trả hàng từ Nhanh.vn về để update DB (xem có gì thay đổi
@@ -326,12 +396,20 @@ export default function TraHangHoanTien() {
       <div className="sticky top-[106px] z-30 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Từ ngày</label>
-            <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Từ ngày cập nhật</label>
+            <input type="date" value={updFrom} onChange={(e) => setUpdFrom(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
           </div>
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Đến ngày</label>
-            <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Đến ngày cập nhật</label>
+            <input type="date" value={updTo} onChange={(e) => setUpdTo(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Từ ngày tạo</label>
+            <input type="date" value={crtFrom} onChange={(e) => setCrtFrom(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Đến ngày tạo</label>
+            <input type="date" value={crtTo} onChange={(e) => setCrtTo(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
           </div>
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Sàn</label>
@@ -342,11 +420,38 @@ export default function TraHangHoanTien() {
             </select>
           </div>
           <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Shop</label>
+            <select value={shop} onChange={(e) => setShop(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
+              <option value="">Tất cả shop</option>
+              {shopOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.platformName ? `${o.platformName} · Shop ${o.id}` : `Shop ${o.id}`}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Trạng thái Nhanh</label>
             <select value={status} onChange={(e) => setStatus(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
               <option value="">Tất cả trạng thái</option>
               {Object.entries(NHANH_STATUS_NAMES).map(([id, name]) => (
                 <option key={id} value={id}>{name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Trạng thái sàn</label>
+            <select value={ecomStatus} onChange={(e) => setEcomStatus(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
+              <option value="">Tất cả trạng thái sàn</option>
+              {ecomStatusOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Sản phẩm</label>
+            <select value={product} onChange={(e) => setProduct(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white max-w-[220px]">
+              <option value="">Tất cả sản phẩm</option>
+              {productOptions.map((o) => (
+                <option key={o.name} value={o.name}>{o.mapped ? `${o.mapped} — ${o.name}` : o.name}</option>
               ))}
             </select>
           </div>
@@ -366,7 +471,7 @@ export default function TraHangHoanTien() {
           <button onClick={handleFilter} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer">Lọc</button>
         </div>
         <p className="text-xs text-slate-500 mt-3">
-          Tổng: <strong className="text-slate-800">{total}</strong> yêu cầu theo bộ lọc. Ngày lọc theo ngày cập nhật trên Nhanh.
+          Tổng: <strong className="text-slate-800">{total}</strong> yêu cầu theo bộ lọc. Ngày cập nhật lọc theo ngày cập nhật trên Nhanh; ngày tạo lọc theo ngày tạo yêu cầu.
         </p>
         {error && <p className="text-sm font-bold text-red-500 mt-2">{error}</p>}
         {isOwner && (
@@ -416,6 +521,7 @@ export default function TraHangHoanTien() {
                 {rows.map((r) => {
                   const prods = productsOf(r);
                   const first = prods[0];
+                  const mappedFirst = r.platform_id === 8855 && first ? mapTiktokProduct(first.name, first.sku) : null;
                   return (
                     <tr key={r.return_id} onClick={() => openDetail(r)} className="border-t border-slate-100 hover:bg-slate-100 cursor-pointer">
                       <td className="px-5 py-3.5 whitespace-nowrap font-medium">{fmtDateTime(r.return_updated_at)}</td>
@@ -423,10 +529,17 @@ export default function TraHangHoanTien() {
                       <td className="px-5 py-3.5 font-mono font-bold text-indigo-700 break-all">{returnCodeOf(r) || <span className="font-sans font-medium text-slate-400">Chưa có mã đơn trả</span>}</td>
                       <td className="px-5 py-3.5 font-mono break-all">{r.original_ecom_order_id || '—'}</td>
                       <td className="px-5 py-3.5">
-                        {first ? (<span>{first.name}{prods.length > 1 ? ` (+${prods.length - 1} SP)` : ''}</span>) : '—'}
+                        {mappedFirst ? (
+                          <span><span className="font-bold text-slate-900">{mappedFirst.label}</span><span className="block text-xs text-slate-500">{first.name}{prods.length > 1 ? ` (+${prods.length - 1} SP)` : ''}</span></span>
+                        ) : first ? (<span>{first.name}{prods.length > 1 ? ` (+${prods.length - 1} SP)` : ''}</span>) : '—'}
                       </td>
                       <td className="px-5 py-3.5 font-bold">{totalQty(r) || '—'}</td>
-                      <td className="px-5 py-3.5">{r.reason_name || '—'}</td>
+                      <td className="px-5 py-3.5">
+                        {r.reason_name || '—'}
+                        {r.raw_data?.reasonDescription && (
+                          <span className="block text-xs text-slate-500 mt-0.5">{r.raw_data.reasonDescription}</span>
+                        )}
+                      </td>
                       <td className="px-5 py-3.5 whitespace-nowrap">
                         <span className={`px-3 py-1 rounded-full text-xs font-bold ${NHANH_STATUS_BADGE[r.nhanh_status_id] || 'bg-slate-100 text-slate-700'}`}>
                           {r.nhanh_status_name || NHANH_STATUS_NAMES[r.nhanh_status_id] || '—'}
@@ -596,7 +709,10 @@ export default function TraHangHoanTien() {
                   <tbody>
                     {detailProducts.map((p, i) => (
                       <tr key={i} className="border-t border-slate-100">
-                        <td className="px-3 py-2">{p.name || '—'}</td>
+                        <td className="px-3 py-2">{(() => {
+                          const mapped = selected?.platform_id === 8855 ? mapTiktokProduct(p.name, p.sku) : null;
+                          return mapped ? (<span><span className="font-bold">{mapped.label}</span><span className="block text-xs text-slate-500">{p.name}</span></span>) : (p.name || '—');
+                        })()}</td>
                         <td className="px-3 py-2">{p.sku || '—'}</td>
                         <td className="px-3 py-2 font-bold">{p.quantity ?? '—'}</td>
                         <td className="px-3 py-2 text-right">{fmtMoney(p.price)}</td>
