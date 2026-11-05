@@ -1936,7 +1936,7 @@ export default function OrderReport() {
             <div className="max-w-[1400px] mx-auto space-y-6">
                 
                 {/* Header Area */}
-                <div className="flex flex-wrap justify-between items-center gap-4 bg-slate-900 border border-slate-900 rounded-2xl px-6 py-6 shadow-md">
+                <div className="sticky top-0 z-30 flex flex-wrap justify-between items-center gap-4 bg-slate-900 border border-slate-900 rounded-2xl px-6 py-6 shadow-md">
                     <div>
                         <h2 className="text-2xl font-bold tracking-tight text-white">Quản lý kho & Đơn hàng</h2>
                         <p className="text-slate-300 text-sm mt-1">Phân bổ tự động dựa trên tồn kho thực tế</p>
@@ -1986,7 +1986,7 @@ export default function OrderReport() {
 
                 {/* Báo cáo đặc biệt: 4 tab làm việc, gộp đủ / tạm giữ / hết hàng */}
                 {specialMode && (
-                    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-3 space-y-3">
+                    <div className="sticky top-[106px] z-30 bg-white border border-slate-200 rounded-2xl shadow-sm p-3 space-y-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                             <h3 className="text-lg font-bold tracking-tight text-slate-900">Báo cáo đặc biệt</h3>
                             <div className="flex flex-wrap items-center gap-2">
@@ -2085,7 +2085,7 @@ export default function OrderReport() {
                 )}
 
                 {/* Filters & Actions Bar */}
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5 space-y-4">
+                <div className={`bg-white border border-slate-200 rounded-2xl shadow-sm p-5 space-y-4 sticky z-30 ${specialMode ? 'top-[248px]' : 'top-[106px]'}`}>
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="flex flex-wrap items-center gap-3 flex-1">
                             {/* Search Inputs */}
@@ -2352,7 +2352,7 @@ export default function OrderReport() {
                             <div className="p-16 text-center text-slate-400 text-sm">Không tìm thấy đơn hàng nào phù hợp.</div>
                         ) : (
                             <table className="w-full text-sm text-left border-collapse">
-                                <thead className="sticky top-0 z-10 bg-slate-900 border-b border-slate-900 text-slate-100">
+                                <thead className={`sticky z-10 bg-slate-900 border-b border-slate-900 text-slate-100 ${specialMode ? 'top-[380px]' : 'top-[292px]'}`}>
                                     <tr>
                                         <th className="py-3.5 px-5 w-12 text-center">
                                             <input type="checkbox" checked={isAllSelected} onChange={handleSelectAll} className="w-4 h-4 rounded border-slate-400 cursor-pointer" />

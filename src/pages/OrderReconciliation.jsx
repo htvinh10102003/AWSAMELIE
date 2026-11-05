@@ -842,7 +842,7 @@ export default function OrderReconciliation() {
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
+      <div className="sticky top-0 z-30 flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
         <div className="flex items-center gap-3">
           <button onClick={handleBackToList} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition" title="Quay lại danh sách">
             <ChevronLeft size={20} />
@@ -878,7 +878,7 @@ export default function OrderReconciliation() {
         </div>
       )}
 
-      <div className="bg-white p-4 sm:p-6 border border-slate-200 rounded-2xl shadow-sm text-center max-w-xl mx-auto space-y-4">
+      <div className="sticky top-[106px] z-30 bg-white p-4 sm:p-6 border border-slate-200 rounded-2xl shadow-sm text-center max-w-xl mx-auto space-y-4">
         {isConfirmed ? (
           <div className="py-4 space-y-2">
             <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-2"><CheckCircle2 size={32} /></div>

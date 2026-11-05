@@ -869,6 +869,35 @@ export default function Mobile() {
                         </div>
                     </div>
                 )}
+                {tab === 'location' && (
+                    <div className="bg-slate-100 px-3 pt-2 pb-2 border-b border-slate-200">
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <input type="text" value={locQuery} onChange={(e) => setLocQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleLocationSearch(); }} placeholder="Tìm tên hoặc mã sản phẩm..." className="w-full pl-10 pr-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" />
+                                <Package className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                            </div>
+                            <button onClick={handleLocationSearch} disabled={locLoading} className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50">Tìm</button>
+                        </div>
+                    </div>
+                )}
+                {tab === 'search' && (
+                    <div className="bg-slate-100 px-3 pt-2 pb-2 space-y-2 border-b border-slate-200">
+                        <div className="grid grid-cols-2 gap-2 bg-slate-100 border border-slate-200 rounded-2xl p-1.5">
+                            <button onClick={() => { setSearchMode('carrier'); setDbSearched(false); setDbSearchResults([]); }} className={`py-3 rounded-xl text-sm font-bold ${searchMode === 'carrier' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:bg-white'}`}>Mã vận đơn</button>
+                            <button onClick={() => { setSearchMode('id'); setDbSearched(false); setDbSearchResults([]); }} className={`py-3 rounded-xl text-sm font-bold ${searchMode === 'id' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:bg-white'}`}>ID đơn</button>
+                        </div>
+                        <form onSubmit={(e) => { e.preventDefault(); handleDbSearch(); }} className="space-y-2">
+                            <div className="flex gap-2">
+                                <div className="relative flex-1">
+                                    <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={searchMode === 'carrier' ? 'Nhập mã vận đơn...' : 'Nhập ID đơn...'} className="w-full pl-10 pr-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" />
+                                    <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                                </div>
+                                <button type="button" onClick={startScanner} className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold flex items-center gap-1.5"><ScanLine size={18} /> Quét</button>
+                            </div>
+                            <button type="submit" disabled={dbSearching || !search.trim()} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50">Tìm đơn</button>
+                        </form>
+                    </div>
+                )}
             </div>
 
             <main className="px-3 py-3 space-y-3">
@@ -894,13 +923,6 @@ export default function Mobile() {
 
                 {tab === 'location' && (
                     <div className="space-y-3">
-                        <div className="flex gap-2">
-                            <div className="relative flex-1">
-                                <input type="text" value={locQuery} onChange={(e) => setLocQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') handleLocationSearch(); }} placeholder="Tìm tên hoặc mã sản phẩm..." className="w-full pl-10 pr-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" />
-                                <Package className="absolute left-3 top-3.5 text-slate-400" size={18} />
-                            </div>
-                            <button onClick={handleLocationSearch} disabled={locLoading} className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50">Tìm</button>
-                        </div>
                         {locLoading && <div className="text-center text-sm text-slate-500 font-medium py-6">Đang tìm...</div>}
                         {!locLoading && locSearched && locResults.length === 0 && <div className="text-center text-sm text-slate-500 py-6">Không tìm thấy sản phẩm nào.</div>}
                         {!locLoading && locResults.map((p, i) => (
@@ -922,20 +944,6 @@ export default function Mobile() {
 
                 {tab === 'search' && (
                     <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-2 bg-slate-100 border border-slate-200 rounded-2xl p-1.5">
-                            <button onClick={() => { setSearchMode('carrier'); setDbSearched(false); setDbSearchResults([]); }} className={`py-3 rounded-xl text-sm font-bold ${searchMode === 'carrier' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:bg-white'}`}>Mã vận đơn</button>
-                            <button onClick={() => { setSearchMode('id'); setDbSearched(false); setDbSearchResults([]); }} className={`py-3 rounded-xl text-sm font-bold ${searchMode === 'id' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:bg-white'}`}>ID đơn</button>
-                        </div>
-                        <form onSubmit={(e) => { e.preventDefault(); handleDbSearch(); }} className="space-y-2">
-                            <div className="flex gap-2">
-                                <div className="relative flex-1">
-                                    <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={searchMode === 'carrier' ? 'Nhập mã vận đơn...' : 'Nhập ID đơn...'} className="w-full pl-10 pr-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" />
-                                    <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
-                                </div>
-                                <button type="button" onClick={startScanner} className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold flex items-center gap-1.5"><ScanLine size={18} /> Quét</button>
-                            </div>
-                            <button type="submit" disabled={dbSearching || !search.trim()} className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold disabled:opacity-50">Tìm đơn</button>
-                        </form>
                         {dbSearching && <div className="text-center text-sm text-slate-500 font-medium py-10">Đang tìm...</div>}
                         {!dbSearching && !dbSearched && <div className="text-center text-sm text-slate-500 py-10">Nhập {searchMode === 'carrier' ? 'mã vận đơn' : 'ID đơn'} rồi bấm Tìm đơn, hoặc bấm Quét để quét mã trên đơn.</div>}
                         {!dbSearching && dbSearchError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm font-medium text-red-700">{dbSearchError}</div>}

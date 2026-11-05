@@ -229,7 +229,7 @@ export default function TraHangHoanTien() {
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
+      <div className="sticky top-0 z-30 bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Trả hàng hoàn tiền</h1>
         <p className="text-sm text-slate-600 mt-1">
           Yêu cầu trả hàng hoàn tiền trên sàn, đồng bộ từ Nhanh.vn. Bấm vào một dòng để xem chi tiết, lý do và phản hồi của khách.
@@ -237,7 +237,7 @@ export default function TraHangHoanTien() {
       </div>
 
       {/* Bộ lọc */}
-      <div className="bg-slate-50 rounded-2xl shadow-sm border border-slate-200 p-6">
+      <div className="sticky top-[106px] z-30 bg-slate-50 rounded-2xl shadow-sm border border-slate-200 p-6">
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Từ ngày</label>
@@ -301,7 +301,7 @@ export default function TraHangHoanTien() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500 sticky top-0 z-10">
+                <tr className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500 sticky top-[290px] z-10">
                   <th className="px-5 py-3.5">Ngày cập nhật</th>
                   <th className="px-5 py-3.5">Sàn</th>
                   <th className="px-5 py-3.5">Mã đơn trả</th>
@@ -397,7 +397,7 @@ export default function TraHangHoanTien() {
             <div className="overflow-x-auto border border-slate-100 rounded-xl">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500 sticky top-0 z-10">
+                  <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500 sticky top-[290px] z-10">
                     <th className="px-4 py-2">Mã quét</th>
                     <th className="px-4 py-2">Kết quả</th>
                     <th className="px-4 py-2">ID đơn gốc</th>
@@ -433,7 +433,7 @@ export default function TraHangHoanTien() {
             <div className="overflow-x-auto border border-slate-100 rounded-xl">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500 sticky top-0 z-10">
+                  <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500 sticky top-[290px] z-10">
                     <th className="px-4 py-2">Mã đơn trả</th>
                     <th className="px-4 py-2">ID đơn gốc</th>
                     <th className="px-4 py-2">Sàn</th>

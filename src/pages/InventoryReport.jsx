@@ -679,7 +679,7 @@ export default function InventoryReport() {
     <div className="space-y-6 provinces pb-10 animate-in fade-in duration-300">
       
       {/* 1. HEADER */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
+      <div className="sticky top-0 z-30 flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <span className="p-2 bg-emerald-50 text-emerald-700 rounded-lg"><Boxes size={20} /></span>
@@ -694,7 +694,7 @@ export default function InventoryReport() {
       </div>
 
       {/* 2. THANH TÌM KIẾM & NÚT IN MÃ VẠCH */}
-      <div className="w-full flex flex-col md:flex-row gap-3">
+      <div className="sticky top-[106px] z-30 bg-slate-50 w-full flex flex-col md:flex-row gap-3">
         <form onSubmit={handleSearchSubmit} className="flex-1 flex gap-2 max-w-md">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-2.5 text-slate-400" size={16} />
@@ -724,7 +724,7 @@ export default function InventoryReport() {
         <div className="flex-1 overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 sticky top-0 z-10">
+              <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200 sticky top-[200px] z-10">
                 <th className="px-5 py-4 w-44">Mã vạch</th>
                 <th className="px-5 py-4">Tên sản phẩm</th>
                 <th className="px-5 py-4 w-32 text-center">Tổng tồn</th>
