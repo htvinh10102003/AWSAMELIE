@@ -3,12 +3,11 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import { isAdminRole, isSuperAdminRole, roleLabel } from '../lib/roles';
 import { sessionRevokedKey } from '../lib/session';
 import { getMaintenanceMode, setMaintenanceMode } from '../lib/maintenance';
-import { getXmasEnabled, setXmasEnabled } from '../lib/xmas';
 import {
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
   Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert,
   Database, HardDrive, Trash2, AlertTriangle, Info,
-  BellRing, Megaphone, MonitorPlay, Ban, History, LogOut, Printer, TreePine
+  BellRing, Megaphone, MonitorPlay, Ban, History, LogOut, Printer
 } from 'lucide-react';
 import { shortDeviceName } from '../lib/presence';
 import PrintSettings from '../components/PrintSettings';
@@ -129,9 +128,6 @@ export default function Admin() {
   const [maintenanceOn, setMaintenanceOn] = useState(false);
   const [maintenanceLoading, setMaintenanceLoading] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
-  const [xmasOn, setXmasOn] = useState(true);
-  const [xmasLoading, setXmasLoading] = useState(false);
-  const [xmasMessage, setXmasMessage] = useState('');
 
   // --- DB CLEANUP & STORAGE ---
   const [cleanDays, setCleanDays] = useState('180');
@@ -221,7 +217,6 @@ export default function Admin() {
       const configMap = {};
       configs.forEach(item => configMap[item.key] = item.value);
       setMaintenanceOn(configMap['maintenance_mode'] === 'true');
-      setXmasOn(configMap['xmas_enabled'] !== 'false');
       
       setApiConfigs(prev => ({ 
           ...prev, 
@@ -771,26 +766,6 @@ export default function Admin() {
       setMaintenanceMessage('Lỗi: ' + (err.message || err));
     } finally {
       setMaintenanceLoading(false);
-    }
-  };
-
-  // --- GIAO DIEN GIANG SINH: chi Owner / Super Admin moi duoc bat/tat --
-  const handleToggleXmas = async () => {
-    if (!canEditSensitiveConfig) {
-      setXmasMessage('Chỉ Chủ sở hữu hoặc Super Admin mới được bật/tắt giao diện Giáng sinh.');
-      return;
-    }
-    const turningOn = !xmasOn;
-    setXmasLoading(true);
-    setXmasMessage('');
-    try {
-      await setXmasEnabled(turningOn);
-      setXmasOn(turningOn);
-      setXmasMessage(turningOn ? 'Đã bật giao diện Giáng sinh.' : 'Đã tắt giao diện Giáng sinh.');
-    } catch (err) {
-      setXmasMessage('Lỗi: ' + (err.message || err));
-    } finally {
-      setXmasLoading(false);
     }
   };
 
@@ -1542,36 +1517,6 @@ export default function Admin() {
           </div>
           )}
 
-          {canEditSensitiveConfig && (
-          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border-2 border-slate-200 mt-8">
-            <h2 className="text-xl font-bold mb-1 text-slate-900 flex items-center gap-2">
-              <TreePine size={22} className="text-emerald-600" /> Giao diện Giáng sinh
-            </h2>
-            <p className="text-sm text-slate-500 mb-4 font-medium max-w-3xl leading-relaxed">
-              Bật/tắt khung Noel ở Báo cáo đặc biệt (ông già Noel, cây thông, tuyết rơi), nền băng giá và thẻ tiêu đề băng giá trên toàn app. Tắt đi thì app trở về giao diện thường.
-            </p>
-            <p className="text-xs font-bold text-slate-500 mb-6 border-b border-slate-200 pb-6">
-              Mặc định là BẬT (chưa có dòng cấu hình thì coi như bật). Sau khi bấm, các trang đang mở cần tải lại mới thấy đổi.
-            </p>
-            {xmasMessage && (
-              <div className="p-4 mb-6 rounded-xl font-bold text-sm bg-slate-50 border border-slate-200 text-slate-700">
-                {xmasMessage}
-              </div>
-            )}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${xmasOn ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
-                  {xmasOn ? 'Đang bật Giáng sinh' : 'Đang tắt Giáng sinh'}
-                </span>
-                <button
-                  onClick={handleToggleXmas}
-                  disabled={xmasLoading}
-                  className={`px-8 py-3 text-sm font-bold rounded-xl shadow-md transition cursor-pointer disabled:opacity-50 ${xmasOn ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}
-                >
-                  {xmasLoading ? 'Đang xử lý...' : xmasOn ? 'Tắt giao diện' : 'Bật giao diện'}
-                </button>
-              </div>
-          </div>
-          )}
 
         </div>
       )}

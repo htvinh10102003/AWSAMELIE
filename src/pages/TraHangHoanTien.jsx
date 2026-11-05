@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { getXmasEnabled } from '../lib/xmas';
 import { Search, X, Trash2, ChevronLeft, ChevronRight, Loader2, ScanLine, Package } from 'lucide-react';
 
 const NHANH_STATUS_NAMES = {
@@ -70,12 +69,6 @@ function totalQty(row) {
 export default function TraHangHoanTien() {
   // --- Bảng báo cáo ---
   const [fromDate, setFromDate] = useState(() => addDaysStr(vnTodayStr(), -30));
-  const [xmasOn, setXmasOn] = useState(true);
-  useEffect(() => {
-    let alive = true;
-    getXmasEnabled().then(v => { if (alive) setXmasOn(v); });
-    return () => { alive = false; };
-  }, []);
   const [toDate, setToDate] = useState(() => vnTodayStr());
   const [platform, setPlatform] = useState('');
   const [status, setStatus] = useState('');
@@ -236,7 +229,7 @@ export default function TraHangHoanTien() {
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      <div className={`sticky top-0 z-30 ${xmasOn ? 'bg-gradient-to-r from-[#DFF4FF] via-[#EFF8FF] to-[#DFF4FF] border border-[#BFE3F7]' : 'bg-white border border-slate-200'} rounded-2xl shadow-sm p-6`}>
+      <div className={`sticky top-0 z-30 bg-white border border-slate-200 rounded-2xl shadow-sm p-6`}>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Trả hàng hoàn tiền</h1>
         <p className="text-sm text-slate-600 mt-1">
           Yêu cầu trả hàng hoàn tiền trên sàn, đồng bộ từ Nhanh.vn. Bấm vào một dòng để xem chi tiết, lý do và phản hồi của khách.

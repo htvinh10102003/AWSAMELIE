@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { getXmasEnabled } from '../lib/xmas';
 import { isAdminRole } from '../lib/roles';
 import { 
   ScanBarcode, Calendar, Trash2, PackagePlus, PackageMinus, AlertCircle, 
@@ -97,12 +96,6 @@ export default function OrderReconciliation() {
   };
   
   const [currentUserMeta, setCurrentUserMeta] = useState({});
-  const [xmasOn, setXmasOn] = useState(true);
-  useEffect(() => {
-    let alive = true;
-    getXmasEnabled().then(v => { if (alive) setXmasOn(v); });
-    return () => { alive = false; };
-  }, []);
   const [view, setView] = useState('list');
   
   // ==========================================
@@ -849,7 +842,7 @@ export default function OrderReconciliation() {
         </div>
       )}
 
-      <div className={`sticky top-0 z-30 flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 ${xmasOn ? 'bg-gradient-to-r from-[#DFF4FF] via-[#EFF8FF] to-[#DFF4FF] border border-[#BFE3F7]' : 'bg-white border border-slate-200'} rounded-2xl shadow-sm gap-4`}>
+      <div className={`sticky top-0 z-30 flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4`}>
         <div className="flex items-center gap-3">
           <button onClick={handleBackToList} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition" title="Quay lại danh sách">
             <ChevronLeft size={20} />

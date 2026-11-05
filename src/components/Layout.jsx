@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { isAdminRole, isSuperAdminRole } from '../lib/roles';
-import { getXmasEnabled } from '../lib/xmas';
 import { sessionRevokedKey, isRevokedAfterLogin } from '../lib/session';
 import { reportPresence, recordLoginHistory } from '../lib/presence';
 import { 
@@ -122,7 +121,6 @@ export default function Layout() {
   });
 
   const [activeTooltip, setActiveTooltip] = useState(null);
-  const [xmasOn, setXmasOn] = useState(true);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -134,11 +132,6 @@ export default function Layout() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    let alive = true;
-    getXmasEnabled().then(v => { if (alive) setXmasOn(v); });
-    return () => { alive = false; };
-  }, []);
 
   useEffect(() => {
     const p = location.pathname;
@@ -598,7 +591,7 @@ export default function Layout() {
         </div>
       )}
 
-      <div className={`layout-root flex h-screen font-sans antialiased overflow-hidden relative ${xmasOn ? 'bg-gradient-to-b from-[#DFF4FF] via-[#F0F9FF] to-[#F8FAFC]' : 'bg-slate-50'} 
+      <div className={`layout-root flex h-screen font-sans antialiased overflow-hidden relative bg-slate-50 
         ${isTopLayout ? 'flex-col' : layoutPrefs.position === 'right' ? 'flex-row-reverse' : 'flex-row'}
         ${bannerNotif?.enabled ? 'pt-10' : ''}`}
       >
