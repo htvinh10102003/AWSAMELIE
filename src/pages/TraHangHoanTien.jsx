@@ -414,7 +414,7 @@ export default function TraHangHoanTien() {
   }
 
   const detailProducts = selected ? productsOf(selected) : [];
-  const reasonDescription = selected?.raw_data?.reasonDescription || '';
+  const reasonDescription = selected?.raw_data?.reasonInfor?.reasonDescription || selected?.raw_data?.reasonDescription || '';
 
   // Cột bảng chính: % cố định (table-fixed + colgroup) để khớp với strip
   // tiêu đề gộp vào cụm lọc phía trên.
@@ -587,8 +587,8 @@ export default function TraHangHoanTien() {
                       <td className="px-5 py-3.5 font-bold">{totalQty(r) || '—'}</td>
                       <td className="px-5 py-3.5">
                         {r.reason_name || '—'}
-                        {r.raw_data?.reasonDescription && (
-                          <span className="block text-xs text-slate-500 mt-0.5">{r.raw_data.reasonDescription}</span>
+                        {(r.raw_data?.reasonInfor?.reasonDescription || r.raw_data?.reasonDescription) && (
+                          <span className="block text-xs text-slate-500 mt-0.5">{r.raw_data.reasonInfor?.reasonDescription || r.raw_data.reasonDescription}</span>
                         )}
                       </td>
                       <td className="px-5 py-3.5 whitespace-nowrap">

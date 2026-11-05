@@ -51,6 +51,21 @@ function codeFromName(name) {
   return '';
 }
 
+// Mã nằm trong SKU Shopee (VD "25AD1-EL189P-WH-M" -> 189);
+// đoạn cuối SKU sau dấu "-" là size (VD "...-WH-M" -> M).
+function codeFromSku(sku) {
+  const raw = String(sku || '');
+  const num = raw.match(LAST_NUMBER_RE);
+  return num ? num[1] : '';
+}
+
+function sizeFromSkuSegments(sku) {
+  const raw = String(sku || '');
+  const segs = raw.split('-');
+  const last = segs.length > 1 ? segs[segs.length - 1].trim() : '';
+  return last && SIZE_RE.test(last) ? last.toUpperCase() : '';
+}
+
 // Trả về tên đầy đủ trong kho ("XANTHE 683 - Beige - L") hoặc null.
 // Chưa nạp kho (index null) thì chỉ ghép mã + size, VD "683 - L".
 export function mapReturnProduct(name, sku, index) {
@@ -74,9 +89,11 @@ export function mapReturnProduct(name, sku, index) {
     const hit = index.byName.get(rawName.toUpperCase()) || index.byCode.get(rawName.toUpperCase());
     if (hit) return hit;
   }
-  // 3. Lấy mã từ tên + size từ SKU (TikTok), tra kho theo mã + size.
-  const code = codeFromName(rawName);
-  let size = sizeFromSku(rawSku);
+  // 3. Lấy mã từ tên (không có thì từ SKU, VD Shopee "EL189P" -> 189)
+  // + size từ SKU (TikTok: sku chính là size; Shopee: đoạn cuối sau "-"),
+  // rồi tra kho theo mã + size.
+  const code = codeFromName(rawName) || codeFromSku(rawSku);
+  let size = sizeFromSku(rawSku) || sizeFromSkuSegments(rawSku);
   if (!size && rawName) {
     const tail = rawName.match(/-\s*(\S+)\s*$/);
     if (tail && SIZE_RE.test(tail[1])) size = tail[1].toUpperCase();
