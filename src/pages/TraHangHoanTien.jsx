@@ -115,6 +115,7 @@ export default function TraHangHoanTien() {
   const [syncMessage, setSyncMessage] = useState({ text: '', type: '' });
 
   // --- Đối soát shipper ---
+  const [showRecon, setShowRecon] = useState(false);
   const [reconDate, setReconDate] = useState(() => vnTodayStr());
   const [todayRows, setTodayRows] = useState([]);
   const [scanned, setScanned] = useState([]);
@@ -614,9 +615,17 @@ export default function TraHangHoanTien() {
         </div>
       </div>
 
-      {/* Đối soát shipper */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-6">
-        <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100"><ScanLine size={18} /> Đối soát shipper</h2>
+      {/* Đối soát shipper — ẩn sau nút, bấm mở popup */}
+      <button onClick={() => setShowRecon(true)} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-2">
+        <ScanLine size={16} /> Đối soát shipper
+      </button>
+      {showRecon && (
+        <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={() => setShowRecon(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto p-6 sm:p-8" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-4 pb-3 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2"><ScanLine size={18} /> Đối soát shipper</h2>
+              <button onClick={() => setShowRecon(false)} className="text-slate-400 hover:text-slate-700 cursor-pointer"><X size={20} /></button>
+            </div>
         <p className="text-xs text-slate-500 mt-1">
           Shipper trả bao nhiêu kiện thì bắn mã vạch từng kiện vào đây, hệ thống đối chiếu với danh sách đơn trả trong ngày.
           Đối soát theo dữ liệu Nhanh; check trạng thái thành công theo hãng vận chuyển sẽ bổ sung sau.
@@ -716,7 +725,9 @@ export default function TraHangHoanTien() {
             </div>
           </div>
         )}
-      </div>
+          </div>
+        </div>
+      )}
 
       {/* Popup chi tiết */}
       {selected && (

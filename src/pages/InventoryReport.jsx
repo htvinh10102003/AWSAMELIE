@@ -675,6 +675,14 @@ export default function InventoryReport() {
     return base;
   })();
 
+  const INV_COLS = [
+    { id: 'code', label: 'Mã vạch', w: 15 },
+    { id: 'name', label: 'Tên sản phẩm', w: 46 },
+    { id: 'total', label: 'Tổng tồn', w: 12 },
+    { id: 'shipping', label: 'Đang chuyển', w: 12 },
+    { id: 'onhand', label: 'Tồn trong kho', w: 15 },
+  ];
+
   return (
     <div className="space-y-6 provinces pb-10 animate-in fade-in duration-300">
       
@@ -694,7 +702,8 @@ export default function InventoryReport() {
       </div>
 
       {/* 2. THANH TÌM KIẾM & NÚT IN MÃ VẠCH */}
-      <div className="sticky top-[106px] z-30 bg-slate-50 w-full flex flex-col md:flex-row gap-3">
+      <div className="sticky top-[106px] z-30 bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+        <div className="flex flex-col md:flex-row gap-3">
         <form onSubmit={handleSearchSubmit} className="flex-1 flex gap-2 max-w-md">
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-2.5 text-slate-400" size={16} />
@@ -717,21 +726,19 @@ export default function InventoryReport() {
         >
           <Printer size={16} /> In mã vạch (Tem 105x22mm)
         </button>
+        </div>
+        <div className="grid bg-slate-900 text-slate-100 rounded-b-2xl -mx-4 -mb-4 mt-4" style={{ gridTemplateColumns: INV_COLS.map((c) => `${c.w}%`).join(' ') }}>
+          {INV_COLS.map((c) => (
+            <div key={c.id} className={`px-5 py-4 text-xs font-bold uppercase tracking-wider ${(c.id === 'total' || c.id === 'shipping' || c.id === 'onhand') ? 'text-center' : ''}`}>{c.label}</div>
+          ))}
+        </div>
       </div>
 
       {/* 3. BẢNG HIỂN THỊ DỮ LIỆU TỒN KHO */}
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col min-h-[400px]">
         <div className="flex-1 overflow-x-auto">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider border-b border-slate-200">
-                <th className="sticky top-[200px] z-10 bg-slate-50 border-b border-slate-200 px-5 py-4 w-44">Mã vạch</th>
-                <th className="sticky top-[200px] z-10 bg-slate-50 border-b border-slate-200 px-5 py-4">Tên sản phẩm</th>
-                <th className="sticky top-[200px] z-10 bg-slate-50 border-b border-slate-200 px-5 py-4 w-32 text-center">Tổng tồn</th>
-                <th className="sticky top-[200px] z-10 bg-slate-50 border-b border-slate-200 px-5 py-4 w-32 text-center">Đang chuyển</th>
-                <th className="sticky top-[200px] z-10 bg-slate-50 border-b border-slate-200 px-5 py-4 w-36 text-center">Tồn trong kho</th>
-              </tr>
-            </thead>
+          <table className="w-full text-left text-xs border-collapse table-fixed">
+            <colgroup>{INV_COLS.map((c) => (<col key={c.id} style={{ width: `${c.w}%` }} />))}</colgroup>
             <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
               {loading ? (
                 <tr>
