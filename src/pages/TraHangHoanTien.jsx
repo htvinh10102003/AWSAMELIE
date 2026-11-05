@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import { Search, X, Trash2, ChevronLeft, ChevronRight, Loader2, ScanLine, Package, DownloadCloud } from 'lucide-react';
-import { mapTiktokProduct } from '../lib/tiktokProductMap';
+import { mapReturnProduct, buildInventoryIndex } from '../lib/tiktokProductMap';
 
 const NHANH_STATUS_NAMES = {
   1: 'Đã hoàn tiền',
@@ -95,6 +95,10 @@ export default function TraHangHoanTien() {
   const [ecomStatusOptions, setEcomStatusOptions] = useState([]);
   const [productOptions, setProductOptions] = useState([]);
   const [shopOptions, setShopOptions] = useState([]);
+  // Index kho (product_inventories) để map SP trả hàng về tên đầy đủ.
+  const [inventoryIndex, setInventoryIndex] = useState(null);
+  // Tên kho -> danh sách matcher { k: 'name' | 'sku', v } để lọc phía server.
+  const [productMatchers, setProductMatchers] = useState({});
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -130,7 +134,18 @@ export default function TraHangHoanTien() {
     if (f.shop) query = query.eq('shop_id', f.shop);
     if (f.status !== '') query = query.eq('nhanh_status_id', Number(f.status));
     if (f.ecomStatus) query = query.eq('ecom_status_id', f.ecomStatus);
-    if (f.product) query = query.contains('products', [{ name: f.product }]);
+    if (f.product) {
+      const matchers = productMatchers[f.product];
+      if (matchers && matchers.length === 1) {
+        query = query.contains('products', [{ [matchers[0].k]: matchers[0].v }]);
+      } else if (matchers && matchers.length > 1) {
+        const ors = matchers.map((m) => `products.cs.${JSON.stringify([{ [m.k]: m.v }])}`).join(',');
+        query = query.or(`(${ors})`);
+      } else {
+        // Không có matcher trong mẫu: tên kho có thể nằm thẳng trong sku (Shopee).
+        query = query.contains('products', [{ sku: f.product }]);
+      }
+    }
     if (f.search && f.search.trim()) {
       const q = escapeLike(f.search.trim());
       query = query.or(`return_tracking_number.ilike.%${q}%,return_id.ilike.%${q}%,original_ecom_order_id.ilike.%${q}%`);
@@ -175,10 +190,30 @@ export default function TraHangHoanTien() {
   }, []);
 
   // Nạp danh sách Trạng thái sàn + Sản phẩm cho dropdown lọc (1 lần lúc mở trang).
-  // Trạng thái sàn lấy distinct theo id; sản phẩm lấy tên distinct trong 2000 đơn mới nhất.
+  // Trạng thái sàn lấy distinct theo id; sản phẩm lấy tên kho distinct trong 2000 đơn mới nhất.
   useEffect(() => {
     let alive = true;
     (async () => {
+      // Nạp toàn bộ kho trước để map SP trả hàng về tên đầy đủ trong kho.
+      let invRows = [];
+      try {
+        let page = 0; let hasMore = true;
+        while (hasMore) {
+          const { data, error } = await supabase
+            .from('product_inventories')
+            .select('product_code,product_name')
+            .order('product_code', { ascending: true })
+            .range(page * 1000, (page + 1) * 1000 - 1);
+          if (error) throw error;
+          if (data && data.length > 0) {
+            invRows = invRows.concat(data);
+            page++;
+            if (data.length < 1000) hasMore = false;
+          } else hasMore = false;
+        }
+      } catch (e) { console.error('Lỗi nạp kho:', e); }
+      const invIndex = buildInventoryIndex(invRows);
+      if (alive) setInventoryIndex(invIndex);
       try {
         const { data } = await supabase
           .from('ecom_return_orders')
@@ -201,14 +236,30 @@ export default function TraHangHoanTien() {
           .order('return_updated_at', { ascending: false })
           .limit(2000);
         if (!alive) return;
-        const byName = new Map();
+        // Tên kho -> matcher để lọc server: tên thô TikTok + sku Shopee.
+        const matchers = {};
+        const names = new Set();
+        const addMatcher = (invName, k, v) => {
+          if (!invName || !v) return;
+          if (!matchers[invName]) matchers[invName] = [];
+          if (!matchers[invName].some((m) => m.k === k && m.v === v)) matchers[invName].push({ k, v });
+        };
         (data || []).forEach((r) => productsOf(r).forEach((p) => {
           const nm = p.name ? String(p.name).trim() : '';
-          if (!nm || byName.has(nm)) return;
-          const mapped = r.platform_id === 8855 ? mapTiktokProduct(nm, p.sku) : null;
-          byName.set(nm, mapped ? mapped.label : '');
+          const sku = p.sku ? String(p.sku).trim() : '';
+          const mapped = mapReturnProduct(nm, sku, invIndex);
+          if (mapped) {
+            names.add(mapped);
+            // TikTok: tên thô là thứ duy nhất khớp được phía server.
+            if (nm && mapped !== nm) addMatcher(mapped, 'name', nm);
+            // Shopee: sku đã là tên kho (hoặc mã vạch) -> khớp thẳng bằng sku.
+            // (SKU chỉ là size như "L" thì không khớp được gì, bỏ qua.)
+            if (sku && !/^(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL|F|FREE)$/i.test(sku)) addMatcher(mapped, 'sku', sku);
+            if (mapped === nm) addMatcher(mapped, 'name', nm);
+          }
         }));
-        setProductOptions([...byName.entries()].map(([name, mapped]) => ({ name, mapped })).sort((a, b) => a.name.localeCompare(b.name, 'vi')));
+        setProductMatchers(matchers);
+        setProductOptions([...names].sort((a, b) => a.localeCompare(b, 'vi')));
       } catch (e) { console.error('Lỗi nạp danh sách sản phẩm:', e); }
       try {
         const { data } = await supabase
@@ -450,8 +501,8 @@ export default function TraHangHoanTien() {
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Sản phẩm</label>
             <select value={product} onChange={(e) => setProduct(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white max-w-[220px]">
               <option value="">Tất cả sản phẩm</option>
-              {productOptions.map((o) => (
-                <option key={o.name} value={o.name}>{o.mapped ? `${o.mapped} — ${o.name}` : o.name}</option>
+              {productOptions.map((name) => (
+                <option key={name} value={name}>{name}</option>
               ))}
             </select>
           </div>
@@ -521,7 +572,7 @@ export default function TraHangHoanTien() {
                 {rows.map((r) => {
                   const prods = productsOf(r);
                   const first = prods[0];
-                  const mappedFirst = r.platform_id === 8855 && first ? mapTiktokProduct(first.name, first.sku) : null;
+                  const mappedFirst = first ? mapReturnProduct(first.name, first.sku, inventoryIndex) : null;
                   return (
                     <tr key={r.return_id} onClick={() => openDetail(r)} className="border-t border-slate-100 hover:bg-slate-100 cursor-pointer">
                       <td className="px-5 py-3.5 whitespace-nowrap font-medium">{fmtDateTime(r.return_updated_at)}</td>
@@ -529,8 +580,8 @@ export default function TraHangHoanTien() {
                       <td className="px-5 py-3.5 font-mono font-bold text-indigo-700 break-all">{returnCodeOf(r) || <span className="font-sans font-medium text-slate-400">Chưa có mã đơn trả</span>}</td>
                       <td className="px-5 py-3.5 font-mono break-all">{r.original_ecom_order_id || '—'}</td>
                       <td className="px-5 py-3.5">
-                        {mappedFirst ? (
-                          <span><span className="font-bold text-slate-900">{mappedFirst.label}</span><span className="block text-xs text-slate-500">{first.name}{prods.length > 1 ? ` (+${prods.length - 1} SP)` : ''}</span></span>
+                        {mappedFirst && mappedFirst !== first.name ? (
+                          <span><span className="font-bold text-slate-900">{mappedFirst}</span><span className="block text-xs text-slate-500">{first.name}{prods.length > 1 ? ` (+${prods.length - 1} SP)` : ''}</span></span>
                         ) : first ? (<span>{first.name}{prods.length > 1 ? ` (+${prods.length - 1} SP)` : ''}</span>) : '—'}
                       </td>
                       <td className="px-5 py-3.5 font-bold">{totalQty(r) || '—'}</td>
@@ -710,8 +761,9 @@ export default function TraHangHoanTien() {
                     {detailProducts.map((p, i) => (
                       <tr key={i} className="border-t border-slate-100">
                         <td className="px-3 py-2">{(() => {
-                          const mapped = selected?.platform_id === 8855 ? mapTiktokProduct(p.name, p.sku) : null;
-                          return mapped ? (<span><span className="font-bold">{mapped.label}</span><span className="block text-xs text-slate-500">{p.name}</span></span>) : (p.name || '—');
+                          const mapped = mapReturnProduct(p.name, p.sku, inventoryIndex);
+                          if (mapped && mapped !== p.name) return (<span><span className="font-bold">{mapped}</span><span className="block text-xs text-slate-500">{p.name}</span></span>);
+                          return (p.name || '—');
                         })()}</td>
                         <td className="px-3 py-2">{p.sku || '—'}</td>
                         <td className="px-3 py-2 font-bold">{p.quantity ?? '—'}</td>
