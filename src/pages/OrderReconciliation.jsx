@@ -878,8 +878,11 @@ export default function OrderReconciliation() {
         </div>
       )}
 
-      {/* Cụm dính: ô bắn + 5 ô tổng số lượng dính chung dưới tiêu đề */}
-      <div className="sticky top-[106px] z-30 space-y-4 sm:space-y-6">
+      {/* Cụm dính: ô bắn + 5 ô tổng số lượng dính chung dưới tiêu đề.
+          bg-slate-50 (cùng màu nền trang) để cụm dính thành "trần" đặc:
+          dữ liệu cuộn lên tới mép dưới cụm là khuất hẳn, không xuyên
+          qua khe giữa các ô hay hai bên ô bắn hẹp nữa. */}
+      <div className="sticky top-[106px] z-30 space-y-4 sm:space-y-6 bg-slate-50">
       <div className="bg-white p-4 sm:p-6 border border-slate-200 rounded-2xl shadow-sm text-center max-w-xl mx-auto space-y-4">
         {isConfirmed ? (
           <div className="py-4 space-y-2">
