@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, X, Trash2, ChevronLeft, ChevronRight, Loader2, ScanLine, Package } from 'lucide-react';
+import * as XLSX from 'xlsx';
+import { Search, X, Trash2, ChevronLeft, ChevronRight, Loader2, ScanLine, Package, Download } from 'lucide-react';
 
 const NHANH_STATUS_NAMES = {
   1: 'Đã hoàn tiền',
@@ -59,6 +60,17 @@ function escapeLike(q) {
 function normCode(s) {
   return String(s || '').trim().toUpperCase().replace(/[\s,]+/g, '');
 }
+// Mã đơn trả "thật" chỉ là mã vận đơn trả có đầu SPX / G / 8 / 1 / VTP.
+// Mọi mã khác đều chưa phải mã đơn trả (hiển thị "Chưa có mã đơn trả").
+const RETURN_CODE_PREFIXES = ['SPX', 'G', '8', '1', 'VTP'];
+function isReturnCode(code) {
+  const c = String(code || '').trim().toUpperCase();
+  return c !== '' && RETURN_CODE_PREFIXES.some((p) => c.startsWith(p));
+}
+function returnCodeOf(row) {
+  const code = row.return_tracking_number || row.return_id;
+  return code && isReturnCode(code) ? String(code) : '';
+}
 function productsOf(row) {
   return Array.isArray(row.products) ? row.products : [];
 }
@@ -81,6 +93,13 @@ export default function TraHangHoanTien() {
   const [error, setError] = useState('');
   const [selected, setSelected] = useState(null);
   const [showJson, setShowJson] = useState(false);
+
+  // --- Tải danh sách (chỉ owner) ---
+  const [isOwner, setIsOwner] = useState(false);
+  const [dlFrom, setDlFrom] = useState(() => addDaysStr(vnTodayStr(), -30));
+  const [dlTo, setDlTo] = useState(() => vnTodayStr());
+  const [dlLoading, setDlLoading] = useState(false);
+  const [dlError, setDlError] = useState('');
 
   // --- Đối soát shipper ---
   const [reconDate, setReconDate] = useState(() => vnTodayStr());
@@ -130,9 +149,74 @@ export default function TraHangHoanTien() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applied, page]);
 
+  // Owner nhận diện giống báo cáo đơn: user_metadata.is_owner hoặc email owner.
+  useEffect(() => {
+    let alive = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!alive) return;
+      const u = data?.user;
+      setIsOwner(u?.user_metadata?.is_owner === true || u?.email === 'contact.hotavinh@gmail.com');
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
   function handleFilter() {
     setPage(1);
     setApplied({ fromDate, toDate, platform, status, search });
+  }
+
+  // Tải toàn bộ danh sách trả hàng trong khoảng ngày đã chọn (theo ngày cập
+  // nhật trên Nhanh, giống bộ lọc của trang; không theo sàn/trạng thái/tìm kiếm).
+  async function handleDownloadExcel() {
+    if (dlLoading) return;
+    if (!dlFrom || !dlTo) { setDlError('Chọn đủ từ ngày và đến ngày.'); return; }
+    if (dlFrom > dlTo) { setDlError('Từ ngày phải nhỏ hơn hoặc bằng đến ngày.'); return; }
+    setDlLoading(true);
+    setDlError('');
+    try {
+      const from = `${dlFrom}T00:00:00+07:00`;
+      const to = `${addDaysStr(dlTo, 1)}T00:00:00+07:00`;
+      const PAGE = 1000;
+      let all = [];
+      let start = 0;
+      for (;;) {
+        const { data, error: err } = await supabase
+          .from('ecom_return_orders')
+          .select('return_id,return_tracking_number,original_ecom_order_id,platform_name,products,reason_name,nhanh_status_id,nhanh_status_name,ecom_status_name,amount,return_created_at,return_updated_at')
+          .gte('return_updated_at', from)
+          .lt('return_updated_at', to)
+          .order('return_updated_at', { ascending: false })
+          .range(start, start + PAGE - 1);
+        if (err) throw err;
+        all = all.concat(data || []);
+        if (!data || data.length < PAGE) break;
+        start += PAGE;
+      }
+      if (all.length === 0) { setDlError('Không có đơn trả nào trong khoảng ngày đã chọn.'); return; }
+      const sheetRows = all.map((r) => ({
+        'Ngày cập nhật': fmtDateTime(r.return_updated_at),
+        'Sàn': r.platform_name || '',
+        'Mã đơn trả': returnCodeOf(r) || 'Chưa có mã đơn trả',
+        'Mã yêu cầu': r.return_id || '',
+        'ID đơn gốc': r.original_ecom_order_id || '',
+        'Sản phẩm': productsOf(r).map((p) => `${p.name || ''} x${p.quantity ?? ''}`).join('; '),
+        'SL': totalQty(r),
+        'Lý do': r.reason_name || '',
+        'Trạng thái Nhanh': r.nhanh_status_name || NHANH_STATUS_NAMES[r.nhanh_status_id] || '',
+        'Trạng thái sàn': r.ecom_status_name || '',
+        'Tiền hoàn': r.amount ?? '',
+        'Ngày tạo': fmtDateTime(r.return_created_at),
+      }));
+      const ws = XLSX.utils.json_to_sheet(sheetRows);
+      ws['!cols'] = [{ wch: 17 }, { wch: 10 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 50 }, { wch: 6 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 17 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Tra hang hoan tien');
+      XLSX.writeFile(wb, `tra-hang-hoan-tien_${dlFrom}_den_${dlTo}.xlsx`);
+    } catch (e) {
+      setDlError('Lỗi tải danh sách: ' + (e.message || e));
+    } finally {
+      setDlLoading(false);
+    }
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -227,17 +311,35 @@ export default function TraHangHoanTien() {
   const detailProducts = selected ? productsOf(selected) : [];
   const reasonDescription = selected?.raw_data?.reasonDescription || '';
 
+  // Cột bảng chính: % cố định (table-fixed + colgroup) để khớp với strip
+  // tiêu đề gộp vào cụm lọc phía trên.
+  const MAIN_COLS = [
+    { id: 'date', label: 'Ngày cập nhật', w: 12 },
+    { id: 'platform', label: 'Sàn', w: 7 },
+    { id: 'code', label: 'Mã đơn trả', w: 13 },
+    { id: 'orig', label: 'ID đơn gốc', w: 11 },
+    { id: 'product', label: 'Sản phẩm', w: 16 },
+    { id: 'qty', label: 'SL', w: 4 },
+    { id: 'reason', label: 'Lý do', w: 9 },
+    { id: 'nhanh', label: 'Trạng thái Nhanh', w: 11 },
+    { id: 'ecom', label: 'Trạng thái sàn', w: 9 },
+    { id: 'money', label: 'Tiền hoàn', w: 8 },
+  ];
+  const mainGridCols = MAIN_COLS.map((c) => `${c.w}%`).join(' ');
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      <div className={`sticky top-0 z-30 bg-white border border-slate-200 rounded-2xl shadow-sm p-6`}>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Trả hàng hoàn tiền</h1>
-        <p className="text-sm text-slate-600 mt-1">
-          Yêu cầu trả hàng hoàn tiền trên sàn, đồng bộ từ Nhanh.vn. Bấm vào một dòng để xem chi tiết, lý do và phản hồi của khách.
-        </p>
+      <div className="sticky top-0 z-30 flex flex-wrap justify-between items-center gap-4 rounded-2xl px-6 py-6 bg-slate-900 border border-slate-900 shadow-md">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-white">Trả hàng hoàn tiền</h1>
+          <p className="text-sm text-slate-300 mt-1">
+            Yêu cầu trả hàng hoàn tiền trên sàn, đồng bộ từ Nhanh.vn. Bấm vào một dòng để xem chi tiết, lý do và phản hồi của khách.
+          </p>
+        </div>
       </div>
 
       {/* Bộ lọc */}
-      <div className="sticky top-[106px] z-30 bg-slate-50 rounded-2xl shadow-sm border border-slate-200 p-6">
+      <div className="sticky top-[106px] z-30 bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Từ ngày</label>
@@ -283,6 +385,31 @@ export default function TraHangHoanTien() {
           Tổng: <strong className="text-slate-800">{total}</strong> yêu cầu theo bộ lọc. Ngày lọc theo ngày cập nhật trên Nhanh.
         </p>
         {error && <p className="text-sm font-bold text-red-500 mt-2">{error}</p>}
+        {isOwner && (
+          <div className="flex flex-wrap items-end gap-3 pt-4 mt-4 border-t border-slate-100">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Tải từ ngày</label>
+              <input type="date" value={dlFrom} onChange={(e) => setDlFrom(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Đến ngày</label>
+              <input type="date" value={dlTo} onChange={(e) => setDlTo(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+            </div>
+            <button onClick={handleDownloadExcel} disabled={dlLoading} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-2">
+              {dlLoading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              {dlLoading ? 'Đang tải...' : 'Tải danh sách Excel'}
+            </button>
+            {dlError && <p className="text-sm font-bold text-red-500">{dlError}</p>}
+          </div>
+        )}
+        {/* Tiêu đề bảng gộp vào cụm lọc: dính cùng cụm lọc, cột theo đúng % của colgroup */}
+        <div className="-mx-6 -mb-6 mt-4 grid bg-slate-900 text-slate-100 rounded-b-2xl overflow-hidden" style={{ gridTemplateColumns: mainGridCols }}>
+          {MAIN_COLS.map((col) => (
+            <div key={col.id} className={`py-3 px-5 text-xs font-bold uppercase tracking-wider min-w-0 ${col.id === 'money' ? 'text-right' : ''}`}>
+              {col.label}
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Bảng */}
@@ -299,21 +426,8 @@ export default function TraHangHoanTien() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-left text-xs font-bold uppercase tracking-wider text-slate-500">
-                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Ngày cập nhật</th>
-                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Sàn</th>
-                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Mã đơn trả</th>
-                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">ID đơn gốc</th>
-                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Sản phẩm</th>
-                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">SL</th>
-                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Lý do</th>
-                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Trạng thái Nhanh</th>
-                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5">Trạng thái sàn</th>
-                  <th className="sticky top-[290px] z-10 bg-slate-50 px-5 py-3.5 text-right">Tiền hoàn</th>
-                </tr>
-              </thead>
+            <table className="w-full text-sm table-fixed">
+              <colgroup>{MAIN_COLS.map((c) => (<col key={c.id} style={{ width: `${c.w}%` }} />))}</colgroup>
               <tbody>
                 {rows.map((r) => {
                   const prods = productsOf(r);
@@ -322,8 +436,8 @@ export default function TraHangHoanTien() {
                     <tr key={r.return_id} onClick={() => openDetail(r)} className="border-t border-slate-100 hover:bg-slate-100 cursor-pointer">
                       <td className="px-5 py-3.5 whitespace-nowrap font-medium">{fmtDateTime(r.return_updated_at)}</td>
                       <td className="px-5 py-3.5 whitespace-nowrap">{r.platform_name || '—'}</td>
-                      <td className="px-5 py-3.5 font-mono font-bold text-indigo-700">{r.return_tracking_number || r.return_id}</td>
-                      <td className="px-5 py-3.5 font-mono">{r.original_ecom_order_id || '—'}</td>
+                      <td className="px-5 py-3.5 font-mono font-bold text-indigo-700 break-all">{returnCodeOf(r) || <span className="font-sans font-medium text-slate-400">Chưa có mã đơn trả</span>}</td>
+                      <td className="px-5 py-3.5 font-mono break-all">{r.original_ecom_order_id || '—'}</td>
                       <td className="px-5 py-3.5">
                         {first ? (<span>{first.name}{prods.length > 1 ? ` (+${prods.length - 1} SP)` : ''}</span>) : '—'}
                       </td>
@@ -398,11 +512,11 @@ export default function TraHangHoanTien() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500">
-                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">Mã quét</th>
-                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">Kết quả</th>
-                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">ID đơn gốc</th>
-                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">Trạng thái Nhanh</th>
-                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2"></th>
+                    <th className="bg-slate-50 px-4 py-2">Mã quét</th>
+                    <th className="bg-slate-50 px-4 py-2">Kết quả</th>
+                    <th className="bg-slate-50 px-4 py-2">ID đơn gốc</th>
+                    <th className="bg-slate-50 px-4 py-2">Trạng thái Nhanh</th>
+                    <th className="bg-slate-50 px-4 py-2"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -434,16 +548,16 @@ export default function TraHangHoanTien() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-50 text-left text-xs font-bold text-slate-500">
-                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">Mã đơn trả</th>
-                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">ID đơn gốc</th>
-                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">Sàn</th>
-                    <th className="sticky top-[290px] z-10 bg-slate-50 px-4 py-2">Trạng thái Nhanh</th>
+                    <th className="bg-slate-50 px-4 py-2">Mã đơn trả</th>
+                    <th className="bg-slate-50 px-4 py-2">ID đơn gốc</th>
+                    <th className="bg-slate-50 px-4 py-2">Sàn</th>
+                    <th className="bg-slate-50 px-4 py-2">Trạng thái Nhanh</th>
                   </tr>
                 </thead>
                 <tbody>
                   {missingRows.map((r) => (
                     <tr key={r.return_id} className="border-t border-slate-100">
-                      <td className="px-4 py-3 font-mono font-bold">{r.return_tracking_number || r.return_id}</td>
+                      <td className="px-4 py-3 font-mono font-bold break-all">{returnCodeOf(r) || <span className="font-sans font-medium text-slate-400">Chưa có mã đơn trả</span>}</td>
                       <td className="px-4 py-2">{r.original_ecom_order_id || '—'}</td>
                       <td className="px-4 py-2">{r.platform_name || '—'}</td>
                       <td className="px-4 py-2">{r.nhanh_status_name || NHANH_STATUS_NAMES[r.nhanh_status_id] || '—'}</td>
@@ -471,7 +585,7 @@ export default function TraHangHoanTien() {
             <div className="grid sm:grid-cols-2 gap-3 mt-4 text-sm">
               <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">Sàn</span><strong>{selected.platform_name || '—'}</strong></div>
               <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">Shop</span><strong>{selected.shop_id || '—'}</strong></div>
-              <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">Mã đơn trả</span><strong>{selected.return_tracking_number || '—'}</strong></div>
+              <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">Mã đơn trả</span><strong>{returnCodeOf(selected) || 'Chưa có mã đơn trả'}</strong></div>
               <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">ID đơn gốc</span><strong>{selected.original_ecom_order_id || '—'}</strong></div>
               <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">Loại trả</span><strong>{RETURN_TYPE_NAMES[selected.return_type] || '—'}</strong></div>
               <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">Tiền hoàn</span><strong>{fmtMoney(selected.amount)}</strong></div>
