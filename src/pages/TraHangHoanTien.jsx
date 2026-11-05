@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../lib/supabase';
-import * as XLSX from 'xlsx';
-import { Search, X, Trash2, ChevronLeft, ChevronRight, Loader2, ScanLine, Package, Download } from 'lucide-react';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
+import { Search, X, Trash2, ChevronLeft, ChevronRight, Loader2, ScanLine, Package, DownloadCloud } from 'lucide-react';
 
 const NHANH_STATUS_NAMES = {
   1: 'Đã hoàn tiền',
@@ -94,12 +93,12 @@ export default function TraHangHoanTien() {
   const [selected, setSelected] = useState(null);
   const [showJson, setShowJson] = useState(false);
 
-  // --- Tải danh sách (chỉ owner) ---
+  // --- Kéo dữ liệu từ Nhanh.vn (chỉ owner) ---
   const [isOwner, setIsOwner] = useState(false);
-  const [dlFrom, setDlFrom] = useState(() => addDaysStr(vnTodayStr(), -30));
-  const [dlTo, setDlTo] = useState(() => vnTodayStr());
-  const [dlLoading, setDlLoading] = useState(false);
-  const [dlError, setDlError] = useState('');
+  const [syncFrom, setSyncFrom] = useState(() => addDaysStr(vnTodayStr(), -30));
+  const [syncTo, setSyncTo] = useState(() => vnTodayStr());
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState({ text: '', type: '' });
 
   // --- Đối soát shipper ---
   const [reconDate, setReconDate] = useState(() => vnTodayStr());
@@ -165,57 +164,42 @@ export default function TraHangHoanTien() {
     setApplied({ fromDate, toDate, platform, status, search });
   }
 
-  // Tải toàn bộ danh sách trả hàng trong khoảng ngày đã chọn (theo ngày cập
-  // nhật trên Nhanh, giống bộ lọc của trang; không theo sàn/trạng thái/tìm kiếm).
-  async function handleDownloadExcel() {
-    if (dlLoading) return;
-    if (!dlFrom || !dlTo) { setDlError('Chọn đủ từ ngày và đến ngày.'); return; }
-    if (dlFrom > dlTo) { setDlError('Từ ngày phải nhỏ hơn hoặc bằng đến ngày.'); return; }
-    setDlLoading(true);
-    setDlError('');
+  // Kéo dữ liệu trả hàng từ Nhanh.vn về để update DB (xem có gì thay đổi
+  // hoặc miss không). Gọi edge sync-ecom-returns 1 lần cho cả 3 sàn
+  // (không gửi platformId thì edge tự kéo Shopee + TikTok + Lazada).
+  async function handleSyncFromNhanh() {
+    if (isSyncing) return;
+    if (!syncFrom || !syncTo) { setSyncMessage({ text: 'Chọn đủ từ ngày và đến ngày.', type: 'error' }); return; }
+    if (syncFrom > syncTo) { setSyncMessage({ text: 'Từ ngày phải nhỏ hơn hoặc bằng đến ngày.', type: 'error' }); return; }
+    setIsSyncing(true);
+    setSyncMessage({ text: 'Đang kéo dữ liệu từ Nhanh.vn...', type: 'processing' });
     try {
-      const from = `${dlFrom}T00:00:00+07:00`;
-      const to = `${addDaysStr(dlTo, 1)}T00:00:00+07:00`;
-      const PAGE = 1000;
-      let all = [];
-      let start = 0;
-      for (;;) {
-        const { data, error: err } = await supabase
-          .from('ecom_return_orders')
-          .select('return_id,return_tracking_number,original_ecom_order_id,platform_name,products,reason_name,nhanh_status_id,nhanh_status_name,ecom_status_name,amount,return_created_at,return_updated_at')
-          .gte('return_updated_at', from)
-          .lt('return_updated_at', to)
-          .order('return_updated_at', { ascending: false })
-          .range(start, start + PAGE - 1);
-        if (err) throw err;
-        all = all.concat(data || []);
-        if (!data || data.length < PAGE) break;
-        start += PAGE;
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/sync-ecom-returns`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_ANON_KEY}`, 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ fromDate: syncFrom || undefined, toDate: syncTo || undefined }),
+      });
+      const textData = await res.text();
+      let data;
+      try { data = JSON.parse(textData); } catch (e) { throw new Error('Máy chủ trả về dữ liệu không đọc được.'); }
+      const total = data.syncedCount || 0;
+      const perPlatform = Array.isArray(data.platforms)
+        ? data.platforms.map((p) => `${p.platformName}: ${p.synced || 0}`).join(', ')
+        : '';
+      if (!res.ok) {
+        setSyncMessage({ text: `Đã kéo được ${total} đơn nhưng bị gián đoạn ở một vài sàn${perPlatform ? ` (${perPlatform})` : ''}.${Array.isArray(data.errors) && data.errors.length ? ' ' + data.errors.join('; ') : ''}`, type: 'error' });
+      } else {
+        setSyncMessage({ text: `Hoàn tất! Đã đồng bộ ${total} đơn trả hàng từ Nhanh.vn${perPlatform ? ` (${perPlatform})` : ''}.`, type: 'success' });
       }
-      if (all.length === 0) { setDlError('Không có đơn trả nào trong khoảng ngày đã chọn.'); return; }
-      const sheetRows = all.map((r) => ({
-        'Ngày cập nhật': fmtDateTime(r.return_updated_at),
-        'Sàn': r.platform_name || '',
-        'Mã đơn trả': returnCodeOf(r) || 'Chưa có mã đơn trả',
-        'Mã yêu cầu': r.return_id || '',
-        'ID đơn gốc': r.original_ecom_order_id || '',
-        'Sản phẩm': productsOf(r).map((p) => `${p.name || ''} x${p.quantity ?? ''}`).join('; '),
-        'SL': totalQty(r),
-        'Lý do': r.reason_name || '',
-        'Trạng thái Nhanh': r.nhanh_status_name || NHANH_STATUS_NAMES[r.nhanh_status_id] || '',
-        'Trạng thái sàn': r.ecom_status_name || '',
-        'Tiền hoàn': r.amount ?? '',
-        'Ngày tạo': fmtDateTime(r.return_created_at),
-      }));
-      const ws = XLSX.utils.json_to_sheet(sheetRows);
-      ws['!cols'] = [{ wch: 17 }, { wch: 10 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 50 }, { wch: 6 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 12 }, { wch: 17 }];
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Tra hang hoan tien');
-      XLSX.writeFile(wb, `tra-hang-hoan-tien_${dlFrom}_den_${dlTo}.xlsx`);
+      // Tải lại bảng + đối soát trong ngày để thấy ngay đơn mới/thay đổi.
+      setPage(1);
+      fetchRows(filters, 1);
+      loadToday(reconDate);
+      setScanned([]);
     } catch (e) {
-      setDlError('Lỗi tải danh sách: ' + (e.message || e));
+      setSyncMessage({ text: 'Lỗi hệ thống: ' + (e.message || e), type: 'error' });
     } finally {
-      setDlLoading(false);
+      setIsSyncing(false);
     }
   }
 
@@ -388,18 +372,18 @@ export default function TraHangHoanTien() {
         {isOwner && (
           <div className="flex flex-wrap items-end gap-3 pt-4 mt-4 border-t border-slate-100">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Tải từ ngày</label>
-              <input type="date" value={dlFrom} onChange={(e) => setDlFrom(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Đồng bộ từ ngày</label>
+              <input type="date" value={syncFrom} onChange={(e) => setSyncFrom(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
             </div>
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Đến ngày</label>
-              <input type="date" value={dlTo} onChange={(e) => setDlTo(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+              <input type="date" value={syncTo} onChange={(e) => setSyncTo(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
             </div>
-            <button onClick={handleDownloadExcel} disabled={dlLoading} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-2">
-              {dlLoading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-              {dlLoading ? 'Đang tải...' : 'Tải danh sách Excel'}
+            <button onClick={handleSyncFromNhanh} disabled={isSyncing} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-2">
+              {isSyncing ? <Loader2 size={16} className="animate-spin" /> : <DownloadCloud size={16} />}
+              {isSyncing ? 'Đang kéo từ Nhanh.vn...' : 'Kéo dữ liệu từ Nhanh.vn'}
             </button>
-            {dlError && <p className="text-sm font-bold text-red-500">{dlError}</p>}
+            {syncMessage.text && <p className={`text-sm font-bold ${syncMessage.type === 'error' ? 'text-red-500' : syncMessage.type === 'success' ? 'text-emerald-600' : 'text-slate-500'}`}>{syncMessage.text}</p>}
           </div>
         )}
         {/* Tiêu đề bảng gộp vào cụm lọc: dính cùng cụm lọc, cột theo đúng % của colgroup */}
