@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { getXmasEnabled } from '../lib/xmas';
 import { 
   Boxes, Search, RefreshCw, ChevronLeft, ChevronRight, FileX, Package, 
   Truck, Home, Printer, FileSpreadsheet, UploadCloud, Download, Plus, Trash2, X, Settings2
@@ -24,6 +25,12 @@ const ORDER_CORNER_STYLE = {
 function PreviewLabel({ item, config }) {
   const svgRef = useRef(null);
   const [qrUrl, setQrUrl] = useState('');
+  const [xmasOn, setXmasOn] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    getXmasEnabled().then(v => { if (alive) setXmasOn(v); });
+    return () => { alive = false; };
+  }, []);
   const today = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
   useEffect(() => {
@@ -679,7 +686,7 @@ export default function InventoryReport() {
     <div className="space-y-6 provinces pb-10 animate-in fade-in duration-300">
       
       {/* 1. HEADER */}
-      <div className="sticky top-0 z-30 flex flex-col md:flex-row justify-between items-start md:items-center p-6 bg-white border border-slate-200 rounded-2xl shadow-sm gap-4">
+      <div className={`sticky top-0 z-30 flex flex-col md:flex-row justify-between items-start md:items-center p-6 ${xmasOn ? 'bg-gradient-to-r from-[#DFF4FF] via-[#EFF8FF] to-[#DFF4FF] border border-[#BFE3F7]' : 'bg-white border border-slate-200'} rounded-2xl shadow-sm gap-4`}>
         <div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
             <span className="p-2 bg-emerald-50 text-emerald-700 rounded-lg"><Boxes size={20} /></span>

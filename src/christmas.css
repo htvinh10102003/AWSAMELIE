@@ -1,0 +1,62 @@
+/* Christmas Edition — OrderReport special mode + icy theme (UI only).
+   Imported after index.css so these utilities win over same-specificity Tailwind classes. */
+
+/* Icy winter background: deeper ice-blue gradient + denser snow dots. */
+.xmas-icy-bg {
+  background-color: #e0f2fe;
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 1) 1.8px, transparent 1.9px),
+    linear-gradient(180deg, #bae6fd 0%, #dff4ff 30%, #eff8ff 62%, #f8fafc 100%);
+  background-size: 80px 80px, 100% 100%;
+}
+
+/* Raised 3D block: layered soft shadows + bright top edge (glass highlight). */
+.xmas-3d {
+  box-shadow:
+    0 1px 2px rgba(6, 61, 46, 0.06),
+    0 12px 32px -8px rgba(6, 61, 46, 0.18),
+    0 24px 48px -24px rgba(6, 61, 46, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+/* Falling snow over the special report. Flakes are deterministic (no random
+   values in render) so server/client output stays identical. */
+.xmas-snowfall {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  overflow: hidden;
+}
+.xmas-flake {
+  position: absolute;
+  top: -14px;
+  background: #fff;
+  border-radius: 9999px;
+  opacity: 0.9;
+  filter: blur(0.2px);
+  animation-name: xmas-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes xmas-fall {
+  0% { transform: translate(0, -5vh) rotate(0deg); }
+  25% { transform: translate(18px, 30vh) rotate(90deg); }
+  50% { transform: translate(-14px, 55vh) rotate(180deg); }
+  75% { transform: translate(12px, 80vh) rotate(270deg); }
+  100% { transform: translate(-8px, 112vh) rotate(360deg); }
+}
+
+/* Twinkling gold stars in the Santa strip. */
+@keyframes xmas-twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+.xmas-twinkle {
+  animation: xmas-twinkle 2.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xmas-snowfall { display: none; }
+  .xmas-twinkle { animation: none; opacity: 0.8; }
+}
