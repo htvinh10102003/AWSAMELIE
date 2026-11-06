@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import FeatureGuard from './components/FeatureGuard';
 import MaintenanceGate from './components/MaintenanceGate';
+import DevtoolGuard from './components/DevtoolGuard';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Admin = lazy(() => import('./pages/Admin'));
@@ -44,6 +45,7 @@ const Mobile = lazy(() => import('./pages/Mobile'));
 export default function App() {
   return (
     <BrowserRouter>
+      <DevtoolGuard />
       <Suspense fallback={<div className="h-screen flex items-center justify-center font-sans text-slate-500 font-semibold animate-pulse">Đang tải trang...</div>}>
       <MaintenanceGate>
       <Routes>
