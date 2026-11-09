@@ -54,6 +54,31 @@ serve(async (req) => {
       orderPage++;
     }
 
+    // Đơn đã xóa trên Nhanh: loại khỏi phân bổ để không chiếm tồn kho
+    // của đơn khác (đọc từ bảng deleted_orders do action syncDeleted
+    // của nhanh-order-actions đồng bộ). Lỗi đọc không được làm hỏng
+    // phân bổ: rơi về tập rỗng và tiếp tục như chưa có đơn nào bị xóa,
+    // giống cách đọc orders_printabledate ở dưới. Lọc ở đây, TRƯỚC khi
+    // sắp xếp/phân bổ, nên đơn đã xóa cũng không được ghi printable_date.
+    let deletedOrderIds = new Set<string>();
+    try {
+      let delPage = 0;
+      while (true) {
+        const { data, error } = await supabase.from('deleted_orders').select('order_id').range(delPage * pageSize, (delPage + 1) * pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        data.forEach(r => { if (r.order_id) deletedOrderIds.add(String(r.order_id)); });
+        if (data.length < pageSize) break;
+        delPage++;
+      }
+    } catch (e) {
+      console.error('Không đọc được deleted_orders:', e.message);
+      deletedOrderIds = new Set();
+    }
+    if (deletedOrderIds.size > 0) {
+      rawOrders = rawOrders.filter(o => !deletedOrderIds.has(String(o.id)));
+    }
+
     // Ngày đủ hàng: đọc từ bảng orders_printabledate (order_id -> printable_date).
     // Bảng này chỉ lưu ngày đầu tiên đơn vào nhóm đủ hàng; giao diện đọc
     // order.printable_date từ dữ liệu hàm này trả về để hiện badge "X ngày"

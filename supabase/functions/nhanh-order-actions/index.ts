@@ -6,6 +6,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // - Sửa đơn (order/edit): ghi chú, ghi chú nội bộ, trạng thái, nhãn.
 // - Danh sách nhãn (order/tags): cache trong bảng nhanh_tags, mới hơn
 //   24h thì dùng luôn, cũ hơn thì gọi API rồi ghi đè (theo tài liệu).
+// - Chi tiết sản phẩm (product/detail): lấy 1 sản phẩm theo ID.
+// - Đơn đã xóa (order/deleted): đồng bộ vào bảng deleted_orders để
+//   wms-allocation loại khỏi phân bổ (action syncDeleted, không cần ID đơn).
+// - Gửi đơn sàn (ecom/readytoship + ecom/getprintlabel): Shopee/TikTok/
+//   Lazada, lấy mã vận đơn sàn + URL nhãn PDF (action ecomReadyToShip).
 // - Gửi đơn sang hãng (order/sendcarrier) và hủy đơn (order/cancelcarrier):
 //   chạy được 1 đơn hoặc nhiều đơn (mảng orderIds, chạy tuần tự từng
 //   đơn). Đơn đã gửi rồi (ERR_ORDER_ALREADY_SENT_CARRIER) thì lấy lại
@@ -73,8 +78,11 @@ serve(async (req) => {
       ? payload.orderIds.map((v: unknown) => parseInt(String(v), 10)).filter((n: number) => !Number.isNaN(n))
       : (payload.orderId ? [parseInt(String(payload.orderId), 10)].filter((n: number) => !Number.isNaN(n)) : []);
     // Riêng tags không cần đơn hàng (chỉ lấy danh sách nhãn để lọc),
-    // sendHistory cũng vậy (chỉ đọc 5 dòng gần nhất).
-    if (action !== 'tags' && action !== 'sendHistory' && orderIds.length === 0) {
+    // sendHistory cũng vậy (chỉ đọc 5 dòng gần nhất). productDetail
+    // chỉ cần productId, syncDeleted không cần tham số nào — cả hai
+    // cũng không mang orderIds nên phải miễn kiểm tra này, nếu không
+    // sẽ luôn trả 400 'Thiếu ID đơn hàng.'
+    if (action !== 'tags' && action !== 'sendHistory' && action !== 'productDetail' && action !== 'syncDeleted' && orderIds.length === 0) {
       return json({ success: false, message: 'Thiếu ID đơn hàng.' }, 400);
     }
 
@@ -304,6 +312,175 @@ serve(async (req) => {
           message: r.ok ? null : (r.message || null),
         },
         result: r.ok ? 'ok' : 'failed',
+      })));
+      return json({ success: okCount > 0, results, okCount, failCount: results.length - okCount });
+    }
+
+    if (action === 'productDetail') {
+      // Chi tiết 1 sản phẩm theo ID (product/detail). Chỉ owner được gọi
+      // (đã qua owner gate ở trên) vì giá trả về gồm cả giá nhập/giá vốn
+      // (prices.import, prices.avgCost) — thông tin nhạy cảm, không mở
+      // cho tài khoản thường.
+      const productId = payload.productId;
+      if (productId === undefined || productId === null || String(productId).trim() === '') {
+        return json({ success: false, message: 'Thiếu ID sản phẩm.' }, 400);
+      }
+      const r = await callPos('/product/detail', { filters: { id: String(productId) } });
+      if (r.code !== 1) return json({ success: false, message: nhanhErr(r) });
+      return json({ success: true, data: r.data });
+    }
+
+    if (action === 'syncDeleted') {
+      // Đồng bộ đơn đã xóa trên Nhanh (order/deleted) vào bảng
+      // deleted_orders để wms-allocation loại khỏi phân bổ tồn kho.
+      // Quét từ 2025-01-01 00:00 giờ VN (1735664400) tới hiện tại,
+      // phân trang cursor (paginator.next echo nguyên vẹn, giống
+      // sync-ecom-returns), chặn 200 trang để khỏi lặp vô hạn.
+      const createdAtFrom = 1735664400;
+      const createdAtTo = Math.floor(Date.now() / 1000);
+      const syncedAt = new Date().toISOString();
+      let next: any = null;
+      let pages = 0;
+      let synced = 0;
+      do {
+        const sentNext = next;
+        const body: any = {
+          filters: { createdAtFrom, createdAtTo },
+          paginator: { size: 50 },
+        };
+        if (next) body.paginator.next = next;
+        const r = await callPos('/order/deleted', body);
+        if (r.code !== 1) return json({ success: false, message: nhanhErr(r) });
+        const items: any[] = Array.isArray(r.data) ? r.data : [];
+        pages++;
+        if (items.length > 0) {
+          const rows = items
+            .filter((it: any) => it && it.id !== undefined && it.id !== null)
+            .map((it: any) => ({
+              order_id: String(it.id),
+              deleted_at: it.createdAt ? new Date(Number(it.createdAt) * 1000).toISOString() : null,
+              deleted_by: it.createdById ?? null,
+              synced_at: syncedAt,
+            }));
+          // Upsert theo từng mẻ 100 để tránh payload quá lớn.
+          for (let i = 0; i < rows.length; i += 100) {
+            const batch = rows.slice(i, i + 100);
+            const { error } = await supabaseAdmin.from('deleted_orders').upsert(batch, { onConflict: 'order_id' });
+            if (error) {
+              const msg = String(error.message || '');
+              if (error.code === '42P01' || /does not exist|PGRST205/i.test(msg)) {
+                return json({ success: false, message: 'Chưa có bảng deleted_orders. Hãy chạy migration supabase/20261109_deleted_orders.sql trong Supabase SQL Editor rồi thử lại.' }, 500);
+              }
+              return json({ success: false, message: `Lỗi ghi bảng deleted_orders: ${msg}` }, 500);
+            }
+          }
+          synced += rows.length;
+        }
+        let rawNext = r.paginator?.next ?? null;
+        // Cursor rỗng (object nhưng id null) coi như hết trang.
+        if (rawNext && typeof rawNext === 'object' && !rawNext.id) rawNext = null;
+        // Cursor trả về giống hệt cursor vừa gửi = không tiến thêm được, dừng để khỏi lặp vô hạn.
+        if (rawNext && JSON.stringify(rawNext) === JSON.stringify(sentNext)) rawNext = null;
+        next = rawNext;
+        if (pages >= 200) {
+          console.log(`[syncDeleted] Dừng sau 200 trang (giới hạn an toàn), đã đồng bộ ${synced} đơn.`);
+          break;
+        }
+      } while (next);
+      return json({ success: true, synced, pages });
+    }
+
+    if (action === 'ecomReadyToShip') {
+      // Gửi đơn sàn sang hãng qua ecom/readytoship rồi lấy URL nhãn PDF
+      // qua ecom/getprintlabel (nhãn chỉ lấy được sau khi readytoship
+      // thành công). Chạy tuần tự từng đơn như action 'send'.
+      const pickupType = payload.orderPickupType === undefined || payload.orderPickupType === null
+        ? 1
+        : parseInt(String(payload.orderPickupType), 10);
+      if (pickupType !== 1 && pickupType !== 2) {
+        return json({ success: false, message: 'orderPickupType chỉ nhận 1 (hãng tới lấy) hoặc 2 (gửi tại bưu cục).' }, 400);
+      }
+      // Kênh bán -> appId sàn trên Nhanh (không phải appId của mình):
+      // 42 Shopee -> 8195, 48 TikTok -> 8855, 41 Lazada -> 8142.
+      const ECOM_APP_IDS: Record<number, number> = { 42: 8195, 48: 8855, 41: 8142 };
+      const results: any[] = [];
+      const appIdByOrder = new Map<number, number | null>();
+      for (const id of orderIds) {
+        // Edge chỉ nhận orderIds nên phải tra sale_channel từ bảng orders
+        // của mình trước khi gọi Nhanh.
+        let appIdForOrder: number | null = null;
+        try {
+          const { data: orderRow } = await supabaseAdmin
+            .from('orders')
+            .select('id, sale_channel')
+            .eq('id', id)
+            .maybeSingle();
+          if (orderRow) {
+            appIdForOrder = ECOM_APP_IDS[Number(orderRow.sale_channel)] ?? null;
+          }
+        } catch { /* Tra cứu lỗi thì coi như không tìm thấy đơn */ }
+        appIdByOrder.set(id, appIdForOrder);
+        if (!appIdForOrder) {
+          results.push({ orderId: id, ok: false, existed: false, trackingNumber: null, labelUrl: null, labelError: null, error: 'Không tìm thấy đơn trong hệ thống hoặc kênh bán không phải Shopee/TikTok/Lazada.' });
+          continue;
+        }
+        try {
+          const r = await callPos('/ecom/readytoship', { appId: appIdForOrder, orderId: Number(id), orderPickupType: pickupType });
+          const alreadyHasTracking = r.errorCode === 'ERR_ECOM_ORDER_ALREADY_HAS_TRACKING_NUMBER';
+          if (r.code !== 1 && !alreadyHasTracking) {
+            results.push({ orderId: id, ok: false, existed: false, trackingNumber: null, labelUrl: null, labelError: null, error: nhanhErr(r) });
+            continue;
+          }
+          const existed = alreadyHasTracking;
+          const trackingNumber = r.data?.trackingNumber || null;
+          // Lấy nhãn PDF. Nhãn lỗi thì đơn vẫn tính là gửi thành công
+          // (đã có mã vận đơn), chỉ ghi labelError để giao diện báo lại.
+          let labelUrl: string | null = null;
+          let labelError: string | null = null;
+          try {
+            const lr = await callPos('/ecom/getprintlabel', { appId: appIdForOrder, orderId: Number(id) });
+            if (lr.code === 1) {
+              labelUrl = lr.data?.url || null;
+            } else {
+              labelError = nhanhErr(lr);
+            }
+          } catch (e: any) {
+            labelError = e?.message || 'Lỗi kết nối tới Nhanh.vn khi lấy nhãn.';
+          }
+          results.push({ orderId: id, ok: true, existed, trackingNumber, labelUrl, labelError, error: null });
+        } catch (e: any) {
+          results.push({ orderId: id, ok: false, existed: false, trackingNumber: null, labelUrl: null, labelError: null, error: e?.message || 'Lỗi kết nối tới Nhanh.vn.' });
+        }
+      }
+      const okCount = results.filter((x) => x.ok).length;
+      // Ghi 1 dòng lịch sử gửi (cùng bảng send_history với action 'send',
+      // schema vừa đủ: items = kết quả từng đơn, skipped_ids rỗng).
+      // Ghi lỗi thì không làm hỏng kết quả gửi.
+      try {
+        await supabaseAdmin.from('send_history').insert({
+          created_by: user.email || null,
+          source: typeof payload.source === 'string' ? payload.source : 'ecom',
+          total_count: orderIds.length,
+          ok_count: okCount,
+          fail_count: results.length - okCount,
+          skipped_count: 0,
+          items: results,
+          skipped_ids: [],
+        });
+      } catch { /* Bỏ qua lỗi ghi lịch sử */ }
+      await logOrderActions(results.map((r) => ({
+        action: 'ecom_send',
+        target_type: 'order',
+        target_id: String(r.orderId),
+        details: {
+          pickupType,
+          trackingNumber: r.trackingNumber || null,
+          labelUrl: r.labelUrl || null,
+          appId: appIdByOrder.get(r.orderId) ?? null,
+          existed: !!r.existed,
+          message: r.ok ? null : (r.error || null),
+        },
+        result: r.ok ? (r.existed ? 'existed' : 'ok') : 'failed',
       })));
       return json({ success: okCount > 0, results, okCount, failCount: results.length - okCount });
     }

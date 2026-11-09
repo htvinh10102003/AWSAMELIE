@@ -271,6 +271,11 @@ export default function OrderReport() {
     const [specialCounts, setSpecialCounts] = useState({});
     const [specialMissingTotal, setSpecialMissingTotal] = useState(null);
     const [specialReloadToken, setSpecialReloadToken] = useState(0);
+    // Tập ID đơn đã xóa trên Nhanh (bảng deleted_orders): tải 1 lần khi
+    // vào báo cáo đặc biệt. Bảng chưa có (chưa chạy migration) thì coi
+    // như tập rỗng, không làm hỏng trang; lần vào sau sẽ thử tải lại.
+    const [deletedOrderIds, setDeletedOrderIds] = useState(new Set());
+    const [deletedIdsLoaded, setDeletedIdsLoaded] = useState(false);
     const [missingUpdateTotal, setMissingUpdateTotal] = useState(0);
     const specialFilterSigRef = useRef(null);
     const [specialLoading, setSpecialLoading] = useState(false);
@@ -362,6 +367,21 @@ export default function OrderReport() {
     // Gửi / hủy hàng loạt từ nút Thao tác trên thanh công cụ.
     const [bulkSendResult, setBulkSendResult] = useState(null);
     const [showBulkSendModal, setShowBulkSendModal] = useState(false);
+    // Gửi đơn sàn (Shopee/TikTok/Lazada) trong popup chi tiết.
+    const [ecomPickupType, setEcomPickupType] = useState(1); // 1: hãng tới lấy, 2: gửi tại bưu cục
+    const [ecomSending, setEcomSending] = useState(false);
+    const [ecomMsg, setEcomMsg] = useState('');
+    const [ecomTracking, setEcomTracking] = useState('');
+    const [ecomLabelUrl, setEcomLabelUrl] = useState('');
+    // Gửi đơn sàn hàng loạt từ nút Thao tác.
+    const [showBulkEcomModal, setShowBulkEcomModal] = useState(false);
+    const [bulkEcomPickupType, setBulkEcomPickupType] = useState(1);
+    const [bulkEcomRunning, setBulkEcomRunning] = useState(false);
+    const [bulkEcomResult, setBulkEcomResult] = useState(null);
+    const [showBulkEcomResultModal, setShowBulkEcomResultModal] = useState(false);
+    // Đồng bộ đơn đã xóa từ Nhanh (owner, trong khu vực báo cáo đặc biệt).
+    const [syncDeletedLoading, setSyncDeletedLoading] = useState(false);
+    const [syncDeletedMsg, setSyncDeletedMsg] = useState('');
     const [showBulkCancelModal, setShowBulkCancelModal] = useState(false);
     const [cancelReasonBulk, setCancelReasonBulk] = useState('');
     const [bulkCancelRunning, setBulkCancelRunning] = useState(false);
@@ -581,6 +601,10 @@ export default function OrderReport() {
     // trang nào mới tải trang đó. Bộ lọc dùng chung với báo cáo cũ được
     // đẩy xuống query server để tổng số và các trang khớp nhau.
     const SPECIAL_PAGE_SIZE = 20;
+    // Giới hạn số id đơn đã xóa đưa vào query .in() / .not() để URL
+    // PostgREST không quá dài; vượt quá thì tab Đơn đã xóa / việc loại
+    // đơn đã xóa khỏi các tab khác sẽ không đầy đủ.
+    const DELETED_IDS_CAP = 1000;
     const SPECIAL_COLUMNS = 'id, created_at, updated_at, packed_at, status, carrier_name, carrier_code, carrier_date, printed_at, sale_channel, ecom_order_id, created_by_name, depot_id, description, private_description, traffic_source, tracking_url, is_declared_fee, order_products (product_code, product_name, quantity)';
 
     // Escape cho ilike: \ % _ là ký tự đặc biệt; dấu phẩy thì PostgREST
@@ -671,6 +695,18 @@ export default function OrderReport() {
         let q = query
             .gte('created_at', `${specialStartDate}T00:00:00.000Z`)
             .lte('created_at', `${specialEndDate}T23:59:59.999Z`);
+        // Đơn đã xóa: tab 'Đơn đã xóa' chỉ lấy đơn trong deleted_orders;
+        // các tab khác loại đơn đã xóa ra (tab 'Tất cả' vì thế sẽ giảm
+        // sau khi loại). tabId null là đường lọc theo id (nhãn / tồn kho
+        // / khách / sản phẩm): không loại ở server mà lọc ở client sau,
+        // để tab 'Đơn đã xóa' vẫn đếm được trong các đường đó.
+        const deletedIds = [...deletedOrderIds].slice(0, DELETED_IDS_CAP).map(v => Number(v)).filter(n => !Number.isNaN(n));
+        if (tabId === 'deleted') {
+            if (deletedIds.length > 0) q = q.in('id', deletedIds);
+            else q = q.eq('id', -1); // tập rỗng: không khớp đơn nào, khỏi lỗi .in([])
+        } else if (tabId !== null && deletedOrderIds.size > 0 && deletedIds.length > 0) {
+            q = q.not('id', 'in', `(${deletedIds.join(',')})`);
+        }
         // Lọc của tab (Tất cả / Xác nhận / In và đóng gói / Đang chuyển),
         // chạy phía server theo đúng định nghĩa cũ của từng tab.
         if (tabId === 'confirm') {
@@ -819,16 +855,22 @@ export default function OrderReport() {
                 const isPrintTag = (o) => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && hasRealCarrier(o);
                 const isTransitTag = (o) => SPECIAL_TRANSIT_STATUSES.includes(String(o.status));
                 const isMissingTag = (o) => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && !hasRealCarrier(o);
+                // Đơn đã xóa loại khỏi các tab thường, chỉ hiện ở tab 'Đơn đã xóa'.
+                const isDeletedTag = (o) => deletedOrderIds.has(String(o.id));
+                const fieldRowsVisible = fieldRows.filter(o => !isDeletedTag(o));
                 const countsTag = {
-                    all: fieldRows.length,
-                    confirm: fieldRows.filter(isConfirmTag).length,
-                    print: fieldRows.filter(isPrintTag).length,
-                    transit: fieldRows.filter(isTransitTag).length,
+                    all: fieldRowsVisible.length,
+                    confirm: fieldRowsVisible.filter(isConfirmTag).length,
+                    print: fieldRowsVisible.filter(isPrintTag).length,
+                    transit: fieldRowsVisible.filter(isTransitTag).length,
+                    deleted: fieldRows.filter(isDeletedTag).length,
                 };
-                const missingTotalTag = fieldRows.filter(isMissingTag).length;
-                const viewListTag = specialOnlyMissingPrint
-                    ? fieldRows.filter(isMissingTag)
-                    : fieldRows.filter(o => specialTab === 'all' ? true : specialTab === 'confirm' ? isConfirmTag(o) : specialTab === 'print' ? isPrintTag(o) : isTransitTag(o));
+                const missingTotalTag = fieldRowsVisible.filter(isMissingTag).length;
+                const viewListTag = specialTab === 'deleted'
+                    ? fieldRows.filter(isDeletedTag)
+                    : specialOnlyMissingPrint
+                    ? fieldRowsVisible.filter(isMissingTag)
+                    : fieldRowsVisible.filter(o => specialTab === 'all' ? true : specialTab === 'confirm' ? isConfirmTag(o) : specialTab === 'print' ? isPrintTag(o) : isTransitTag(o));
                 const totalTag = viewListTag.length;
                 const totalPagesTag = Math.max(1, Math.ceil(totalTag / SPECIAL_PAGE_SIZE));
                 const effectivePageTag = totalTag > 0 ? Math.min(page, totalPagesTag) : 1;
@@ -874,16 +916,22 @@ export default function OrderReport() {
                 const isPrint = (o) => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && hasRealCarrier(o);
                 const isTransit = (o) => SPECIAL_TRANSIT_STATUSES.includes(String(o.status));
                 const isMissing = (o) => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && !hasRealCarrier(o);
+                // Đơn đã xóa loại khỏi các tab thường, chỉ hiện ở tab 'Đơn đã xóa'.
+                const isDeleted = (o) => deletedOrderIds.has(String(o.id));
+                const matchedVisible = matched.filter(o => !isDeleted(o));
                 const counts = {
-                    all: matched.length,
-                    confirm: matched.filter(isConfirm).length,
-                    print: matched.filter(isPrint).length,
-                    transit: matched.filter(isTransit).length,
+                    all: matchedVisible.length,
+                    confirm: matchedVisible.filter(isConfirm).length,
+                    print: matchedVisible.filter(isPrint).length,
+                    transit: matchedVisible.filter(isTransit).length,
+                    deleted: matched.filter(isDeleted).length,
                 };
-                const missingTotal = matched.filter(isMissing).length;
-                const viewList = specialOnlyMissingPrint
-                    ? matched.filter(isMissing)
-                    : matched.filter(o => specialTab === 'all' ? true : specialTab === 'confirm' ? isConfirm(o) : specialTab === 'print' ? isPrint(o) : isTransit(o));
+                const missingTotal = matchedVisible.filter(isMissing).length;
+                const viewList = specialTab === 'deleted'
+                    ? matched.filter(isDeleted)
+                    : specialOnlyMissingPrint
+                    ? matchedVisible.filter(isMissing)
+                    : matchedVisible.filter(o => specialTab === 'all' ? true : specialTab === 'confirm' ? isConfirm(o) : specialTab === 'print' ? isPrint(o) : isTransit(o));
                 const total = viewList.length;
                 const totalPages = Math.max(1, Math.ceil(total / SPECIAL_PAGE_SIZE));
                 const effectivePage = total > 0 ? Math.min(page, totalPages) : 1;
@@ -915,7 +963,10 @@ export default function OrderReport() {
             const [cAll, cConfirm, cPrint, cTransit] = await Promise.all([
                 countFor('all', false), countFor('confirm', false), countFor('print', false), countFor('transit', false),
             ]);
-            const counts = { all: cAll, confirm: cConfirm, print: cPrint, transit: cTransit };
+            // Số tab 'Đơn đã xóa' chỉ cần khi đang xem tab đó (badge của
+            // tab lấy thẳng cỡ tập deletedOrderIds, xem specialTabCount).
+            const cDeleted = specialTab === 'deleted' ? await countFor('deleted', false) : 0;
+            const counts = { all: cAll, confirm: cConfirm, print: cPrint, transit: cTransit, deleted: cDeleted };
             const missingTotal = specialTab === 'print' ? await countFor('print', true) : null;
             const total = specialOnlyMissingPrint ? (missingTotal || 0) : counts[specialTab];
             const totalPages = Math.max(1, Math.ceil(total / SPECIAL_PAGE_SIZE));
@@ -944,7 +995,7 @@ export default function OrderReport() {
 
     // Đổi tab / ngày / bộ lọc / sắp xếp thì quay về trang 1 rồi mới tải,
     // để khỏi tải nhầm trang cũ với bộ lọc mới.
-    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), selectedTags.join(','), selectedStock.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0', specialAgingFilter ? '1' : '0'].join('|');
+    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), selectedTags.join(','), selectedStock.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0', specialAgingFilter ? '1' : '0', deletedOrderIds.size].join('|');
     useEffect(() => {
         if (!specialMode) return;
         if (specialFilterSigRef.current !== specialFilterSig) {
@@ -953,7 +1004,7 @@ export default function OrderReport() {
         }
         fetchSpecialData(specialPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, selectedTags, selectedStock, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialAgingFilter, specialPage, specialReloadToken, data]);
+    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, selectedTags, selectedStock, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialAgingFilter, specialPage, specialReloadToken, deletedOrderIds, data]);
 
     // Đổi trang thì bỏ chọn cũ để nút Copy / Xuất chỉ tính trên trang mới.
     useEffect(() => {
@@ -986,6 +1037,11 @@ export default function OrderReport() {
         setActionOrder(null);
         setDetailActionMsg('');
         setDetailSendDone(false);
+        setEcomPickupType(1);
+        setEcomSending(false);
+        setEcomMsg('');
+        setEcomTracking('');
+        setEcomLabelUrl('');
         setNhanhHistory([]);
         setNhanhHistoryLoaded(false);
         setNhanhHistoryMsg('');
@@ -1193,6 +1249,35 @@ export default function OrderReport() {
             setDetailActionLoading(false);
         }
     };
+    // Gửi 1 đơn sàn trong popup chi tiết: ecom/readytoship rồi lấy URL
+    // nhãn PDF. Đơn vẫn tính thành công nếu lấy nhãn lỗi (đã có mã vận
+    // đơn), chỉ báo lại để owner in nhãn sau. Không chạm luồng gửi kênh
+    // Admin (handleSendShip) bên trên.
+    const handleSendEcom = async () => {
+        if (!detailOrder) return;
+        setEcomSending(true);
+        setEcomMsg('');
+        setEcomTracking('');
+        setEcomLabelUrl('');
+        try {
+            const result = await callNhanhActionRaw('ecomReadyToShip', { orderIds: [detailOrder.id], orderPickupType: ecomPickupType, source: 'detail' });
+            const first = result.results?.[0];
+            if (first?.ok) {
+                if (first.trackingNumber) patchOrderEverywhere(detailOrder.id, { carrier_code: first.trackingNumber });
+                setEcomTracking(first.trackingNumber || '');
+                if (first.labelUrl) setEcomLabelUrl(first.labelUrl);
+                let msg = first.existed
+                    ? `Đơn đã gửi sàn từ trước, mã vận đơn: ${first.trackingNumber || 'không rõ'}.`
+                    : `Đã gửi đơn sàn, mã vận đơn: ${first.trackingNumber || 'không rõ'}.`;
+                if (!first.labelUrl) msg += first.labelError ? ` Không lấy được nhãn PDF: ${first.labelError}` : ' Không lấy được nhãn PDF của đơn này.';
+                setEcomMsg(msg);
+            } else setEcomMsg(first?.error || result.message || 'Nhanh.vn từ chối gửi đơn sàn.');
+        } catch (err) {
+            setEcomMsg(`Lỗi hệ thống: ${err.message}`);
+        } finally {
+            setEcomSending(false);
+        }
+    };
     // Hủy 1 đơn trong popup.
     const handleCancelShip = async () => {
         if (!actionOrder) { setDetailActionMsg('Chưa chọn đơn hàng nào.'); return; }
@@ -1236,6 +1321,54 @@ export default function OrderReport() {
         }).catch(() => {});
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [specialMode]);
+    // Tải tập ID đơn đã xóa (bảng deleted_orders, phân trang 1000/trang).
+    // Bảng chưa có (chưa chạy migration) thì bắt lỗi và coi như tập rỗng,
+    // không làm hỏng trang.
+    const loadDeletedOrderIds = async () => {
+        try {
+            const ids = new Set();
+            let offset = 0;
+            for (let chunk = 0; chunk < 50; chunk++) {
+                const { data: rows, error } = await supabase.from('deleted_orders').select('order_id').range(offset, offset + 999);
+                if (error) throw error;
+                const list = rows || [];
+                list.forEach(r => { if (r.order_id !== null && r.order_id !== undefined) ids.add(String(r.order_id)); });
+                if (list.length < 1000) break;
+                offset += 1000;
+            }
+            setDeletedOrderIds(ids);
+            setDeletedIdsLoaded(true);
+        } catch (err) {
+            console.error('Không tải được deleted_orders (có thể chưa chạy migration):', err);
+            setDeletedOrderIds(new Set());
+        }
+    };
+    // Vào báo cáo đặc biệt lần đầu thì tải tập đơn đã xóa; tải lỗi (chưa
+    // có bảng) thì lần vào sau thử lại.
+    useEffect(() => {
+        if (!specialMode || deletedIdsLoaded) return;
+        loadDeletedOrderIds();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [specialMode]);
+    // Đồng bộ đơn đã xóa từ Nhanh về bảng deleted_orders (owner), rồi tải
+    // lại tập id và làm mới danh sách.
+    const handleSyncDeleted = async () => {
+        setSyncDeletedLoading(true);
+        setSyncDeletedMsg('');
+        try {
+            const result = await callNhanhActionRaw('syncDeleted');
+            if (result.success) {
+                await loadDeletedOrderIds();
+                setSpecialReloadToken(t => t + 1);
+                setSyncDeletedMsg(`Đã đồng bộ ${result.synced || 0} đơn đã xóa từ Nhanh.vn (${result.pages || 0} trang).`);
+                setTimeout(() => setSyncDeletedMsg(''), 10000);
+            } else setSyncDeletedMsg(result.message || 'Không đồng bộ được đơn đã xóa.');
+        } catch (err) {
+            setSyncDeletedMsg(`Lỗi hệ thống: ${err.message}`);
+        } finally {
+            setSyncDeletedLoading(false);
+        }
+    };
     const handleOpenSendHistory = async () => {
         setShowSendHistoryModal(true);
         setSendHistoryLoading(true);
@@ -1277,6 +1410,37 @@ export default function OrderReport() {
             setTimeout(() => setCopyMessage(''), 5000);
         } finally {
             setSendingOrder(false);
+        }
+    };
+    // Gửi đơn sàn hàng loạt từ nút Thao tác: chỉ gửi đơn sàn trong list
+    // đã tick, các đơn khác bỏ qua và báo rõ trong popup kết quả (giống
+    // gửi sang hãng). Mã vận đơn vá thẳng vào bảng hiển thị qua
+    // patchOrderEverywhere, không bump specialReloadToken để khỏi tải lại
+    // từ bảng orders và lật lại mã cũ (bảng chỉ đổi ở lần đồng bộ sau).
+    const openBulkEcom = () => {
+        if (selectedMarketplaceIds.length === 0) return;
+        setBulkEcomResult(null);
+        setBulkEcomPickupType(1);
+        setShowActionMenu(false);
+        setShowBulkEcomModal(true);
+    };
+    const handleBulkEcom = async () => {
+        if (selectedMarketplaceIds.length === 0) return;
+        const skippedIds = selectedOrders.filter(id => !selectedMarketplaceIds.some(a => String(a) === String(id)));
+        setShowBulkEcomModal(false);
+        setBulkEcomRunning(true);
+        try {
+            const result = await callNhanhActionRaw('ecomReadyToShip', { orderIds: selectedMarketplaceIds, orderPickupType: bulkEcomPickupType, source: 'toolbar' });
+            (result.results || []).forEach(r => {
+                if (r.ok && r.trackingNumber) patchOrderEverywhere(r.orderId, { carrier_code: r.trackingNumber });
+            });
+            setBulkEcomResult({ ...result, skippedIds });
+            setShowBulkEcomResultModal(true);
+        } catch (err) {
+            setBulkEcomResult({ success: false, results: [], message: `Lỗi hệ thống: ${err.message}`, skippedIds });
+            setShowBulkEcomResultModal(true);
+        } finally {
+            setBulkEcomRunning(false);
         }
     };
     // Hủy hàng loạt: tick bao nhiêu hủy bấy nhiêu, 1 lý do chung.
@@ -1459,7 +1623,10 @@ export default function OrderReport() {
     // Tên trạng thái ngắn chỉ dùng trong báo cáo đặc biệt: 57 là Chờ xác nhận.
     const specialStatusName = (code) => String(code) === '57' ? 'Chờ xác nhận' : (statusDict[code] || LOCAL_STATUS_NAMES[String(code)] || String(code));
     // Số trên tab là số đếm đúng từ server (chưa đếm xong thì …).
+    // Riêng tab 'Đơn đã xóa' lấy thẳng cỡ tập đã tải (không cần đếm
+    // lại, tập này chính là nguồn của tab).
     const specialTabCount = (tabId) => {
+        if (tabId === 'deleted') return String(deletedOrderIds.size);
         const v = specialCounts[tabId];
         return v === undefined || v === null ? null : String(v);
     };
@@ -1854,6 +2021,14 @@ export default function OrderReport() {
     // SALE_CHANNELS); đơn Shopee (42) / Tiktok Shop (48) và các kênh
     // khác đều bỏ qua khi gửi.
     const isAdminChannel = (order) => String(order?.sale_channel) === '1';
+    // Đơn sàn mới gửi được qua ecom/readytoship: Shopee (42), Tiktok
+    // Shop (48), Lazada (41). Đơn kênh Admin gửi bằng sendcarrier riêng.
+    const isMarketplaceChannel = (order) => ['42', '48', '41'].includes(String(order?.sale_channel));
+    // Đơn sàn trong list đã tick (để gửi đơn sàn hàng loạt).
+    const selectedMarketplaceIds = selectedOrders.filter(id => {
+        const row = effectiveFiltered.find(o => String(o.id) === String(id));
+        return row && isMarketplaceChannel(row);
+    });
     // Mở trang in của Nhanh cho đúng các đơn truyền vào (mẫu từ báo cáo
     // cũ), rồi popup list các đơn vừa in: khổ A thì list mã vận đơn,
     // khổ K80 thì list ID đơn. Dùng chung cho: in đơn đã tick, in 1 đơn
@@ -2017,10 +2192,18 @@ export default function OrderReport() {
                                 <button onClick={() => setSpecialReloadToken(t => t + 1)} disabled={specialLoading} className={`px-3 py-2 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-50 flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 shadow-sm`}>
                                     <RefreshCw size={14} className={specialLoading ? 'animate-spin' : ''} /> Tải lại
                                 </button>
+                                {isOwner && (
+                                    <button onClick={handleSyncDeleted} disabled={syncDeletedLoading} className="px-3 py-2 text-white text-sm font-bold rounded-xl transition-all disabled:opacity-50 flex items-center gap-2 bg-slate-700 hover:bg-slate-800 shadow-sm">
+                                        <RefreshCw size={14} className={syncDeletedLoading ? 'animate-spin' : ''} /> {syncDeletedLoading ? 'Đang đồng bộ...' : 'Đồng bộ đơn đã xóa'}
+                                    </button>
+                                )}
                             </div>
                         </div>
                         {specialError && (
                             <div className="p-3 rounded-lg bg-red-50 text-red-700 border border-red-200 text-sm font-medium">Không tải được đơn trực tiếp từ bảng orders: {specialError}. Báo cáo cũ vẫn dùng được khi tắt chế độ này.</div>
+                        )}
+                        {syncDeletedMsg && (
+                            <div className="p-3 rounded-lg bg-green-50 text-green-700 border border-green-200 text-sm font-medium">{syncDeletedMsg}</div>
                         )}
                         <div className="flex flex-wrap gap-2 border-b border-slate-200 pb-3">
                             {[
@@ -2028,6 +2211,7 @@ export default function OrderReport() {
                                 { id: 'confirm', label: 'Xác nhận' },
                                 { id: 'print', label: 'In và đóng gói' },
                                 { id: 'transit', label: 'Đang chuyển' },
+                                { id: 'deleted', label: 'Đơn đã xóa' },
                             ].map(tab => {
                                 const count = specialTabCount(tab.id);
                                 return (
@@ -2252,6 +2436,7 @@ export default function OrderReport() {
                                             
                                             <div className="px-3 py-1.5 mt-1 text-xs font-semibold text-slate-400 uppercase bg-slate-50 border-t border-slate-100">Vận Chuyển</div>
                                             <button onClick={handleBulkSend} className="w-full text-left px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 flex items-center gap-2"><Send size={15} /> Gửi đơn sang hãng</button>
+                                            <button onClick={openBulkEcom} disabled={selectedMarketplaceIds.length === 0} className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${selectedMarketplaceIds.length > 0 ? 'text-amber-700 hover:bg-amber-50' : 'text-slate-400 cursor-not-allowed'}`}><Send size={15} /> Gửi đơn sàn{selectedMarketplaceIds.length > 0 ? ` (${selectedMarketplaceIds.length})` : ''}</button>
                                             <button onClick={() => { setShowActionMenu(false); setBulkCancelResult(null); setCancelReasonBulk(''); setShowBulkCancelModal(true); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><XCircle size={15} /> Hủy đơn</button>
 
                                             <div className="px-3 py-1.5 mt-1 text-xs font-semibold text-slate-400 uppercase bg-slate-50 border-t border-slate-100">Hệ Thống</div>
@@ -2385,12 +2570,14 @@ export default function OrderReport() {
                                     {paginatedOrders.map(order => {
                                         const products = order.order_products || [];
                                         const rowCount = Math.max(1, products.length);
-                                        const statusName = specialMode ? specialStatusName(order.status) : (statusDict[order.status] || LOCAL_STATUS_NAMES[String(order.status)] || `Mã ${order.status}`);
+                                        // Đơn đã xóa: pill trạng thái hiện "Đơn đã xóa" thay cho trạng thái Nhanh.
+                                        const isDeletedOrder = deletedOrderIds.has(String(order.id));
+                                        const statusName = isDeletedOrder ? 'Đơn đã xóa' : (specialMode ? specialStatusName(order.status) : (statusDict[order.status] || LOCAL_STATUS_NAMES[String(order.status)] || `Mã ${order.status}`));
                                         const channelName = SALE_CHANNELS[order.sale_channel] || order.sale_channel || 'Khác';
                                         const isChecked = selectedOrders.includes(order.id);
                                         
                                         const channelColorClass = CHANNEL_COLORS[order.sale_channel] || 'bg-slate-100 text-slate-600 border-slate-200';
-                                        const statusColorClass = STATUS_COLORS[order.status] || 'bg-slate-100 text-slate-600 border border-slate-200';
+                                        const statusColorClass = isDeletedOrder ? 'bg-slate-200 text-slate-700 border border-slate-300' : (STATUS_COLORS[order.status] || 'bg-slate-100 text-slate-600 border border-slate-200');
 
                                         const agingDays = order.printable_date ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24)) : 0;
                                         const isAgingOrder = activeTab === 'printable' && agingDays >= 2;
@@ -2618,7 +2805,10 @@ export default function OrderReport() {
                 const payment = rawData?.payment || null;
                 const shipAddr = rawData?.shippingAddress || null;
                 const rawProducts = rawData?.products || null;
-                const statusName = specialStatusName(base.status);
+                // Đơn đã xóa: pill trạng thái hiện "Đơn đã xóa" thay cho trạng thái Nhanh.
+                const isDetailDeleted = deletedOrderIds.has(String(base.id));
+                const detailRealStatusName = specialStatusName(base.status);
+                const statusName = isDetailDeleted ? 'Đơn đã xóa' : detailRealStatusName;
                 const channelName = SALE_CHANNELS[base.sale_channel] || base.sale_channel || 'Khác';
                 const productsForPopup = rawProducts || (base.order_products || []).map(p => ({
                     name: p.product_name, code: p.product_code, quantity: p.quantity
@@ -2645,7 +2835,7 @@ export default function OrderReport() {
                                 <div>
                                     <h3 className="font-bold text-xl tracking-tight text-white">Chi tiết đơn hàng #{detailOrder.id}</h3>
                                     <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${STATUS_COLORS[base.status] || 'bg-slate-100 text-slate-600 border border-slate-200'}`}>{statusName}</span>
+                                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold ${isDetailDeleted ? 'bg-slate-200 text-slate-700 border border-slate-300' : (STATUS_COLORS[base.status] || 'bg-slate-100 text-slate-600 border border-slate-200')}`}>{statusName}</span>
                                         <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold border ${CHANNEL_COLORS[base.sale_channel] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{channelName}</span>
                                         {getStockBadge(detailOrder)}
                                     </div>
@@ -2782,6 +2972,36 @@ export default function OrderReport() {
                                                 )}
                                             </div>
                                         </section>
+
+                                        {isMarketplaceChannel(base) && (
+                                            <section className="border border-slate-200 rounded-2xl overflow-hidden">
+                                                <h4 className="px-5 py-3 bg-slate-100 border-b border-slate-200 text-base font-bold text-slate-900">Gửi đơn sàn</h4>
+                                                <div className="px-4 py-3 space-y-3">
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input type="radio" name="ecom-pickup" checked={ecomPickupType === 1} onChange={() => setEcomPickupType(1)} className="w-4 h-4 text-slate-700 border-slate-300 focus:ring-slate-500" />
+                                                        <span className="text-sm font-medium text-slate-700">Báo ship đến lấy hàng</span>
+                                                    </label>
+                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                        <input type="radio" name="ecom-pickup" checked={ecomPickupType === 2} onChange={() => setEcomPickupType(2)} className="w-4 h-4 text-slate-700 border-slate-300 focus:ring-slate-500" />
+                                                        <span className="text-sm font-medium text-slate-700">Gửi tại bưu cục</span>
+                                                    </label>
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <button onClick={handleSendEcom} disabled={ecomSending} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">
+                                                            {ecomSending && <RefreshCw size={14} className="animate-spin" />} Gửi đơn sàn
+                                                        </button>
+                                                        {ecomLabelUrl && (
+                                                            <button onClick={() => window.open(ecomLabelUrl, '_blank')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In phiếu gửi (PDF)</button>
+                                                        )}
+                                                    </div>
+                                                    {ecomTracking && (
+                                                        <p className="text-sm text-slate-700">Mã vận đơn: <span className="font-mono font-bold text-slate-900">{ecomTracking}</span></p>
+                                                    )}
+                                                    {ecomMsg && (
+                                                        <p className="text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">{ecomMsg}</p>
+                                                    )}
+                                                </div>
+                                            </section>
+                                        )}
                                     </div>
 
                                     {/* Cột phải: thanh toán, thông tin, lịch trình */}
@@ -2834,7 +3054,7 @@ export default function OrderReport() {
                                                             <li className="pl-5 relative">
                                                                 <span className="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-slate-900 border-2 border-white shadow" />
                                                                 <p className="text-xs font-medium text-slate-500">{fmtDateStr(base.created_at)}</p>
-                                                                <p className="text-sm font-semibold text-slate-800">Tạo đơn: {statusName}</p>
+                                                                <p className="text-sm font-semibold text-slate-800">Tạo đơn: {detailRealStatusName}</p>
                                                                 <p className="text-xs text-slate-500">Bởi: {base.created_by_name || 'Hệ thống'}</p>
                                                             </li>
                                                         </ol>
@@ -2966,6 +3186,72 @@ export default function OrderReport() {
                             )}
                             <button onClick={() => { setShowBulkSendModal(false); handleOpenSendHistory(); }} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 self-start">Xem lịch sử gửi</button>
                             <p className="text-xs text-slate-500">Mã vận đơn sẽ hiện trong bảng sau khi hệ thống đồng bộ đơn từ Nhanh về.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Gửi đơn sàn hàng loạt: chọn hình thức lấy hàng rồi xác nhận */}
+            {showBulkEcomModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50" onClick={() => !bulkEcomRunning && setShowBulkEcomModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                        <div className="px-6 py-4 border-b border-slate-900 flex justify-between items-center bg-slate-900">
+                            <h3 className="font-bold text-white">Gửi {selectedMarketplaceIds.length} đơn sàn</h3>
+                            <button onClick={() => !bulkEcomRunning && setShowBulkEcomModal(false)} disabled={bulkEcomRunning} className="text-slate-300 hover:text-white"><XCircle size={20} /></button>
+                        </div>
+                        <div className="p-5 overflow-y-auto space-y-3">
+                            <p className="text-sm font-medium text-slate-700">Chỉ gửi các đơn sàn (Shopee/TikTok/Lazada) đã tick.{(selectedOrders.length - selectedMarketplaceIds.length) > 0 && (<> Bỏ qua <span className="font-bold text-amber-700">{selectedOrders.length - selectedMarketplaceIds.length}</span> đơn không phải đơn sàn: {selectedOrders.filter(id => !selectedMarketplaceIds.some(a => String(a) === String(id))).join(', ')}.</>)}</p>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="bulk-ecom-pickup" checked={bulkEcomPickupType === 1} onChange={() => setBulkEcomPickupType(1)} className="w-4 h-4 text-slate-700 border-slate-300 focus:ring-slate-500" />
+                                <span className="text-sm font-medium text-slate-700">Báo ship đến lấy hàng</span>
+                            </label>
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="radio" name="bulk-ecom-pickup" checked={bulkEcomPickupType === 2} onChange={() => setBulkEcomPickupType(2)} className="w-4 h-4 text-slate-700 border-slate-300 focus:ring-slate-500" />
+                                <span className="text-sm font-medium text-slate-700">Gửi tại bưu cục</span>
+                            </label>
+                            <button onClick={handleBulkEcom} disabled={bulkEcomRunning} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">
+                                {bulkEcomRunning && <RefreshCw size={14} className="animate-spin" />} Xác nhận gửi {selectedMarketplaceIds.length} đơn sàn
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Kết quả gửi đơn sàn hàng loạt: mã vận đơn + link in phiếu từng đơn */}
+            {showBulkEcomResultModal && bulkEcomResult && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50" onClick={() => setShowBulkEcomResultModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                        <div className="px-6 py-4 border-b border-slate-900 flex justify-between items-center bg-slate-900">
+                            <h3 className="font-bold text-white">Kết quả gửi đơn sàn</h3>
+                            <button onClick={() => setShowBulkEcomResultModal(false)} className="text-slate-300 hover:text-white"><XCircle size={20} /></button>
+                        </div>
+                        <div className="p-5 overflow-y-auto space-y-3">
+                            <p className="text-sm font-medium text-slate-700">
+                                Thành công <span className="font-bold text-green-700">{bulkEcomResult.okCount || 0}</span> đơn
+                                {(bulkEcomResult.failCount || 0) > 0 && (<> · Thất bại <span className="font-bold text-red-600">{bulkEcomResult.failCount}</span> đơn</>)}
+                                {(bulkEcomResult.skippedIds || []).length > 0 && (<> · Bỏ qua <span className="font-bold text-amber-700">{bulkEcomResult.skippedIds.length}</span> đơn không phải đơn sàn</>)}.
+                            </p>
+                            {(bulkEcomResult.skippedIds || []).length > 0 && (
+                                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                    Bỏ qua vì không phải đơn sàn (Shopee/TikTok/Lazada): {bulkEcomResult.skippedIds.join(', ')}
+                                </p>
+                            )}
+                            {(bulkEcomResult.results || []).filter(r => r.ok).length > 0 && (
+                                <div className="space-y-1">
+                                    {(bulkEcomResult.results || []).filter(r => r.ok).map(r => (
+                                        <p key={r.orderId} className="text-sm text-slate-600">Đơn #{r.orderId}: mã vận đơn <span className="font-mono font-bold text-slate-800">{r.trackingNumber || 'không rõ'}</span>{r.existed ? ' (đã gửi từ trước)' : ''}{r.labelUrl ? (<> · <button onClick={() => window.open(r.labelUrl, '_blank')} className="font-bold text-blue-700 hover:underline">In phiếu</button></>) : (<span className="text-slate-400"> · không lấy được nhãn</span>)}</p>
+                                    ))}
+                                </div>
+                            )}
+                            {(bulkEcomResult.results || []).filter(r => !r.ok).length > 0 && (
+                                <div className="space-y-1 border-t border-slate-200 pt-2">
+                                    {(bulkEcomResult.results || []).filter(r => !r.ok).map(r => (
+                                        <p key={r.orderId} className="text-sm text-red-600">Đơn #{r.orderId}: {r.error}</p>
+                                    ))}
+                                </div>
+                            )}
+                            {bulkEcomResult.message && <p className="text-sm text-red-600">{bulkEcomResult.message}</p>}
+                            <p className="text-xs text-slate-500">Mã vận đơn đã cập nhật ngay trong bảng; nhãn PDF mở trong tab mới.</p>
                         </div>
                     </div>
                 </div>

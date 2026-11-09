@@ -11,6 +11,39 @@ import QRCode from 'qrcode';
 const escapeHtml = (s) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+// Định dạng ngày giờ VN (dd/MM/yyyy HH:mm) bằng cộng tay UTC+7 —
+// KHÔNG dùng định dạng ngày giờ theo múi giờ của Intl (gây trắng trang Admin).
+const formatVnDateTime = (value) => {
+  if (!value) return '—';
+  const d = new Date(typeof value === 'number' ? value * 1000 : value);
+  if (Number.isNaN(d.getTime())) return '—';
+  const vn = new Date(d.getTime() + 7 * 3600 * 1000);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(vn.getUTCDate())}/${pad(vn.getUTCMonth() + 1)}/${vn.getUTCFullYear()} ${pad(vn.getUTCHours())}:${pad(vn.getUTCMinutes())}`;
+};
+
+// Định dạng tiền VNĐ bằng tách nhóm nghìn thủ công (không dùng Intl).
+const formatMoney = (value) => {
+  if (value === null || value === undefined || value === '') return '—';
+  const n = Number(value);
+  if (Number.isNaN(n)) return String(value);
+  return `${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} đ`;
+};
+
+// Tên trạng thái Nhanh.vn — bản sao LOCAL_STATUS_NAMES trong
+// OrderReport.jsx (bản đó không export nên không import được).
+const STATUS_NAMES = {
+  '40': 'Đã đóng gói', '42': 'Đang đóng gói', '43': 'Chờ thu gom',
+  '54': 'Đơn mới', '55': 'Đang xác nhận', '56': 'Đã xác nhận', '57': 'Chờ khách xác nhận',
+  '58': 'Hãng vận chuyển hủy đơn', '59': 'Đang chuyển', '60': 'Thành công', '61': 'Thất bại',
+  '63': 'Khách hủy', '64': 'Hệ thống hủy', '68': 'Hết hàng',
+  '71': 'Đang chuyển hoàn', '72': 'Đã chuyển hoàn', '73': 'Đổi kho xuất hàng', '74': 'Xác nhận hoàn',
+};
+const statusName = (code) => STATUS_NAMES[String(code)] ?? `Mã ${code}`;
+
+// Tên kho theo id depot Nhanh.vn (khớp DEPOT_NAMES trong OrderReport.jsx).
+const DEPOT_NAMES = { '180540': 'AMELIE', '225005': 'LUNARA' };
+
 // Vị trí góc tem cho Số lệnh (dùng chung cho bản xem trước và bản in thật)
 const ORDER_CORNER_STYLE = {
   'top-left': { top: '0.5mm', left: '1mm' },
@@ -109,13 +142,161 @@ export default function InventoryReport() {
 
   const searchInputRef = useRef(null);
 
+  // ==========================================
+  // STATES CHO POPUP CHI TIẾT SẢN PHẨM
+  // ==========================================
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [nhanhDetail, setNhanhDetail] = useState(null);
+  const [nhanhLoading, setNhanhLoading] = useState(false);
+  const [nhanhError, setNhanhError] = useState('');
+  const [nhanhForbidden, setNhanhForbidden] = useState(false);
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [onlyReturns, setOnlyReturns] = useState(false);
+
+  // Gọi edge nhanh-order-actions theo đúng mẫu callNhanhActionRaw trong
+  // OrderReport.jsx, nhưng giữ lại HTTP status để nhận biết 403 (non-owner).
+  const callNhanhProductDetail = async (productId) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/nhanh-order-actions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token || ''}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ action: 'productDetail', productId }),
+    });
+    const json = await res.json().catch(() => ({}));
+    return { status: res.status, json };
+  };
+
+  const fetchProductHistory = async (productCode) => {
+    setHistoryLoading(true);
+    setHistoryError('');
+    setHistoryRows([]);
+    const HISTORY_SELECT = `
+      id, created_at, created_by_name, status_old, status_new, order_id,
+      orders!inner (
+        id, carrier_name,
+        order_products!inner (product_code, product_name, quantity)
+      )
+    `;
+    try {
+      // Cách chính: lọc nhúng PostgREST trên orders.order_products
+      // (đã kiểm chứng mẫu tương tự trong StatusTransitionTracker.jsx:
+      // .ilike('orders.order_products.product_name', ...) và
+      // .gte('orders.order_products.quantity', ...)).
+      const { data, error } = await supabase
+        .from('order_histories')
+        .select(HISTORY_SELECT)
+        .eq('orders.order_products.product_code', productCode)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      setHistoryRows(data || []);
+    } catch (err) {
+      // Dự phòng 2 bước khi lọc nhúng không chạy: lấy order_id từ
+      // order_products trước rồi mới kéo order_histories của các đơn đó.
+      // (order_products không có created_at nên bước 1 chỉ limit, bước 2
+      // mới sắp theo created_at giảm dần.)
+      try {
+        const { data: prods, error: prodErr } = await supabase
+          .from('order_products')
+          .select('order_id, quantity')
+          .eq('product_code', productCode)
+          .limit(100);
+        if (prodErr) throw prodErr;
+        const qtyByOrder = new Map();
+        (prods || []).forEach((p) => {
+          if (!qtyByOrder.has(p.order_id)) qtyByOrder.set(p.order_id, Number(p.quantity || 0));
+        });
+        const orderIds = [...qtyByOrder.keys()].slice(0, 20);
+        if (orderIds.length === 0) { setHistoryRows([]); return; }
+        const { data: hist, error: histErr } = await supabase
+          .from('order_histories')
+          .select('id, created_at, created_by_name, status_old, status_new, order_id')
+          .in('order_id', orderIds)
+          .order('created_at', { ascending: false })
+          .limit(20);
+        if (histErr) throw histErr;
+        setHistoryRows((hist || []).map((h) => ({
+          ...h,
+          orders: {
+            id: h.order_id, carrier_name: null,
+            order_products: [{ product_code: productCode, product_name: '', quantity: qtyByOrder.get(h.order_id) || 0 }],
+          },
+        })));
+      } catch (fallbackErr) {
+        console.error('Lỗi tải lịch sử đơn của sản phẩm:', fallbackErr);
+        setHistoryError(fallbackErr.message || 'Không tải được lịch sử đơn.');
+      }
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const openProductDetail = async (item) => {
+    setSelectedProduct(item);
+    setNhanhDetail(null);
+    setNhanhError('');
+    setNhanhForbidden(false);
+    setOnlyReturns(false);
+    fetchProductHistory(item.product_code);
+    if (!item.product_id) return;
+    setNhanhLoading(true);
+    try {
+      const { status, json } = await callNhanhProductDetail(item.product_id);
+      if (status === 403) {
+        setNhanhForbidden(true);
+        return;
+      }
+      if (!json.success) {
+        setNhanhError(json.message || 'Không tải được chi tiết từ Nhanh.vn.');
+        return;
+      }
+      // Edge trả { success, data } với data là object sản phẩm Nhanh
+      // (đôi khi bọc trong data.product hoặc mảng 1 phần tử) — chuẩn hóa.
+      let d = json.data;
+      if (Array.isArray(d)) d = d[0] || null;
+      if (d && d.product) d = d.product;
+      setNhanhDetail(d || null);
+      if (!d) setNhanhError('Nhanh.vn không trả về dữ liệu sản phẩm.');
+    } catch (err) {
+      console.error('Lỗi gọi productDetail:', err);
+      setNhanhError(err.message || 'Không tải được chi tiết từ Nhanh.vn.');
+    } finally {
+      setNhanhLoading(false);
+    }
+  };
+
+  const closeProductDetail = () => {
+    setSelectedProduct(null);
+    setNhanhDetail(null);
+    setNhanhError('');
+    setNhanhForbidden(false);
+    setHistoryRows([]);
+    setHistoryError('');
+    setOnlyReturns(false);
+  };
+
+  // Hàng lịch sử sau khi áp bộ lọc "Chỉ đơn hoàn (→ Đã hoàn)".
+  const visibleHistoryRows = onlyReturns
+    ? historyRows.filter((r) => String(r.status_new) === '72')
+    : historyRows;
+
   // --- HÀM KÉO DATA BÁO CÁO TỒN KHO ---
   const fetchInventoryData = async () => {
     setLoading(true);
     try {
       let query = supabase
         .from('product_inventories')
-        .select('product_code, product_name, remain, shipping, on_hand', { count: 'exact' });
+        // product_id / available / location_code / last_synced đều đã
+        // kiểm chứng có trên product_inventories: sync-products ghi cả 4
+        // cột (update + upsert onConflict product_id), nhiều trang khác
+        // select product_id và location_code từ bảng này.
+        .select('product_code, product_name, remain, shipping, on_hand, product_id, available, location_code, last_synced', { count: 'exact' });
 
       if (searchTerm.trim()) {
         const term = searchTerm.trim();
@@ -756,7 +937,7 @@ export default function InventoryReport() {
                 </tr>
               ) : (
                 inventory.map(item => (
-                  <tr key={item.product_code} className="hover:bg-slate-100 transition">
+                  <tr key={item.product_code} onClick={() => openProductDetail(item)} className="hover:bg-slate-100 transition cursor-pointer">
                     <td className="px-5 py-4 font-bold text-slate-900 tracking-wide font-mono text-sm">{item.product_code}</td>
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2">
@@ -796,6 +977,207 @@ export default function InventoryReport() {
           </div>
         )}
       </div>
+
+      {/* ========================================== */}
+      {/* POPUP CHI TIẾT SẢN PHẨM */}
+      {/* ========================================== */}
+      {selectedProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-2 bg-slate-100 text-slate-700 rounded-xl flex-shrink-0"><Package size={20} /></div>
+                <div className="min-w-0">
+                  <h3 className="text-base font-bold text-slate-900 truncate">{selectedProduct.product_name}</h3>
+                  <p className="text-xs text-slate-500 font-medium font-mono">{selectedProduct.product_code}</p>
+                </div>
+              </div>
+              <button onClick={closeProductDetail} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-full transition cursor-pointer flex-shrink-0"><X size={18} /></button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-6">
+              {/* Tồn kho theo dữ liệu trong DB */}
+              <section>
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Tồn kho trong hệ thống</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <div className="text-xs font-bold text-slate-400 uppercase">Tổng tồn</div>
+                    <div className="text-lg font-bold text-slate-900 mt-1">{selectedProduct.remain ?? '—'}</div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <div className="text-xs font-bold text-slate-400 uppercase">Đang chuyển</div>
+                    <div className="text-lg font-bold text-slate-900 mt-1">{selectedProduct.shipping ?? '—'}</div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <div className="text-xs font-bold text-slate-400 uppercase">Tồn trong kho</div>
+                    <div className="text-lg font-bold text-emerald-700 mt-1">{selectedProduct.on_hand ?? '—'}</div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <div className="text-xs font-bold text-slate-400 uppercase">Có thể bán</div>
+                    <div className="text-lg font-bold text-slate-900 mt-1">{selectedProduct.available ?? '—'}</div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <div className="text-xs font-bold text-slate-400 uppercase">Vị trí kho</div>
+                    <div className="text-lg font-bold text-slate-900 mt-1">{selectedProduct.location_code || 'Chưa gán vị trí'}</div>
+                  </div>
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <div className="text-xs font-bold text-slate-400 uppercase">Đồng bộ lần cuối</div>
+                    <div className="text-sm font-bold text-slate-900 mt-1">{formatVnDateTime(selectedProduct.last_synced)}</div>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">Mã sản phẩm Nhanh.vn (product_id): <span className="font-mono font-bold text-slate-600">{selectedProduct.product_id || '—'}</span></p>
+              </section>
+
+              {/* Chi tiết trực tiếp từ Nhanh.vn */}
+              <section>
+                <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide mb-3">Chi tiết từ Nhanh.vn</h4>
+                {!selectedProduct.product_id ? (
+                  <p className="text-sm text-slate-500 bg-amber-50 border border-amber-200 rounded-xl p-3">
+                    Chưa có mã sản phẩm Nhanh.vn (product_id) nên không xem được chi tiết trực tiếp. Mã này được điền khi chạy đồng bộ sản phẩm (sync-products) trong Admin.
+                  </p>
+                ) : nhanhLoading ? (
+                  <p className="text-sm text-slate-400 font-bold p-3 flex items-center gap-2"><RefreshCw size={16} className="animate-spin" /> Đang tải chi tiết từ Nhanh.vn...</p>
+                ) : nhanhForbidden ? (
+                  <p className="text-sm text-slate-500 bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    Chi tiết trực tiếp từ Nhanh.vn (kèm giá nhập, giá vốn) chỉ hiển thị cho Tài khoản Chủ.
+                  </p>
+                ) : nhanhError ? (
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3">{nhanhError}</p>
+                ) : nhanhDetail ? (
+                  <div className="space-y-4">
+                    <div className="flex gap-4 items-start">
+                      {nhanhDetail.images?.avatar ? (
+                        <img src={nhanhDetail.images.avatar} alt="" className="w-24 h-24 object-cover rounded-xl border border-slate-200 flex-shrink-0" />
+                      ) : null}
+                      <div className="min-w-0">
+                        <div className="text-sm font-bold text-slate-900">{nhanhDetail.name || nhanhDetail.productName || selectedProduct.product_name}</div>
+                        <div className="text-xs text-slate-500 mt-1">Mã Nhanh: <span className="font-mono">{nhanhDetail.code || nhanhDetail.barcode || nhanhDetail.id || '—'}</span></div>
+                        {nhanhDetail.description ? (
+                          <p className="text-xs text-slate-500 mt-2 whitespace-pre-line break-words">{String(nhanhDetail.description).replace(/<[^>]*>/g, '')}</p>
+                        ) : null}
+                      </div>
+                    </div>
+                    {nhanhDetail.prices ? (
+                      <div>
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Giá</div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><span className="text-xs text-slate-400 font-bold block">Giá bán lẻ</span><span className="font-bold text-slate-900">{formatMoney(nhanhDetail.prices.retail)}</span></div>
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><span className="text-xs text-slate-400 font-bold block">Giá nhập</span><span className="font-bold text-slate-900">{formatMoney(nhanhDetail.prices.import)}</span></div>
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><span className="text-xs text-slate-400 font-bold block">Giá cũ</span><span className="font-bold text-slate-900">{formatMoney(nhanhDetail.prices.old)}</span></div>
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><span className="text-xs text-slate-400 font-bold block">Giá sỉ</span><span className="font-bold text-slate-900">{formatMoney(nhanhDetail.prices.wholesale)}</span></div>
+                          <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2"><span className="text-xs text-slate-400 font-bold block">Giá vốn trung bình</span><span className="font-bold text-slate-900">{formatMoney(nhanhDetail.prices.avgCost)}</span></div>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-2">Giá nhập và giá vốn trung bình là thông tin nhạy cảm, chỉ Tài khoản Chủ mới xem được.</p>
+                      </div>
+                    ) : null}
+                    {Array.isArray(nhanhDetail.inventory?.depots) && nhanhDetail.inventory.depots.length > 0 ? (
+                      <div>
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Tồn kho theo kho (Nhanh.vn)</div>
+                        <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                          <table className="w-full text-left text-xs border-collapse">
+                            <thead>
+                              <tr className="bg-slate-50 text-slate-500 uppercase">
+                                <th className="px-3 py-2 font-bold">Kho</th>
+                                <th className="px-3 py-2 font-bold text-center">Tồn</th>
+                                <th className="px-3 py-2 font-bold text-center">Đang chuyển</th>
+                                <th className="px-3 py-2 font-bold text-center">Hỏng</th>
+                                <th className="px-3 py-2 font-bold text-center">Giữ hàng</th>
+                                <th className="px-3 py-2 font-bold text-center">Đang chuyển kho</th>
+                                <th className="px-3 py-2 font-bold text-center">Có thể bán</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                              {nhanhDetail.inventory.depots.map((dpt, i) => (
+                                <tr key={dpt.id ?? i}>
+                                  <td className="px-3 py-2 font-bold text-slate-900">{DEPOT_NAMES[String(dpt.id)] || dpt.name || `Kho ${dpt.id ?? ''}`}</td>
+                                  <td className="px-3 py-2 text-center">{dpt.remain ?? '—'}</td>
+                                  <td className="px-3 py-2 text-center">{dpt.shipping ?? '—'}</td>
+                                  <td className="px-3 py-2 text-center">{dpt.damaged ?? '—'}</td>
+                                  <td className="px-3 py-2 text-center">{dpt.holding ?? '—'}</td>
+                                  <td className="px-3 py-2 text-center">{dpt.transfering ?? '—'}</td>
+                                  <td className="px-3 py-2 text-center">{dpt.available ?? '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : null}
+                    {Array.isArray(nhanhDetail.attributes) && nhanhDetail.attributes.length > 0 ? (
+                      <div>
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Thuộc tính</div>
+                        <div className="flex flex-wrap gap-2">
+                          {nhanhDetail.attributes.map((a, i) => (
+                            <span key={i} className="px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-700">
+                              {a.name ? `${a.name}: ${Array.isArray(a.value) ? a.value.join(', ') : (a.value ?? '')}` : (typeof a === 'string' ? a : JSON.stringify(a))}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </section>
+
+              {/* Đơn làm thay đổi tồn kho */}
+              <section>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                  <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Đơn làm thay đổi tồn kho</h4>
+                  <label className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer select-none">
+                    <input type="checkbox" checked={onlyReturns} onChange={(e) => setOnlyReturns(e.target.checked)} className="accent-emerald-600" />
+                    Chỉ đơn hoàn (→ Đã hoàn)
+                  </label>
+                </div>
+                <p className="text-xs text-slate-400 mb-3">
+                  Danh sách dưới đây chỉ là tương quan từ các dòng lịch sử đơn hàng, chưa phải mức thay đổi tồn kho đã chứng minh — số tồn chỉ cập nhật khi có người chạy đồng bộ sản phẩm (sync-products) trong Admin, và dòng lịch sử chỉ tồn tại khi webhook Nhanh đã ghi lại chuyển trạng thái đó.
+                </p>
+                {historyLoading ? (
+                  <p className="text-sm text-slate-400 font-bold p-3 flex items-center gap-2"><RefreshCw size={16} className="animate-spin" /> Đang tải lịch sử đơn...</p>
+                ) : historyError ? (
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3">{historyError}</p>
+                ) : visibleHistoryRows.length === 0 ? (
+                  <p className="text-sm text-slate-400 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                    {onlyReturns ? 'Không có đơn nào chuyển sang Đã hoàn cho sản phẩm này.' : 'Không có dòng lịch sử đơn hàng nào ghi nhận sản phẩm này.'}
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 text-slate-500 uppercase">
+                          <th className="px-3 py-2 font-bold">Đơn</th>
+                          <th className="px-3 py-2 font-bold">Chuyển trạng thái</th>
+                          <th className="px-3 py-2 font-bold text-center">SL</th>
+                          <th className="px-3 py-2 font-bold">Thời gian</th>
+                          <th className="px-3 py-2 font-bold">Người thực hiện</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
+                        {visibleHistoryRows.map((row) => {
+                          const prods = row.orders?.order_products || [];
+                          const qty = prods.reduce((sum, p) => sum + Number(p.quantity || 0), 0);
+                          return (
+                            <tr key={row.id}>
+                              <td className="px-3 py-2 font-mono font-bold text-slate-900">{row.order_id}</td>
+                              <td className="px-3 py-2">
+                                {statusName(row.status_old)} <span className="text-slate-400">→</span> {statusName(row.status_new)}
+                                {row.orders?.carrier_name ? <span className="block text-xs text-slate-400 font-medium">{row.orders.carrier_name}</span> : null}
+                              </td>
+                              <td className="px-3 py-2 text-center">{qty}</td>
+                              <td className="px-3 py-2 whitespace-nowrap">{formatVnDateTime(row.created_at)}</td>
+                              <td className="px-3 py-2">{row.created_by_name || '—'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <p className="text-xs text-slate-400 mt-2">Tối đa 20 dòng gần nhất.</p>
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================== */}
       {/* ️ MODAL IN MÃ VẠCH */}
