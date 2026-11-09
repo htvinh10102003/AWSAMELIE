@@ -167,6 +167,40 @@ function parseAftershipText(text) {
   return results;
 }
 
+// UUID cho batch_id của 1 lô dán (crypto.randomUUID có sẵn ở trình duyệt
+// hiện đại; dự phòng Math.random khi không có).
+function genUuid() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+// Ghi lịch sử kiểm nhận — BEST-EFFORT: lỗi (ví dụ bảng lịch sử chưa tạo)
+// thì chỉ log + trả false, KHÔNG làm hỏng cập nhật trạng thái chính.
+async function logCheckHistory(rows, userEmail) {
+  try {
+    const payloads = rows.map((r) => ({
+      return_id: r.return_id,
+      tracking_number: r.tracking_number || null,
+      shipment_status: r.shipment_status || null,
+      received_status: r.received_status,
+      received_date: r.received_date || null,
+      source: r.source,
+      checked_by: userEmail || '',
+      checked_at: new Date().toISOString(),
+      batch_id: r.batch_id || null,
+    }));
+    const { error } = await supabase.from('return_receipt_check_history').insert(payloads);
+    if (error) throw error;
+    return true;
+  } catch (e) {
+    console.error('Không lưu được lịch sử kiểm nhận:', e);
+    return false;
+  }
+}
+
 // Cột bảng: % cố định (table-fixed + colgroup) để khớp với strip tiêu đề
 // gộp vào cụm lọc phía trên. Cả 2 bảng nhóm dùng chung 1 bộ cột.
 // 11 cột gộp (tổng 100%): mỗi cột đủ rộng cho nội dung nowrap của nó
@@ -232,6 +266,13 @@ export default function BaoCaoHoanChuaNhan() {
   const [bulkSaving, setBulkSaving] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
   const [bulkError, setBulkError] = useState('');
+  // --- Lịch sử kiểm nhận (tab "Lịch sử" trong popup đối chiếu) ---
+  const [bulkTab, setBulkTab] = useState('doi-chieu');
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [historyFilter, setHistoryFilter] = useState('');
+  const [historyWarn, setHistoryWarn] = useState('');
 
   const filters = applied || { updFrom, updTo, crtFrom, crtTo, platform, shop, search };
 
@@ -549,6 +590,18 @@ export default function BaoCaoHoanChuaNhan() {
         next.set(row.return_id, { return_id: row.return_id, received_date: date || null, received_status: status });
         return next;
       });
+      // Ghi lịch sử (best-effort): sửa tay = 1 dòng riêng, source 'thu_cong'.
+      const historyOk = await logCheckHistory([{
+        return_id: row.return_id,
+        tracking_number: returnCodeOf(row) || row.return_tracking_number || null,
+        shipment_status: null,
+        received_status: status,
+        received_date: date || null,
+        source: 'thu_cong',
+        batch_id: null,
+      }], userEmail);
+      if (historyOk) setHistoryWarn('');
+      else setHistoryWarn('Không lưu được lịch sử — chạy migration bảng lịch sử trước.');
       setEditRowId(null);
       setEditDrafts((prev) => { const next = { ...prev }; delete next[row.return_id]; return next; });
       setSaveMsg(`Đã lưu kiểm nhận cho đơn ${row.return_id}.`);
@@ -594,9 +647,37 @@ export default function BaoCaoHoanChuaNhan() {
   const activeCarrierSkipped = activeBulkCarrier ? activeBulkCarrier.rows.length - activeCarrierUnchecked.length : 0;
   const activeCarrierCopyRows = activeCarrierUnchecked.slice(0, 20);
 
+  // Nhóm lịch sử để hiển thị: lọc theo mã vận đơn trước (khớp chuỗi con,
+  // không phân biệt hoa thường), rồi gom theo batch_id; sửa tay (batch_id
+  // null) mỗi dòng 1 nhóm riêng. Nhóm xếp theo thời gian mới nhất trước.
+  const historyGroups = useMemo(() => {
+    const q = historyFilter.trim().toLowerCase();
+    const rows = q
+      ? historyRows.filter((r) => String(r.tracking_number || '').toLowerCase().includes(q))
+      : historyRows;
+    const batches = new Map();
+    const singles = [];
+    for (const r of rows) {
+      if (r.batch_id) {
+        if (!batches.has(r.batch_id)) batches.set(r.batch_id, []);
+        batches.get(r.batch_id).push(r);
+      } else singles.push(r);
+    }
+    const groups = [];
+    for (const [batchId, brs] of batches) {
+      groups.push({ key: `batch-${batchId}`, batch: true, rows: brs, checkedAt: brs[0].checked_at, checkedBy: brs[0].checked_by });
+    }
+    for (const r of singles) {
+      groups.push({ key: `row-${r.id}`, batch: false, rows: [r], checkedAt: r.checked_at, checkedBy: r.checked_by });
+    }
+    groups.sort((a, b) => String(b.checkedAt || '').localeCompare(String(a.checkedAt || '')));
+    return groups;
+  }, [historyRows, historyFilter]);
+
   function openBulk() {
     setBulkPage(1);
     setBulkCarrier('');
+    setBulkTab('doi-chieu');
     setPasteText('');
     setBulkPreview(null);
     setBulkMsg('');
@@ -609,6 +690,32 @@ export default function BaoCaoHoanChuaNhan() {
     setBulkMsg('');
     setBulkError('');
   }
+
+  // Lịch sử kiểm nhận: 200 dòng mới nhất, chỉ tải khi mở tab "Lịch sử".
+  // Bảng chưa tạo (migration chưa chạy) thì báo nhẹ, không sập popup.
+  async function fetchHistory() {
+    setHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const { data, error } = await supabase
+        .from('return_receipt_check_history')
+        .select('*')
+        .order('checked_at', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      setHistoryRows(data || []);
+    } catch (e) {
+      console.error('Lỗi tải lịch sử kiểm nhận:', e);
+      setHistoryRows([]);
+      setHistoryError('Không tải được lịch sử — chạy migration bảng lịch sử trước.');
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+  useEffect(() => {
+    if (showBulk && bulkTab === 'lich-su') fetchHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showBulk, bulkTab]);
 
   // Đọc đoạn dán -> xem trước (chưa ghi gì cả). Khớp theo mã vận đơn
   // (trim + uppercase 2 bên) với TOÀN BỘ tập chưa nhận, không chỉ trang này.
@@ -672,6 +779,19 @@ export default function BaoCaoHoanChuaNhan() {
       });
       const nNhan = payloads.filter((p) => p.received_status === 'Đã nhận').length;
       const nChua = payloads.length - nNhan;
+      // Ghi lịch sử (best-effort): 1 lô dán = 1 batch_id chung cho cả lô.
+      const batchId = genUuid();
+      const historyOk = await logCheckHistory(bulkPreview.matched.map(({ row, tracking, shipStatus, delivered, receivedDate }) => ({
+        return_id: row.return_id,
+        tracking_number: tracking,
+        shipment_status: shipStatus || null,
+        received_status: delivered ? 'Đã nhận' : 'Chưa nhận',
+        received_date: delivered ? receivedDate : null,
+        source: 'aftership',
+        batch_id: batchId,
+      })), userEmail);
+      if (historyOk) setHistoryWarn('');
+      else setHistoryWarn('Không lưu được lịch sử — chạy migration bảng lịch sử trước.');
       setBulkMsg(`Đã cập nhật ${payloads.length} đơn: ${nNhan} Đã nhận, ${nChua} Chưa nhận.${bulkPreview.unmatched.length > 0 ? ` ${bulkPreview.unmatched.length} mã không khớp.` : ''}`);
       setBulkPreview(null);
       setPasteText('');
@@ -960,6 +1080,7 @@ export default function BaoCaoHoanChuaNhan() {
         {exportMsg && <p className="text-sm font-bold text-slate-600">{exportMsg}</p>}
         {toast && <p className="text-sm font-bold text-emerald-600">{toast}</p>}
         {saveMsg && <p className="text-sm font-bold text-slate-600">{saveMsg}</p>}
+        {historyWarn && <p className="text-sm font-bold text-amber-700">{historyWarn}</p>}
       </div>
 
       {/* Nhóm 1: Cần đi đòi */}
@@ -1000,6 +1121,61 @@ export default function BaoCaoHoanChuaNhan() {
               </button>
             </div>
             <div className="p-6 space-y-5">
+              <div className="flex gap-2">
+                <button onClick={() => setBulkTab('doi-chieu')} className={`px-4 py-2 text-sm font-bold rounded-xl cursor-pointer ${bulkTab === 'doi-chieu' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>Đối chiếu</button>
+                <button onClick={() => setBulkTab('lich-su')} className={`px-4 py-2 text-sm font-bold rounded-xl cursor-pointer ${bulkTab === 'lich-su' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>Lịch sử</button>
+              </div>
+              {bulkTab === 'lich-su' ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="relative flex-1 min-w-[220px]">
+                      <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        value={historyFilter}
+                        onChange={(e) => setHistoryFilter(e.target.value)}
+                        placeholder="Lọc theo mã vận đơn..."
+                        className="w-full text-sm border border-slate-200 rounded-lg pl-9 pr-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-mono"
+                      />
+                    </div>
+                    <button onClick={fetchHistory} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer">Tải lại</button>
+                  </div>
+                  <p className="text-xs text-slate-500">Lịch sử kiểm nhận gần nhất (tối đa 200 dòng): mỗi lần dán AfterShip là 1 lô, sửa tay từng đơn ghi riêng 1 dòng "Thủ công". Đơn Delivered sau khi cập nhật không biến mất — nó nhảy từ nhóm Đang chờ sang Cần đi đòi, vẫn xem lại được ở đây.</p>
+                  {historyError && <p className="text-sm font-bold text-amber-700">{historyError}</p>}
+                  {historyLoading ? (
+                    <div className="p-8 flex items-center justify-center gap-2 text-sm font-bold text-slate-500">
+                      <Loader2 size={18} className="animate-spin" /> Đang tải...
+                    </div>
+                  ) : historyGroups.length === 0 ? (
+                    <p className="text-sm font-bold text-slate-600">Chưa có lịch sử kiểm nhận nào{historyFilter.trim() ? ' khớp với mã đã lọc' : ''}.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {historyGroups.map((g) => (
+                        <div key={g.key} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                          {g.batch ? (
+                            <p className="text-sm font-bold text-slate-900 mb-2">
+                              Lô kiểm {fmtDateTime(g.checkedAt)} · {g.checkedBy || '—'} · {g.rows.length} đơn · {g.rows.filter((r) => r.received_status === 'Đã nhận').length} Đã nhận
+                            </p>
+                          ) : (
+                            <p className="text-sm font-bold text-slate-900 mb-2">Sửa tay · {fmtDateTime(g.checkedAt)} · {g.checkedBy || '—'} · Thủ công</p>
+                          )}
+                          <div className="space-y-1">
+                            {g.rows.map((r) => (
+                              <div key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                                <span className="font-mono font-bold text-indigo-700 break-all">{r.tracking_number || '—'}</span>
+                                <span className="text-xs text-slate-500">{r.shipment_status || (r.source === 'thu_cong' ? 'Thủ công' : '—')}</span>
+                                <span className={`ml-auto text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap ${r.received_status === 'Đã nhận' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                                  {r.received_status || '—'}{r.received_date ? ` · ${fmtDateOnly(r.received_date)}` : ''}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+              <>
               {loading ? (
                 <div className="p-8 flex items-center justify-center gap-2 text-sm font-bold text-slate-500">
                   <Loader2 size={18} className="animate-spin" /> Đang tải...
@@ -1075,6 +1251,7 @@ export default function BaoCaoHoanChuaNhan() {
                       <button onClick={handleBulkPreview} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer">Cập nhật trạng thái</button>
                       {bulkError && <p className="text-sm font-bold text-red-500">{bulkError}</p>}
                       {bulkMsg && <p className="text-sm font-bold text-emerald-600">{bulkMsg}</p>}
+                      {historyWarn && <p className="text-sm font-bold text-amber-700">{historyWarn}</p>}
                     </div>
                   </div>
                   {/* Xem trước — chưa ghi gì cả */}
@@ -1111,6 +1288,8 @@ export default function BaoCaoHoanChuaNhan() {
                     </div>
                   )}
                 </>
+              )}
+              </>
               )}
             </div>
           </div>
