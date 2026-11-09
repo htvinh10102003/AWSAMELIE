@@ -87,6 +87,55 @@ function stripTrailingR(appOrderId) {
   return String(appOrderId).replace(/R$/, '');
 }
 
+// --- Danh sách "Cần check tay": ngày VN + tuổi đơn trả (UTC+7, không Intl) ---
+// Ngày VN (YYYY-MM-DD) của 1 timestamp — cộng 7 giờ, đọc bằng UTC getters.
+function vnDateOf(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const v = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${v.getUTCFullYear()}-${p(v.getUTCMonth() + 1)}-${p(v.getUTCDate())}`;
+}
+// Số ngày nguyên từ ngày A tới ngày B (B - A), chuỗi ngày YYYY-MM-DD.
+function daysBetween(dateStrA, dateStrB) {
+  const a = Date.parse(`${dateStrA}T00:00:00Z`);
+  const b = Date.parse(`${dateStrB}T00:00:00Z`);
+  if (isNaN(a) || isNaN(b)) return null;
+  return Math.round((b - a) / 86400000);
+}
+// Tuổi (ngày VN) của đơn trả tính tới hôm nay; null khi không đọc được ngày tạo.
+function returnAgeDays(row, todayStr) {
+  const created = vnDateOf(row.return_created_at);
+  if (!created) return null;
+  return daysBetween(created, todayStr);
+}
+// Quy tắc 1-3 của danh sách "Cần check tay". Trả về { pass, age }.
+// hasPartialFn: (row) => boolean; manualChecks: Map(return_id -> { received_status }).
+function passesNeedCheckRules123(row, hasPartialFn, manualChecks, todayStr) {
+  if (hasPartialFn(row)) return { pass: false, age: null };
+  if (manualChecks.get(row.return_id)?.received_status === 'Đã nhận') return { pass: false, age: null };
+  const age = returnAgeDays(row, todayStr);
+  if (age === null || age <= 4) return { pass: false, age };
+  return { pass: true, age };
+}
+// Quy tắc 4: trạng thái đơn gốc (null = không nối được / không tra được
+// -> vẫn tính theo quy tắc 1-3). 71/74/72 loại ra.
+function passesOrigStatusRule(status) {
+  if (status === null || status === undefined) return true;
+  return status !== 71 && status !== 74 && status !== 72;
+}
+// Tra trạng thái đơn gốc trong 2 map cache: ưu tiên ID đơn Nhanh
+// (raw_data.nhanhOrderId), sau đó mã đơn sàn gốc (original_ecom_order_id).
+// Trả về status (số) hoặc null khi không nối được.
+function lookupOrigStatus(row, statusById, statusByEcom) {
+  const nid = row?.raw_data?.nhanhOrderId;
+  if (nid !== null && nid !== undefined && nid !== '' && statusById.has(String(nid))) return statusById.get(String(nid));
+  const oid = row?.original_ecom_order_id;
+  if (oid && statusByEcom.has(String(oid))) return statusByEcom.get(String(oid));
+  return null;
+}
+
 // --- Đối chiếu hàng loạt: hãng theo đầu mã vận đơn ---
 // Kiểm tra tiền tố dài trước (SPX, VTP) rồi mới tới tiền tố 1 ký tự (8, G, 1).
 const CARRIER_BY_PREFIX = [
@@ -360,9 +409,15 @@ export default function BaoCaoHoanChuaNhan() {
   const [partialMissing, setPartialMissing] = useState(false);
   const [manualChecks, setManualChecks] = useState(new Map());
   const [manualMissing, setManualMissing] = useState(false);
+  // Trạng thái đơn gốc cho danh sách "Cần check tay" (quy tắc 4) — cache
+  // theo ID đơn Nhanh và theo mã đơn sàn gốc; lỗi tra thì bỏ qua quy tắc 4.
+  const [origStatusById, setOrigStatusById] = useState(new Map());
+  const [origStatusByEcom, setOrigStatusByEcom] = useState(new Map());
+  const [origStatusError, setOrigStatusError] = useState(false);
   // --- Phân trang từng nhóm (client-side, trên tập đã lọc đủ) ---
   const [pageDoi, setPageDoi] = useState(1);
   const [pageCho, setPageCho] = useState(1);
+  const [pageCheck, setPageCheck] = useState(1); // nhóm "Cần check tay"
   // --- Sửa tay từng dòng ---
   const [editRowId, setEditRowId] = useState(null);
   const [editDrafts, setEditDrafts] = useState({});
@@ -405,6 +460,12 @@ export default function BaoCaoHoanChuaNhan() {
   const [scanBatchId, setScanBatchId] = useState('');
   const [scanOnlyUnscanned, setScanOnlyUnscanned] = useState(true);
   const [scanPage, setScanPage] = useState(1);
+  // Giao diện quét-ưu-tiên: danh sách chờ quét ẩn sau nút bấm (mặc định đóng).
+  const [scanShowList, setScanShowList] = useState(false);
+  // Mã đơn trả đã quét hôm nay (nguồn 'quet' trong lịch sử + quét trong
+  // phiên này) — đếm "Đã quét hôm nay", lỗi tải thì chỉ đếm trong phiên.
+  const [scannedTodayIds, setScannedTodayIds] = useState(new Set());
+  const [scannedTodayLoaded, setScannedTodayLoaded] = useState(false);
   const scanInputRef = useRef(null);
 
   const filters = applied || { updFrom, updTo, crtFrom, crtTo, platform, shop, search };
@@ -557,7 +618,7 @@ export default function BaoCaoHoanChuaNhan() {
   function handleFilter() {
     setPageDoi(1);
     setPageCho(1);
-    setBulkPage(1);
+    setPageCheck(1);
     setApplied({ updFrom, updTo, crtFrom, crtTo, platform, shop, search });
   }
 
@@ -615,6 +676,80 @@ export default function BaoCaoHoanChuaNhan() {
   const totalPagesCho = Math.max(1, Math.ceil(groups.cho.length / PAGE_SIZE));
   const safePageDoi = Math.min(pageDoi, totalPagesDoi);
   const safePageCho = Math.min(pageCho, totalPagesCho);
+
+  // --- Danh sách "Cần check tay" (quy tắc 1-3, trong bộ nhớ) ---
+  // Đơn trả tạo quá 4 ngày (tuổi theo ngày VN > 4), chưa có trạng thái
+  // Đã nhận (quét hay dán kết quả đều ghi 'Đã nhận'), chưa có đơn hoàn
+  // 1 phần. Quy tắc 4 (trạng thái đơn gốc) áp sau khi tra DB.
+  const needCheckCandidates = useMemo(() => {
+    const today = vnTodayStr();
+    const out = [];
+    for (const r of allRows) {
+      const { pass, age } = passesNeedCheckRules123(r, hasPartial, manualChecks, today);
+      if (pass) out.push({ row: r, age });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR]);
+
+  // Tra trạng thái đơn gốc cho các ứng viên "Cần check tay" (quy tắc 4).
+  // Chỉ tra những đơn chưa có trong cache (chia lô 100); lỗi -> bỏ qua
+  // quy tắc 4 (giữ luật 1-3) và hiện ghi chú, không sập trang.
+  useEffect(() => {
+    let cancelled = false;
+    const needIds = new Set();
+    const needEcoms = new Set();
+    for (const { row } of needCheckCandidates) {
+      const nid = row?.raw_data?.nhanhOrderId;
+      if (nid !== null && nid !== undefined && nid !== '' && !origStatusById.has(String(nid))) needIds.add(String(nid));
+      const oid = row?.original_ecom_order_id;
+      if (oid && !origStatusByEcom.has(String(oid))) needEcoms.add(String(oid));
+    }
+    if (needIds.size === 0 && needEcoms.size === 0) return;
+    const chunk = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
+    (async () => {
+      try {
+        const byId = new Map();
+        const byEcom = new Map();
+        const absorb = (rows) => {
+          for (const o of rows || []) {
+            byId.set(String(o.id), o.status);
+            if (o.ecom_order_id !== null && o.ecom_order_id !== undefined && String(o.ecom_order_id) !== '') byEcom.set(String(o.ecom_order_id), o.status);
+          }
+        };
+        for (const part of chunk([...needIds], 100)) {
+          const { data, error } = await supabase.from('orders').select('id,status,ecom_order_id').in('id', part);
+          if (error) throw error;
+          absorb(data);
+        }
+        for (const part of chunk([...needEcoms], 100)) {
+          const { data, error } = await supabase.from('orders').select('id,status,ecom_order_id').in('ecom_order_id', part);
+          if (error) throw error;
+          absorb(data);
+        }
+        if (cancelled) return;
+        setOrigStatusById((prev) => new Map([...prev, ...byId]));
+        setOrigStatusByEcom((prev) => new Map([...prev, ...byEcom]));
+        setOrigStatusError(false);
+      } catch (e) {
+        console.error('Lỗi tra trạng thái đơn gốc:', e);
+        if (!cancelled) setOrigStatusError(true);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needCheckCandidates]);
+
+  // Danh sách cuối "Cần check tay": ứng viên quy tắc 1-3 + quy tắc 4.
+  // Đơn không nối được đơn gốc (hoặc tra lỗi) thì giữ theo luật 1-3.
+  // Dẫn xuất từ cùng manualChecks + tập đơn 1 phần như các nhóm khác nên
+  // quét / xác nhận / sửa tay xong là đơn tự biến khỏi danh sách.
+  const needCheckRows = useMemo(
+    () => needCheckCandidates.filter(({ row }) => passesOrigStatusRule(lookupOrigStatus(row, origStatusById, origStatusByEcom))),
+    [needCheckCandidates, origStatusById, origStatusByEcom]
+  );
+  const totalPagesCheck = Math.max(1, Math.ceil(needCheckRows.length / PAGE_SIZE));
+  const safePageCheck = Math.min(pageCheck, totalPagesCheck);
 
   function showToast(msg) {
     setToast(msg);
@@ -822,6 +957,9 @@ export default function BaoCaoHoanChuaNhan() {
     setScanPasteMsg('');
     setScanOnlyUnscanned(true);
     setScanPage(1);
+    setScanShowList(false);
+    setScannedTodayIds(new Set());
+    setScannedTodayLoaded(false);
     fetchCheckedToday();
     setShowBulk(true);
   }
@@ -852,6 +990,26 @@ export default function BaoCaoHoanChuaNhan() {
     }
   }
 
+  // Mã đơn trả đã quét hôm nay (nguồn 'quet' trong lịch sử, từ 00:00 VN
+  // hôm nay). Gộp với quét trong phiên (đã có trong tập) để số đếm tăng
+  // ngay khi quét; lỗi tải thì chỉ đếm trong phiên, không sập popup.
+  async function fetchScannedToday() {
+    try {
+      const todayStart = `${vnTodayStr()}T00:00:00+07:00`;
+      const { data, error } = await supabase
+        .from('return_receipt_check_history')
+        .select('return_id')
+        .eq('source', 'quet')
+        .gte('checked_at', todayStart)
+        .limit(5000);
+      if (error) throw error;
+      const fetched = new Set((data || []).map((r) => String(r.return_id)).filter(Boolean));
+      setScannedTodayIds((prev) => new Set([...prev, ...fetched]));
+    } catch (e) {
+      console.error('Lỗi tải số đơn đã quét hôm nay:', e);
+    }
+  }
+
   // Lịch sử kiểm nhận: 200 dòng mới nhất, chỉ tải khi mở tab "Lịch sử".
   // Bảng chưa tạo (migration chưa chạy) thì báo nhẹ, không sập popup.
   async function fetchHistory() {
@@ -877,10 +1035,13 @@ export default function BaoCaoHoanChuaNhan() {
     if (showBulk && bulkTab === 'lich-su') fetchHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showBulk, bulkTab]);
-  // Tab "Quét nhận hàng": tải lười danh sách chờ quét + focus ô bắn mã.
+  // Tab "Quét nhận hàng": tải lười danh sách chờ quét + số đơn đã quét
+  // hôm nay + focus ô bắn mã. Danh sách chờ vẫn tải khi mở tab (quét cần
+  // nó để khớp mã), chỉ là ẩn khỏi giao diện cho tới khi bấm xem.
   useEffect(() => {
     if (showBulk && bulkTab === 'quet-nhan') {
       if (!scanLoaded && !scanLoading) fetchScanExpected();
+      if (!scannedTodayLoaded) { setScannedTodayLoaded(true); fetchScannedToday(); }
       setTimeout(() => { if (scanInputRef.current) scanInputRef.current.focus(); }, 60);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1027,6 +1188,12 @@ export default function BaoCaoHoanChuaNhan() {
         setCheckedTodayIds((prev) => {
           const next = new Set(prev);
           next.add(payload.return_id);
+          return next;
+        });
+        // Quét trong phiên này cũng tính vào "Đã quét hôm nay".
+        setScannedTodayIds((prev) => {
+          const next = new Set(prev);
+          next.add(String(payload.return_id));
           return next;
         });
         const historyOk = await logCheckHistory([{
@@ -1250,7 +1417,7 @@ export default function BaoCaoHoanChuaNhan() {
     }
   }
 
-  function renderRow(r) {
+  function renderRow(r, ageDays) {
     const prods = productsOf(r);
     const first = prods[0];
     const mappedFirst = first ? mapReturnProduct(first.name, first.sku, inventoryIndex) : null;
@@ -1311,6 +1478,9 @@ export default function BaoCaoHoanChuaNhan() {
         <td className="px-2 py-3.5 min-w-0">
           <div className="whitespace-nowrap text-xs leading-5"><span className="text-slate-400">Tạo</span> {fmtDateTime(r.return_created_at)}</div>
           <div className="whitespace-nowrap text-xs leading-5"><span className="text-slate-400">Cập nhật</span> {fmtDateTime(r.return_updated_at)}</div>
+          {ageDays !== null && ageDays !== undefined && (
+            <div className="mt-1"><span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200 whitespace-nowrap">Quá {ageDays} ngày</span></div>
+          )}
         </td>
         {/* Nhận hàng: trạng thái trên, ngày về dưới */}
         <td className="px-3 py-3.5 min-w-0">
@@ -1397,6 +1567,64 @@ export default function BaoCaoHoanChuaNhan() {
             <div className="flex gap-2">
               <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1"><ChevronLeft size={14} /> Trước</button>
               <button disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1">Sau <ChevronRight size={14} /></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Nhóm "Cần check tay": đơn trả tạo quá 4 ngày chưa quét lần nào, chưa
+  // có đơn hoàn 1 phần, đơn gốc (nếu nối được) không ở 71/74/72. Dùng
+  // chung bảng/cột với 2 nhóm trên; copy 20 hoặc 40 mã 1 lần để check tay.
+  function renderNeedCheckSection() {
+    const rows = needCheckRows;
+    const paged = rows.slice((safePageCheck - 1) * PAGE_SIZE, safePageCheck * PAGE_SIZE);
+    const n20 = Math.min(20, rows.length);
+    const n40 = Math.min(40, rows.length);
+    const done = rows.length === 0;
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">
+              Cần check tay <span className="text-slate-500 font-medium">({rows.length} đơn · Tổng hoàn {fmtMoney(sumMoney(rows.map((x) => x.row)))} VND)</span>
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">Đơn trả tạo quá 4 ngày mà chưa quét lần nào, chưa có đơn hoàn 1 phần, đơn gốc (nếu nối được) không ở trạng thái Đang chuyển hoàn / Xác nhận hoàn / Đã hoàn — mang đi check tay với hãng.</p>
+            {origStatusError && <p className="text-xs text-amber-700 mt-1">Không kiểm tra được trạng thái đơn gốc — danh sách đang hiển thị theo luật tuổi + chưa quét (chưa lọc 71/74/72).</p>}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button disabled={done} onClick={() => copyCodes(rows.slice(0, 20).map((x) => x.row), 'Cần check tay (20 mã)')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
+              <Copy size={15} /> {done ? 'Đã kiểm xong' : `Sao chép ${n20} mã`}
+            </button>
+            <button disabled={done} onClick={() => copyCodes(rows.slice(0, 40).map((x) => x.row), 'Cần check tay (40 mã)')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
+              <Copy size={15} /> {done ? 'Đã kiểm xong' : `Sao chép ${n40} mã`}
+            </button>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+          {loading ? (
+            <div className="p-8 flex items-center justify-center gap-2 text-sm font-bold text-slate-500">
+              <Loader2 size={18} className="animate-spin" /> Đang tải...
+            </div>
+          ) : paged.length === 0 ? (
+            <div className="p-8 text-center">
+              <Package size={32} className="mx-auto text-slate-300 mb-2" />
+              <p className="text-sm font-bold text-slate-600">Không có đơn nào quá 4 ngày chưa quét.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm table-fixed">
+                <colgroup>{COLS.map((c) => (<col key={c.id} style={{ width: `${c.w}%` }} />))}</colgroup>
+                <tbody>{paged.map(({ row, age }) => renderRow(row, age))}</tbody>
+              </table>
+            </div>
+          )}
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
+            <span className="text-xs font-bold text-slate-500">Trang {safePageCheck} / {totalPagesCheck} — {rows.length} đơn</span>
+            <div className="flex gap-2">
+              <button disabled={safePageCheck <= 1} onClick={() => setPageCheck(safePageCheck - 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1"><ChevronLeft size={14} /> Trước</button>
+              <button disabled={safePageCheck >= totalPagesCheck} onClick={() => setPageCheck(safePageCheck + 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1">Sau <ChevronRight size={14} /></button>
             </div>
           </div>
         </div>
@@ -1533,6 +1761,9 @@ export default function BaoCaoHoanChuaNhan() {
         {historyWarn && <p className="text-sm font-bold text-amber-700">{historyWarn}</p>}
       </div>
 
+      {/* Cần check tay: đơn trả quá 4 ngày chưa quét */}
+      {renderNeedCheckSection()}
+
       {/* Nhóm 1: Cần đi đòi */}
       {renderGroupSection({
         sectionKey: 'doi',
@@ -1631,16 +1862,6 @@ export default function BaoCaoHoanChuaNhan() {
                   Bắn mã vạch từng đơn nhận về từ shipper — đơn nào bắn rồi thì lưu ngay là <strong>Đã nhận hàng hoàn</strong>, chưa bắn thì vẫn là <strong>Chưa nhận hàng hoàn</strong>. Danh sách chờ gồm đơn trả (trạng thái Nhanh Đã hoàn tiền / Đang xử lý / Đang hoàn tiền) và đơn Nhanh ở trạng thái Đang chuyển hoàn / Xác nhận hoàn.
                 </p>
                 {scanError && <p className="text-sm font-bold text-red-500">{scanError}</p>}
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <span className="text-sm font-bold text-slate-700">Đã quét {scanStats.done} / Tổng {scanStats.total} — Còn lại {scanStats.left}</span>
-                  <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
-                      <input type="checkbox" checked={scanOnlyUnscanned} onChange={(e) => { setScanOnlyUnscanned(e.target.checked); setScanPage(1); }} className="w-4 h-4 accent-emerald-600" />
-                      Chỉ hiện chưa quét
-                    </label>
-                    <button onClick={fetchScanExpected} disabled={scanLoading} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-50 cursor-pointer">Tải lại</button>
-                  </div>
-                </div>
                 {/* Ô bắn mã */}
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Bắn mã vạch vào đây (súng bắn xong bấm Enter)</label>
@@ -1657,6 +1878,7 @@ export default function BaoCaoHoanChuaNhan() {
                     <p className={`text-sm font-bold mt-1 ${scanFlash.kind === 'ok' ? 'text-emerald-600' : scanFlash.kind === 'dup' ? 'text-amber-700' : 'text-red-500'}`}>{scanFlash.msg}</p>
                   )}
                 </div>
+                <p className="text-sm font-bold text-slate-700">Đã quét hôm nay: {scannedTodayIds.size} đơn</p>
                 {/* Vừa quét */}
                 {scanRecent.length > 0 && (
                   <div>
@@ -1677,8 +1899,23 @@ export default function BaoCaoHoanChuaNhan() {
                     {scanPasteMsg && <p className="text-sm font-bold text-slate-600">{scanPasteMsg}</p>}
                   </div>
                 </div>
-                {/* Danh sách chờ quét */}
-                {scanLoading ? (
+                {/* Danh sách chờ quét — ẩn mặc định, mở bằng nút bên dưới */}
+                <button onClick={() => setScanShowList((v) => !v)} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer">
+                  {scanShowList ? 'Ẩn danh sách chờ quét' : `Xem danh sách chờ quét${scanLoaded ? ` (${scanExpected.length} đơn)` : ''}`}
+                </button>
+                {scanShowList && (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <span className="text-sm font-bold text-slate-700">Đã quét {scanStats.done} / Tổng {scanStats.total} — Còn lại {scanStats.left}</span>
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
+                          <input type="checkbox" checked={scanOnlyUnscanned} onChange={(e) => { setScanOnlyUnscanned(e.target.checked); setScanPage(1); }} className="w-4 h-4 accent-emerald-600" />
+                          Chỉ hiện chưa quét
+                        </label>
+                        <button onClick={fetchScanExpected} disabled={scanLoading} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-50 cursor-pointer">Tải lại</button>
+                      </div>
+                    </div>
+                    {scanLoading ? (
                   <div className="p-8 flex items-center justify-center gap-2 text-sm font-bold text-slate-500"><Loader2 size={18} className="animate-spin" /> Đang tải...</div>
                 ) : scanVisible.length === 0 ? (
                   <p className="text-sm font-bold text-slate-600">{scanExpected.length === 0 ? 'Không có đơn nào trong danh sách chờ quét.' : 'Đã quét xong tất cả đơn trong danh sách.'}</p>
@@ -1710,7 +1947,9 @@ export default function BaoCaoHoanChuaNhan() {
                     </div>
                   </>
                 )}
-                <p className="text-xs text-slate-500">Chưa có hoàn tác trong phiên này — quét nhầm thì sửa lại bằng nút "Sửa" từng dòng ở bảng chính.</p>
+                    <p className="text-xs text-slate-500">Chưa có hoàn tác trong phiên này — quét nhầm thì sửa lại bằng nút "Sửa" từng dòng ở bảng chính.</p>
+                  </>
+                )}
               </div>
               ) : (
               <>
