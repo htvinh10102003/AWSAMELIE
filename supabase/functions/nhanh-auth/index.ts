@@ -20,6 +20,7 @@ serve(async (req) => {
         const businessId = body.nhanh_business_id || body.business_id || body.businessId;
         const secretKey = body.nhanh_secret_key || body.secret_key || body.secretKey;
         const accessCode = body.nhanh_access_code || body.access_code || body.accessCode || body.code;
+        const verifyCode = body.nhanh_verify_code || body.verify_code || body.verifyCode || '';
 
         console.log(`🔑 Nhận yêu cầu verify - AppID: ${appId}, BusinessID: ${businessId}`);
 
@@ -34,15 +35,25 @@ serve(async (req) => {
             });
         }
 
-        // 1. Gọi API Nhanh.vn để đổi Access Code lấy Access Token
+        // 1. Gọi API Nhanh.vn để đổi Access Code lấy Access Token.
+        // Flow mới (docs developers.nhanh.group): verifyCode do app tự
+        // tạo, gắn vào link cấp quyền (&service=pos&verifyCode=...),
+        // lúc đổi token gửi kèm verifyCode, secretKey chuyển từ body
+        // sang header Authorization. Không có verifyCode thì dùng lại
+        // kiểu cũ (secretKey trong body) để khỏi hỏng đường cũ.
+        const useNewFlow = Boolean(verifyCode);
         const res = await fetch(`https://pos.open.nhanh.vn/v3.0/app/getaccesstoken?appId=${appId}`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                appId: String(appId), 
-                accessCode: String(accessCode), 
-                secretKey: String(secretKey) 
-            })
+            headers: useNewFlow
+                ? { 'Content-Type': 'application/json', 'Authorization': String(secretKey) }
+                : { 'Content-Type': 'application/json' },
+            body: JSON.stringify(useNewFlow
+                ? { accessCode: String(accessCode), verifyCode: String(verifyCode) }
+                : {
+                    appId: String(appId),
+                    accessCode: String(accessCode),
+                    secretKey: String(secretKey)
+                })
         });
 
         const nhanhData = await res.json();

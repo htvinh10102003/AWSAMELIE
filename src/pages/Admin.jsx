@@ -22,6 +22,29 @@ const formatBytes = (bytes, decimals = 2) => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
+// Mã verify cho flow cấp quyền Nhanh.vn kiểu mới (docs developers.nhanh.group):
+// random 12-64 ký tự [a-zA-Z0-9], tạo ở Admin, gắn vào link cấp quyền
+// (&service=pos&verifyCode=...) rồi gửi kèm lúc đổi access code lấy token.
+const makeVerifyCode = (len = 32) => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let out = '';
+  const arr = new Uint32Array(len);
+  window.crypto.getRandomValues(arr);
+  for (let i = 0; i < len; i++) out += chars[arr[i] % chars.length];
+  return out;
+};
+const loadStoredVerifyCode = () => {
+  try {
+    const saved = localStorage.getItem('nhanh_verify_code') || '';
+    if (/^[A-Za-z0-9]{12,64}$/.test(saved)) return saved;
+    const fresh = makeVerifyCode();
+    localStorage.setItem('nhanh_verify_code', fresh);
+    return fresh;
+  } catch (e) {
+    return makeVerifyCode();
+  }
+};
+
 export default function Admin() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('configs'); 
@@ -64,7 +87,7 @@ export default function Admin() {
   const [upgradePassword, setUpgradePassword] = useState('');
 
   // --- CONFIGS API ---
-  const [apiConfigs, setApiConfigs] = useState({ nhanh_app_id: '', nhanh_business_id: '', nhanh_secret_key: '', nhanh_access_code: '' });
+  const [apiConfigs, setApiConfigs] = useState(() => ({ nhanh_app_id: '', nhanh_business_id: '', nhanh_secret_key: '', nhanh_access_code: '', nhanh_verify_code: loadStoredVerifyCode() }));
   const [apiLoading, setApiLoading] = useState(false);
   const [apiMessage, setApiMessage] = useState('');
   const [nhanhDaysLeft, setNhanhDaysLeft] = useState(null);
@@ -491,6 +514,12 @@ export default function Admin() {
   };
 
   const handleApiChange = (e) => setApiConfigs({ ...apiConfigs, [e.target.name]: e.target.value });
+
+  const handleRegenVerifyCode = () => {
+    const vc = makeVerifyCode();
+    try { localStorage.setItem('nhanh_verify_code', vc); } catch (e) {}
+    setApiConfigs(prev => ({ ...prev, nhanh_verify_code: vc }));
+  };
   
   const handleSaveApi = async (e) => {
     e.preventDefault();
@@ -504,8 +533,10 @@ export default function Admin() {
         { key: 'nhanh_token_updated_at', value: nowIso }
       ], { onConflict: 'key' });
 
-      setApiMessage(' Đã đổi Token thành công!'); 
-      setApiConfigs(prev => ({ ...prev, nhanh_access_code: '' }));
+      setApiMessage(' Đã đổi Token thành công!');
+      const freshVc = makeVerifyCode();
+      try { localStorage.setItem('nhanh_verify_code', freshVc); } catch (e) {}
+      setApiConfigs(prev => ({ ...prev, nhanh_access_code: '', nhanh_verify_code: freshVc }));
       setNhanhDaysLeft(365);
     } catch (error) { setApiMessage(' Lỗi: ' + error.message); } finally { setApiLoading(false); }
   };
@@ -1131,14 +1162,24 @@ export default function Admin() {
                   <input type="password" name="nhanh_secret_key" value={apiConfigs.nhanh_secret_key} onChange={handleApiChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium transition" />
                 </div>
                 
-                <div className="bg-amber-50/50 p-5 sm:p-6 border border-amber-200/60 rounded-2xl flex flex-col md:flex-row md:items-end gap-4">
-                  <div className="flex-1">
-                    <label className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2 block flex items-center gap-1.5"><KeyRound size={14}/> Mã Access Code mới (Hạn 15p)</label>
-                    <input type="text" name="nhanh_access_code" value={apiConfigs.nhanh_access_code} onChange={handleApiChange} className="w-full px-4 py-3 border border-amber-300/60 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium transition placeholder:text-amber-300" placeholder="Paste access code lấy từ Nhanh.vn vào đây..." />
+                <div className="bg-amber-50/50 p-5 sm:p-6 border border-amber-200/60 rounded-2xl flex flex-col gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2 block flex items-center gap-1.5"><KeyRound size={14}/> Mã Verify Code (bắt buộc khi cấp quyền kiểu mới)</label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input type="text" name="nhanh_verify_code" value={apiConfigs.nhanh_verify_code} readOnly className="flex-1 px-4 py-3 border border-amber-300/60 rounded-xl text-sm bg-white outline-none font-mono font-medium" />
+                      <button type="button" onClick={handleRegenVerifyCode} className="px-4 py-3 bg-white border border-amber-300/60 text-amber-800 text-sm font-bold rounded-xl hover:bg-amber-100/60 transition whitespace-nowrap flex items-center justify-center gap-2"><RefreshCcw size={15} /> Tạo mã mới</button>
+                    </div>
+                    <p className="text-xs text-amber-700/80 mt-2 leading-relaxed">Mở link cấp quyền Nhanh như mọi lần, thêm vào cuối link: <span className="font-mono font-bold">{`&service=pos&verifyCode=${apiConfigs.nhanh_verify_code || 'MÃ-TRÊN'}`}</span> rồi đăng nhập, tick đủ quyền (kể cả sàn TMĐT), copy Access Code về paste vào ô dưới rồi bấm Lưu Token mới.</p>
                   </div>
-                  <button type="submit" disabled={apiLoading} className="w-full md:w-auto px-8 py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-md hover:bg-emerald-700 transition-all cursor-pointer text-sm disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap">
-                    {apiLoading ? <Loader2 size={16} className="animate-spin" /> : <SaveIcon />} Lưu Token mới
-                  </button>
+                  <div className="flex flex-col md:flex-row md:items-end gap-4">
+                    <div className="flex-1">
+                      <label className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2 block flex items-center gap-1.5"><KeyRound size={14}/> Mã Access Code mới (Hạn 15p)</label>
+                      <input type="text" name="nhanh_access_code" value={apiConfigs.nhanh_access_code} onChange={handleApiChange} className="w-full px-4 py-3 border border-amber-300/60 rounded-xl text-sm bg-white outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium transition placeholder:text-amber-300" placeholder="Paste access code lấy từ Nhanh.vn vào đây..." />
+                    </div>
+                    <button type="submit" disabled={apiLoading} className="w-full md:w-auto px-8 py-3 bg-emerald-600 text-white font-bold rounded-xl shadow-md hover:bg-emerald-700 transition-all cursor-pointer text-sm disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap">
+                      {apiLoading ? <Loader2 size={16} className="animate-spin" /> : <SaveIcon />} Lưu Token mới
+                    </button>
+                  </div>
                 </div>
               </form>
             ) : (
