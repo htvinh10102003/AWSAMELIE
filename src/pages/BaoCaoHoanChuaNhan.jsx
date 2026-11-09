@@ -373,8 +373,6 @@ export default function BaoCaoHoanChuaNhan() {
   const [exportMsg, setExportMsg] = useState('');
   // --- Đối chiếu hàng loạt (chỉ owner) ---
   const [showBulk, setShowBulk] = useState(false);
-  const [bulkPage, setBulkPage] = useState(1);
-  const [bulkCarrier, setBulkCarrier] = useState('');
   const [pasteText, setPasteText] = useState('');
   const [bulkPreview, setBulkPreview] = useState(null);
   const [bulkSaving, setBulkSaving] = useState(false);
@@ -749,46 +747,33 @@ export default function BaoCaoHoanChuaNhan() {
   }
 
   // --- Đối chiếu hàng loạt (chỉ owner) ---
-  const BULK_PAGE_SIZE = 50;
   // Toàn bộ tập chưa nhận theo bộ lọc (cả 2 nhóm), giữ đúng thứ tự
   // return_updated_at desc như bảng (allRows đã xếp sẵn khi tải).
   // Chỉ đơn chưa có trạng thái cuối mới hiện trong popup đối chiếu: đơn
   // Đã nhận (và đơn đã có đơn hoàn 1 phần) bị loại khỏi danh sách — xong
-  // là biến mất, dữ liệu trang sau tự đôn lên. Thêm nữa: đơn nào hôm nay
-  // đã check rồi (có dòng trong bảng lịch sử từ 00:00 VN hôm nay) cũng
-  // bỏ qua luôn, khỏi check đi check lại; sang hôm sau đơn Chưa nhận lại
-  // hiện để check tiếp. Bảng chính không đổi: nhóm "Cần đi đòi" vẫn hiện
-  // đơn Đã nhận để đi đòi.
+  // là biến mất. Thêm nữa: đơn nào hôm nay đã check rồi (có dòng trong
+  // bảng lịch sử từ 00:00 VN hôm nay) cũng bỏ qua luôn, khỏi check đi
+  // check lại; sang hôm sau đơn Chưa nhận lại hiện để check tiếp. Bảng
+  // chính không đổi: nhóm "Cần đi đòi" vẫn hiện đơn Đã nhận để đi đòi.
   const bulkRows = useMemo(
     () => allRows.filter((r) => !hasPartial(r) && manualChecks.get(r.return_id)?.received_status !== 'Đã nhận' && !checkedTodayIds.has(r.return_id)),
     [allRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR, checkedTodayIds]
   );
-  const bulkTotalPages = Math.max(1, Math.ceil(bulkRows.length / BULK_PAGE_SIZE));
-  const safeBulkPage = Math.min(bulkPage, bulkTotalPages);
-  const bulkPageRows = bulkRows.slice((safeBulkPage - 1) * BULK_PAGE_SIZE, safeBulkPage * BULK_PAGE_SIZE);
-  // Khi danh sách co lại (đơn vừa kiểm xong biến mất), kéo trang hiện
-  // tại về trang cuối còn hợp lệ để trang sau đôn lên lấp đầy.
-  useEffect(() => {
-    if (bulkPage > bulkTotalPages) setBulkPage(bulkTotalPages);
-  }, [bulkPage, bulkTotalPages]);
-  // Mọi đơn trên trang đều chưa kiểm nên nút copy lấy 20 mã đầu tiên
-  // (AfterShip chỉ check tối đa 20 mã/lần).
-  const bulkPageCopyRows = bulkPageRows.slice(0, 20);
-  // Nhóm trang hiện tại theo hãng (tab hiển thị theo thứ tự SPX, J&T, GHN,
-  // GHTK, Viettel Post, Hãng khác; chỉ hãng nào có đơn mới hiện).
-  const bulkPageCarriers = useMemo(() => {
+  // Nhóm TOÀN BỘ danh sách chưa nhận theo hãng (thứ tự SPX, J&T, GHN,
+  // GHTK, Viettel Post, Hãng khác; chỉ hãng nào có đơn mới hiện). Không
+  // phân trang nữa — hiển thị hết 1 loạt, mỗi hãng copy 20 hoặc 40 mã
+  // 1 lần; đơn vừa kiểm xong biến mất khỏi danh sách nên lần copy sau
+  // tự lấy tiếp 20/40 mã tiếp theo.
+  const bulkCarriers = useMemo(() => {
     const map = new Map();
-    for (const r of bulkPageRows) {
+    for (const r of bulkRows) {
       const name = carrierOf(returnCodeOf(r) || r.return_tracking_number || '');
       if (!map.has(name)) map.set(name, []);
       map.get(name).push(r);
     }
     const order = ['SPX (Shopee Express)', 'J&T Express', 'GHN', 'GHTK', 'Viettel Post', 'Hãng khác'];
     return order.filter((n) => map.has(n)).map((n) => ({ name: n, rows: map.get(n) }));
-  }, [bulkPageRows]);
-  const activeBulkCarrier = bulkPageCarriers.find((c) => c.name === bulkCarrier) || bulkPageCarriers[0] || null;
-  // Copy theo hãng: 20 mã đầu tiên của hãng đó trên trang này.
-  const activeCarrierCopyRows = activeBulkCarrier ? activeBulkCarrier.rows.slice(0, 20) : [];
+  }, [bulkRows]);
 
   // Nhóm lịch sử để hiển thị: lọc theo mã vận đơn trước (khớp chuỗi con,
   // không phân biệt hoa thường), rồi gom theo batch_id; sửa tay (batch_id
@@ -818,8 +803,6 @@ export default function BaoCaoHoanChuaNhan() {
   }, [historyRows, historyFilter]);
 
   function openBulk() {
-    setBulkPage(1);
-    setBulkCarrier('');
     setBulkTab('doi-chieu');
     setPasteText('');
     setBulkPreview(null);
@@ -1739,57 +1722,6 @@ export default function BaoCaoHoanChuaNhan() {
                 <p className="text-sm font-bold text-slate-600">Đã kiểm xong tất cả đơn trong bộ lọc.</p>
               ) : (
                 <>
-                  {/* Phân trang 50 đơn/trang */}
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-sm font-bold text-slate-700">Trang {safeBulkPage} / {bulkTotalPages} — tổng {bulkRows.length} đơn chưa nhận</span>
-                    <div className="flex gap-2">
-                      <button disabled={safeBulkPage <= 1} onClick={() => setBulkPage(safeBulkPage - 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1"><ChevronLeft size={14} /> Trước</button>
-                      <button disabled={safeBulkPage >= bulkTotalPages} onClick={() => setBulkPage(safeBulkPage + 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1">Sau <ChevronRight size={14} /></button>
-                    </div>
-                  </div>
-                  {/* Tab theo hãng — 1 hãng hiện 1 lúc */}
-                  <div className="flex flex-wrap gap-2">
-                    {bulkPageCarriers.map((c) => (
-                      <button
-                        key={c.name}
-                        onClick={() => setBulkCarrier(c.name)}
-                        className={`px-4 py-2 text-sm font-bold rounded-xl cursor-pointer ${activeBulkCarrier?.name === c.name ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}
-                      >
-                        {c.name} ({c.rows.length})
-                      </button>
-                    ))}
-                  </div>
-                  {activeBulkCarrier && (
-                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                        <h3 className="text-sm font-bold text-slate-900">{activeBulkCarrier.name} — {activeBulkCarrier.rows.length} đơn trên trang này</h3>
-                        <div className="flex flex-col items-end gap-1">
-                          <button onClick={() => copyCodes(activeCarrierCopyRows, activeBulkCarrier.name)} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer flex items-center gap-2">
-                            <Copy size={15} /> Sao chép mã vận đơn ({activeCarrierCopyRows.length})
-                          </button>
-                        </div>
-                      </div>
-                      <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
-                        {activeBulkCarrier.rows.map((r) => {
-                          const m = manualChecks.get(r.return_id);
-                          return (
-                            <div key={r.return_id} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
-                              <span className="font-mono font-bold text-indigo-700 break-all">{returnCodeOf(r) || r.return_tracking_number || '—'}</span>
-                              <span className="font-mono text-xs text-slate-500 break-all">{r.return_id || '—'}</span>
-                              <span className="ml-auto text-xs font-bold text-slate-500">
-                                {m?.received_status ? `${m.received_status}${m.received_date ? ` · ${fmtDateOnly(m.received_date)}` : ''}` : 'Chưa kiểm'}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button onClick={() => copyCodes(bulkPageCopyRows, 'chưa kiểm trên trang này')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer flex items-center gap-2">
-                      <Copy size={15} /> Sao chép {bulkPageCopyRows.length} mã
-                    </button>
-                  </div>
                   {/* Dán kết quả AfterShip / 17Track */}
                   <div>
                     <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Dán kết quả AfterShip / 17Track vào đây</label>
@@ -1866,6 +1798,42 @@ export default function BaoCaoHoanChuaNhan() {
                       </div>
                     </div>
                   )}
+                  {/* Danh sách hết 1 loạt theo hãng — không phân trang; mỗi hãng copy 20 hoặc 40 mã 1 lần */}
+                  <p className="text-sm font-bold text-slate-700">Tổng {bulkRows.length} đơn chưa nhận — chia theo hãng vận chuyển, copy 20 hoặc 40 mã 1 lần để đi check.</p>
+                  {bulkCarriers.map((c) => {
+                    const n20 = Math.min(20, c.rows.length);
+                    const n40 = Math.min(40, c.rows.length);
+                    const done = c.rows.length === 0;
+                    return (
+                      <div key={c.name} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                          <h3 className="text-sm font-bold text-slate-900">{c.name} — {c.rows.length} đơn</h3>
+                          <div className="flex flex-wrap gap-2">
+                            <button disabled={done} onClick={() => copyCodes(c.rows.slice(0, 20), `${c.name} (20 mã)`)} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
+                              <Copy size={15} /> {done ? 'Đã kiểm xong' : `Sao chép ${n20} mã`}
+                            </button>
+                            <button disabled={done} onClick={() => copyCodes(c.rows.slice(0, 40), `${c.name} (40 mã)`)} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
+                              <Copy size={15} /> {done ? 'Đã kiểm xong' : `Sao chép ${n40} mã`}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
+                          {c.rows.map((r) => {
+                            const m = manualChecks.get(r.return_id);
+                            return (
+                              <div key={r.return_id} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                                <span className="font-mono font-bold text-indigo-700 break-all">{returnCodeOf(r) || r.return_tracking_number || '—'}</span>
+                                <span className="font-mono text-xs text-slate-500 break-all">{r.return_id || '—'}</span>
+                                <span className="ml-auto text-xs font-bold text-slate-500">
+                                  {m?.received_status ? `${m.received_status}${m.received_date ? ` · ${fmtDateOnly(m.received_date)}` : ''}` : 'Chưa kiểm'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </>
               )}
               </>
