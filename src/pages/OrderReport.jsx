@@ -1398,13 +1398,16 @@ export default function OrderReport() {
         setShowSendHistoryModal(true);
         await loadSendHistory();
     };
-    // Gộp nhiều nhãn PDF sàn thành 1 file PDF rồi tải về. Edge trả về
+    // Gộp nhiều nhãn PDF sàn thành 1 file PDF rồi MỞ TRONG TAB MỚI để
+    // in (giống nút "In phiếu" từng đơn), không tải về máy. Edge trả về
     // BINARY PDF (không phải JSON) nên gọi bằng raw fetch, không dùng
-    // callNhanhActionRaw. Tên file theo giờ VN cộng tay UTC+7, không
-    // dùng Intl với timezone.
+    // callNhanhActionRaw. Mở tab trắng ngay lúc bấm (đồng bộ) để trình
+    // duyệt không chặn popup, rồi mới fetch và trỏ tab sang blob URL;
+    // nếu tab bị chặn thì dự phòng bằng cách tải file về máy.
     const downloadMergedLabels = async (labelUrls) => {
         const urls = (labelUrls || []).filter(Boolean);
         if (urls.length === 0) return;
+        const printTab = window.open('', '_blank');
         setMergingLabels(true);
         setMergeLabelsMsg('');
         try {
@@ -1420,18 +1423,29 @@ export default function OrderReport() {
                 throw new Error(msg);
             }
             const blob = await res.blob();
-            const now = new Date(Date.now() + 7 * 3600 * 1000);
-            const pad2 = (n) => String(n).padStart(2, '0');
-            const fname = `phieu-gui-san-${now.getUTCFullYear()}${pad2(now.getUTCMonth() + 1)}${pad2(now.getUTCDate())}-${pad2(now.getUTCHours())}${pad2(now.getUTCMinutes())}.pdf`;
             const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fname;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            URL.revokeObjectURL(url);
+            if (printTab) {
+                printTab.location.href = url;
+                // Thu hồi blob URL sau 5 phút; tab đã tải xong vào bộ nhớ.
+                setTimeout(() => URL.revokeObjectURL(url), 5 * 60 * 1000);
+            } else {
+                // Tab bị trình duyệt chặn: dự phòng tải file về máy.
+                // Tên file theo giờ VN cộng tay UTC+7, không dùng Intl
+                // với timezone.
+                const now = new Date(Date.now() + 7 * 3600 * 1000);
+                const pad2 = (n) => String(n).padStart(2, '0');
+                const fname = `phieu-gui-san-${now.getUTCFullYear()}${pad2(now.getUTCMonth() + 1)}${pad2(now.getUTCDate())}-${pad2(now.getUTCHours())}${pad2(now.getUTCMinutes())}.pdf`;
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fname;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            }
         } catch (err) {
+            // Gộp lỗi thì đóng tab trắng vừa mở (nếu có) để khỏi để tab trống.
+            if (printTab) { try { printTab.close(); } catch (e) { /* bỏ qua */ } }
             const msg = err.message || 'Không gộp được phiếu gửi.';
             setMergeLabelsMsg(msg);
             setCopyMessage(msg);
@@ -3454,7 +3468,7 @@ export default function OrderReport() {
                             {bulkEcomResult?.message && <p className="text-sm text-red-600">{bulkEcomResult.message}</p>}
                             {bulkEcomDisplayLabelUrls.length >= 2 && (
                                 <button onClick={() => downloadMergedLabels(bulkEcomDisplayLabelUrls).catch(() => {})} disabled={mergingLabels} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">
-                                    {mergingLabels && <RefreshCw size={14} className="animate-spin" />} Tải tất cả phiếu (1 file PDF)
+                                    {mergingLabels && <RefreshCw size={14} className="animate-spin" />} In tất cả phiếu (1 file PDF)
                                 </button>
                             )}
                             {mergeLabelsMsg && <p className="text-sm text-red-600">{mergeLabelsMsg}</p>}
@@ -3575,7 +3589,7 @@ export default function OrderReport() {
                                         {isEcomEntry && ecomLabelUrls.length >= 2 && (
                                             <div className="flex gap-2 pt-1">
                                                 <button onClick={() => downloadMergedLabels(ecomLabelUrls).catch(() => {})} disabled={mergingLabels} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1">
-                                                    {mergingLabels && <RefreshCw size={13} className="animate-spin" />} Tải tất cả phiếu (1 file PDF)
+                                                    {mergingLabels && <RefreshCw size={13} className="animate-spin" />} In tất cả phiếu (1 file PDF)
                                                 </button>
                                             </div>
                                         )}
