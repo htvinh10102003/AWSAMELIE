@@ -136,6 +136,41 @@ function lookupOrigStatus(row, statusById, statusByEcom) {
   return null;
 }
 
+// --- Danh sách hợp nhất "Cần check tay": 1 lần lọc, không gộp nhánh ---
+// Một đơn nằm trong danh sách khi KHÔNG được giải quyết VÀ khớp BẤT KỲ
+// nhánh nào: (a) kiểm tay Đã nhận nhưng chưa được xác nhận nhận hàng thật,
+// (b) quá 4 ngày chưa quét + đơn gốc (nếu nối được) không ở 71/74/72,
+// (c) kiểm tay Đã khiếu nại. ĐÃ GIẢI QUYẾT = có đơn hoàn 1 phần, HOẶC
+// có dòng lịch sử kiểm nhận nguồn 'quet'/'thu_cong' với trạng thái Đã nhận
+// (xác nhận nhận hàng thật). Cổng giải quyết kiểm TRƯỚC mọi nhánh nên
+// đơn đã xác nhận nhận rồi thì không bao giờ lọt lại qua nhánh (c).
+// deps: { hasPartialFn, manualChecks, confirmedReceivedIds, todayStr,
+//         origStatusById, origStatusByEcom }.
+function unifiedBranchOf(row, deps) {
+  const { hasPartialFn, manualChecks, confirmedReceivedIds, todayStr, origStatusById, origStatusByEcom } = deps;
+  if (hasPartialFn(row)) return null;
+  if (confirmedReceivedIds && confirmedReceivedIds.has(String(row.return_id))) return null;
+  const manual = manualChecks.get(row.return_id)?.received_status;
+  if (manual === 'Đã khiếu nại') return 'c';
+  if (manual === 'Đã nhận') return 'a';
+  const { pass } = passesNeedCheckRules123(row, hasPartialFn, manualChecks, todayStr);
+  if (!pass) return null;
+  if (!passesOrigStatusRule(lookupOrigStatus(row, origStatusById, origStatusByEcom))) return null;
+  return 'b';
+}
+function isInUnifiedList(row, deps) {
+  return unifiedBranchOf(row, deps) !== null;
+}
+// Ứng viên để tra lịch sử xác nhận nhận hàng: chưa có đơn 1 phần VÀ
+// (kiểm tay Đã nhận HOẶC Đã khiếu nại HOẶC tuổi > 4 ngày).
+function isUnifiedCandidate(row, hasPartialFn, manualChecks, todayStr) {
+  if (hasPartialFn(row)) return false;
+  const manual = manualChecks.get(row.return_id)?.received_status;
+  if (manual === 'Đã nhận' || manual === 'Đã khiếu nại') return true;
+  const age = returnAgeDays(row, todayStr);
+  return age !== null && age > 4;
+}
+
 // --- Đối chiếu hàng loạt: hãng theo đầu mã vận đơn ---
 // Kiểm tra tiền tố dài trước (SPX, VTP) rồi mới tới tiền tố 1 ký tự (8, G, 1).
 const CARRIER_BY_PREFIX = [
@@ -404,6 +439,16 @@ export default function BaoCaoHoanChuaNhan() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Tập riêng cho mục hợp nhất "Cần check tay": tải độc lập, không phụ
+  // thuộc bộ lọc trang (không lọc ngày/sàn/shop/tìm kiếm).
+  const [checkRows, setCheckRows] = useState([]);
+  const [checkLoading, setCheckLoading] = useState(false);
+  const [checkError, setCheckError] = useState('');
+  // Đơn đã XÁC NHẬN nhận hàng thật: có dòng lịch sử nguồn 'quet' hoặc
+  // 'thu_cong' với received_status 'Đã nhận'. Cổng giải quyết của danh
+  // sách hợp nhất; lỗi tra thì coi như tập rỗng, không sập trang.
+  const [confirmedReceivedIds, setConfirmedReceivedIds] = useState(new Set());
+  const [confirmedError, setConfirmedError] = useState(false);
   // Đơn hoàn 1 phần (type 16) + kiểm nhận tay.
   const [partialRows, setPartialRows] = useState([]);
   const [partialMissing, setPartialMissing] = useState(false);
@@ -415,9 +460,23 @@ export default function BaoCaoHoanChuaNhan() {
   const [origStatusByEcom, setOrigStatusByEcom] = useState(new Map());
   const [origStatusError, setOrigStatusError] = useState(false);
   // --- Phân trang từng nhóm (client-side, trên tập đã lọc đủ) ---
-  const [pageDoi, setPageDoi] = useState(1);
   const [pageCho, setPageCho] = useState(1);
-  const [pageCheck, setPageCheck] = useState(1); // nhóm "Cần check tay"
+  // --- Mục hợp nhất "Cần check tay": phân trang + bộ lọc riêng ---
+  const [pageUnified, setPageUnified] = useState(1);
+  const [uniSearch, setUniSearch] = useState('');
+  const [uniPlatform, setUniPlatform] = useState('');
+  const [uniShop, setUniShop] = useState('');
+  const [uniProduct, setUniProduct] = useState('');
+  const [uniStatus, setUniStatus] = useState('');
+  const [uniTick, setUniTick] = useState('');
+  const [uniCrtFrom, setUniCrtFrom] = useState('');
+  const [uniCrtTo, setUniCrtTo] = useState('');
+  const [uniMoneyMin, setUniMoneyMin] = useState('');
+  const [uniMoneyMax, setUniMoneyMax] = useState('');
+  // Tick hàng loạt trong mục hợp nhất (chỉ owner): tập return_id đã chọn.
+  const [selectedUnified, setSelectedUnified] = useState(new Set());
+  const [bulkTickSaving, setBulkTickSaving] = useState(false);
+  const [bulkTickMsg, setBulkTickMsg] = useState('');
   // --- Sửa tay từng dòng ---
   const [editRowId, setEditRowId] = useState(null);
   const [editDrafts, setEditDrafts] = useState({});
@@ -523,10 +582,52 @@ export default function BaoCaoHoanChuaNhan() {
     }
   }
 
+  // Tải tập riêng cho mục hợp nhất "Cần check tay": toàn bộ đơn trả có
+  // mã đơn trả thật + trạng thái Nhanh Đã hoàn tiền (1) / Đang hoàn tiền
+  // (5), KHÔNG lọc ngày/sàn/shop/tìm kiếm. Lọc mã thật 2 lớp: or ilike
+  // theo đầu mã ở server + isReturnCode ở client. Lỗi -> ghi chú mờ
+  // trong mục, không sập trang.
+  async function fetchCheckRows() {
+    setCheckLoading(true);
+    setCheckError('');
+    try {
+      let all = [];
+      let from = 0;
+      const STEP = 1000;
+      for (;;) {
+        const { data, error: err } = await supabase
+          .from('ecom_return_orders')
+          .select('*')
+          .in('nhanh_status_id', [1, 5])
+          .not('return_tracking_number', 'is', null)
+          .neq('return_tracking_number', '')
+          .or('return_tracking_number.ilike.SPX%,return_tracking_number.ilike.G%,return_tracking_number.ilike.8%,return_tracking_number.ilike.1%,return_tracking_number.ilike.VTP%')
+          .order('return_updated_at', { ascending: false })
+          .range(from, from + STEP - 1);
+        if (err) throw err;
+        if (!data || data.length === 0) break;
+        all = all.concat(data);
+        from += data.length;
+        if (data.length < STEP) break;
+      }
+      setCheckRows(all.filter((r) => isReturnCode(r.return_tracking_number)));
+    } catch (e) {
+      setCheckError('Lỗi tải danh sách cần check tay: ' + (e.message || e));
+      setCheckRows([]);
+    } finally {
+      setCheckLoading(false);
+    }
+  }
+
   useEffect(() => {
     fetchAll(filters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applied]);
+
+  useEffect(() => {
+    fetchCheckRows();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Owner nhận diện giống TraHangHoanTien: user_metadata.is_owner hoặc email owner.
   useEffect(() => {
@@ -616,9 +717,7 @@ export default function BaoCaoHoanChuaNhan() {
   }, []);
 
   function handleFilter() {
-    setPageDoi(1);
     setPageCho(1);
-    setPageCheck(1);
     setApplied({ updFrom, updTo, crtFrom, crtTo, platform, shop, search });
   }
 
@@ -647,59 +746,58 @@ export default function BaoCaoHoanChuaNhan() {
     return false;
   }
 
-  // "Đã nhập kho" = có đơn hoàn 1 phần -> loại khỏi 2 danh sách, chỉ đếm tổng.
-  // Còn lại tách 2 nhóm: "Cần đi đòi" = kiểm tay Đã nhận nhưng chưa có đơn
-  // hoàn 1 phần; "Đang chờ hàng về" = phần còn lại (Chưa nhận hoặc chưa kiểm).
+  // "Đã nhập kho" = có đơn hoàn 1 phần -> loại khỏi danh sách chờ, chỉ đếm tổng.
+  // Còn lại là "Đang chờ hàng về" (chưa có đơn hoàn 1 phần). Nhóm cũ
+  // "Cần đi đòi" đã gộp vào mục hợp nhất "Cần check tay" bên dưới.
   const groups = useMemo(() => {
-    const doi = [];
     const cho = [];
     const daNhap = [];
     for (const r of allRows) {
       if (hasPartial(r)) { daNhap.push(r); continue; }
-      const m = manualChecks.get(r.return_id);
-      if (m && m.received_status === 'Đã nhận') doi.push(r);
-      else cho.push(r);
+      cho.push(r);
     }
-    return { doi, cho, daNhap };
+    return { cho, daNhap };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR]);
 
   const sumMoney = (rows) => rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
-  const summary = useMemo(() => ({
-    totalMoney: sumMoney(allRows),
-    daNhapMoney: sumMoney(groups.daNhap),
-    doiMoney: sumMoney(groups.doi),
-    choMoney: sumMoney(groups.cho),
-  }), [allRows, groups]);
 
-  const totalPagesDoi = Math.max(1, Math.ceil(groups.doi.length / PAGE_SIZE));
-  const totalPagesCho = Math.max(1, Math.ceil(groups.cho.length / PAGE_SIZE));
-  const safePageDoi = Math.min(pageDoi, totalPagesDoi);
-  const safePageCho = Math.min(pageCho, totalPagesCho);
+  // Deps chung cho vị từ danh sách hợp nhất (dùng ở danh sách, Excel, ...).
+  function unifiedDeps() {
+    return {
+      hasPartialFn: hasPartial,
+      manualChecks,
+      confirmedReceivedIds,
+      todayStr: vnTodayStr(),
+      origStatusById,
+      origStatusByEcom,
+    };
+  }
 
-  // --- Danh sách "Cần check tay" (quy tắc 1-3, trong bộ nhớ) ---
-  // Đơn trả tạo quá 4 ngày (tuổi theo ngày VN > 4), chưa có trạng thái
-  // Đã nhận (quét hay dán kết quả đều ghi 'Đã nhận'), chưa có đơn hoàn
-  // 1 phần. Quy tắc 4 (trạng thái đơn gốc) áp sau khi tra DB.
-  const needCheckCandidates = useMemo(() => {
+  // --- Mục hợp nhất "Cần check tay" (trên tập tải riêng checkRows) ---
+  // Ứng viên tra lịch sử xác nhận + ứng viên nhánh (b) để tra trạng thái
+  // đơn gốc. Dẫn xuất từ cùng manualChecks + tập đơn 1 phần + tập xác
+  // nhận như các nhóm khác nên quét / xác nhận / sửa tay xong là đơn tự
+  // biến khỏi danh sách, không cần tải lại trang.
+  const unifiedCandidates = useMemo(() => {
     const today = vnTodayStr();
-    const out = [];
-    for (const r of allRows) {
-      const { pass, age } = passesNeedCheckRules123(r, hasPartial, manualChecks, today);
-      if (pass) out.push({ row: r, age });
-    }
-    return out;
+    return checkRows.filter((r) => isUnifiedCandidate(r, hasPartial, manualChecks, today));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR]);
+  }, [checkRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR]);
+  const unifiedBranchBCandidates = useMemo(() => {
+    const today = vnTodayStr();
+    return checkRows.filter((r) => passesNeedCheckRules123(r, hasPartial, manualChecks, today).pass);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR]);
 
-  // Tra trạng thái đơn gốc cho các ứng viên "Cần check tay" (quy tắc 4).
+  // Tra trạng thái đơn gốc cho ứng viên nhánh (b) (quy tắc 4).
   // Chỉ tra những đơn chưa có trong cache (chia lô 100); lỗi -> bỏ qua
   // quy tắc 4 (giữ luật 1-3) và hiện ghi chú, không sập trang.
   useEffect(() => {
     let cancelled = false;
     const needIds = new Set();
     const needEcoms = new Set();
-    for (const { row } of needCheckCandidates) {
+    for (const row of unifiedBranchBCandidates) {
       const nid = row?.raw_data?.nhanhOrderId;
       if (nid !== null && nid !== undefined && nid !== '' && !origStatusById.has(String(nid))) needIds.add(String(nid));
       const oid = row?.original_ecom_order_id;
@@ -738,18 +836,142 @@ export default function BaoCaoHoanChuaNhan() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needCheckCandidates]);
+  }, [unifiedBranchBCandidates]);
 
-  // Danh sách cuối "Cần check tay": ứng viên quy tắc 1-3 + quy tắc 4.
-  // Đơn không nối được đơn gốc (hoặc tra lỗi) thì giữ theo luật 1-3.
-  // Dẫn xuất từ cùng manualChecks + tập đơn 1 phần như các nhóm khác nên
-  // quét / xác nhận / sửa tay xong là đơn tự biến khỏi danh sách.
-  const needCheckRows = useMemo(
-    () => needCheckCandidates.filter(({ row }) => passesOrigStatusRule(lookupOrigStatus(row, origStatusById, origStatusByEcom))),
-    [needCheckCandidates, origStatusById, origStatusByEcom]
-  );
-  const totalPagesCheck = Math.max(1, Math.ceil(needCheckRows.length / PAGE_SIZE));
-  const safePageCheck = Math.min(pageCheck, totalPagesCheck);
+  // Tra lịch sử xác nhận nhận hàng thật cho các ứng viên: chỉ những
+  // return_id chưa tra bao giờ (cache trong ref) mới tra, chia lô 100.
+  // Lỗi -> coi như chưa xác nhận đơn nào + ghi chú mờ, không sập trang.
+  const confirmedFetchedRef = useRef(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    const missing = unifiedCandidates
+      .map((r) => String(r.return_id))
+      .filter((id) => id && !confirmedFetchedRef.current.has(id));
+    if (missing.length === 0) return;
+    const chunk = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
+    (async () => {
+      try {
+        const found = new Set();
+        for (const part of chunk(missing, 100)) {
+          const { data, error } = await supabase
+            .from('return_receipt_check_history')
+            .select('return_id')
+            .in('return_id', part)
+            .in('source', ['quet', 'thu_cong'])
+            .eq('received_status', 'Đã nhận');
+          if (error) throw error;
+          for (const r of data || []) if (r.return_id) found.add(String(r.return_id));
+        }
+        if (cancelled) return;
+        missing.forEach((id) => confirmedFetchedRef.current.add(id));
+        if (found.size > 0) setConfirmedReceivedIds((prev) => new Set([...prev, ...found]));
+        setConfirmedError(false);
+      } catch (e) {
+        console.error('Lỗi tra lịch sử xác nhận nhận hàng:', e);
+        if (!cancelled) setConfirmedError(true);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unifiedCandidates]);
+
+  // Danh sách hợp nhất cuối: 1 lần lọc qua vị từ thuần (không gộp nhánh)
+  // nên mỗi đơn xuất hiện tối đa 1 lần. Kèm nhánh + tuổi để hiển thị.
+  const unifiedList = useMemo(() => {
+    const deps = unifiedDeps();
+    const out = [];
+    for (const r of checkRows) {
+      const branch = unifiedBranchOf(r, deps);
+      if (branch) out.push({ row: r, branch, age: returnAgeDays(r, deps.todayStr) });
+    }
+    return out;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR, confirmedReceivedIds, origStatusById, origStatusByEcom]);
+
+  const summary = useMemo(() => ({
+    totalMoney: sumMoney(allRows),
+    daNhapMoney: sumMoney(groups.daNhap),
+    unifiedMoney: sumMoney(unifiedList.map((x) => x.row)),
+    choMoney: sumMoney(groups.cho),
+  }), [allRows, groups, unifiedList]);
+
+  const totalPagesCho = Math.max(1, Math.ceil(groups.cho.length / PAGE_SIZE));
+  const safePageCho = Math.min(pageCho, totalPagesCho);
+  const totalPagesUnified = Math.max(1, Math.ceil(unifiedList.length / PAGE_SIZE));
+  const safePageUnified = Math.min(pageUnified, totalPagesUnified);
+
+  // --- Bộ lọc riêng của mục hợp nhất (client-side, trên unifiedList) ---
+  // Đổi bất kỳ lọc nào cũng về trang 1 (qua setUniFilter / Xóa lọc).
+  function setUniFilter(setter, value) {
+    setter(value);
+    setPageUnified(1);
+  }
+  const uniPlatformOptions = useMemo(() => {
+    const m = new Map();
+    for (const { row } of unifiedList) {
+      if (row.platform_id !== null && row.platform_id !== undefined && !m.has(String(row.platform_id))) m.set(String(row.platform_id), row.platform_name || '');
+    }
+    return [...m.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+  }, [unifiedList]);
+  const uniShopOptions = useMemo(() => {
+    const m = new Map();
+    for (const { row } of unifiedList) {
+      if (row.shop_id && !m.has(String(row.shop_id))) m.set(String(row.shop_id), row.platform_name || '');
+    }
+    return [...m.entries()].map(([id, platformName]) => ({ id, platformName })).sort((a, b) => a.id.localeCompare(b.id));
+  }, [unifiedList]);
+  const uniStatusOptions = useMemo(() => {
+    const m = new Map();
+    for (const { row } of unifiedList) {
+      if (row.nhanh_status_id !== null && row.nhanh_status_id !== undefined && !m.has(String(row.nhanh_status_id))) m.set(String(row.nhanh_status_id), row.nhanh_status_name || NHANH_STATUS_NAMES[row.nhanh_status_id] || '');
+    }
+    return [...m.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.id.localeCompare(b.id));
+  }, [unifiedList]);
+  const filteredUnified = useMemo(() => {
+    const q = uniSearch.trim().toLowerCase();
+    const pq = uniProduct.trim().toLowerCase();
+    const min = uniMoneyMin === '' ? null : Number(uniMoneyMin);
+    const max = uniMoneyMax === '' ? null : Number(uniMoneyMax);
+    return unifiedList.filter(({ row }) => {
+      if (q) {
+        const hay = [returnCodeOf(row), row.return_tracking_number, row.return_id, row.original_ecom_order_id].map((v) => String(v || '').toLowerCase()).join(' ');
+        if (!hay.includes(q)) return false;
+      }
+      if (uniPlatform !== '' && String(row.platform_id) !== uniPlatform) return false;
+      if (uniShop !== '' && String(row.shop_id) !== uniShop) return false;
+      if (pq) {
+        const ok = productsOf(row).some((p) => {
+          const mapped = mapReturnProduct(p.name, p.sku, inventoryIndex) || '';
+          return [mapped, p.name, p.sku].some((v) => String(v || '').toLowerCase().includes(pq));
+        });
+        if (!ok) return false;
+      }
+      if (uniStatus !== '' && String(row.nhanh_status_id) !== uniStatus) return false;
+      if (uniTick !== '') {
+        const m = manualChecks.get(row.return_id);
+        if (uniTick === '__none__') { if (m) return false; }
+        else if (m?.received_status !== uniTick) return false;
+      }
+      if (uniCrtFrom || uniCrtTo) {
+        const d = vnDateOf(row.return_created_at);
+        if (!d) return false;
+        if (uniCrtFrom && d < uniCrtFrom) return false;
+        if (uniCrtTo && d > uniCrtTo) return false;
+      }
+      const amt = Number(row.amount) || 0;
+      if (min !== null && !isNaN(min) && amt < min) return false;
+      if (max !== null && !isNaN(max) && amt > max) return false;
+      return true;
+    });
+  }, [unifiedList, uniSearch, uniPlatform, uniShop, uniProduct, uniStatus, uniTick, uniCrtFrom, uniCrtTo, uniMoneyMin, uniMoneyMax, manualChecks, inventoryIndex]);
+  const totalPagesUnifiedFiltered = Math.max(1, Math.ceil(filteredUnified.length / PAGE_SIZE));
+  const safePageUnifiedFiltered = Math.min(safePageUnified, totalPagesUnifiedFiltered);
+  const unifiedPageRows = filteredUnified.slice((safePageUnifiedFiltered - 1) * PAGE_SIZE, safePageUnifiedFiltered * PAGE_SIZE);
+  function clearUniFilters() {
+    setUniSearch(''); setUniPlatform(''); setUniShop(''); setUniProduct('');
+    setUniStatus(''); setUniTick(''); setUniCrtFrom(''); setUniCrtTo('');
+    setUniMoneyMin(''); setUniMoneyMax(''); setPageUnified(1);
+  }
 
   function showToast(msg) {
     setToast(msg);
@@ -780,7 +1002,10 @@ export default function BaoCaoHoanChuaNhan() {
 
   // Tải Excel: 1 file gộp cả 2 nhóm chưa nhận, mỗi đơn 1 dòng, đủ hết cột.
   async function handleExportExcel() {
-    const rows = [...groups.doi, ...groups.cho];
+    // Phạm vi xuất = tập đã lọc của trang (chưa có đơn hoàn 1 phần);
+    // cột Nhóm dùng chung vị từ hợp nhất với mục "Cần check tay".
+    const rows = allRows.filter((r) => !hasPartial(r));
+    const deps = unifiedDeps();
     if (rows.length === 0) { setExportMsg('Không có dữ liệu để xuất.'); return; }
     if (exporting) return;
     setExporting(true);
@@ -810,7 +1035,7 @@ export default function BaoCaoHoanChuaNhan() {
           'Số lượng': totalQty(r),
           'Ngày hàng về': m?.received_date ? fmtDateOnly(m.received_date) : '',
           'Trạng thái nhận': m?.received_status || '',
-          'Nhóm': (m && m.received_status === 'Đã nhận') ? 'Cần đi đòi' : 'Đang chờ hàng về',
+          'Nhóm': hasPartial(r) ? 'Đã nhập kho' : (isInUnifiedList(r, deps) ? 'Cần check tay' : 'Đang chờ hàng về'),
         };
       });
       const worksheet = XLSX.utils.json_to_sheet(rowData);
@@ -836,7 +1061,10 @@ export default function BaoCaoHoanChuaNhan() {
   async function handleSaveCheck(row) {
     const d = editDrafts[row.return_id] || {};
     const status = d.status || 'Chưa nhận';
-    const date = (d.date || '').trim();
+    // Ngày hàng về chỉ có ý nghĩa khi Đã nhận; các trạng thái khác ép null.
+    // (Lưu 'Đã khiếu nại' sẽ lỗi ở DB cho tới khi chạy migration mở rộng
+    // CHECK constraint của return_receipt_checks — xem thông báo lỗi.)
+    const date = status === 'Đã nhận' ? (d.date || '').trim() : '';
     if (status === 'Đã nhận' && !date) {
       setSaveMsg('Chọn ngày hàng về trước khi lưu trạng thái Đã nhận.');
       return;
@@ -856,6 +1084,15 @@ export default function BaoCaoHoanChuaNhan() {
       setManualChecks((prev) => {
         const next = new Map(prev);
         next.set(row.return_id, { return_id: row.return_id, received_date: date || null, received_status: status });
+        return next;
+      });
+      // Ghi tay là xác nhận của người dùng: Đã nhận -> thêm vào tập xác
+      // nhận (đơn biến khỏi "Cần check tay"); Chưa nhận / Đã khiếu nại
+      // -> gỡ khỏi tập xác nhận (ghi đè của người dùng thắng lịch sử cũ).
+      setConfirmedReceivedIds((prev) => {
+        const next = new Set(prev);
+        if (status === 'Đã nhận') next.add(String(row.return_id));
+        else next.delete(String(row.return_id));
         return next;
       });
       // Ghi lịch sử (best-effort): sửa tay = 1 dòng riêng, source 'thu_cong'.
@@ -881,15 +1118,75 @@ export default function BaoCaoHoanChuaNhan() {
     }
   }
 
+  // --- Tick hàng loạt trong mục "Cần check tay" (chỉ owner) ---
+  // Upsert return_receipt_checks cho các đơn đã chọn + 1 lô lịch sử
+  // chung (source 'thu_cong', batch_id chung). Ngày = hôm nay (VN) khi
+  // Đã nhận, null với các trạng thái khác. Tick Đã nhận gỡ đơn khỏi
+  // danh sách ngay (qua manualChecks + tập xác nhận).
+  async function handleBulkTick(status) {
+    if (selectedUnified.size === 0 || bulkTickSaving) return;
+    const ids = [...selectedUnified];
+    if (!window.confirm(`Tick ${ids.length} đơn đã chọn thành "${status}"?`)) return;
+    setBulkTickSaving(true);
+    setBulkTickMsg('');
+    try {
+      const today = vnTodayStr();
+      const payloads = ids.map((id) => ({
+        return_id: id,
+        received_date: status === 'Đã nhận' ? today : null,
+        received_status: status,
+        updated_by: userEmail || '',
+        updated_at: new Date().toISOString(),
+      }));
+      const { error: err } = await supabase.from('return_receipt_checks').upsert(payloads, { onConflict: 'return_id' });
+      if (err) throw err;
+      setManualChecks((prev) => {
+        const next = new Map(prev);
+        for (const p of payloads) next.set(p.return_id, { return_id: p.return_id, received_date: p.received_date, received_status: p.received_status });
+        return next;
+      });
+      setConfirmedReceivedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of ids) {
+          if (status === 'Đã nhận') next.add(String(id));
+          else next.delete(String(id));
+        }
+        return next;
+      });
+      const batchId = genUuid();
+      const byId = new Map(checkRows.map((r) => [String(r.return_id), r]));
+      const historyOk = await logCheckHistory(ids.map((id) => {
+        const row = byId.get(String(id));
+        return {
+          return_id: id,
+          tracking_number: row ? (returnCodeOf(row) || row.return_tracking_number || null) : null,
+          shipment_status: null,
+          received_status: status,
+          received_date: status === 'Đã nhận' ? today : null,
+          source: 'thu_cong',
+          batch_id: batchId,
+        };
+      }), userEmail);
+      if (!historyOk) setHistoryWarn('Không lưu được lịch sử — chạy migration bảng lịch sử trước.');
+      setSelectedUnified(new Set());
+      setBulkTickMsg(`Đã tick ${ids.length} đơn thành "${status}".`);
+    } catch (e) {
+      setBulkTickMsg('Lỗi tick hàng loạt: ' + (e.message || e) + ' (tick "Đã khiếu nại" cần chạy migration mở rộng CHECK constraint trước).');
+    } finally {
+      setBulkTickSaving(false);
+    }
+  }
+
   // --- Đối chiếu hàng loạt (chỉ owner) ---
-  // Toàn bộ tập chưa nhận theo bộ lọc (cả 2 nhóm), giữ đúng thứ tự
+  // Toàn bộ tập chưa nhận theo bộ lọc (chưa có đơn hoàn 1 phần), giữ đúng thứ tự
   // return_updated_at desc như bảng (allRows đã xếp sẵn khi tải).
   // Chỉ đơn chưa có trạng thái cuối mới hiện trong popup đối chiếu: đơn
   // Đã nhận (và đơn đã có đơn hoàn 1 phần) bị loại khỏi danh sách — xong
   // là biến mất. Thêm nữa: đơn nào hôm nay đã check rồi (có dòng trong
   // bảng lịch sử từ 00:00 VN hôm nay) cũng bỏ qua luôn, khỏi check đi
   // check lại; sang hôm sau đơn Chưa nhận lại hiện để check tiếp. Bảng
-  // chính không đổi: nhóm "Cần đi đòi" vẫn hiện đơn Đã nhận để đi đòi.
+  // chính không đổi: đơn Đã nhận (chưa được xác nhận nhận hàng thật qua
+  // quét/tick) vẫn nằm trong mục hợp nhất "Cần check tay" để đi đòi.
   const bulkRows = useMemo(
     () => allRows.filter((r) => !hasPartial(r) && manualChecks.get(r.return_id)?.received_status !== 'Đã nhận' && !checkedTodayIds.has(r.return_id)),
     [allRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR, checkedTodayIds]
@@ -1190,6 +1487,9 @@ export default function BaoCaoHoanChuaNhan() {
           next.add(payload.return_id);
           return next;
         });
+        // Quét là xác nhận nhận hàng thật (lịch sử nguồn 'quet'): đơn
+        // biến khỏi mục "Cần check tay" ngay, không chờ tra lại lịch sử.
+        setConfirmedReceivedIds((prev) => new Set(prev).add(String(payload.return_id)));
         // Quét trong phiên này cũng tính vào "Đã quét hôm nay".
         setScannedTodayIds((prev) => {
           const next = new Set(prev);
@@ -1417,8 +1717,13 @@ export default function BaoCaoHoanChuaNhan() {
     }
   }
 
-  function renderRow(r, ageDays) {
+  function renderRow(r, ageDays, opts = {}) {
     const prods = productsOf(r);
+    // Checkbox tick hàng loạt: chỉ mục hợp nhất truyền opts.selectable
+    // (owner-only); checkbox nằm trong ô mã vận đơn để giữ nguyên 11 cột.
+    const selectable = !!opts.selectable;
+    const checked = !!opts.checked;
+    const onToggle = opts.onToggle || null;
     const first = prods[0];
     const mappedFirst = first ? mapReturnProduct(first.name, first.sku, inventoryIndex) : null;
     const m = manualChecks.get(r.return_id);
@@ -1430,6 +1735,9 @@ export default function BaoCaoHoanChuaNhan() {
       <tr key={r.return_id} className="border-t border-slate-100 hover:bg-slate-50">
         {/* Mã vận đơn trả + ID đơn Nhanh */}
         <td className="px-3 py-3.5 min-w-0">
+          {selectable && isOwner && (
+            <input type="checkbox" checked={checked} onChange={(e) => onToggle && onToggle(r.return_id, e.target.checked)} className="w-4 h-4 accent-emerald-600 mb-1" aria-label={`Chọn đơn ${r.return_id}`} />
+          )}
           <div className="font-mono font-bold text-indigo-700 break-all leading-snug">{returnCodeOf(r) || r.return_tracking_number || '—'}</div>
           <div className="font-mono text-xs text-slate-400 mt-0.5">{r.raw_data?.nhanhOrderId ?? '—'}</div>
         </td>
@@ -1486,7 +1794,7 @@ export default function BaoCaoHoanChuaNhan() {
         <td className="px-3 py-3.5 min-w-0">
           {m ? (
             <>
-              <span className={`inline-block px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap ${m.received_status === 'Đã nhận' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}`}>{m.received_status}</span>
+              <span className={`inline-block px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap ${m.received_status === 'Đã nhận' ? 'bg-green-100 text-green-800 border border-green-200' : m.received_status === 'Đã khiếu nại' ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}`}>{m.received_status}</span>
               <div className="text-xs text-slate-500 mt-1 whitespace-nowrap">{m.received_date ? fmtDateOnly(m.received_date) : '—'}</div>
             </>
           ) : (<span className="text-slate-400 text-xs">Chưa kiểm</span>)}
@@ -1494,12 +1802,14 @@ export default function BaoCaoHoanChuaNhan() {
         <td className="px-3 py-3.5">
           {isOwner ? (editing ? (
             <div className="space-y-1 min-w-[110px]">
-              <input
-                type="date"
-                value={draft.date ?? ''}
-                onChange={(e) => setEditDrafts((prev) => ({ ...prev, [r.return_id]: { ...(prev[r.return_id] || {}), date: e.target.value } }))}
-                className="w-full text-xs border border-slate-300 rounded-lg px-2 py-1 outline-none focus:border-slate-700"
-              />
+              {draft.status === 'Đã nhận' && (
+                <input
+                  type="date"
+                  value={draft.date ?? ''}
+                  onChange={(e) => setEditDrafts((prev) => ({ ...prev, [r.return_id]: { ...(prev[r.return_id] || {}), date: e.target.value } }))}
+                  className="w-full text-xs border border-slate-300 rounded-lg px-2 py-1 outline-none focus:border-slate-700"
+                />
+              )}
               <select
                 value={draft.status ?? 'Chưa nhận'}
                 onChange={(e) => setEditDrafts((prev) => ({ ...prev, [r.return_id]: { ...(prev[r.return_id] || {}), status: e.target.value } }))}
@@ -1507,6 +1817,7 @@ export default function BaoCaoHoanChuaNhan() {
               >
                 <option value="Chưa nhận">Chưa nhận</option>
                 <option value="Đã nhận">Đã nhận</option>
+                <option value="Đã khiếu nại">Đã khiếu nại</option>
               </select>
               <div className="flex gap-1">
                 <button onClick={() => handleSaveCheck(r)} disabled={savingId === r.return_id} className="flex-1 px-2 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 cursor-pointer">
@@ -1574,57 +1885,163 @@ export default function BaoCaoHoanChuaNhan() {
     );
   }
 
-  // Nhóm "Cần check tay": đơn trả tạo quá 4 ngày chưa quét lần nào, chưa
-  // có đơn hoàn 1 phần, đơn gốc (nếu nối được) không ở 71/74/72. Dùng
-  // chung bảng/cột với 2 nhóm trên; copy 20 hoặc 40 mã 1 lần để check tay.
-  function renderNeedCheckSection() {
-    const rows = needCheckRows;
-    const paged = rows.slice((safePageCheck - 1) * PAGE_SIZE, safePageCheck * PAGE_SIZE);
+  // Mục hợp nhất "Cần check tay": 3 nhánh (hãng báo đã giao nhưng chưa
+  // xác nhận nhận thật / quá 4 ngày chưa quét / đã khiếu nại), trừ đơn
+  // đã có đơn hoàn 1 phần hoặc đã xác nhận nhận hàng thật (quét/tick).
+  // Bộ lọc + phân trang + tick hàng loạt riêng, không phụ thuộc bộ lọc
+  // trang. Dùng chung bảng/cột với nhóm còn lại; copy 20 hoặc 40 mã
+  // 1 lần để check tay (copy theo danh sách đã lọc).
+  function renderUnifiedSection() {
+    const rows = filteredUnified;
     const n20 = Math.min(20, rows.length);
     const n40 = Math.min(40, rows.length);
-    const done = rows.length === 0;
+    const allPageChecked = isOwner && unifiedPageRows.length > 0 && unifiedPageRows.every(({ row }) => selectedUnified.has(row.return_id));
+    const toggleRow = (returnId, checked) => {
+      setSelectedUnified((prev) => {
+        const next = new Set(prev);
+        if (checked) next.add(returnId);
+        else next.delete(returnId);
+        return next;
+      });
+    };
+    const togglePage = (checked) => {
+      setSelectedUnified((prev) => {
+        const next = new Set(prev);
+        for (const { row } of unifiedPageRows) {
+          if (checked) next.add(row.return_id);
+          else next.delete(row.return_id);
+        }
+        return next;
+      });
+    };
     return (
       <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-slate-900">
-              Cần check tay <span className="text-slate-500 font-medium">({rows.length} đơn · Tổng hoàn {fmtMoney(sumMoney(rows.map((x) => x.row)))} VND)</span>
+              Cần check tay <span className="text-slate-500 font-medium">({unifiedList.length} đơn · Tổng hoàn {fmtMoney(sumMoney(unifiedList.map((x) => x.row)))} VND)</span>
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">Đơn trả tạo quá 4 ngày mà chưa quét lần nào, chưa có đơn hoàn 1 phần, đơn gốc (nếu nối được) không ở trạng thái Đang chuyển hoàn / Xác nhận hoàn / Đã hoàn — mang đi check tay với hãng.</p>
+            <p className="text-xs text-slate-500 mt-0.5">Hãng báo đã giao nhưng chưa xác nhận nhận thật, đơn quá 4 ngày chưa quét, hoặc đơn đã khiếu nại — trừ đơn đã có đơn hoàn 1 phần và đơn đã xác nhận nhận hàng thật (quét/tick). Tick Đã nhận là gỡ đơn khỏi danh sách ngay.</p>
+            {checkError && <p className="text-xs text-red-600 mt-1">{checkError}</p>}
+            {confirmedError && <p className="text-xs text-amber-700 mt-1">Không kiểm tra được lịch sử xác nhận nhận hàng — danh sách đang hiển thị như thể chưa có đơn nào được xác nhận (đơn đã quét/tick vẫn có thể hiện lại).</p>}
             {origStatusError && <p className="text-xs text-amber-700 mt-1">Không kiểm tra được trạng thái đơn gốc — danh sách đang hiển thị theo luật tuổi + chưa quét (chưa lọc 71/74/72).</p>}
           </div>
           <div className="flex flex-wrap gap-2">
-            <button disabled={done} onClick={() => copyCodes(rows.slice(0, 20).map((x) => x.row), 'Cần check tay (20 mã)')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
-              <Copy size={15} /> {done ? 'Đã kiểm xong' : `Sao chép ${n20} mã`}
+            <button disabled={rows.length === 0} onClick={() => copyCodes(rows.slice(0, 20).map((x) => x.row), 'Cần check tay (20 mã)')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
+              <Copy size={15} /> Sao chép {n20} mã
             </button>
-            <button disabled={done} onClick={() => copyCodes(rows.slice(0, 40).map((x) => x.row), 'Cần check tay (40 mã)')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
-              <Copy size={15} /> {done ? 'Đã kiểm xong' : `Sao chép ${n40} mã`}
+            <button disabled={rows.length === 0} onClick={() => copyCodes(rows.slice(0, 40).map((x) => x.row), 'Cần check tay (40 mã)')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
+              <Copy size={15} /> Sao chép {n40} mã
             </button>
           </div>
         </div>
+        {/* Bộ lọc riêng của mục (trên danh sách hợp nhất, đổi lọc về trang 1) */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Tìm mã vận đơn / mã đơn trả / mã đơn gốc</label>
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={uniSearch} onChange={(e) => setUniFilter(setUniSearch, e.target.value)} placeholder="Nhập mã cần tìm" className="w-full text-sm border border-slate-200 rounded-lg pl-9 pr-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Sàn</label>
+              <select value={uniPlatform} onChange={(e) => setUniFilter(setUniPlatform, e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
+                <option value="">Tất cả sàn</option>
+                {uniPlatformOptions.map((p) => (<option key={p.id} value={p.id}>{p.name || `Sàn ${p.id}`}</option>))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Shop</label>
+              <select value={uniShop} onChange={(e) => setUniFilter(setUniShop, e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
+                <option value="">Tất cả shop</option>
+                {uniShopOptions.map((o) => (<option key={o.id} value={o.id}>{o.platformName ? `${o.platformName} · Shop ${o.id}` : `Shop ${o.id}`}</option>))}
+              </select>
+            </div>
+            <div className="flex-1 min-w-[160px]">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Sản phẩm</label>
+              <input value={uniProduct} onChange={(e) => setUniFilter(setUniProduct, e.target.value)} placeholder="Tên / mã SP" className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Trạng thái Nhanh</label>
+              <select value={uniStatus} onChange={(e) => setUniFilter(setUniStatus, e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
+                <option value="">Tất cả trạng thái</option>
+                {uniStatusOptions.map((s) => (<option key={s.id} value={s.id}>{s.name || `Trạng thái ${s.id}`}</option>))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Trạng thái tick</label>
+              <select value={uniTick} onChange={(e) => setUniFilter(setUniTick, e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
+                <option value="">Tất cả</option>
+                <option value="Chưa nhận">Chưa nhận</option>
+                <option value="Đã nhận">Đã nhận</option>
+                <option value="Đã khiếu nại">Đã khiếu nại</option>
+                <option value="__none__">Chưa có trạng thái</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Từ ngày tạo</label>
+              <input type="date" value={uniCrtFrom} onChange={(e) => setUniFilter(setUniCrtFrom, e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Đến ngày tạo</label>
+              <input type="date" value={uniCrtTo} onChange={(e) => setUniFilter(setUniCrtTo, e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Tiền hoàn từ</label>
+              <input type="number" min="0" value={uniMoneyMin} onChange={(e) => setUniFilter(setUniMoneyMin, e.target.value)} placeholder="0" className="w-28 text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">đến</label>
+              <input type="number" min="0" value={uniMoneyMax} onChange={(e) => setUniFilter(setUniMoneyMax, e.target.value)} placeholder="Không giới hạn" className="w-32 text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium" />
+            </div>
+            <button onClick={clearUniFilters} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer">Xóa lọc</button>
+          </div>
+          <p className="text-xs text-slate-500 mt-2">Đang hiện {rows.length} / {unifiedList.length} đơn trong mục.</p>
+        </div>
+        {/* Chọn + tick hàng loạt (chỉ owner) */}
+        {isOwner && (
+          <div className="flex flex-wrap items-center gap-3 bg-white rounded-2xl shadow-sm border border-slate-200 px-4 py-3">
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
+              <input type="checkbox" checked={allPageChecked} onChange={(e) => togglePage(e.target.checked)} className="w-4 h-4 accent-emerald-600" />
+              Chọn tất cả trang này ({unifiedPageRows.length} đơn)
+            </label>
+            {selectedUnified.size > 0 && (
+              <>
+                <span className="text-sm font-bold text-slate-700">Đã chọn {selectedUnified.size} đơn</span>
+                <button onClick={() => handleBulkTick('Chưa nhận')} disabled={bulkTickSaving} className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-bold rounded-xl shadow-md disabled:opacity-50 cursor-pointer">Tick Chưa nhận</button>
+                <button onClick={() => handleBulkTick('Đã nhận')} disabled={bulkTickSaving} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md disabled:opacity-50 cursor-pointer">Tick Đã nhận</button>
+                <button onClick={() => handleBulkTick('Đã khiếu nại')} disabled={bulkTickSaving} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-bold rounded-xl shadow-md disabled:opacity-50 cursor-pointer">Tick Đã khiếu nại</button>
+                <button onClick={() => setSelectedUnified(new Set())} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer">Bỏ chọn</button>
+              </>
+            )}
+            {bulkTickMsg && <p className="text-sm font-bold text-slate-600">{bulkTickMsg}</p>}
+          </div>
+        )}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
-          {loading ? (
+          {checkLoading ? (
             <div className="p-8 flex items-center justify-center gap-2 text-sm font-bold text-slate-500">
               <Loader2 size={18} className="animate-spin" /> Đang tải...
             </div>
-          ) : paged.length === 0 ? (
+          ) : unifiedPageRows.length === 0 ? (
             <div className="p-8 text-center">
               <Package size={32} className="mx-auto text-slate-300 mb-2" />
-              <p className="text-sm font-bold text-slate-600">Không có đơn nào quá 4 ngày chưa quét.</p>
+              <p className="text-sm font-bold text-slate-600">{unifiedList.length === 0 ? 'Không còn đơn nào cần check tay.' : 'Không có đơn nào khớp bộ lọc.'}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm table-fixed">
                 <colgroup>{COLS.map((c) => (<col key={c.id} style={{ width: `${c.w}%` }} />))}</colgroup>
-                <tbody>{paged.map(({ row, age }) => renderRow(row, age))}</tbody>
+                <tbody>{unifiedPageRows.map(({ row, age }) => renderRow(row, age, { selectable: true, checked: selectedUnified.has(row.return_id), onToggle: toggleRow }))}</tbody>
               </table>
             </div>
           )}
           <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-            <span className="text-xs font-bold text-slate-500">Trang {safePageCheck} / {totalPagesCheck} — {rows.length} đơn</span>
+            <span className="text-xs font-bold text-slate-500">Trang {safePageUnifiedFiltered} / {totalPagesUnifiedFiltered} — {rows.length} đơn</span>
             <div className="flex gap-2">
-              <button disabled={safePageCheck <= 1} onClick={() => setPageCheck(safePageCheck - 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1"><ChevronLeft size={14} /> Trước</button>
-              <button disabled={safePageCheck >= totalPagesCheck} onClick={() => setPageCheck(safePageCheck + 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1">Sau <ChevronRight size={14} /></button>
+              <button disabled={safePageUnifiedFiltered <= 1} onClick={() => setPageUnified(safePageUnifiedFiltered - 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1"><ChevronLeft size={14} /> Trước</button>
+              <button disabled={safePageUnifiedFiltered >= totalPagesUnifiedFiltered} onClick={() => setPageUnified(safePageUnifiedFiltered + 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1">Sau <ChevronRight size={14} /></button>
             </div>
           </div>
         </div>
@@ -1638,7 +2055,7 @@ export default function BaoCaoHoanChuaNhan() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-white">Đơn hoàn chưa nhận</h1>
           <p className="text-sm text-slate-300 mt-1">
-            Đơn trả hàng đã/đang hoàn tiền, có mã đơn trả nhưng chưa có đơn hoàn 1 phần nhập kho trên Nhanh. Kiểm nhận tay để tách đơn cần đi đòi khỏi đơn đang chờ hàng về.
+            Đơn trả hàng đã/đang hoàn tiền, có mã đơn trả nhưng chưa có đơn hoàn 1 phần nhập kho trên Nhanh. Kiểm nhận tay để tách đơn cần check tay khỏi đơn đang chờ hàng về.
           </p>
         </div>
       </div>
@@ -1727,9 +2144,9 @@ export default function BaoCaoHoanChuaNhan() {
           <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.daNhapMoney)} VND</div>
         </div>
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4 shadow-sm">
-          <div className="text-2xl font-bold text-red-600">{groups.doi.length}</div>
-          <div className="text-xs font-bold text-slate-500">Chưa nhận: Cần đi đòi</div>
-          <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.doiMoney)} VND</div>
+          <div className="text-2xl font-bold text-red-600">{unifiedList.length}</div>
+          <div className="text-xs font-bold text-slate-500">Cần check tay</div>
+          <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.unifiedMoney)} VND</div>
         </div>
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
           <div className="text-2xl font-bold text-amber-700">{groups.cho.length}</div>
@@ -1742,10 +2159,10 @@ export default function BaoCaoHoanChuaNhan() {
       <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={handleExportExcel}
-          disabled={exporting || groups.doi.length + groups.cho.length === 0}
+          disabled={exporting || groups.cho.length === 0}
           className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md disabled:opacity-50 cursor-pointer flex items-center gap-2"
         >
-          <FileDown size={16} /> {exporting ? 'Đang tạo file...' : `Tải Excel (${groups.doi.length + groups.cho.length} đơn chưa nhận)`}
+          <FileDown size={16} /> {exporting ? 'Đang tạo file...' : `Tải Excel (${groups.cho.length} đơn chưa nhận)`}
         </button>
         {isOwner && (
           <button
@@ -1761,22 +2178,10 @@ export default function BaoCaoHoanChuaNhan() {
         {historyWarn && <p className="text-sm font-bold text-amber-700">{historyWarn}</p>}
       </div>
 
-      {/* Cần check tay: đơn trả quá 4 ngày chưa quét */}
-      {renderNeedCheckSection()}
+      {/* Cần check tay (mục hợp nhất): hãng báo đã giao / quá 4 ngày / đã khiếu nại */}
+      {renderUnifiedSection()}
 
-      {/* Nhóm 1: Cần đi đòi */}
-      {renderGroupSection({
-        sectionKey: 'doi',
-        title: 'Cần đi đòi',
-        desc: 'Hàng đã về theo kiểm tay (trạng thái Đã nhận) nhưng chưa có đơn hoàn 1 phần trên Nhanh — đi đòi kho/Nhanh.',
-        rows: groups.doi,
-        page: safePageDoi,
-        setPage: setPageDoi,
-        totalPages: totalPagesDoi,
-        copyLabel: 'Cần đi đòi',
-      })}
-
-      {/* Nhóm 2: Đang chờ hàng về */}
+      {/* Nhóm: Đang chờ hàng về */}
       {renderGroupSection({
         sectionKey: 'cho',
         title: 'Đang chờ hàng về',
@@ -1821,7 +2226,7 @@ export default function BaoCaoHoanChuaNhan() {
                     </div>
                     <button onClick={fetchHistory} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer">Tải lại</button>
                   </div>
-                  <p className="text-xs text-slate-500">Lịch sử kiểm nhận gần nhất (tối đa 200 dòng): mỗi lần dán kết quả hoặc quét 1 lô là 1 lô, sửa tay từng đơn ghi riêng 1 dòng "Thủ công". Đơn Delivered sau khi cập nhật không biến mất — nó nhảy từ nhóm Đang chờ sang Cần đi đòi, vẫn xem lại được ở đây.</p>
+                  <p className="text-xs text-slate-500">Lịch sử kiểm nhận gần nhất (tối đa 200 dòng): mỗi lần dán kết quả hoặc quét 1 lô là 1 lô, sửa tay từng đơn ghi riêng 1 dòng "Thủ công". Đơn Delivered sau khi cập nhật không biến mất — nó nhảy từ nhóm Đang chờ sang mục Cần check tay, vẫn xem lại được ở đây.</p>
                   {historyError && <p className="text-sm font-bold text-amber-700">{historyError}</p>}
                   {historyLoading ? (
                     <div className="p-8 flex items-center justify-center gap-2 text-sm font-bold text-slate-500">
