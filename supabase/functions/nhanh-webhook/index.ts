@@ -114,11 +114,70 @@ serve(async (req) => {
     }
 
     // ============================================
-    // 2. XỬ LÝ SỰ KIỆN ĐƠN HÀNG THAY ĐỔI
+    // 2. ĐƠN HOÀN 1 PHẦN (type 16) — BẢNG RIÊNG
     // ============================================
-    // orderPartialReturn: đơn hoàn 1 phần (type 16) tạo trên web/POS Nhanh —
-    // data là object đơn đầy đủ như orderAdd nên xử lý chung luôn.
-    if (event === 'orderAdd' || event === 'orderUpdate' || event === 'orderPartialReturn') {
+    // orderPartialReturn: đơn hoàn 1 phần tạo trên web/POS Nhanh.
+    // Ghi vào bảng riêng partial_return_orders (có index theo đơn gốc
+    // để báo cáo "chưa nhận" lọc nhanh), KHÔNG ghi vào orders /
+    // order_products / order_histories — đơn hoàn 1 phần là biên nhận
+    // hoàn kho, không phải đơn bán hàng.
+    if (event === 'orderPartialReturn') {
+      const info = data?.info || {};
+      const channel = data?.channel || {};
+      const originalOrder = data?.originalOrder || {};
+
+      if (!info.id) return new Response("Missing Order ID", { status: 200 });
+
+      const orderId = String(info.id);
+      const newStatus = info.status ?? info.statusId ?? null;
+      const createdAt = info.createdAt ? new Date(info.createdAt * 1000).toISOString() : new Date().toISOString();
+      const updatedAt = info.updatedAt ? new Date(info.updatedAt * 1000).toISOString() : new Date().toISOString();
+      const creatorName = info.createdBy?.name || info.sale?.name || '';
+
+      // ID đơn gốc: thử lần lượt info.originalOrderId (payload đồng bộ
+      // thật), originalOrder.id (theo docs webhook), cả 2 đường envelope.
+      const pickFirst = (...cands: any[]) => {
+        for (const c of cands) {
+          if (c !== null && c !== undefined && c !== 0 && String(c).trim() !== '') return String(c);
+        }
+        return null;
+      };
+      const originalOrderId = pickFirst(
+        info.originalOrderId,
+        (data as any)?.data?.info?.originalOrderId,
+        originalOrder?.id,
+        (data as any)?.data?.originalOrder?.id,
+      );
+      const appOrderId = channel?.appOrderId || originalOrder?.channel?.appOrderId || null;
+      // channel.appOrderId của đơn hoàn 1 phần có hậu tố 'R'
+      // (VD '586714831070856213R') — bản gốc bỏ 'R' để nối đơn trả.
+      const originalEcomOrderId = appOrderId ? String(appOrderId).replace(/R$/, '') : null;
+      const shopId = channel?.shopId || channel?.appShopId || originalOrder?.channel?.appShopId || null;
+      const saleChannel = channel.saleChannel || null;
+      const products = Array.isArray(data?.products) ? data.products : null;
+
+      const { error: partialError } = await supabase.from('partial_return_orders').upsert({
+        id: orderId,
+        original_order_id: originalOrderId,
+        original_ecom_order_id: originalEcomOrderId,
+        ecom_order_id: appOrderId ? String(appOrderId) : null,
+        shop_id: shopId ? String(shopId) : null,
+        sale_channel: saleChannel,
+        status: newStatus,
+        created_by_name: creatorName,
+        products: products,
+        raw_data: payload,
+        created_at: createdAt,
+        updated_at: updatedAt,
+        synced_at: new Date().toISOString(),
+      }, { onConflict: 'id' });
+      if (partialError) console.error(`❌ Lỗi ghi đơn hoàn 1 phần ${orderId}:`, partialError.message);
+    }
+
+    // ============================================
+    // 3. XỬ LÝ SỰ KIỆN ĐƠN HÀNG THAY ĐỔI
+    // ============================================
+    if (event === 'orderAdd' || event === 'orderUpdate') {
       const info = data?.info || {};
       const carrier = data?.carrier || {};
       const channel = data?.channel || {};

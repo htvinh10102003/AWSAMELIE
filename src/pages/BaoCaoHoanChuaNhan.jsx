@@ -78,25 +78,9 @@ function totalQty(row) {
   return productsOf(row).reduce((sum, p) => sum + (Number(p.quantity) || 0), 0);
 }
 
-// --- Đơn hoàn 1 phần (type 16) trong bảng orders ---
-// ID đơn gốc có thể nằm ở nhiều chỗ khác nhau trong raw_data — thử lần lượt
-// tất cả, lấy giá trị đầu tiên khác null/0 rồi String() nó.
-function partialOriginalIdOf(raw) {
-  const cands = [
-    raw?.info?.originalOrderId,
-    raw?.data?.info?.originalOrderId,
-    raw?.originalOrder?.id,
-    raw?.data?.originalOrder?.id,
-  ];
-  for (const c of cands) {
-    if (c !== null && c !== undefined && c !== 0 && String(c).trim() !== '') return String(c);
-  }
-  return null;
-}
-function partialAppOrderIdOf(raw) {
-  const v = raw?.channel?.appOrderId ?? raw?.data?.channel?.appOrderId;
-  return v !== null && v !== undefined && String(v).trim() !== '' ? String(v) : null;
-}
+// --- Đơn hoàn 1 phần (type 16) trong bảng riêng partial_return_orders ---
+// original_order_id = ID đơn gốc; original_ecom_order_id = mã đơn sàn gốc
+// (đã bỏ hậu tố 'R' lúc ghi). stripTrailingR giữ lại phòng hờ dữ liệu cũ.
 function stripTrailingR(appOrderId) {
   return String(appOrderId).replace(/R$/, '');
 }
@@ -243,7 +227,7 @@ export default function BaoCaoHoanChuaNhan() {
   const [error, setError] = useState('');
   // Đơn hoàn 1 phần (type 16) + kiểm nhận tay.
   const [partialRows, setPartialRows] = useState([]);
-  const [partialError, setPartialError] = useState('');
+  const [partialMissing, setPartialMissing] = useState(false);
   const [manualChecks, setManualChecks] = useState(new Map());
   const [manualMissing, setManualMissing] = useState(false);
   // --- Phân trang từng nhóm (client-side, trên tập đã lọc đủ) ---
@@ -387,24 +371,24 @@ export default function BaoCaoHoanChuaNhan() {
     return () => { alive = false; };
   }, []);
 
-  // Nạp đơn hoàn 1 phần (type 16) + bảng kiểm nhận tay (1 lần lúc mở trang).
-  // Bảng return_receipt_checks chưa có (migration chạy trước khi go-live) thì
-  // trang vẫn chạy bình thường với map rỗng + ghi chú nhỏ, không sập trang.
+  // Nạp đơn hoàn 1 phần (type 16, bảng riêng partial_return_orders) +
+  // bảng kiểm nhận tay (1 lần lúc mở trang). Bảng chưa có (migration chạy
+  // trước khi go-live) thì trang vẫn chạy bình thường với danh sách rỗng +
+  // ghi chú nhỏ, không sập trang.
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const { data, error: err } = await supabase
-          .from('orders')
-          .select('id,raw_data')
-          .or('raw_data->info->>type.eq.16,raw_data->data->info->>type.eq.16');
+          .from('partial_return_orders')
+          .select('id, original_order_id, original_ecom_order_id');
         if (err) throw err;
-        if (alive) setPartialRows(data || []);
+        if (alive) { setPartialRows(data || []); setPartialMissing(false); }
       } catch (e) {
         console.error('Lỗi nạp đơn hoàn 1 phần:', e);
         if (alive) {
           setPartialRows([]);
-          setPartialError('Không tải được danh sách đơn hoàn 1 phần: ' + (e.message || e));
+          setPartialMissing(true);
         }
       }
       try {
@@ -428,20 +412,20 @@ export default function BaoCaoHoanChuaNhan() {
     setApplied({ updFrom, updTo, crtFrom, crtTo, platform, shop, search });
   }
 
-  // --- Ghép nối đơn hoàn 1 phần (trong bộ nhớ) ---
+  // --- Ghép nối đơn hoàn 1 phần (trong bộ nhớ, đọc cột index sẵn) ---
   const partialOriginalIds = useMemo(() => {
     const s = new Set();
     for (const p of partialRows) {
-      const id = partialOriginalIdOf(p.raw_data);
-      if (id) s.add(id);
+      const id = p.original_order_id;
+      if (id !== null && id !== undefined && String(id).trim() !== '') s.add(String(id));
     }
     return s;
   }, [partialRows]);
   const partialAppOrderIdsNoR = useMemo(() => {
     const s = new Set();
     for (const p of partialRows) {
-      const a = partialAppOrderIdOf(p.raw_data);
-      if (a) s.add(stripTrailingR(a));
+      const a = p.original_ecom_order_id;
+      if (a !== null && a !== undefined && String(a).trim() !== '') s.add(stripTrailingR(a));
     }
     return s;
   }, [partialRows]);
@@ -617,18 +601,25 @@ export default function BaoCaoHoanChuaNhan() {
   const BULK_PAGE_SIZE = 50;
   // Toàn bộ tập chưa nhận theo bộ lọc (cả 2 nhóm), giữ đúng thứ tự
   // return_updated_at desc như bảng (allRows đã xếp sẵn khi tải).
-  const bulkRows = useMemo(() => allRows.filter((r) => !hasPartial(r)), [allRows, partialOriginalIds, partialAppOrderIdsNoR]);
+  // Chỉ đơn chưa có trạng thái cuối mới hiện trong popup đối chiếu: đơn
+  // Đã nhận (và đơn đã có đơn hoàn 1 phần) bị loại khỏi danh sách — xong
+  // là biến mất, dữ liệu trang sau tự đôn lên. Bảng chính không đổi:
+  // nhóm "Cần đi đòi" vẫn hiện đơn Đã nhận để đi đòi.
+  const bulkRows = useMemo(
+    () => allRows.filter((r) => !hasPartial(r) && manualChecks.get(r.return_id)?.received_status !== 'Đã nhận'),
+    [allRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR]
+  );
   const bulkTotalPages = Math.max(1, Math.ceil(bulkRows.length / BULK_PAGE_SIZE));
   const safeBulkPage = Math.min(bulkPage, bulkTotalPages);
   const bulkPageRows = bulkRows.slice((safeBulkPage - 1) * BULK_PAGE_SIZE, safeBulkPage * BULK_PAGE_SIZE);
-  // Đơn "cần kiểm" = chưa có trạng thái cuối Đã nhận (Chưa nhận hoặc chưa
-  // kiểm). AfterShip chỉ check tối đa 20 mã/lần nên nút copy chỉ lấy 20 mã
-  // chưa kiểm đầu tiên trên trang, bỏ qua các đơn Đã nhận.
-  const isBulkDone = (r) => manualChecks.get(r.return_id)?.received_status === 'Đã nhận';
-  const uncheckedRows = (rows) => rows.filter((r) => !isBulkDone(r));
-  const bulkPageUnchecked = uncheckedRows(bulkPageRows);
-  const bulkPageSkipped = bulkPageRows.length - bulkPageUnchecked.length;
-  const bulkPageCopyRows = bulkPageUnchecked.slice(0, 20);
+  // Khi danh sách co lại (đơn vừa kiểm xong biến mất), kéo trang hiện
+  // tại về trang cuối còn hợp lệ để trang sau đôn lên lấp đầy.
+  useEffect(() => {
+    if (bulkPage > bulkTotalPages) setBulkPage(bulkTotalPages);
+  }, [bulkPage, bulkTotalPages]);
+  // Mọi đơn trên trang đều chưa kiểm nên nút copy lấy 20 mã đầu tiên
+  // (AfterShip chỉ check tối đa 20 mã/lần).
+  const bulkPageCopyRows = bulkPageRows.slice(0, 20);
   // Nhóm trang hiện tại theo hãng (tab hiển thị theo thứ tự SPX, J&T, GHN,
   // GHTK, Viettel Post, Hãng khác; chỉ hãng nào có đơn mới hiện).
   const bulkPageCarriers = useMemo(() => {
@@ -642,10 +633,8 @@ export default function BaoCaoHoanChuaNhan() {
     return order.filter((n) => map.has(n)).map((n) => ({ name: n, rows: map.get(n) }));
   }, [bulkPageRows]);
   const activeBulkCarrier = bulkPageCarriers.find((c) => c.name === bulkCarrier) || bulkPageCarriers[0] || null;
-  // Copy theo hãng cũng chỉ lấy 20 mã chưa kiểm đầu tiên của hãng đó.
-  const activeCarrierUnchecked = activeBulkCarrier ? uncheckedRows(activeBulkCarrier.rows) : [];
-  const activeCarrierSkipped = activeBulkCarrier ? activeBulkCarrier.rows.length - activeCarrierUnchecked.length : 0;
-  const activeCarrierCopyRows = activeCarrierUnchecked.slice(0, 20);
+  // Copy theo hãng: 20 mã đầu tiên của hãng đó trên trang này.
+  const activeCarrierCopyRows = activeBulkCarrier ? activeBulkCarrier.rows.slice(0, 20) : [];
 
   // Nhóm lịch sử để hiển thị: lọc theo mã vận đơn trước (khớp chuỗi con,
   // không phân biệt hoa thường), rồi gom theo batch_id; sửa tay (batch_id
@@ -918,7 +907,7 @@ export default function BaoCaoHoanChuaNhan() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-slate-900">
-              {title} <span className="text-slate-500 font-medium">({rows.length} đơn · Tổng hoàn {fmtMoney(sumMoney(rows))})</span>
+              {title} <span className="text-slate-500 font-medium">({rows.length} đơn · Tổng hoàn {fmtMoney(sumMoney(rows))} VND)</span>
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">{desc}</p>
           </div>
@@ -1022,7 +1011,9 @@ export default function BaoCaoHoanChuaNhan() {
           Tổng: <strong className="text-slate-800">{total}</strong> đơn theo bộ lọc (có mã đơn trả thật SPX/G/8/1/VTP, trạng thái Nhanh Đã hoàn tiền hoặc Đang hoàn tiền). Ngày cập nhật lọc theo ngày cập nhật trên Nhanh; ngày tạo lọc theo ngày tạo yêu cầu.
         </p>
         {error && <p className="text-sm font-bold text-red-500 mt-2">{error}</p>}
-        {partialError && <p className="text-sm font-bold text-red-500 mt-2">{partialError}</p>}
+        {partialMissing && (
+          <p className="text-xs text-amber-700 mt-2">Chưa tải được danh sách đơn hoàn 1 phần (bảng partial_return_orders chưa có hoặc chưa có quyền đọc) — các đơn tạm xếp hết vào nhóm chưa nhập kho, chạy migration bảng đơn hoàn 1 phần rồi tải lại trang.</p>
+        )}
         {manualMissing && (
           <p className="text-xs text-amber-700 mt-2">Chưa tải được dữ liệu kiểm nhận tay (bảng return_receipt_checks chưa có hoặc chưa có quyền đọc) — các đơn tạm xếp hết vào nhóm đang chờ, phần sửa tay sẽ báo lỗi cho đến khi bảng được tạo.</p>
         )}
@@ -1041,22 +1032,22 @@ export default function BaoCaoHoanChuaNhan() {
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
           <div className="text-2xl font-bold text-slate-900">{total}</div>
           <div className="text-xs font-bold text-slate-500">Tổng đơn lọc được</div>
-          <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.totalMoney)}</div>
+          <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.totalMoney)} VND</div>
         </div>
         <div className="bg-green-50 border border-green-200 rounded-2xl p-4 shadow-sm">
           <div className="text-2xl font-bold text-green-700">{groups.daNhap.length}</div>
           <div className="text-xs font-bold text-slate-500">Đã nhập kho (có đơn hoàn 1 phần)</div>
-          <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.daNhapMoney)}</div>
+          <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.daNhapMoney)} VND</div>
         </div>
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4 shadow-sm">
           <div className="text-2xl font-bold text-red-600">{groups.doi.length}</div>
           <div className="text-xs font-bold text-slate-500">Chưa nhận: Cần đi đòi</div>
-          <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.doiMoney)}</div>
+          <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.doiMoney)} VND</div>
         </div>
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
           <div className="text-2xl font-bold text-amber-700">{groups.cho.length}</div>
           <div className="text-xs font-bold text-slate-500">Chưa nhận: Đang chờ hàng về</div>
-          <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.choMoney)}</div>
+          <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.choMoney)} VND</div>
         </div>
       </div>
 
@@ -1181,7 +1172,7 @@ export default function BaoCaoHoanChuaNhan() {
                   <Loader2 size={18} className="animate-spin" /> Đang tải...
                 </div>
               ) : bulkRows.length === 0 ? (
-                <p className="text-sm font-bold text-slate-600">Không có đơn chưa nhận nào theo bộ lọc hiện tại.</p>
+                <p className="text-sm font-bold text-slate-600">Đã kiểm xong tất cả đơn trong bộ lọc.</p>
               ) : (
                 <>
                   {/* Phân trang 50 đơn/trang */}
@@ -1209,20 +1200,19 @@ export default function BaoCaoHoanChuaNhan() {
                       <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
                         <h3 className="text-sm font-bold text-slate-900">{activeBulkCarrier.name} — {activeBulkCarrier.rows.length} đơn trên trang này</h3>
                         <div className="flex flex-col items-end gap-1">
-                          <button disabled={activeCarrierCopyRows.length === 0} onClick={() => copyCodes(activeCarrierCopyRows, activeBulkCarrier.name)} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
-                            <Copy size={15} /> {activeCarrierCopyRows.length === 0 ? 'Đã kiểm xong' : `Sao chép mã vận đơn (${activeCarrierCopyRows.length})`}
+                          <button onClick={() => copyCodes(activeCarrierCopyRows, activeBulkCarrier.name)} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer flex items-center gap-2">
+                            <Copy size={15} /> Sao chép mã vận đơn ({activeCarrierCopyRows.length})
                           </button>
-                          {activeCarrierSkipped > 0 && <span className="text-xs text-slate-500">Đã bỏ qua {activeCarrierSkipped} đơn Đã nhận.</span>}
                         </div>
                       </div>
                       <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
                         {activeBulkCarrier.rows.map((r) => {
                           const m = manualChecks.get(r.return_id);
                           return (
-                            <div key={r.return_id} className={`flex flex-wrap items-center gap-x-4 gap-y-0.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm ${m?.received_status === 'Đã nhận' ? 'opacity-60' : ''}`}>
+                            <div key={r.return_id} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
                               <span className="font-mono font-bold text-indigo-700 break-all">{returnCodeOf(r) || r.return_tracking_number || '—'}</span>
                               <span className="font-mono text-xs text-slate-500 break-all">{r.return_id || '—'}</span>
-                              <span className={`ml-auto text-xs font-bold ${m?.received_status === 'Đã nhận' ? 'text-green-700' : 'text-slate-500'}`}>
+                              <span className="ml-auto text-xs font-bold text-slate-500">
                                 {m?.received_status ? `${m.received_status}${m.received_date ? ` · ${fmtDateOnly(m.received_date)}` : ''}` : 'Chưa kiểm'}
                               </span>
                             </div>
@@ -1232,10 +1222,9 @@ export default function BaoCaoHoanChuaNhan() {
                     </div>
                   )}
                   <div className="flex flex-wrap items-center gap-3">
-                    <button disabled={bulkPageCopyRows.length === 0} onClick={() => copyCodes(bulkPageCopyRows, 'chưa kiểm trên trang này')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
-                      <Copy size={15} /> {bulkPageCopyRows.length === 0 ? 'Trang này đã kiểm xong' : `Sao chép ${bulkPageCopyRows.length} mã chưa kiểm`}
+                    <button onClick={() => copyCodes(bulkPageCopyRows, 'chưa kiểm trên trang này')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer flex items-center gap-2">
+                      <Copy size={15} /> Sao chép {bulkPageCopyRows.length} mã
                     </button>
-                    {bulkPageSkipped > 0 && <span className="text-xs text-slate-500">Đã bỏ qua {bulkPageSkipped} đơn Đã nhận trên trang này.</span>}
                   </div>
                   {/* Dán kết quả AfterShip */}
                   <div>
