@@ -1538,6 +1538,31 @@ export default function OrderReport() {
             <p key={oid} className="text-sm text-slate-600">Đơn #{oid}: mã vận đơn <span className="font-mono font-bold text-slate-800">{r.trackingNumber || 'chưa có'}</span>{r.existed ? ' (đã gửi từ trước)' : ''}{r.labelUrl ? (<> · <button onClick={() => window.open(r.labelUrl, '_blank')} className="font-bold text-blue-700 hover:underline">In phiếu</button></>) : (<> · <span className="text-slate-400">không lấy được nhãn</span> · <button onClick={() => onRelabel?.(oid)} disabled={loading} className="font-bold text-blue-700 hover:underline disabled:opacity-50">{loading ? 'Đang lấy nhãn...' : 'Kéo lại nhãn'}</button></>)}{r.labelError ? (<span className="text-red-600"> · {r.labelError}</span>) : null}</p>
         );
     };
+    // Lịch sử gửi: dòng gọn cho 1 đơn sàn — chỉ ID + nút in lại (hoặc
+    // kéo lại nhãn khi chưa lấy được nhãn). Đơn gửi lỗi chỉ hiện ID mờ,
+    // không kèm lỗi (chi tiết lỗi đã hiện ở popup kết quả lúc gửi).
+    const renderEcomHistoryRow = (r, onRelabel) => {
+        const oid = r.orderId ?? r.id;
+        const loading = !!relabelLoadingIds[String(oid)];
+        if (!r.ok) {
+            return (
+                <div key={oid} className="flex items-center justify-between gap-2 py-0.5">
+                    <span className="text-sm font-mono text-slate-400">#{oid}</span>
+                    <span className="text-xs text-slate-400">gửi lỗi</span>
+                </div>
+            );
+        }
+        return (
+            <div key={oid} className="flex items-center justify-between gap-2 py-0.5">
+                <span className="text-sm font-mono font-bold text-slate-800">#{oid}</span>
+                {r.labelUrl ? (
+                    <button onClick={() => window.open(r.labelUrl, '_blank')} className="px-2.5 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 flex items-center gap-1 shrink-0"><Printer size={12} /> In lại</button>
+                ) : (
+                    <button onClick={() => onRelabel?.(oid)} disabled={loading} className="px-2.5 py-1 bg-white border border-slate-300 text-xs font-bold rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1 shrink-0"><RefreshCw size={12} className={loading ? 'animate-spin' : ''} /> {loading ? 'Đang lấy nhãn...' : 'Kéo lại nhãn'}</button>
+                )}
+            </div>
+        );
+    };
     // Gửi hàng loạt từ nút Thao tác trên thanh công cụ: chỉ gửi đơn
     // kênh Admin, đơn Shopee/TikTok và các kênh khác trong list đã tick
     // đều bỏ qua mặc định và được báo rõ trong popup kết quả.
@@ -3534,8 +3559,6 @@ export default function OrderReport() {
                             {sendHistory.map(entry => {
                                 const items = Array.isArray(entry.items) ? entry.items : [];
                                 const okItems = items.filter(it => it.ok);
-                                const failItems = items.filter(it => !it.ok);
-                                const skipped = Array.isArray(entry.skipped_ids) ? entry.skipped_ids : [];
                                 // Mục đơn sàn: nhận diện theo item (it.orderId !== undefined),
                                 // không theo source — cả gửi 1 đơn (source 'detail') lẫn
                                 // gửi bulk (source 'toolbar') đều là đơn sàn nếu item là ecom.
@@ -3547,27 +3570,20 @@ export default function OrderReport() {
                                             <span className="text-sm font-bold text-slate-800">{fmtDateStr(entry.created_at)}</span>
                                             <span className="text-xs text-slate-400 shrink-0">{isEcomEntry ? 'Đơn sàn' : entry.source === 'popup' ? 'Popup chi tiết' : entry.source === 'toolbar' ? 'Thanh công cụ' : (entry.source || '')}</span>
                                         </div>
-                                        <p className="text-sm text-slate-600">
-                                            Thành công <span className="font-bold text-green-700">{entry.ok_count}</span>
-                                            {entry.fail_count > 0 && (<> · Thất bại <span className="font-bold text-red-600">{entry.fail_count}</span></>)}
-                                            {entry.skipped_count > 0 && (<> · Bỏ qua <span className="font-bold text-amber-700">{entry.skipped_count}</span> đơn không phải kênh Admin</>)}
-                                        </p>
-                                        {okItems.length > 0 && (
-                                            <p className="text-xs text-slate-500 break-words">Mã vận đơn: {isEcomEntry ? (okItems.map(it => it.trackingNumber).filter(Boolean).join(', ') || 'chưa có') : okItems.map(it => it.carrierCode || `#${it.id}`).join(', ')}</p>
-                                        )}
+                                        {/* Lịch sử gọn: chỉ list ID đơn + nút in lại. Đơn gửi lỗi
+                                            chỉ hiện ID mờ, không kèm lỗi. */}
                                         {isEcomEntry ? (
-                                            <div className="space-y-1">
-                                                {items.map(it => renderEcomResultRow(it, (oid) => handleRelabelHistory(oid)))}
-                                            </div>
-                                        ) : (failItems.length > 0 && (
                                             <div className="space-y-0.5">
-                                                {failItems.map(it => (
-                                                    <p key={it.id} className="text-xs text-red-600">Đơn #{it.id}: {it.error || it.message}</p>
-                                                ))}
+                                                {items.map(it => renderEcomHistoryRow(it, (oid) => handleRelabelHistory(oid)))}
                                             </div>
-                                        ))}
-                                        {skipped.length > 0 && (
-                                            <p className="text-xs text-amber-800">Bỏ qua: {skipped.join(', ')}</p>
+                                        ) : (
+                                            <p className="text-sm font-mono break-words leading-relaxed">
+                                                {items.map((it, i) => (
+                                                    <span key={it.id} className={it.ok ? 'font-bold text-slate-800' : 'text-slate-400'}>
+                                                        #{it.id}{i < items.length - 1 ? ', ' : ''}
+                                                    </span>
+                                                ))}
+                                            </p>
                                         )}
                                         {!isEcomEntry && (
                                             <>
