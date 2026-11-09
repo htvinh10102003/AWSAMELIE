@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { PDFDocument } from 'https://esm.sh/pdf-lib@1.17.1';
 
 // Proxy cho API v3 của Nhanh.vn dùng trong báo cáo đặc biệt:
 // - Lịch sử đơn (order/history): thao tác trên Nhanh + lịch sử hãng VC.
@@ -82,7 +83,7 @@ serve(async (req) => {
     // chỉ cần productId, syncDeleted không cần tham số nào — cả hai
     // cũng không mang orderIds nên phải miễn kiểm tra này, nếu không
     // sẽ luôn trả 400 'Thiếu ID đơn hàng.'
-    if (action !== 'tags' && action !== 'sendHistory' && action !== 'productDetail' && action !== 'syncDeleted' && orderIds.length === 0) {
+    if (action !== 'tags' && action !== 'sendHistory' && action !== 'productDetail' && action !== 'syncDeleted' && action !== 'ecomGetLabel' && action !== 'ecomMergeLabels' && orderIds.length === 0) {
       return json({ success: false, message: 'Thiếu ID đơn hàng.' }, 400);
     }
 
@@ -435,17 +436,24 @@ serve(async (req) => {
           const trackingNumber = r.data?.trackingNumber || null;
           // Lấy nhãn PDF. Nhãn lỗi thì đơn vẫn tính là gửi thành công
           // (đã có mã vận đơn), chỉ ghi labelError để giao diện báo lại.
+          // LƯU Ý 2026-11-09: lấy nhãn ngay sau readytoship hay bị RACE
+          // (Nhanh chưa kịp sinh nhãn) nên thử lại tối đa 3 lần, cách
+          // nhau ~3s; lần nào code 1 thì dừng ngay, chỉ giữ lỗi lần cuối.
           let labelUrl: string | null = null;
           let labelError: string | null = null;
-          try {
-            const lr = await callPos('/ecom/getprintlabel', { appId: appIdForOrder, orderId: Number(id) });
-            if (lr.code === 1) {
-              labelUrl = lr.data?.url || null;
-            } else {
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              const lr = await callPos('/ecom/getprintlabel', { appId: appIdForOrder, orderId: Number(id) });
+              if (lr.code === 1) {
+                labelUrl = lr.data?.url || null;
+                labelError = null;
+                break;
+              }
               labelError = nhanhErr(lr);
+            } catch (e: any) {
+              labelError = e?.message || 'Lỗi kết nối tới Nhanh.vn khi lấy nhãn.';
             }
-          } catch (e: any) {
-            labelError = e?.message || 'Lỗi kết nối tới Nhanh.vn khi lấy nhãn.';
+            if (attempt < 3) await new Promise(r => setTimeout(r, 3000));
           }
           results.push({ orderId: id, ok: true, existed, trackingNumber, labelUrl, labelError, error: null });
         } catch (e: any) {
@@ -483,6 +491,132 @@ serve(async (req) => {
         result: r.ok ? (r.existed ? 'existed' : 'ok') : 'failed',
       })));
       return json({ success: okCount > 0, results, okCount, failCount: results.length - okCount });
+    }
+
+    if (action === 'ecomGetLabel') {
+      // Kéo lại nhãn PDF sàn cho 1 đơn đã gửi (dùng khi lần lấy nhãn
+      // trong ecomReadyToShip bị lỗi RACE). Chỉ 1 đơn: body {orderId}
+      // (chấp nhận cả orderIds[0]).
+      const orderId = orderIds[0];
+      if (!orderId) {
+        return json({ success: false, message: 'Thiếu ID đơn hàng.' }, 400);
+      }
+      const ECOM_APP_IDS: Record<number, number> = { 42: 8195, 48: 8855, 41: 8142 };
+      let appIdForOrder: number | null = null;
+      try {
+        const { data: orderRow } = await supabaseAdmin
+          .from('orders')
+          .select('id, sale_channel')
+          .eq('id', orderId)
+          .maybeSingle();
+        if (orderRow) {
+          appIdForOrder = ECOM_APP_IDS[Number(orderRow.sale_channel)] ?? null;
+        }
+      } catch { /* Tra cứu lỗi thì coi như không tìm thấy đơn */ }
+      if (!appIdForOrder) {
+        const message = 'Không tìm thấy đơn trong hệ thống hoặc kênh bán không phải Shopee/TikTok/Lazada.';
+        await logOrderActions([{
+          action: 'ecom_get_label',
+          target_type: 'order',
+          target_id: String(orderId),
+          details: { message },
+          result: 'failed',
+        }]);
+        return json({ success: false, message });
+      }
+      let labelUrl: string | null = null;
+      let message: string | null = null;
+      try {
+        const lr = await callPos('/ecom/getprintlabel', { appId: appIdForOrder, orderId: Number(orderId) });
+        if (lr.code === 1) {
+          labelUrl = lr.data?.url || null;
+          if (!labelUrl) message = 'Nhanh.vn không trả về URL nhãn.';
+        } else {
+          message = nhanhErr(lr);
+        }
+      } catch (e: any) {
+        message = e?.message || 'Lỗi kết nối tới Nhanh.vn khi lấy nhãn.';
+      }
+      if (!labelUrl) {
+        await logOrderActions([{
+          action: 'ecom_get_label',
+          target_type: 'order',
+          target_id: String(orderId),
+          details: { message },
+          result: 'failed',
+        }]);
+        return json({ success: false, message });
+      }
+      // Vá dòng send_history ecom gần nhất chứa đơn này: cập nhật
+      // labelUrl mới, labelError null cho đúng item đó. Không tìm thấy
+      // thì bỏ qua lặng lẽ (không lỗi).
+      try {
+        const { data: historyRows } = await supabaseAdmin
+          .from('send_history')
+          .select('id, items')
+          .order('id', { ascending: false })
+          .limit(5);
+        for (const row of historyRows || []) {
+          const items: any[] = Array.isArray(row.items) ? row.items : [];
+          const idx = items.findIndex((it: any) => it && String(it.orderId) === String(orderId));
+          if (idx >= 0) {
+            items[idx] = { ...items[idx], labelUrl, labelError: null };
+            await supabaseAdmin.from('send_history').update({ items }).eq('id', row.id);
+            break;
+          }
+        }
+      } catch { /* Bỏ qua lỗi vá lịch sử */ }
+      await logOrderActions([{
+        action: 'ecom_get_label',
+        target_type: 'order',
+        target_id: String(orderId),
+        details: { labelUrl },
+        result: 'ok',
+      }]);
+      return json({ success: true, labelUrl });
+    }
+
+    if (action === 'ecomMergeLabels') {
+      // Gộp nhiều nhãn PDF sàn thành 1 file PDF duy nhất để in 1 lần.
+      // Body {labelUrls: string[]} (1..50 URL http(s)). URL nào fetch
+      // lỗi hoặc parse lỗi thì bỏ qua, tiếp tục các URL còn lại; tất cả
+      // đều lỗi thì trả 400. Trả về binary PDF, không dùng helper json().
+      const labelUrls: unknown = payload.labelUrls;
+      if (!Array.isArray(labelUrls) || labelUrls.length < 1 || labelUrls.length > 50) {
+        return json({ success: false, message: 'labelUrls phải là mảng gồm 1 đến 50 URL nhãn PDF.' }, 400);
+      }
+      const hasBad = labelUrls.some((u: unknown) => typeof u !== 'string' || (!u.startsWith('http://') && !u.startsWith('https://')));
+      if (hasBad) {
+        return json({ success: false, message: 'Mỗi phần tử trong labelUrls phải là chuỗi URL bắt đầu bằng http:// hoặc https://.' }, 400);
+      }
+      const merged = await PDFDocument.create();
+      let mergedCount = 0;
+      for (const url of labelUrls as string[]) {
+        try {
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const bytes = await res.arrayBuffer();
+          const src = await PDFDocument.load(bytes);
+          const pages = await merged.copyPages(src, src.getPageIndices());
+          pages.forEach((p) => merged.addPage(p));
+          mergedCount++;
+        } catch { /* Bỏ qua URL lỗi, tiếp tục các URL còn lại */ }
+      }
+      if (mergedCount === 0) {
+        return json({ success: false, message: 'Không tải được nhãn PDF nào từ các URL đã cho.' }, 400);
+      }
+      const pdfBytes = await merged.save();
+      // Giờ VN (UTC+7 cộng tay, KHÔNG dùng Intl timezone).
+      const now = new Date(Date.now() + 7 * 3600 * 1000);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const stamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}-${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}`;
+      return new Response(pdfBytes, {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="phieu-gui-san-${stamp}.pdf"`,
+        },
+      });
     }
 
     return json({ success: false, message: 'Thao tác không hợp lệ.' }, 400);

@@ -379,6 +379,16 @@ export default function OrderReport() {
     const [bulkEcomRunning, setBulkEcomRunning] = useState(false);
     const [bulkEcomResult, setBulkEcomResult] = useState(null);
     const [showBulkEcomResultModal, setShowBulkEcomResultModal] = useState(false);
+    // Tiến trình gửi đơn sàn hàng loạt (gửi tuần tự từng đơn): done/total
+    // + đơn đang gửi, và kết quả từng đơn append ngay khi xong.
+    const [bulkEcomProgress, setBulkEcomProgress] = useState({ done: 0, total: 0, currentId: null });
+    const [bulkEcomLiveResults, setBulkEcomLiveResults] = useState([]);
+    const bulkEcomStopRef = useRef(false);
+    // Gộp nhiều nhãn PDF sàn thành 1 file.
+    const [mergingLabels, setMergingLabels] = useState(false);
+    const [mergeLabelsMsg, setMergeLabelsMsg] = useState('');
+    // Đơn nào đang kéo lại nhãn (key = orderId) để disable đúng nút đó.
+    const [relabelLoadingIds, setRelabelLoadingIds] = useState({});
     // Đồng bộ đơn đã xóa từ Nhanh (owner, trong khu vực báo cáo đặc biệt).
     const [syncDeletedLoading, setSyncDeletedLoading] = useState(false);
     const [syncDeletedMsg, setSyncDeletedMsg] = useState('');
@@ -1369,8 +1379,9 @@ export default function OrderReport() {
             setSyncDeletedLoading(false);
         }
     };
-    const handleOpenSendHistory = async () => {
-        setShowSendHistoryModal(true);
+    // Tải lại lịch sử gửi (tách riêng để nút "Kéo lại nhãn" trong lịch
+    // sử dùng lại được sau khi edge đã vá labelUrl vào send_history).
+    const loadSendHistory = async () => {
         setSendHistoryLoading(true);
         try {
             const result = await callNhanhActionRaw('sendHistory');
@@ -1382,6 +1393,136 @@ export default function OrderReport() {
             setSendHistoryLoading(false);
             setTimeout(() => setCopyMessage(''), 5000);
         }
+    };
+    const handleOpenSendHistory = async () => {
+        setShowSendHistoryModal(true);
+        await loadSendHistory();
+    };
+    // Gộp nhiều nhãn PDF sàn thành 1 file PDF rồi tải về. Edge trả về
+    // BINARY PDF (không phải JSON) nên gọi bằng raw fetch, không dùng
+    // callNhanhActionRaw. Tên file theo giờ VN cộng tay UTC+7, không
+    // dùng Intl với timezone.
+    const downloadMergedLabels = async (labelUrls) => {
+        const urls = (labelUrls || []).filter(Boolean);
+        if (urls.length === 0) return;
+        setMergingLabels(true);
+        setMergeLabelsMsg('');
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/nhanh-order-actions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token || ''}` },
+                body: JSON.stringify({ action: 'ecomMergeLabels', labelUrls: urls }),
+            });
+            if (!res.ok) {
+                let msg = 'Không gộp được phiếu gửi.';
+                try { const j = await res.json(); if (j?.message) msg = j.message; } catch (e) { /* giữ msg mặc định */ }
+                throw new Error(msg);
+            }
+            const blob = await res.blob();
+            const now = new Date(Date.now() + 7 * 3600 * 1000);
+            const pad2 = (n) => String(n).padStart(2, '0');
+            const fname = `phieu-gui-san-${now.getUTCFullYear()}${pad2(now.getUTCMonth() + 1)}${pad2(now.getUTCDate())}-${pad2(now.getUTCHours())}${pad2(now.getUTCMinutes())}.pdf`;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fname;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            const msg = err.message || 'Không gộp được phiếu gửi.';
+            setMergeLabelsMsg(msg);
+            setCopyMessage(msg);
+            setTimeout(() => setCopyMessage(''), 5000);
+            throw err;
+        } finally {
+            setMergingLabels(false);
+        }
+    };
+    // Lấy lại URL nhãn PDF của 1 đơn sàn đã gửi xong (edge tự vá
+    // labelUrl vào dòng send_history gần nhất chứa đơn đó).
+    const fetchEcomLabel = async (orderId) => {
+        const result = await callNhanhActionRaw('ecomGetLabel', { orderId });
+        if (result?.success && result.labelUrl) return result.labelUrl;
+        throw new Error(result?.message || 'Không lấy được nhãn PDF của đơn này.');
+    };
+    // Kéo lại nhãn cho 1 đơn trong modal kết quả bulk: vá labelUrl vào
+    // cả bulkEcomLiveResults lẫn bulkEcomResult để hiện nút In phiếu;
+    // lỗi thì ghi labelError vào đúng dòng đó để hiện câu lỗi.
+    const handleRelabelBulk = async (orderId) => {
+        const sid = String(orderId);
+        setRelabelLoadingIds(prev => ({ ...prev, [sid]: true }));
+        try {
+            const labelUrl = await fetchEcomLabel(orderId);
+            const patchOk = (list) => (list || []).map(r => String(r.orderId) === sid ? { ...r, labelUrl, labelError: '' } : r);
+            setBulkEcomLiveResults(prev => patchOk(prev));
+            setBulkEcomResult(prev => prev ? { ...prev, results: patchOk(prev.results) } : prev);
+        } catch (err) {
+            const msg = err.message || 'Không lấy được nhãn PDF của đơn này.';
+            const patchErr = (list) => (list || []).map(r => String(r.orderId) === sid ? { ...r, labelError: msg } : r);
+            setBulkEcomLiveResults(prev => patchErr(prev));
+            setBulkEcomResult(prev => prev ? { ...prev, results: patchErr(prev.results) } : prev);
+        } finally {
+            setRelabelLoadingIds(prev => ({ ...prev, [sid]: false }));
+        }
+    };
+    // Kéo lại nhãn cho 1 đơn trong lịch sử: thành công thì tải lại danh
+    // sách lịch sử (edge đã vá labelUrl vào send_history); lỗi thì ghi
+    // labelError vào đúng dòng đó để hiện câu lỗi.
+    const handleRelabelHistory = async (orderId) => {
+        const sid = String(orderId);
+        setRelabelLoadingIds(prev => ({ ...prev, [sid]: true }));
+        try {
+            const labelUrl = await fetchEcomLabel(orderId);
+            setSendHistory(prev => prev.map(entry => ({
+                ...entry,
+                items: (entry.items || []).map(it => String(it.orderId) === sid ? { ...it, labelUrl, labelError: '' } : it),
+            })));
+            await loadSendHistory();
+        } catch (err) {
+            const msg = err.message || 'Không lấy được nhãn PDF của đơn này.';
+            setSendHistory(prev => prev.map(entry => ({
+                ...entry,
+                items: (entry.items || []).map(it => String(it.orderId) === sid ? { ...it, labelError: msg } : it),
+            })));
+        } finally {
+            setRelabelLoadingIds(prev => ({ ...prev, [sid]: false }));
+        }
+    };
+    // Kéo lại nhãn cho đơn sàn trong popup chi tiết: thành công thì
+    // setEcomLabelUrl để hiện nút In phiếu; lỗi thì hiện câu lỗi vào
+    // ecomMsg.
+    const handleRelabelDetail = async () => {
+        if (!detailOrder) return;
+        const sid = String(detailOrder.id);
+        setRelabelLoadingIds(prev => ({ ...prev, [sid]: true }));
+        try {
+            const labelUrl = await fetchEcomLabel(detailOrder.id);
+            setEcomLabelUrl(labelUrl);
+            setEcomMsg('Đã lấy lại được nhãn PDF của đơn này, bấm In phiếu gửi để in.');
+        } catch (err) {
+            setEcomMsg(err.message || 'Không lấy được nhãn PDF của đơn này.');
+        } finally {
+            setRelabelLoadingIds(prev => ({ ...prev, [sid]: false }));
+        }
+    };
+    // 1 dòng kết quả đơn sàn, dùng chung cho modal kết quả bulk và mục
+    // ecom trong lịch sử: "Đơn #id: mã vận đơn ... · [In phiếu] /
+    // [Kéo lại nhãn] / câu lỗi". trackingNumber null vẫn tính là đã
+    // gửi xong (chỉ hiện 'chưa có'), không phụ thuộc vào nó.
+    const renderEcomResultRow = (r, onRelabel) => {
+        const oid = r.orderId ?? r.id;
+        const loading = !!relabelLoadingIds[String(oid)];
+        if (!r.ok) {
+            return (
+                <p key={oid} className="text-sm text-red-600">Đơn #{oid}: {r.error || r.labelError || r.message || 'Gửi thất bại.'}</p>
+            );
+        }
+        return (
+            <p key={oid} className="text-sm text-slate-600">Đơn #{oid}: mã vận đơn <span className="font-mono font-bold text-slate-800">{r.trackingNumber || 'chưa có'}</span>{r.existed ? ' (đã gửi từ trước)' : ''}{r.labelUrl ? (<> · <button onClick={() => window.open(r.labelUrl, '_blank')} className="font-bold text-blue-700 hover:underline">In phiếu</button></>) : (<> · <span className="text-slate-400">không lấy được nhãn</span> · <button onClick={() => onRelabel?.(oid)} disabled={loading} className="font-bold text-blue-700 hover:underline disabled:opacity-50">{loading ? 'Đang lấy nhãn...' : 'Kéo lại nhãn'}</button></>)}{r.labelError ? (<span className="text-red-600"> · {r.labelError}</span>) : null}</p>
+        );
     };
     // Gửi hàng loạt từ nút Thao tác trên thanh công cụ: chỉ gửi đơn
     // kênh Admin, đơn Shopee/TikTok và các kênh khác trong list đã tick
@@ -1420,27 +1561,66 @@ export default function OrderReport() {
     const openBulkEcom = () => {
         if (selectedMarketplaceIds.length === 0) return;
         setBulkEcomResult(null);
+        setBulkEcomLiveResults([]);
+        setBulkEcomProgress({ done: 0, total: 0, currentId: null });
+        bulkEcomStopRef.current = false;
+        setMergeLabelsMsg('');
         setBulkEcomPickupType(1);
         setShowActionMenu(false);
         setShowBulkEcomModal(true);
     };
+    // Gửi đơn sàn hàng loạt: gọi ecomReadyToShip TUẦN TỰ từng đơn (1
+    // đơn/cuộc gọi, edge tự ghi 1 dòng send_history riêng cho mỗi đơn).
+    // Modal kết quả mở ngay khi bắt đầu gửi; sau mỗi đơn xong thì cập
+    // nhật tiến trình + append kết quả đơn đó vào bulkEcomLiveResults để
+    // hiện ngay trong modal. Nút Dừng chỉ dừng sau khi đơn hiện tại
+    // xong, giữ lại kết quả đã xong và hiện tổng kết như bình thường.
     const handleBulkEcom = async () => {
-        if (selectedMarketplaceIds.length === 0) return;
+        if (selectedMarketplaceIds.length === 0 || bulkEcomRunning) return;
+        const ids = [...selectedMarketplaceIds];
         const skippedIds = selectedOrders.filter(id => !selectedMarketplaceIds.some(a => String(a) === String(id)));
         setShowBulkEcomModal(false);
+        bulkEcomStopRef.current = false;
+        setBulkEcomLiveResults([]);
+        setBulkEcomResult({ success: true, results: [], okCount: 0, failCount: 0, skippedIds });
+        setBulkEcomProgress({ done: 0, total: ids.length, currentId: ids[0] ?? null });
+        setMergeLabelsMsg('');
         setBulkEcomRunning(true);
+        setShowBulkEcomResultModal(true);
+        const live = [];
         try {
-            const result = await callNhanhActionRaw('ecomReadyToShip', { orderIds: selectedMarketplaceIds, orderPickupType: bulkEcomPickupType, source: 'toolbar' });
-            (result.results || []).forEach(r => {
-                if (r.ok && r.trackingNumber) patchOrderEverywhere(r.orderId, { carrier_code: r.trackingNumber });
-            });
-            setBulkEcomResult({ ...result, skippedIds });
-            setShowBulkEcomResultModal(true);
-        } catch (err) {
-            setBulkEcomResult({ success: false, results: [], message: `Lỗi hệ thống: ${err.message}`, skippedIds });
-            setShowBulkEcomResultModal(true);
+            for (let i = 0; i < ids.length; i++) {
+                if (bulkEcomStopRef.current) break;
+                const orderId = ids[i];
+                setBulkEcomProgress({ done: i, total: ids.length, currentId: orderId });
+                let one;
+                try {
+                    const result = await callNhanhActionRaw('ecomReadyToShip', { orderIds: [orderId], orderPickupType: bulkEcomPickupType, source: 'toolbar' });
+                    one = result.results?.[0] || { orderId, ok: false, error: result.message || 'Nhanh.vn từ chối gửi đơn sàn.' };
+                    one = { ...one, orderId: one.orderId ?? orderId };
+                } catch (err) {
+                    one = { orderId, ok: false, error: `Lỗi hệ thống: ${err.message}` };
+                }
+                if (one.ok && one.trackingNumber) patchOrderEverywhere(one.orderId, { carrier_code: one.trackingNumber });
+                live.push(one);
+                setBulkEcomLiveResults([...live]);
+                setBulkEcomProgress({ done: i + 1, total: ids.length, currentId: ids[i + 1] ?? null });
+            }
         } finally {
+            const stopped = bulkEcomStopRef.current;
+            const okCount = live.filter(r => r.ok).length;
+            const failCount = live.filter(r => !r.ok).length;
+            setBulkEcomResult({
+                success: failCount === 0,
+                results: live,
+                okCount,
+                failCount,
+                skippedIds,
+                stopped,
+                message: stopped ? `Đã dừng theo yêu cầu sau ${live.length}/${ids.length} đơn.` : undefined,
+            });
             setBulkEcomRunning(false);
+            setBulkEcomProgress(prev => ({ ...prev, currentId: null }));
         }
     };
     // Hủy hàng loạt: tick bao nhiêu hủy bấy nhiêu, 1 lý do chung.
@@ -2029,6 +2209,17 @@ export default function OrderReport() {
         const row = effectiveFiltered.find(o => String(o.id) === String(id));
         return row && isMarketplaceChannel(row);
     });
+    // Kết quả hiển thị trong modal kết quả gửi sàn: lúc đang chạy thì
+    // lấy từ bulkEcomLiveResults (append từng đơn khi xong), lúc xong
+    // thì lấy từ bulkEcomResult (đã gồm toàn bộ kết quả đã xong).
+    const bulkEcomDisplayResults = bulkEcomLiveResults.length > 0 ? bulkEcomLiveResults : (bulkEcomResult?.results || []);
+    const bulkEcomDisplayOkCount = bulkEcomRunning
+        ? bulkEcomLiveResults.filter(r => r.ok).length
+        : (bulkEcomResult?.okCount ?? bulkEcomLiveResults.filter(r => r.ok).length);
+    const bulkEcomDisplayFailCount = bulkEcomRunning
+        ? bulkEcomLiveResults.filter(r => !r.ok).length
+        : (bulkEcomResult?.failCount ?? bulkEcomLiveResults.filter(r => !r.ok).length);
+    const bulkEcomDisplayLabelUrls = bulkEcomDisplayResults.filter(r => r.ok && r.labelUrl).map(r => r.labelUrl);
     // Mở trang in của Nhanh cho đúng các đơn truyền vào (mẫu từ báo cáo
     // cũ), rồi popup list các đơn vừa in: khổ A thì list mã vận đơn,
     // khổ K80 thì list ID đơn. Dùng chung cho: in đơn đã tick, in 1 đơn
@@ -2992,6 +3183,11 @@ export default function OrderReport() {
                                                         {ecomLabelUrl && (
                                                             <button onClick={() => window.open(ecomLabelUrl, '_blank')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Printer size={15} /> In phiếu gửi (PDF)</button>
                                                         )}
+                                                        {!ecomLabelUrl && !ecomSending && (ecomTracking || (ecomMsg && ecomMsg.includes('Đã gửi'))) && (
+                                                            <button onClick={handleRelabelDetail} disabled={!!relabelLoadingIds[String(detailOrder.id)]} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center gap-2">
+                                                                {relabelLoadingIds[String(detailOrder.id)] && <RefreshCw size={14} className="animate-spin" />} Kéo lại nhãn
+                                                            </button>
+                                                        )}
                                                     </div>
                                                     {ecomTracking && (
                                                         <p className="text-sm text-slate-700">Mã vận đơn: <span className="font-mono font-bold text-slate-900">{ecomTracking}</span></p>
@@ -3226,31 +3422,42 @@ export default function OrderReport() {
                             <button onClick={() => setShowBulkEcomResultModal(false)} className="text-slate-300 hover:text-white"><XCircle size={20} /></button>
                         </div>
                         <div className="p-5 overflow-y-auto space-y-3">
+                            {bulkEcomRunning && (
+                                <div className="space-y-2">
+                                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div className="h-full bg-emerald-600 transition-all" style={{ width: `${bulkEcomProgress.total > 0 ? Math.round((bulkEcomProgress.done / bulkEcomProgress.total) * 100) : 0}%` }} />
+                                    </div>
+                                    <p className="text-sm font-medium text-slate-700">Đang gửi {bulkEcomProgress.done}/{bulkEcomProgress.total}{bulkEcomProgress.currentId ? ` — đơn #${bulkEcomProgress.currentId}...` : '...'}</p>
+                                    <button onClick={() => { bulkEcomStopRef.current = true; }} className="px-4 py-2 bg-white border border-red-300 text-red-600 text-sm font-bold rounded-lg hover:bg-red-50">Dừng</button>
+                                </div>
+                            )}
                             <p className="text-sm font-medium text-slate-700">
-                                Thành công <span className="font-bold text-green-700">{bulkEcomResult.okCount || 0}</span> đơn
-                                {(bulkEcomResult.failCount || 0) > 0 && (<> · Thất bại <span className="font-bold text-red-600">{bulkEcomResult.failCount}</span> đơn</>)}
-                                {(bulkEcomResult.skippedIds || []).length > 0 && (<> · Bỏ qua <span className="font-bold text-amber-700">{bulkEcomResult.skippedIds.length}</span> đơn không phải đơn sàn</>)}.
+                                Thành công <span className="font-bold text-green-700">{bulkEcomDisplayOkCount}</span> đơn
+                                {bulkEcomDisplayFailCount > 0 && (<> · Thất bại <span className="font-bold text-red-600">{bulkEcomDisplayFailCount}</span> đơn</>)}
+                                {(bulkEcomResult?.skippedIds || []).length > 0 && (<> · Bỏ qua <span className="font-bold text-amber-700">{(bulkEcomResult?.skippedIds || []).length}</span> đơn không phải đơn sàn</>)}.
                             </p>
-                            {(bulkEcomResult.skippedIds || []).length > 0 && (
+                            {(bulkEcomResult?.skippedIds || []).length > 0 && (
                                 <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-                                    Bỏ qua vì không phải đơn sàn (Shopee/TikTok/Lazada): {bulkEcomResult.skippedIds.join(', ')}
+                                    Bỏ qua vì không phải đơn sàn (Shopee/TikTok/Lazada): {(bulkEcomResult?.skippedIds || []).join(', ')}
                                 </p>
                             )}
-                            {(bulkEcomResult.results || []).filter(r => r.ok).length > 0 && (
+                            {bulkEcomDisplayResults.filter(r => r.ok).length > 0 && (
                                 <div className="space-y-1">
-                                    {(bulkEcomResult.results || []).filter(r => r.ok).map(r => (
-                                        <p key={r.orderId} className="text-sm text-slate-600">Đơn #{r.orderId}: mã vận đơn <span className="font-mono font-bold text-slate-800">{r.trackingNumber || 'không rõ'}</span>{r.existed ? ' (đã gửi từ trước)' : ''}{r.labelUrl ? (<> · <button onClick={() => window.open(r.labelUrl, '_blank')} className="font-bold text-blue-700 hover:underline">In phiếu</button></>) : (<span className="text-slate-400"> · không lấy được nhãn</span>)}</p>
-                                    ))}
+                                    {bulkEcomDisplayResults.filter(r => r.ok).map(r => renderEcomResultRow(r, handleRelabelBulk))}
                                 </div>
                             )}
-                            {(bulkEcomResult.results || []).filter(r => !r.ok).length > 0 && (
+                            {bulkEcomDisplayResults.filter(r => !r.ok).length > 0 && (
                                 <div className="space-y-1 border-t border-slate-200 pt-2">
-                                    {(bulkEcomResult.results || []).filter(r => !r.ok).map(r => (
-                                        <p key={r.orderId} className="text-sm text-red-600">Đơn #{r.orderId}: {r.error}</p>
-                                    ))}
+                                    {bulkEcomDisplayResults.filter(r => !r.ok).map(r => renderEcomResultRow(r, handleRelabelBulk))}
                                 </div>
                             )}
-                            {bulkEcomResult.message && <p className="text-sm text-red-600">{bulkEcomResult.message}</p>}
+                            {bulkEcomResult?.message && <p className="text-sm text-red-600">{bulkEcomResult.message}</p>}
+                            {bulkEcomDisplayLabelUrls.length >= 2 && (
+                                <button onClick={() => downloadMergedLabels(bulkEcomDisplayLabelUrls).catch(() => {})} disabled={mergingLabels} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">
+                                    {mergingLabels && <RefreshCw size={14} className="animate-spin" />} Tải tất cả phiếu (1 file PDF)
+                                </button>
+                            )}
+                            {mergeLabelsMsg && <p className="text-sm text-red-600">{mergeLabelsMsg}</p>}
                             <p className="text-xs text-slate-500">Mã vận đơn đã cập nhật ngay trong bảng; nhãn PDF mở trong tab mới.</p>
                         </div>
                     </div>
@@ -3315,11 +3522,16 @@ export default function OrderReport() {
                                 const okItems = items.filter(it => it.ok);
                                 const failItems = items.filter(it => !it.ok);
                                 const skipped = Array.isArray(entry.skipped_ids) ? entry.skipped_ids : [];
+                                // Mục đơn sàn: nhận diện theo item (it.orderId !== undefined),
+                                // không theo source — cả gửi 1 đơn (source 'detail') lẫn
+                                // gửi bulk (source 'toolbar') đều là đơn sàn nếu item là ecom.
+                                const isEcomEntry = items.some(it => it.orderId !== undefined);
+                                const ecomLabelUrls = items.filter(it => it.ok && it.labelUrl).map(it => it.labelUrl);
                                 return (
                                     <div key={entry.id} className="border border-slate-200 rounded-lg p-3 space-y-2">
                                         <div className="flex justify-between gap-3">
                                             <span className="text-sm font-bold text-slate-800">{fmtDateStr(entry.created_at)}</span>
-                                            <span className="text-xs text-slate-400 shrink-0">{entry.source === 'popup' ? 'Popup chi tiết' : entry.source === 'toolbar' ? 'Thanh công cụ' : (entry.source || '')}</span>
+                                            <span className="text-xs text-slate-400 shrink-0">{isEcomEntry ? 'Đơn sàn' : entry.source === 'popup' ? 'Popup chi tiết' : entry.source === 'toolbar' ? 'Thanh công cụ' : (entry.source || '')}</span>
                                         </div>
                                         <p className="text-sm text-slate-600">
                                             Thành công <span className="font-bold text-green-700">{entry.ok_count}</span>
@@ -3327,31 +3539,47 @@ export default function OrderReport() {
                                             {entry.skipped_count > 0 && (<> · Bỏ qua <span className="font-bold text-amber-700">{entry.skipped_count}</span> đơn không phải kênh Admin</>)}
                                         </p>
                                         {okItems.length > 0 && (
-                                            <p className="text-xs text-slate-500 break-words">Mã vận đơn: {okItems.map(it => it.carrierCode || `#${it.id}`).join(', ')}</p>
+                                            <p className="text-xs text-slate-500 break-words">Mã vận đơn: {isEcomEntry ? (okItems.map(it => it.trackingNumber).filter(Boolean).join(', ') || 'chưa có') : okItems.map(it => it.carrierCode || `#${it.id}`).join(', ')}</p>
                                         )}
-                                        {failItems.length > 0 && (
+                                        {isEcomEntry ? (
+                                            <div className="space-y-1">
+                                                {items.map(it => renderEcomResultRow(it, (oid) => handleRelabelHistory(oid)))}
+                                            </div>
+                                        ) : (failItems.length > 0 && (
                                             <div className="space-y-0.5">
                                                 {failItems.map(it => (
-                                                    <p key={it.id} className="text-xs text-red-600">Đơn #{it.id}: {it.message}</p>
+                                                    <p key={it.id} className="text-xs text-red-600">Đơn #{it.id}: {it.error || it.message}</p>
                                                 ))}
                                             </div>
-                                        )}
+                                        ))}
                                         {skipped.length > 0 && (
                                             <p className="text-xs text-amber-800">Bỏ qua: {skipped.join(', ')}</p>
                                         )}
-                                        <div className="flex gap-2 pt-1">
-                                            <button
-                                                disabled={okItems.length === 0}
-                                                onClick={() => openNhanhPrint(okItems.map(it => ({ id: it.id, carrier_code: it.carrierCode || '' })), 'A4')}
-                                                className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1"
-                                            ><Printer size={13} /> In lại (A4/A5)</button>
-                                            <button
-                                                disabled={okItems.length === 0}
-                                                onClick={() => openNhanhPrint(okItems.map(it => ({ id: it.id, carrier_code: it.carrierCode || '' })), 'K80')}
-                                                className="px-3 py-1.5 bg-white border border-slate-300 text-xs font-bold rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1"
-                                            ><Printer size={13} /> In lại (K80)</button>
-                                        </div>
-                                        {okItems.length > 0 && <BillPrintButtons small items={okItems.map(it => ({ id: it.id, carrier_code: it.carrierCode || '' }))} />}
+                                        {!isEcomEntry && (
+                                            <>
+                                                <div className="flex gap-2 pt-1">
+                                                    <button
+                                                        disabled={okItems.length === 0}
+                                                        onClick={() => openNhanhPrint(okItems.map(it => ({ id: it.id, carrier_code: it.carrierCode || '' })), 'A4')}
+                                                        className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1"
+                                                    ><Printer size={13} /> In lại (A4/A5)</button>
+                                                    <button
+                                                        disabled={okItems.length === 0}
+                                                        onClick={() => openNhanhPrint(okItems.map(it => ({ id: it.id, carrier_code: it.carrierCode || '' })), 'K80')}
+                                                        className="px-3 py-1.5 bg-white border border-slate-300 text-xs font-bold rounded-lg hover:bg-slate-50 disabled:opacity-50 flex items-center gap-1"
+                                                    ><Printer size={13} /> In lại (K80)</button>
+                                                </div>
+                                                {okItems.length > 0 && <BillPrintButtons small items={okItems.map(it => ({ id: it.id, carrier_code: it.carrierCode || '' }))} />}
+                                            </>
+                                        )}
+                                        {isEcomEntry && ecomLabelUrls.length >= 2 && (
+                                            <div className="flex gap-2 pt-1">
+                                                <button onClick={() => downloadMergedLabels(ecomLabelUrls).catch(() => {})} disabled={mergingLabels} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1">
+                                                    {mergingLabels && <RefreshCw size={13} className="animate-spin" />} Tải tất cả phiếu (1 file PDF)
+                                                </button>
+                                            </div>
+                                        )}
+                                        {isEcomEntry && mergeLabelsMsg && <p className="text-xs text-red-600">{mergeLabelsMsg}</p>}
                                     </div>
                                 );
                             })}
