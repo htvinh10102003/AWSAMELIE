@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, ChevronLeft, ChevronRight, Loader2, Package, Copy, FileDown, Pencil } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Package, Copy, FileDown, Pencil, ScanLine, X } from 'lucide-react';
 import { mapReturnProduct, buildInventoryIndex } from '../lib/tiktokProductMap';
 
 const NHANH_STATUS_NAMES = {
@@ -101,26 +101,88 @@ function stripTrailingR(appOrderId) {
   return String(appOrderId).replace(/R$/, '');
 }
 
+// --- Đối chiếu hàng loạt: hãng theo đầu mã vận đơn ---
+// Kiểm tra tiền tố dài trước (SPX, VTP) rồi mới tới tiền tố 1 ký tự (8, G, 1).
+const CARRIER_BY_PREFIX = [
+  { prefix: 'SPX', name: 'SPX (Shopee Express)' },
+  { prefix: 'VTP', name: 'Viettel Post' },
+  { prefix: '8', name: 'J&T Express' },
+  { prefix: 'G', name: 'GHN' },
+  { prefix: '1', name: 'GHTK' },
+];
+function carrierOf(code) {
+  const c = String(code || '').trim().toUpperCase();
+  for (const { prefix, name } of CARRIER_BY_PREFIX) {
+    if (c && c.startsWith(prefix)) return name;
+  }
+  return 'Hãng khác';
+}
+
+// --- Phân tích đoạn text kết quả AfterShip dán vào ---
+// Mỗi đơn 1 khối, tách bằng dòng phân cách ==== (20+ dấu =); bỏ footer
+// "Powered by www.aftership.com/track" và khối trống. Chỉ đọc 3 dòng đầu:
+// Tracking number / Shipment status / Delivery date.
+const MONTHS_EN = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+function parseDeliveryDate(raw) {
+  // "Nov 7, 2026 (Sat)" -> bỏ phần trong ngoặc, tách tháng/tên theo tay để
+  // khỏi lệch ngày do múi giờ (Date.parse hiểu "Nov 7, 2026" là nửa đêm
+  // giờ địa phương; trình duyệt +07 sẽ lùi về ngày 6 khi đọc bằng UTC).
+  const cleaned = String(raw || '').split('\n')[0].replace(/\([^)]*\)/g, '').trim();
+  const m = cleaned.match(/^([A-Za-z]+)\s+(\d{1,2}),\s*(\d{4})$/);
+  if (!m) return null;
+  const month = MONTHS_EN[m[1].toLowerCase().slice(0, 3)];
+  if (month === undefined) return null;
+  const p = (n) => String(n).padStart(2, '0');
+  return `${m[3]}-${p(month + 1)}-${p(Number(m[2]))}`;
+}
+function parseAftershipText(text) {
+  const blocks = String(text || '')
+    .split(/={20,}/)
+    .map((b) => b.replace(/Powered by www\.aftership\.com\/track/gi, '').trim())
+    .filter(Boolean);
+  const results = [];
+  for (const block of blocks) {
+    const trackM = block.match(/Tracking number:\s*(\S+)/i);
+    if (!trackM) continue;
+    const statusM = block.match(/Shipment status:\s*(.+)/i);
+    const dateM = block.match(/Delivery date:\s*(.+)/i);
+    const tracking = trackM[1].trim();
+    const shipStatus = statusM ? statusM[1].split('\n')[0].trim() : '';
+    const delivered = shipStatus.toLowerCase() === 'delivered';
+    let receivedDate = null;
+    if (delivered && dateM) {
+      receivedDate = parseDeliveryDate(dateM[1]);
+      if (!receivedDate) {
+        // Dự phòng: thử Date.parse rồi format bằng UTC getters.
+        const ms = Date.parse(dateM[1].split('\n')[0].replace(/\([^)]*\)/g, '').trim());
+        if (!isNaN(ms)) {
+          const d = new Date(ms);
+          const p = (n) => String(n).padStart(2, '0');
+          receivedDate = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+        }
+      }
+    }
+    results.push({ tracking, shipStatus, delivered, receivedDate });
+  }
+  return results;
+}
+
 // Cột bảng: % cố định (table-fixed + colgroup) để khớp với strip tiêu đề
 // gộp vào cụm lọc phía trên. Cả 2 bảng nhóm dùng chung 1 bộ cột.
+// 11 cột gộp (tổng 100%): mỗi cột đủ rộng cho nội dung nowrap của nó
+// (ngày giờ, mã, loại trả) để chữ không tràn sang cột bên cạnh.
 const COLS = [
-  { id: 'code', label: 'Mã vận đơn trả', w: 8 },
-  { id: 'return_id', label: 'Mã đơn trả', w: 7 },
-  { id: 'orig', label: 'Mã đơn gốc', w: 7 },
-  { id: 'nhanhId', label: 'ID đơn Nhanh', w: 6 },
-  { id: 'platform', label: 'Sàn', w: 4 },
-  { id: 'shop', label: 'Shop', w: 5 },
-  { id: 'type', label: 'Loại trả', w: 5 },
-  { id: 'reason', label: 'Lý do', w: 6 },
-  { id: 'nhanh', label: 'Trạng thái Nhanh', w: 6 },
-  { id: 'ecom', label: 'Trạng thái sàn', w: 5 },
-  { id: 'money', label: 'Tiền hoàn', w: 6 },
-  { id: 'product', label: 'Sản phẩm', w: 8 },
-  { id: 'created', label: 'Ngày tạo', w: 5 },
-  { id: 'updated', label: 'Ngày cập nhật', w: 5 },
-  { id: 'recvDate', label: 'Ngày hàng về', w: 4 },
-  { id: 'recvStatus', label: 'Trạng thái nhận', w: 4 },
-  { id: 'edit', label: 'Sửa', w: 9 },
+  { id: 'code', label: 'Mã vận đơn', w: 11 },
+  { id: 'order', label: 'Mã đơn', w: 10 },
+  { id: 'platform', label: 'Sàn · Shop', w: 10 },
+  { id: 'type', label: 'Loại trả', w: 10 },
+  { id: 'reason', label: 'Lý do', w: 8 },
+  { id: 'status', label: 'Trạng thái', w: 9 },
+  { id: 'money', label: 'Tiền hoàn', w: 7 },
+  { id: 'product', label: 'Sản phẩm', w: 10 },
+  { id: 'dates', label: 'Ngày', w: 11 },
+  { id: 'recv', label: 'Nhận hàng', w: 7 },
+  { id: 'edit', label: 'Sửa', w: 7 },
 ];
 const gridCols = COLS.map((c) => `${c.w}%`).join(' ');
 
@@ -161,6 +223,15 @@ export default function BaoCaoHoanChuaNhan() {
   const [toast, setToast] = useState('');
   const [exporting, setExporting] = useState(false);
   const [exportMsg, setExportMsg] = useState('');
+  // --- Đối chiếu hàng loạt (chỉ owner) ---
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkPage, setBulkPage] = useState(1);
+  const [bulkCarrier, setBulkCarrier] = useState('');
+  const [pasteText, setPasteText] = useState('');
+  const [bulkPreview, setBulkPreview] = useState(null);
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState('');
+  const [bulkError, setBulkError] = useState('');
 
   const filters = applied || { updFrom, updTo, crtFrom, crtTo, platform, shop, search };
 
@@ -312,6 +383,7 @@ export default function BaoCaoHoanChuaNhan() {
   function handleFilter() {
     setPageDoi(1);
     setPageCho(1);
+    setBulkPage(1);
     setApplied({ updFrom, updTo, crtFrom, crtTo, platform, shop, search });
   }
 
@@ -488,6 +560,116 @@ export default function BaoCaoHoanChuaNhan() {
     }
   }
 
+  // --- Đối chiếu hàng loạt (chỉ owner) ---
+  const BULK_PAGE_SIZE = 50;
+  // Toàn bộ tập chưa nhận theo bộ lọc (cả 2 nhóm), giữ đúng thứ tự
+  // return_updated_at desc như bảng (allRows đã xếp sẵn khi tải).
+  const bulkRows = useMemo(() => allRows.filter((r) => !hasPartial(r)), [allRows, partialOriginalIds, partialAppOrderIdsNoR]);
+  const bulkTotalPages = Math.max(1, Math.ceil(bulkRows.length / BULK_PAGE_SIZE));
+  const safeBulkPage = Math.min(bulkPage, bulkTotalPages);
+  const bulkPageRows = bulkRows.slice((safeBulkPage - 1) * BULK_PAGE_SIZE, safeBulkPage * BULK_PAGE_SIZE);
+  // Nhóm trang hiện tại theo hãng (tab hiển thị theo thứ tự SPX, J&T, GHN,
+  // GHTK, Viettel Post, Hãng khác; chỉ hãng nào có đơn mới hiện).
+  const bulkPageCarriers = useMemo(() => {
+    const map = new Map();
+    for (const r of bulkPageRows) {
+      const name = carrierOf(returnCodeOf(r) || r.return_tracking_number || '');
+      if (!map.has(name)) map.set(name, []);
+      map.get(name).push(r);
+    }
+    const order = ['SPX (Shopee Express)', 'J&T Express', 'GHN', 'GHTK', 'Viettel Post', 'Hãng khác'];
+    return order.filter((n) => map.has(n)).map((n) => ({ name: n, rows: map.get(n) }));
+  }, [bulkPageRows]);
+  const activeBulkCarrier = bulkPageCarriers.find((c) => c.name === bulkCarrier) || bulkPageCarriers[0] || null;
+
+  function openBulk() {
+    setBulkPage(1);
+    setBulkCarrier('');
+    setPasteText('');
+    setBulkPreview(null);
+    setBulkMsg('');
+    setBulkError('');
+    setShowBulk(true);
+  }
+  function closeBulk() {
+    setShowBulk(false);
+    setBulkPreview(null);
+    setBulkMsg('');
+    setBulkError('');
+  }
+
+  // Đọc đoạn dán -> xem trước (chưa ghi gì cả). Khớp theo mã vận đơn
+  // (trim + uppercase 2 bên) với TOÀN BỘ tập chưa nhận, không chỉ trang này.
+  function handleBulkPreview() {
+    setBulkMsg('');
+    setBulkError('');
+    if (!pasteText.trim()) {
+      setBulkPreview(null);
+      setBulkError('Dán kết quả AfterShip vào ô trước.');
+      return;
+    }
+    const parsed = parseAftershipText(pasteText);
+    if (parsed.length === 0) {
+      setBulkPreview(null);
+      setBulkError('Không đọc được mã vận đơn nào trong đoạn đã dán — kiểm tra lại định dạng AfterShip.');
+      return;
+    }
+    const byCode = new Map();
+    for (const r of bulkRows) {
+      const code = String(returnCodeOf(r) || r.return_tracking_number || '').trim().toUpperCase();
+      if (code && !byCode.has(code)) byCode.set(code, r);
+    }
+    // Mã trùng trong 1 lần dán: lần xuất hiện sau thắng.
+    const seen = new Map();
+    for (const p of parsed) seen.set(p.tracking.trim().toUpperCase(), p);
+    const matched = [];
+    const unmatched = [];
+    for (const [, p] of seen) {
+      const row = byCode.get(p.tracking.trim().toUpperCase());
+      if (row) matched.push({ ...p, row });
+      else unmatched.push(p);
+    }
+    setBulkPreview({ matched, unmatched });
+  }
+
+  // Ghi xem trước vào return_receipt_checks. Chỉ đơn có trong đoạn dán
+  // mới bị chạm tới (lần dán mới nhất thắng với những đơn đó); đơn nào
+  // không có trong đoạn dán thì để nguyên. Ghi xong map kiểm tay cập nhật
+  // trong bộ nhớ nên các đơn tự nhảy nhóm ngay, không cần tải lại trang.
+  async function handleBulkConfirm() {
+    if (!bulkPreview || bulkPreview.matched.length === 0 || bulkSaving) return;
+    setBulkSaving(true);
+    setBulkMsg('');
+    setBulkError('');
+    try {
+      const payloads = bulkPreview.matched.map(({ row, delivered, receivedDate }) => ({
+        return_id: row.return_id,
+        received_date: delivered ? receivedDate : null,
+        received_status: delivered ? 'Đã nhận' : 'Chưa nhận',
+        updated_by: userEmail || '',
+        updated_at: new Date().toISOString(),
+      }));
+      const { error: err } = await supabase.from('return_receipt_checks').upsert(payloads, { onConflict: 'return_id' });
+      if (err) throw err;
+      setManualChecks((prev) => {
+        const next = new Map(prev);
+        for (const p of payloads) {
+          next.set(p.return_id, { return_id: p.return_id, received_date: p.received_date, received_status: p.received_status });
+        }
+        return next;
+      });
+      const nNhan = payloads.filter((p) => p.received_status === 'Đã nhận').length;
+      const nChua = payloads.length - nNhan;
+      setBulkMsg(`Đã cập nhật ${payloads.length} đơn: ${nNhan} Đã nhận, ${nChua} Chưa nhận.${bulkPreview.unmatched.length > 0 ? ` ${bulkPreview.unmatched.length} mã không khớp.` : ''}`);
+      setBulkPreview(null);
+      setPasteText('');
+    } catch (e) {
+      setBulkError('Lỗi cập nhật: ' + (e.message || e));
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
   function renderRow(r) {
     const prods = productsOf(r);
     const first = prods[0];
@@ -496,40 +678,70 @@ export default function BaoCaoHoanChuaNhan() {
     const editing = editRowId === r.return_id;
     const draft = editDrafts[r.return_id] || {};
     const reasonDesc = r.raw_data?.reasonInfor?.reasonDescription || r.raw_data?.reasonDescription || '';
+    const reasonFull = [r.reason_name || '', reasonDesc].filter(Boolean).join(' — ') || '—';
     return (
       <tr key={r.return_id} className="border-t border-slate-100 hover:bg-slate-50">
-        <td className="px-3 py-3 font-mono font-bold text-indigo-700 break-all">{returnCodeOf(r) || r.return_tracking_number || '—'}</td>
-        <td className="px-3 py-3 font-mono break-all">{r.return_id || '—'}</td>
-        <td className="px-3 py-3 font-mono break-all">{r.original_ecom_order_id || '—'}</td>
-        <td className="px-3 py-3 font-mono break-all">{r.raw_data?.nhanhOrderId ?? '—'}</td>
-        <td className="px-3 py-3 whitespace-nowrap">{r.platform_name || '—'}</td>
-        <td className="px-3 py-3 font-mono break-all">{r.shop_id || '—'}</td>
-        <td className="px-3 py-3">{RETURN_TYPE_NAMES[r.return_type] || '—'}</td>
-        <td className="px-3 py-3">
-          {r.reason_name || '—'}
-          {reasonDesc && (<span className="block text-xs text-slate-500 mt-0.5">{reasonDesc}</span>)}
+        {/* Mã vận đơn trả + ID đơn Nhanh */}
+        <td className="px-3 py-3.5 min-w-0">
+          <div className="font-mono font-bold text-indigo-700 break-all leading-snug">{returnCodeOf(r) || r.return_tracking_number || '—'}</div>
+          <div className="font-mono text-xs text-slate-400 mt-0.5">{r.raw_data?.nhanhOrderId ?? '—'}</div>
         </td>
-        <td className="px-3 py-3 whitespace-nowrap">
-          <span className={`px-2 py-1 rounded-full text-xs font-bold ${NHANH_STATUS_BADGE[r.nhanh_status_id] || 'bg-slate-100 text-slate-700'}`}>
+        {/* Mã đơn: mã trả + mã gốc */}
+        <td className="px-3 py-3.5 min-w-0">
+          <div className="font-mono text-xs break-all leading-snug">{r.return_id || '—'}</div>
+          <div className="font-mono text-xs text-slate-500 break-all leading-snug mt-0.5">{r.original_ecom_order_id || '—'}</div>
+        </td>
+        {/* Sàn · Shop: tên sàn + mã shop đầy đủ (shop dài tự xuống dòng trong ô) */}
+        <td className="px-3 py-3.5 min-w-0">
+          <span className="font-bold whitespace-nowrap">{r.platform_name || '—'}</span>{' '}
+          <span className="font-mono text-xs text-slate-500 break-all">· {r.shop_id || '—'}</span>
+        </td>
+        {/* Loại trả: chữ ngắn, không xuống dòng */}
+        <td className="px-2 py-3.5 whitespace-nowrap text-xs font-bold">{RETURN_TYPE_NAMES[r.return_type] || '—'}</td>
+        {/* Lý do: kẹp tối đa 2 dòng, xem đủ ở title */}
+        <td className="px-3 py-3.5 min-w-0">
+          <div className="line-clamp-2 leading-snug" title={reasonFull}>{reasonFull}</div>
+        </td>
+        {/* Trạng thái: Nhanh trên, sàn dưới */}
+        <td className="px-3 py-3.5 min-w-0">
+          <span className={`inline-block px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap ${NHANH_STATUS_BADGE[r.nhanh_status_id] || 'bg-slate-100 text-slate-700'}`}>
             {r.nhanh_status_name || NHANH_STATUS_NAMES[r.nhanh_status_id] || '—'}
           </span>
+          <div className="text-xs text-slate-500 mt-1 break-words leading-snug">{r.ecom_status_name || '—'}</div>
         </td>
-        <td className="px-3 py-3">{r.ecom_status_name || '—'}</td>
-        <td className="px-3 py-3 text-right font-mono font-bold">{fmtMoney(r.amount)}</td>
-        <td className="px-3 py-3">
+        <td className="px-3 py-3.5 text-right font-mono font-bold whitespace-nowrap">{fmtMoney(r.amount)}</td>
+        {/* Sản phẩm: tên map kẹp 2 dòng + SL; tên gốc kẹp 1 dòng (bỏ khi trùng tên map) */}
+        <td className="px-3 py-3.5 min-w-0">
           {mappedFirst && first && mappedFirst !== first.name ? (
-            <span><span className="font-bold text-slate-900">{mappedFirst}</span><span className="block text-xs text-slate-500">{first.name}{prods.length > 1 ? ` (+${prods.length - 1} SP)` : ''}</span></span>
-          ) : first ? (<span>{first.name}{prods.length > 1 ? ` (+${prods.length - 1} SP)` : ''}</span>) : '—'}
+            <>
+              <div className="font-bold text-slate-900 line-clamp-2 leading-snug" title={mappedFirst}>{mappedFirst}</div>
+              <div className="text-xs text-slate-500 line-clamp-1 leading-snug" title={first.name}>{first.name}</div>
+              <div className="text-xs text-slate-500 mt-0.5 whitespace-nowrap">SL {totalQty(r)}{prods.length > 1 ? ` · +${prods.length - 1} SP` : ''}</div>
+            </>
+          ) : first ? (
+            <>
+              <div className="line-clamp-2 leading-snug" title={first.name}>{first.name}</div>
+              <div className="text-xs text-slate-500 mt-0.5 whitespace-nowrap">SL {totalQty(r)}{prods.length > 1 ? ` · +${prods.length - 1} SP` : ''}</div>
+            </>
+          ) : '—'}
         </td>
-        <td className="px-3 py-3 whitespace-nowrap">{fmtDateTime(r.return_created_at)}</td>
-        <td className="px-3 py-3 whitespace-nowrap">{fmtDateTime(r.return_updated_at)}</td>
-        <td className="px-3 py-3 whitespace-nowrap">{m?.received_date ? fmtDateOnly(m.received_date) : '—'}</td>
-        <td className="px-3 py-3 whitespace-nowrap">
+        {/* Ngày: tạo + cập nhật, mỗi dòng 1 block riêng. Trước đây 2 cột 5%
+            quá hẹp nên chuỗi ngày nowrap tràn sang cột bên cạnh và chồng chữ;
+            giờ gộp 1 cột 11% nên dòng dài nhất vừa đủ, không tràn nữa */}
+        <td className="px-2 py-3.5 min-w-0">
+          <div className="whitespace-nowrap text-xs leading-5"><span className="text-slate-400">Tạo</span> {fmtDateTime(r.return_created_at)}</div>
+          <div className="whitespace-nowrap text-xs leading-5"><span className="text-slate-400">Cập nhật</span> {fmtDateTime(r.return_updated_at)}</div>
+        </td>
+        {/* Nhận hàng: trạng thái trên, ngày về dưới */}
+        <td className="px-3 py-3.5 min-w-0">
           {m ? (
-            <span className={`px-2 py-1 rounded-full text-xs font-bold ${m.received_status === 'Đã nhận' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}`}>{m.received_status}</span>
+            <>
+              <span className={`inline-block px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap ${m.received_status === 'Đã nhận' ? 'bg-green-100 text-green-800 border border-green-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}`}>{m.received_status}</span>
+              <div className="text-xs text-slate-500 mt-1 whitespace-nowrap">{m.received_date ? fmtDateOnly(m.received_date) : '—'}</div>
+            </>
           ) : (<span className="text-slate-400 text-xs">Chưa kiểm</span>)}
         </td>
-        <td className="px-3 py-3">
+        <td className="px-3 py-3.5">
           {isOwner ? (editing ? (
             <div className="space-y-1 min-w-[110px]">
               <input
@@ -725,6 +937,14 @@ export default function BaoCaoHoanChuaNhan() {
         >
           <FileDown size={16} /> {exporting ? 'Đang tạo file...' : `Tải Excel (${groups.doi.length + groups.cho.length} đơn chưa nhận)`}
         </button>
+        {isOwner && (
+          <button
+            onClick={openBulk}
+            className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-2"
+          >
+            <ScanLine size={16} /> Đối chiếu hàng loạt
+          </button>
+        )}
         {exportMsg && <p className="text-sm font-bold text-slate-600">{exportMsg}</p>}
         {toast && <p className="text-sm font-bold text-emerald-600">{toast}</p>}
         {saveMsg && <p className="text-sm font-bold text-slate-600">{saveMsg}</p>}
@@ -753,6 +973,131 @@ export default function BaoCaoHoanChuaNhan() {
         totalPages: totalPagesCho,
         copyLabel: 'Đang chờ hàng về',
       })}
+
+      {/* Đối chiếu hàng loạt — popup copy theo hãng + dán kết quả AfterShip */}
+      {showBulk && isOwner && (
+        <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={closeBulk}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 bg-slate-900 text-white px-6 py-4 flex items-start justify-between gap-4 rounded-t-2xl">
+              <div>
+                <h2 className="text-lg font-bold">Đối chiếu hàng loạt</h2>
+                <p className="text-xs text-slate-300 mt-0.5">Copy mã vận đơn theo từng hãng đi check AfterShip, rồi dán kết quả vào để cập nhật trạng thái. Delivered → Đã nhận (kèm ngày giao), còn lại → Chưa nhận.</p>
+              </div>
+              <button onClick={closeBulk} className="p-2 rounded-lg hover:bg-slate-700 cursor-pointer flex-shrink-0" aria-label="Đóng">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-6 space-y-5">
+              {loading ? (
+                <div className="p-8 flex items-center justify-center gap-2 text-sm font-bold text-slate-500">
+                  <Loader2 size={18} className="animate-spin" /> Đang tải...
+                </div>
+              ) : bulkRows.length === 0 ? (
+                <p className="text-sm font-bold text-slate-600">Không có đơn chưa nhận nào theo bộ lọc hiện tại.</p>
+              ) : (
+                <>
+                  {/* Phân trang 50 đơn/trang */}
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-sm font-bold text-slate-700">Trang {safeBulkPage} / {bulkTotalPages} — tổng {bulkRows.length} đơn chưa nhận</span>
+                    <div className="flex gap-2">
+                      <button disabled={safeBulkPage <= 1} onClick={() => setBulkPage(safeBulkPage - 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1"><ChevronLeft size={14} /> Trước</button>
+                      <button disabled={safeBulkPage >= bulkTotalPages} onClick={() => setBulkPage(safeBulkPage + 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1">Sau <ChevronRight size={14} /></button>
+                    </div>
+                  </div>
+                  {/* Tab theo hãng — 1 hãng hiện 1 lúc */}
+                  <div className="flex flex-wrap gap-2">
+                    {bulkPageCarriers.map((c) => (
+                      <button
+                        key={c.name}
+                        onClick={() => setBulkCarrier(c.name)}
+                        className={`px-4 py-2 text-sm font-bold rounded-xl cursor-pointer ${activeBulkCarrier?.name === c.name ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}
+                      >
+                        {c.name} ({c.rows.length})
+                      </button>
+                    ))}
+                  </div>
+                  {activeBulkCarrier && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                        <h3 className="text-sm font-bold text-slate-900">{activeBulkCarrier.name} — {activeBulkCarrier.rows.length} đơn trên trang này</h3>
+                        <button onClick={() => copyCodes(activeBulkCarrier.rows, activeBulkCarrier.name)} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer flex items-center gap-2">
+                          <Copy size={15} /> Sao chép mã vận đơn ({activeBulkCarrier.rows.length})
+                        </button>
+                      </div>
+                      <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+                        {activeBulkCarrier.rows.map((r) => {
+                          const m = manualChecks.get(r.return_id);
+                          return (
+                            <div key={r.return_id} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                              <span className="font-mono font-bold text-indigo-700 break-all">{returnCodeOf(r) || r.return_tracking_number || '—'}</span>
+                              <span className="font-mono text-xs text-slate-500 break-all">{r.return_id || '—'}</span>
+                              <span className={`ml-auto text-xs font-bold ${m?.received_status === 'Đã nhận' ? 'text-green-700' : 'text-slate-500'}`}>
+                                {m?.received_status ? `${m.received_status}${m.received_date ? ` · ${fmtDateOnly(m.received_date)}` : ''}` : 'Chưa kiểm'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  <button onClick={() => copyCodes(bulkPageRows, 'trang hiện tại')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer flex items-center gap-2">
+                    <Copy size={15} /> Sao chép tất cả {bulkPageRows.length} mã
+                  </button>
+                  {/* Dán kết quả AfterShip */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Dán kết quả AfterShip vào đây</label>
+                    <textarea
+                      value={pasteText}
+                      onChange={(e) => setPasteText(e.target.value)}
+                      rows={8}
+                      placeholder={'Tracking number: 854169939715\nCourier name: J&T Express Vietnam\nShipment status: Delivered\nDelivery date: Nov 7, 2026 (Sat)\n\n===============================\n\nTracking number: 854169610860\nCourier name: J&T Express Vietnam\nShipment status: In transit'}
+                      className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-mono"
+                    />
+                    <div className="flex flex-wrap items-center gap-3 mt-2">
+                      <button onClick={handleBulkPreview} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer">Cập nhật trạng thái</button>
+                      {bulkError && <p className="text-sm font-bold text-red-500">{bulkError}</p>}
+                      {bulkMsg && <p className="text-sm font-bold text-emerald-600">{bulkMsg}</p>}
+                    </div>
+                  </div>
+                  {/* Xem trước — chưa ghi gì cả */}
+                  {bulkPreview && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                      <p className="text-sm font-bold text-slate-900">
+                        Xem trước — chưa lưu gì cả: tìm thấy {bulkPreview.matched.length} đơn, không khớp {bulkPreview.unmatched.length} mã.
+                      </p>
+                      {bulkPreview.matched.length > 0 && (
+                        <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
+                          {bulkPreview.matched.map((p) => (
+                            <div key={p.tracking} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                              <span className="font-mono font-bold text-indigo-700 break-all">{p.tracking}</span>
+                              <span className="text-xs text-slate-500">{p.shipStatus || '(không có trạng thái)'}</span>
+                              <span className={`ml-auto text-xs font-bold px-2 py-1 rounded-full ${p.delivered ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                                {p.delivered ? `Đã nhận${p.receivedDate ? ` · ${fmtDateOnly(p.receivedDate)}` : ''}` : 'Chưa nhận'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {bulkPreview.unmatched.length > 0 && (
+                        <div>
+                          <p className="text-xs font-bold text-slate-500 mb-1">Không khớp (không nằm trong danh sách chưa nhận theo bộ lọc):</p>
+                          <p className="font-mono text-xs text-slate-500 break-all">{bulkPreview.unmatched.map((p) => p.tracking).join(', ')}</p>
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={handleBulkConfirm} disabled={bulkSaving || bulkPreview.matched.length === 0} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md disabled:opacity-50 cursor-pointer">
+                          {bulkSaving ? 'Đang cập nhật...' : `Xác nhận cập nhật (${bulkPreview.matched.length} đơn)`}
+                        </button>
+                        <button onClick={() => setBulkPreview(null)} className="px-4 py-2.5 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer">Hủy xem trước</button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
