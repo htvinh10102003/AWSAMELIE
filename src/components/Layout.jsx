@@ -36,6 +36,7 @@ const ROUTE_TO_FEATURE_MAP = {
   '/xu-ly-don-hoan': { parent: 'return_orders', sub: 'xu_ly_don_hoan' },
   '/kiem-tra-don-hoan': { parent: 'return_orders', sub: 'kiem_tra_don_hoan' },
   '/tra-hang-hoan-tien': { parent: 'return_orders', sub: 'tra_hang_hoan_tien' },
+  '/bao-cao-hoan-chua-nhan': { parent: 'return_orders', sub: 'bao_cao_hoan_chua_nhan' },
 
   '/thong-ke-kiem-ke': { parent: 'inventory_check', sub: 'thong_ke_kiem_ke' },
   '/danh-sach-kiem-ke': { parent: 'inventory_check', sub: 'danh_sach_kiem_ke' },
@@ -398,7 +399,8 @@ export default function Layout() {
             { path: '/bao-cao-hoan-tong-hop', label: 'Tổng hợp đơn hoàn', icon: BarChart3 },
             { path: '/xu-ly-don-hoan', label: 'Xử lý Đơn hoàn', icon: PackageMinus },
             { path: '/kiem-tra-don-hoan', label: 'Kiểm tra & Chốt SL', icon: ScanLine },
-            { path: '/tra-hang-hoan-tien', label: 'Trả hàng hoàn tiền', icon: Undo2 }
+            { path: '/tra-hang-hoan-tien', label: 'Trả hàng hoàn tiền', icon: Undo2 },
+            { path: '/bao-cao-hoan-chua-nhan', label: 'Đơn hoàn chưa nhận', icon: PackageSearch }
           ]
         },
         {

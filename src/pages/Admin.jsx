@@ -93,6 +93,12 @@ export default function Admin() {
   const [nhanhDaysLeft, setNhanhDaysLeft] = useState(null);
   const hasWarnedNhanh = useRef(false);
 
+  // --- MÃ VERIFY WEBHOOK NHANH.VN (edge nhanh-webhook đối chiếu) ---
+  const [webhookToken, setWebhookToken] = useState('');
+  const [webhookTokenSaved, setWebhookTokenSaved] = useState(false);
+  const [webhookTokenMsg, setWebhookTokenMsg] = useState('');
+  const [webhookTokenLoading, setWebhookTokenLoading] = useState(false);
+
   // --- FILTER & PRIORITY ---
   const [filterConfigs, setFilterConfigs] = useState({ allowed_statuses: [] });
   const [statusList, setStatusList] = useState([]);
@@ -247,6 +253,11 @@ export default function Admin() {
           nhanh_business_id: configMap['nhanh_business_id'] || '',
           nhanh_secret_key: configMap['nhanh_secret_key'] || ''
       }));
+
+      if (configMap['nhanh_webhook_verify_token']) {
+        setWebhookToken(configMap['nhanh_webhook_verify_token']);
+        setWebhookTokenSaved(true);
+      }
 
       if (configMap['nhanh_token_updated_at']) {
         const updatedDate = new Date(configMap['nhanh_token_updated_at']);
@@ -539,6 +550,28 @@ export default function Admin() {
       setApiConfigs(prev => ({ ...prev, nhanh_access_code: '', nhanh_verify_code: freshVc }));
       setNhanhDaysLeft(365);
     } catch (error) { setApiMessage(' Lỗi: ' + error.message); } finally { setApiLoading(false); }
+  };
+
+  // Lưu / xóa mã verify webhook (lưu thẳng system_configs, không qua nhanh-auth).
+  const handleSaveWebhookToken = async () => {
+    const token = (webhookToken || '').trim();
+    if (!token) { setWebhookTokenMsg('Nhập mã trước khi lưu.'); return; }
+    setWebhookTokenLoading(true); setWebhookTokenMsg('');
+    try {
+      const { error } = await supabase.from('system_configs').upsert({ key: 'nhanh_webhook_verify_token', value: token }, { onConflict: 'key' });
+      if (error) throw error;
+      setWebhookTokenSaved(true);
+      setWebhookTokenMsg('Đã lưu mã verify webhook.');
+    } catch (e) { setWebhookTokenMsg('Lỗi: ' + (e.message || e)); } finally { setWebhookTokenLoading(false); }
+  };
+  const handleClearWebhookToken = async () => {
+    setWebhookTokenLoading(true); setWebhookTokenMsg('');
+    try {
+      const { error } = await supabase.from('system_configs').delete().eq('key', 'nhanh_webhook_verify_token');
+      if (error) throw error;
+      setWebhookToken(''); setWebhookTokenSaved(false);
+      setWebhookTokenMsg('Đã xóa mã — webhook chạy không kiểm tra.');
+    } catch (e) { setWebhookTokenMsg('Lỗi: ' + (e.message || e)); } finally { setWebhookTokenLoading(false); }
   };
 
   const handleStatusToggle = (statusId) => {
@@ -1146,6 +1179,7 @@ export default function Admin() {
             {apiMessage && <div className={`p-4 mb-6 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${apiMessage.includes('') ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200'}`}><CheckCircle2 size={18}/> {apiMessage}</div>}
             
             {canEditSensitiveConfig ? (
+              <>
               <form onSubmit={handleSaveApi} className="space-y-5">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div>
@@ -1182,6 +1216,21 @@ export default function Admin() {
                   </div>
                 </div>
               </form>
+              {/* Mã verify webhook Nhanh.vn: edge nhanh-webhook đối chiếu header
+                  Authorization (hoặc body webhooksVerifyToken) với mã này.
+                  Chưa lưu mã thì webhook chạy không kiểm tra (fail open). */}
+              <div className="mt-5 p-5 sm:p-6 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block flex items-center gap-1.5"><KeyRound size={14}/> Mã Verify Webhook (Nhanh.vn)</label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input type="password" value={webhookToken} onChange={(e) => setWebhookToken(e.target.value)} placeholder="Dán mã verify token trong cài đặt app Nhanh.vn..." className="flex-1 px-4 py-3 border border-slate-200 rounded-xl text-sm bg-white outline-none font-mono focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700" />
+                    <button type="button" onClick={handleSaveWebhookToken} disabled={webhookTokenLoading} className="px-4 py-3 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition whitespace-nowrap disabled:opacity-50 flex items-center justify-center gap-2">{webhookTokenLoading ? <Loader2 size={15} className="animate-spin" /> : <SaveIcon />} Lưu mã</button>
+                    {webhookTokenSaved && <button type="button" onClick={handleClearWebhookToken} disabled={webhookTokenLoading} className="px-4 py-3 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-xl hover:bg-slate-50 transition whitespace-nowrap disabled:opacity-50">Xóa mã</button>}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2 leading-relaxed">{webhookTokenSaved ? 'Đã lưu mã — webhook sẽ từ chối mọi yêu cầu không đúng mã này.' : 'Chưa lưu mã — webhook đang chạy không kiểm tra (mọi sự kiện đều được nhận).'} {webhookTokenMsg}</p>
+                </div>
+              </div>
+              </>
             ) : (
               <LockedFeature msg="Chỉ Chủ sở hữu (Owner) hoặc Super Admin mới được quyền thay đổi cấu hình kết nối Nhanh.vn." />
             )}
