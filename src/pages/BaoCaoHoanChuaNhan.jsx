@@ -257,6 +257,10 @@ export default function BaoCaoHoanChuaNhan() {
   const [historyError, setHistoryError] = useState('');
   const [historyFilter, setHistoryFilter] = useState('');
   const [historyWarn, setHistoryWarn] = useState('');
+  // Đơn đã check trong ngày hôm nay (theo bảng lịch sử kiểm nhận) — để
+  // bỏ khỏi popup đối chiếu, khỏi check đi check lại. Sang hôm sau đơn
+  // Chưa nhận lại hiện để check tiếp; Đã nhận thì ẩn hẳn như cũ.
+  const [checkedTodayIds, setCheckedTodayIds] = useState(new Set());
 
   const filters = applied || { updFrom, updTo, crtFrom, crtTo, platform, shop, search };
 
@@ -603,11 +607,14 @@ export default function BaoCaoHoanChuaNhan() {
   // return_updated_at desc như bảng (allRows đã xếp sẵn khi tải).
   // Chỉ đơn chưa có trạng thái cuối mới hiện trong popup đối chiếu: đơn
   // Đã nhận (và đơn đã có đơn hoàn 1 phần) bị loại khỏi danh sách — xong
-  // là biến mất, dữ liệu trang sau tự đôn lên. Bảng chính không đổi:
-  // nhóm "Cần đi đòi" vẫn hiện đơn Đã nhận để đi đòi.
+  // là biến mất, dữ liệu trang sau tự đôn lên. Thêm nữa: đơn nào hôm nay
+  // đã check rồi (có dòng trong bảng lịch sử từ 00:00 VN hôm nay) cũng
+  // bỏ qua luôn, khỏi check đi check lại; sang hôm sau đơn Chưa nhận lại
+  // hiện để check tiếp. Bảng chính không đổi: nhóm "Cần đi đòi" vẫn hiện
+  // đơn Đã nhận để đi đòi.
   const bulkRows = useMemo(
-    () => allRows.filter((r) => !hasPartial(r) && manualChecks.get(r.return_id)?.received_status !== 'Đã nhận'),
-    [allRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR]
+    () => allRows.filter((r) => !hasPartial(r) && manualChecks.get(r.return_id)?.received_status !== 'Đã nhận' && !checkedTodayIds.has(r.return_id)),
+    [allRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR, checkedTodayIds]
   );
   const bulkTotalPages = Math.max(1, Math.ceil(bulkRows.length / BULK_PAGE_SIZE));
   const safeBulkPage = Math.min(bulkPage, bulkTotalPages);
@@ -671,6 +678,7 @@ export default function BaoCaoHoanChuaNhan() {
     setBulkPreview(null);
     setBulkMsg('');
     setBulkError('');
+    fetchCheckedToday();
     setShowBulk(true);
   }
   function closeBulk() {
@@ -678,6 +686,26 @@ export default function BaoCaoHoanChuaNhan() {
     setBulkPreview(null);
     setBulkMsg('');
     setBulkError('');
+  }
+
+  // Đơn đã check trong ngày hôm nay (lấy từ bảng lịch sử kiểm nhận,
+  // checked_at từ 00:00 VN hôm nay). Bảng chưa tạo thì coi như chưa có
+  // đơn nào đã check — không sập popup. Sửa tay từng dòng cũng ghi lịch
+  // sử nên cũng tính là "đã check hôm nay" khi mở popup lần sau.
+  async function fetchCheckedToday() {
+    try {
+      const todayStart = `${vnTodayStr()}T00:00:00+07:00`;
+      const { data, error } = await supabase
+        .from('return_receipt_check_history')
+        .select('return_id')
+        .gte('checked_at', todayStart)
+        .limit(5000);
+      if (error) throw error;
+      setCheckedTodayIds(new Set((data || []).map((r) => r.return_id).filter(Boolean)));
+    } catch (e) {
+      console.error('Lỗi tải danh sách đã kiểm hôm nay:', e);
+      setCheckedTodayIds(new Set());
+    }
   }
 
   // Lịch sử kiểm nhận: 200 dòng mới nhất, chỉ tải khi mở tab "Lịch sử".
@@ -727,17 +755,30 @@ export default function BaoCaoHoanChuaNhan() {
       const code = String(returnCodeOf(r) || r.return_tracking_number || '').trim().toUpperCase();
       if (code && !byCode.has(code)) byCode.set(code, r);
     }
+    // Mã không nằm trong danh sách cần kiểm: phân biệt "đã kiểm rồi"
+    // (đơn đã check trong hôm nay hoặc đã có trạng thái cuối Đã nhận)
+    // với mã hoàn toàn không khớp với tập đã lọc.
+    const byCodeAll = new Map();
+    for (const r of allRows) {
+      const code = String(returnCodeOf(r) || r.return_tracking_number || '').trim().toUpperCase();
+      if (code && !byCodeAll.has(code)) byCodeAll.set(code, r);
+    }
     // Mã trùng trong 1 lần dán: lần xuất hiện sau thắng.
     const seen = new Map();
     for (const p of parsed) seen.set(p.tracking.trim().toUpperCase(), p);
     const matched = [];
+    const alreadyChecked = [];
     const unmatched = [];
     for (const [, p] of seen) {
       const row = byCode.get(p.tracking.trim().toUpperCase());
       if (row) matched.push({ ...p, row });
-      else unmatched.push(p);
+      else {
+        const anyRow = byCodeAll.get(p.tracking.trim().toUpperCase());
+        if (anyRow && (checkedTodayIds.has(anyRow.return_id) || manualChecks.get(anyRow.return_id)?.received_status === 'Đã nhận')) alreadyChecked.push(p);
+        else unmatched.push(p);
+      }
     }
-    setBulkPreview({ matched, unmatched });
+    setBulkPreview({ matched, alreadyChecked, unmatched });
   }
 
   // Ghi xem trước vào return_receipt_checks. Chỉ đơn có trong đoạn dán
@@ -766,6 +807,14 @@ export default function BaoCaoHoanChuaNhan() {
         }
         return next;
       });
+      // Đơn vừa xác nhận xong tính là "đã check hôm nay" ngay trong bộ
+      // nhớ — biến mất khỏi danh sách, trang sau tự đôn lên, không cần
+      // tải lại.
+      setCheckedTodayIds((prev) => {
+        const next = new Set(prev);
+        for (const p of payloads) next.add(p.return_id);
+        return next;
+      });
       const nNhan = payloads.filter((p) => p.received_status === 'Đã nhận').length;
       const nChua = payloads.length - nNhan;
       // Ghi lịch sử (best-effort): 1 lô dán = 1 batch_id chung cho cả lô.
@@ -781,7 +830,7 @@ export default function BaoCaoHoanChuaNhan() {
       })), userEmail);
       if (historyOk) setHistoryWarn('');
       else setHistoryWarn('Không lưu được lịch sử — chạy migration bảng lịch sử trước.');
-      setBulkMsg(`Đã cập nhật ${payloads.length} đơn: ${nNhan} Đã nhận, ${nChua} Chưa nhận.${bulkPreview.unmatched.length > 0 ? ` ${bulkPreview.unmatched.length} mã không khớp.` : ''}`);
+      setBulkMsg(`Đã cập nhật ${payloads.length} đơn: ${nNhan} Đã nhận, ${nChua} Chưa nhận.${bulkPreview.unmatched.length > 0 ? ` ${bulkPreview.unmatched.length} mã không khớp.` : ''}${(bulkPreview.alreadyChecked?.length || 0) > 0 ? ` ${bulkPreview.alreadyChecked.length} mã đã kiểm rồi.` : ''}`);
       setBulkPreview(null);
       setPasteText('');
     } catch (e) {
@@ -1247,7 +1296,7 @@ export default function BaoCaoHoanChuaNhan() {
                   {bulkPreview && (
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
                       <p className="text-sm font-bold text-slate-900">
-                        Xem trước — chưa lưu gì cả: tìm thấy {bulkPreview.matched.length} đơn, không khớp {bulkPreview.unmatched.length} mã.
+                        Xem trước — chưa lưu gì cả: tìm thấy {bulkPreview.matched.length} đơn, không khớp {bulkPreview.unmatched.length} mã{(bulkPreview.alreadyChecked?.length || 0) > 0 ? `, đã kiểm rồi ${bulkPreview.alreadyChecked.length} mã` : ''}.
                       </p>
                       {bulkPreview.matched.length > 0 && (
                         <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
@@ -1260,6 +1309,12 @@ export default function BaoCaoHoanChuaNhan() {
                               </span>
                             </div>
                           ))}
+                        </div>
+                      )}
+                      {bulkPreview.alreadyChecked?.length > 0 && (
+                        <div>
+                          <p className="text-xs font-bold text-slate-500 mb-1">Đã kiểm rồi (đã check trong hôm nay hoặc đã nhận — không cập nhật lại):</p>
+                          <p className="font-mono text-xs text-slate-500 break-all">{bulkPreview.alreadyChecked.map((p) => p.tracking).join(', ')}</p>
                         </div>
                       )}
                       {bulkPreview.unmatched.length > 0 && (
