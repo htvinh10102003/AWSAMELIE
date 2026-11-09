@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Search, ChevronLeft, ChevronRight, Loader2, Package, Copy, FileDown, Pencil, ScanLine, X } from 'lucide-react';
 import { mapReturnProduct, buildInventoryIndex } from '../lib/tiktokProductMap';
@@ -22,6 +22,8 @@ const RETURN_TYPE_NAMES = {
   2: 'Trả hàng và hoàn tiền',
   3: 'Đổi mới',
 };
+// Tên kênh cho mục quét nhận hàng (đơn 71/74 chỉ có sale_channel số).
+const CHANNEL_NAMES = { 1: 'Admin', 2: 'Website', 10: 'API', 20: 'Facebook', 21: 'Instagram', 41: 'Lazada', 42: 'Shopee', 43: 'Sendo', 45: 'Tiki', 48: 'TikTok', 49: 'Zalo OA' };
 const PLATFORMS = [
   { id: '', name: 'Tất cả sàn' },
   { id: 8195, name: 'Shopee' },
@@ -151,6 +153,134 @@ function parseAftershipText(text) {
   return results;
 }
 
+// --- Phân tích đoạn text kết quả 17Track (và các bên khác cùng dạng dòng) ---
+// Mỗi đơn 1 dòng, các cột cách nhau bằng tab/khoảng trắng:
+//   MÃ<TAB>Quốc gia<TAB>...<TAB>ngày giờ + sự kiện<TAB>Trạng thái<TAB>(N Days)
+// Bỏ dòng phân cách ==== và footer "Powered by www.17track.net".
+// Trạng thái lấy ở gần cuối dòng (trước "(N Days)" nếu có); dự phòng tìm
+// từ "Delivered" trong cả dòng. "Not found" = hãng chưa có dữ liệu giao
+// hàng cho mã đó -> tính 'Chưa nhận' (và theo quy tắc theo ngày, đơn này
+// ẩn khỏi popup trong hôm nay, hôm sau lại hiện để check tiếp).
+const CARRIER_STATUS_WORDS = [
+  'Available for Pickup',
+  'Out for Delivery',
+  'Attempted Delivery',
+  'Info Received',
+  'In Transit',
+  'Not found',
+  'Undelivered',
+  'Delivered',
+  'Exception',
+  'Expired',
+  'Pending',
+];
+const CARRIER_STATUS_END_RE = new RegExp(
+  `\\b(${CARRIER_STATUS_WORDS.map((w) => w.replace(/ /g, '\\s+')).join('|')})$`,
+  'i',
+);
+function parse17TrackText(text) {
+  const results = [];
+  for (const rawLine of String(text || '').split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (/^=+\s*$/.test(line)) continue;
+    if (/^powered by\b/i.test(line)) continue;
+    // Mã vận đơn = token đầu dòng; phải chứa ít nhất 1 chữ số và dài
+    // hơn 5 ký tự (để các dòng "Tracking number: ..." của AfterShip
+    // không lọt vào parser dòng này khi đoạn dán không có chữ aftership).
+    const tracking = line.split(/\s+/)[0].trim();
+    if (!tracking || tracking.length <= 5 || !/\d/.test(tracking) || tracking.includes(':')) continue;
+    // Ngày giao: ngày ISO đầu tiên trong dòng, chỉ lấy khi Delivered.
+    const dateM = line.match(/(\d{4})-(\d{2})-(\d{2})/);
+    // Bỏ hậu tố "(N Days)" ở cuối rồi khớp trạng thái ở cuối dòng.
+    const noDays = line.replace(/\(\d+\s*days?\)\s*$/i, '').trim();
+    const endM = noDays.match(CARRIER_STATUS_END_RE);
+    let shipStatus = '';
+    let delivered = false;
+    if (endM) {
+      shipStatus = endM[1];
+      delivered = /delivered/i.test(shipStatus) && !/undelivered/i.test(shipStatus);
+    } else if (/\bnot\s+delivered\b/i.test(line)) {
+      shipStatus = 'Not delivered';
+    } else if (/\bdelivered\b/i.test(line)) {
+      shipStatus = 'Delivered';
+      delivered = true;
+    }
+    results.push({
+      tracking,
+      shipStatus,
+      delivered,
+      receivedDate: delivered && dateM ? `${dateM[1]}-${dateM[2]}-${dateM[3]}` : null,
+    });
+  }
+  return results;
+}
+
+// --- Điểm vào chung cho đoạn dán: tự nhận diện nguồn ---
+// Có chữ "17track" -> parser 17Track; có chữ "aftership" -> parser
+// AfterShip; không có dấu hiệu nào -> thử parser dòng trước (đủ chung cho
+// các bên khác dán 1 dòng/đơn: mã đầu dòng + trạng thái + ngày), nếu không
+// đọc được mã nào thì thử parser AfterShip. Trả về { rows, source }.
+function parseCarrierText(text) {
+  const raw = String(text || '');
+  if (/17track/i.test(raw)) return { rows: parse17TrackText(raw), source: '17track' };
+  if (/aftership/i.test(raw)) return { rows: parseAftershipText(raw), source: 'aftership' };
+  const lineRows = parse17TrackText(raw);
+  if (lineRows.length > 0) return { rows: lineRows, source: 'generic' };
+  return { rows: parseAftershipText(raw), source: 'aftership' };
+}
+
+// --- Đọc file Excel đối chiếu (2 cột: Mã vận đơn, Trạng thái) ---
+// Dạng mảng 2 chiều (sheet đầu tiên). Nhận diện tiêu đề ở 1 trong 3 dòng
+// đầu (khớp "mã vận đơn"/"mã đơn"/"tracking" và "trạng thái"/"status",
+// không phân biệt hoa thường, đã trim); nếu không có tiêu đề mà ô đầu
+// dòng 1 trông như mã vận đơn thì coi toàn bộ là dữ liệu, cột 1 = mã,
+// cột 2 = trạng thái. "Đã giao" hoặc "Delivered" -> đã giao; giá trị khác
+// -> chưa giao (giữ nguyên chuỗi trạng thái gốc để xem trước).
+function parseExcelAoa(aoa) {
+  const rows = (aoa || []).filter((r) => Array.isArray(r) && r.some((c) => String(c ?? '').trim() !== ''));
+  if (rows.length === 0) return [];
+  const norm = (v) => String(v ?? '').trim().toLowerCase();
+  const isCodeHeader = (v) => /mã vận đơn|mã đơn trả|mã đơn|tracking/.test(norm(v));
+  const isStatusHeader = (v) => /trạng thái|status/.test(norm(v));
+  let codeIdx = 0;
+  let statusIdx = 1;
+  let startRow = 0;
+  let headerFound = false;
+  for (let i = 0; i < Math.min(3, rows.length); i++) {
+    const cells = rows[i];
+    let ci = -1;
+    let si = -1;
+    for (let j = 0; j < cells.length; j++) {
+      if (ci < 0 && isCodeHeader(cells[j])) ci = j;
+      if (si < 0 && isStatusHeader(cells[j])) si = j;
+    }
+    if (ci >= 0 && si >= 0) {
+      codeIdx = ci;
+      statusIdx = si;
+      startRow = i + 1;
+      headerFound = true;
+      break;
+    }
+  }
+  if (!headerFound) {
+    // Không có tiêu đề: dòng 1 phải trông như mã vận đơn thì mới đọc.
+    const first = String(rows[0][0] ?? '').trim();
+    if (!isReturnCode(first) && !(first.length > 5 && /\d/.test(first))) return [];
+  }
+  const out = [];
+  for (let i = startRow; i < rows.length; i++) {
+    const tracking = String(rows[i][codeIdx] ?? '').trim();
+    if (!tracking) continue;
+    const shipStatus = String(rows[i][statusIdx] ?? '').trim();
+    const delivered = ['đã giao', 'delivered'].includes(shipStatus.toLowerCase());
+    out.push({ tracking, shipStatus, delivered, receivedDate: null });
+  }
+  return out;
+}
+
+const CARRIER_SOURCE_LABELS = { aftership: 'AfterShip', '17track': '17Track', generic: 'Dạng dòng (bên khác)', excel: 'Excel', quet: 'Quét mã', thu_cong: 'Thủ công' };
+
 // UUID cho batch_id của 1 lô dán (crypto.randomUUID có sẵn ở trình duyệt
 // hiện đại; dự phòng Math.random khi không có).
 function genUuid() {
@@ -261,6 +391,23 @@ export default function BaoCaoHoanChuaNhan() {
   // bỏ khỏi popup đối chiếu, khỏi check đi check lại. Sang hôm sau đơn
   // Chưa nhận lại hiện để check tiếp; Đã nhận thì ẩn hẳn như cũ.
   const [checkedTodayIds, setCheckedTodayIds] = useState(new Set());
+  // --- Upload Excel cho mục "Đối chiếu" (thay cho dán tay) ---
+  const [excelUpload, setExcelUpload] = useState(null); // { rows, fileName } | null
+  // --- Quét nhận hàng (tab riêng trong popup đối chiếu) ---
+  const [scanExpected, setScanExpected] = useState([]);
+  const [scanLoaded, setScanLoaded] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanError, setScanError] = useState('');
+  const [scanSession, setScanSession] = useState(new Map()); // code -> { kind, label }
+  const [scanRecent, setScanRecent] = useState([]); // [{ code, kind, label }] mới nhất trước, tối đa 20
+  const [scanInput, setScanInput] = useState('');
+  const [scanFlash, setScanFlash] = useState(null); // { kind: 'ok'|'dup'|'nomatch'|'err', msg }
+  const [scanPasteText, setScanPasteText] = useState('');
+  const [scanPasteMsg, setScanPasteMsg] = useState('');
+  const [scanBatchId, setScanBatchId] = useState('');
+  const [scanOnlyUnscanned, setScanOnlyUnscanned] = useState(true);
+  const [scanPage, setScanPage] = useState(1);
+  const scanInputRef = useRef(null);
 
   const filters = applied || { updFrom, updTo, crtFrom, crtTo, platform, shop, search };
 
@@ -678,6 +825,20 @@ export default function BaoCaoHoanChuaNhan() {
     setBulkPreview(null);
     setBulkMsg('');
     setBulkError('');
+    setExcelUpload(null);
+    // Phiên quét mới: batch_id mới cho lịch sử, trạng thái phiên quét reset.
+    setScanBatchId(genUuid());
+    setScanSession(new Map());
+    setScanRecent([]);
+    setScanLoaded(false);
+    setScanExpected([]);
+    setScanError('');
+    setScanFlash(null);
+    setScanInput('');
+    setScanPasteText('');
+    setScanPasteMsg('');
+    setScanOnlyUnscanned(true);
+    setScanPage(1);
     fetchCheckedToday();
     setShowBulk(true);
   }
@@ -733,21 +894,286 @@ export default function BaoCaoHoanChuaNhan() {
     if (showBulk && bulkTab === 'lich-su') fetchHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showBulk, bulkTab]);
+  // Tab "Quét nhận hàng": tải lười danh sách chờ quét + focus ô bắn mã.
+  useEffect(() => {
+    if (showBulk && bulkTab === 'quet-nhan') {
+      if (!scanLoaded && !scanLoading) fetchScanExpected();
+      setTimeout(() => { if (scanInputRef.current) scanInputRef.current.focus(); }, 60);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showBulk, bulkTab]);
+
+  // --- Quét nhận hàng: danh sách chờ, xử lý mã quét, upload Excel ---
+  // Mã -> item chờ quét (1 mã có thể vừa là mã trả vừa là mã đơn 71/74).
+  const scanMap = useMemo(() => {
+    const m = new Map();
+    for (const it of scanExpected) m.set(it.code, it);
+    return m;
+  }, [scanExpected]);
+  // "Đã nhận" = đơn trả đã có kiểm tay Đã nhận, hoặc đã quét trong phiên này.
+  function scanItemReceived(it) {
+    if (!it) return false;
+    if (it.returnRow && manualChecks.get(it.returnRow.return_id)?.received_status === 'Đã nhận') return true;
+    return scanSession.has(it.code);
+  }
+  const scanStats = useMemo(() => {
+    const done = scanExpected.filter((it) => scanItemReceived(it)).length;
+    return { done, total: scanExpected.length, left: scanExpected.length - done };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanExpected, scanSession, manualChecks]);
+  const scanVisible = useMemo(() => {
+    const list = scanOnlyUnscanned ? scanExpected.filter((it) => !scanItemReceived(it)) : scanExpected;
+    return list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanExpected, scanOnlyUnscanned, scanSession, manualChecks]);
+  const SCAN_PAGE_SIZE = 50;
+  const scanTotalPages = Math.max(1, Math.ceil(scanVisible.length / SCAN_PAGE_SIZE));
+  const safeScanPage = Math.min(scanPage, scanTotalPages);
+  const scanPageRows = scanVisible.slice((safeScanPage - 1) * SCAN_PAGE_SIZE, safeScanPage * SCAN_PAGE_SIZE);
+
+  // Danh sách chờ quét nhận hàng: (a) đơn trả có mã vận đơn thật, trạng
+  // thái Nhanh 1/2/5 (kể cả Đang xử lý — đang chờ hàng về thì vẫn quét
+  // được); (b) đơn Nhanh ở trạng thái Đang chuyển hoàn (71) / Xác nhận
+  // hoàn (74) có mã vận đơn thật (mã không phải dạng NVN giả của GHN).
+  // Không lọc theo ngày: quét là việc nhận hàng thực tế, danh sách chờ
+  // là toàn bộ đơn đang chờ về kho.
+  async function fetchScanExpected() {
+    setScanLoading(true);
+    setScanError('');
+    try {
+      const STEP = 1000;
+      let retRows = [];
+      let from = 0;
+      for (;;) {
+        const { data, error } = await supabase
+          .from('ecom_return_orders')
+          .select('return_id,return_tracking_number,platform_name,shop_id,nhanh_status_id,nhanh_status_name,original_ecom_order_id')
+          .in('nhanh_status_id', [1, 2, 5])
+          .not('return_tracking_number', 'is', null)
+          .neq('return_tracking_number', '')
+          .order('return_updated_at', { ascending: false })
+          .range(from, from + STEP - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        retRows = retRows.concat(data);
+        from += data.length;
+        if (data.length < STEP) break;
+      }
+      let ordRows = [];
+      from = 0;
+      for (;;) {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('id,carrier_code,carrier_name,status,sale_channel,updated_at')
+          .in('status', [71, 74])
+          .not('carrier_code', 'is', null)
+          .neq('carrier_code', '')
+          .order('updated_at', { ascending: false })
+          .range(from, from + STEP - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        ordRows = ordRows.concat(data);
+        from += data.length;
+        if (data.length < STEP) break;
+      }
+      const map = new Map();
+      for (const r of retRows) {
+        const code = returnCodeOf(r);
+        if (!code) continue;
+        const key = code.trim().toUpperCase();
+        if (!map.has(key)) map.set(key, { code: key, returnRow: null, orderRow: null });
+        if (!map.get(key).returnRow) map.get(key).returnRow = r;
+      }
+      for (const o of ordRows) {
+        const code = String(o.carrier_code || '').trim().toUpperCase();
+        if (!code || code.startsWith('NVN')) continue;
+        if (!map.has(code)) map.set(code, { code, returnRow: null, orderRow: null });
+        if (!map.get(code).orderRow) map.get(code).orderRow = o;
+      }
+      setScanExpected([...map.values()]);
+      setScanLoaded(true);
+    } catch (e) {
+      console.error('Lỗi tải danh sách chờ quét:', e);
+      setScanError('Lỗi tải danh sách chờ quét: ' + (e.message || e));
+    } finally {
+      setScanLoading(false);
+    }
+  }
+
+  function pushScanRecent(entry) {
+    setScanRecent((prev) => [entry, ...prev].slice(0, 20));
+  }
+
+  // Xử lý 1 mã quét (súng bắn mã gõ mã + Enter, hoặc dán từng dòng).
+  // Có đơn trả -> lưu ngay kiểm nhận tay Đã nhận (ngày = hôm nay) + lịch
+  // sử nguồn 'quet'. Chỉ có đơn 71/74 (không có đơn trả) thì chỉ ghi
+  // nhận trong phiên, không có bảng nào để ghi. Trả về { kind, msg } để
+  // hiện phản hồi ngay dưới ô nhập.
+  async function processScanCode(rawCode) {
+    const code = String(rawCode || '').trim().toUpperCase();
+    if (!code) return { kind: 'err', msg: 'Mã trống.' };
+    const it = scanMap.get(code);
+    if (!it) {
+      pushScanRecent({ code, kind: 'nomatch', label: 'Không khớp' });
+      return { kind: 'nomatch', msg: `${code}: không khớp với đơn nào trong danh sách chờ quét.` };
+    }
+    if (scanSession.has(code)) {
+      return { kind: 'dup', msg: `${code}: đã quét rồi trong phiên này.` };
+    }
+    if (it.returnRow && manualChecks.get(it.returnRow.return_id)?.received_status === 'Đã nhận') {
+      pushScanRecent({ code, kind: 'dup', label: 'Đã nhận từ trước' });
+      return { kind: 'dup', msg: `${code}: đơn này đã có trạng thái Đã nhận từ trước.` };
+    }
+    if (it.returnRow) {
+      try {
+        const today = vnTodayStr();
+        const payload = {
+          return_id: it.returnRow.return_id,
+          received_date: today,
+          received_status: 'Đã nhận',
+          updated_by: userEmail || '',
+          updated_at: new Date().toISOString(),
+        };
+        const { error: err } = await supabase.from('return_receipt_checks').upsert(payload, { onConflict: 'return_id' });
+        if (err) throw err;
+        setManualChecks((prev) => {
+          const next = new Map(prev);
+          next.set(payload.return_id, { return_id: payload.return_id, received_date: today, received_status: 'Đã nhận' });
+          return next;
+        });
+        setCheckedTodayIds((prev) => {
+          const next = new Set(prev);
+          next.add(payload.return_id);
+          return next;
+        });
+        const historyOk = await logCheckHistory([{
+          return_id: it.returnRow.return_id,
+          tracking_number: code,
+          shipment_status: 'Đã quét',
+          received_status: 'Đã nhận',
+          received_date: today,
+          source: 'quet',
+          batch_id: scanBatchId || null,
+        }], userEmail);
+        if (!historyOk) setHistoryWarn('Không lưu được lịch sử — chạy migration bảng lịch sử trước.');
+      } catch (e) {
+        console.error('Lỗi lưu quét nhận hàng:', e);
+        return { kind: 'err', msg: `${code}: lỗi lưu — ${e.message || e}` };
+      }
+      setScanSession((prev) => new Map(prev).set(code, { kind: 'return', label: 'Đã nhận hàng hoàn' }));
+      pushScanRecent({ code, kind: 'return', label: 'Đã nhận hàng hoàn' });
+      return { kind: 'ok', msg: `${code}: đã nhận hàng hoàn.` };
+    }
+    setScanSession((prev) => new Map(prev).set(code, { kind: 'order-only', label: 'Đã quét — không có đơn trả' }));
+    pushScanRecent({ code, kind: 'order-only', label: 'Đã quét — không có đơn trả' });
+    return { kind: 'ok', msg: `${code}: đã quét (đơn 71/74, không có đơn trả nên không ghi kiểm nhận).` };
+  }
+
+  async function handleScanEnter() {
+    const code = scanInput.trim();
+    if (!code) return;
+    setScanInput('');
+    const res = await processScanCode(code);
+    setScanFlash(res);
+    if (scanInputRef.current) scanInputRef.current.focus();
+  }
+
+  async function handleScanPaste() {
+    const codes = scanPasteText.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    if (codes.length === 0) { setScanPasteMsg('Dán danh sách mã (1 mã 1 dòng) trước.'); return; }
+    setScanPasteMsg(`Đang xử lý ${codes.length} mã...`);
+    let ok = 0; let dup = 0; let nomatch = 0; let err = 0;
+    const seen = new Set();
+    for (const c of codes) {
+      const key = c.toUpperCase();
+      if (seen.has(key)) { dup++; continue; }
+      seen.add(key);
+      const res = await processScanCode(c);
+      if (res.kind === 'ok') ok++;
+      else if (res.kind === 'dup') dup++;
+      else if (res.kind === 'nomatch') nomatch++;
+      else err++;
+    }
+    setScanPasteMsg(`Đã xử lý ${codes.length} mã: ${ok} đã nhận, ${dup} đã quét rồi, ${nomatch} không khớp${err > 0 ? `, ${err} lỗi` : ''}.`);
+    setScanPasteText('');
+    if (scanInputRef.current) scanInputRef.current.focus();
+  }
+
+  // Tải file Excel đối chiếu (2 cột Mã vận đơn / Trạng thái) — thay thế
+  // đoạn dán tay, cùng đi qua 1 luồng xem trước -> xác nhận.
+  async function handleExcelUpload(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setBulkError('');
+    setBulkMsg('');
+    try {
+      const XLSX = await import('xlsx');
+      // CSV phải đọc dạng text (UTF-8) thì tiếng Việt mới không bị vỡ chữ;
+      // xlsx/xls đọc dạng array buffer.
+      const wb = /\.csv$/i.test(file.name)
+        ? XLSX.read(await file.text(), { type: 'string' })
+        : XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      if (!ws) throw new Error('File không có sheet nào.');
+      const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+      const rows = parseExcelAoa(aoa);
+      if (rows.length === 0) {
+        setExcelUpload(null);
+        setBulkError('Không đọc được mã nào trong file — kiểm tra file có đúng 2 cột "Mã vận đơn" và "Trạng thái" không (dòng đầu có thể là tiêu đề hoặc dữ liệu).');
+        return;
+      }
+      setExcelUpload({ rows, fileName: file.name });
+      setPasteText('');
+      setBulkPreview(null);
+      setBulkMsg(`Đã tải file ${file.name}: ${rows.length} mã. Bấm "Cập nhật trạng thái" để xem trước.`);
+    } catch (err) {
+      console.error('Lỗi đọc file Excel:', err);
+      setExcelUpload(null);
+      setBulkError('Lỗi đọc file Excel: ' + (err.message || err));
+    }
+  }
+
+  // File Excel mẫu 2 cột để kho điền theo đúng form thống nhất.
+  async function downloadExcelTemplate() {
+    try {
+      const XLSX = await import('xlsx');
+      const ws = XLSX.utils.aoa_to_sheet([
+        ['Mã vận đơn', 'Trạng thái'],
+        ['SPXVN00000000000A', 'Đã giao'],
+        ['SPXVN00000000000B', 'Đang giao'],
+      ]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'DoiChieu');
+      XLSX.writeFile(wb, 'mau-doi-chieu-van-don.xlsx');
+    } catch (err) {
+      console.error('Lỗi tạo form mẫu:', err);
+      setBulkError('Lỗi tạo form mẫu: ' + (err.message || err));
+    }
+  }
 
   // Đọc đoạn dán -> xem trước (chưa ghi gì cả). Khớp theo mã vận đơn
   // (trim + uppercase 2 bên) với TOÀN BỘ tập chưa nhận, không chỉ trang này.
   function handleBulkPreview() {
     setBulkMsg('');
     setBulkError('');
-    if (!pasteText.trim()) {
-      setBulkPreview(null);
-      setBulkError('Dán kết quả AfterShip vào ô trước.');
-      return;
+    // Nguồn đang dùng: file Excel (nếu đã tải và ô dán đang trống) hoặc đoạn dán tay.
+    let parsed;
+    let pasteSource;
+    if (excelUpload && !pasteText.trim()) {
+      parsed = excelUpload.rows;
+      pasteSource = 'excel';
+    } else {
+      if (!pasteText.trim()) {
+        setBulkPreview(null);
+        setBulkError('Dán kết quả AfterShip / 17Track vào ô trước, hoặc tải file Excel.');
+        return;
+      }
+      ({ rows: parsed, source: pasteSource } = parseCarrierText(pasteText));
     }
-    const parsed = parseAftershipText(pasteText);
     if (parsed.length === 0) {
       setBulkPreview(null);
-      setBulkError('Không đọc được mã vận đơn nào trong đoạn đã dán — kiểm tra lại định dạng AfterShip.');
+      setBulkError('Không đọc được mã vận đơn nào — kiểm tra lại định dạng AfterShip / 17Track hoặc file Excel.');
       return;
     }
     const byCode = new Map();
@@ -778,7 +1204,7 @@ export default function BaoCaoHoanChuaNhan() {
         else unmatched.push(p);
       }
     }
-    setBulkPreview({ matched, alreadyChecked, unmatched });
+    setBulkPreview({ matched, alreadyChecked, unmatched, source: pasteSource });
   }
 
   // Ghi xem trước vào return_receipt_checks. Chỉ đơn có trong đoạn dán
@@ -825,7 +1251,7 @@ export default function BaoCaoHoanChuaNhan() {
         shipment_status: shipStatus || null,
         received_status: delivered ? 'Đã nhận' : 'Chưa nhận',
         received_date: delivered ? receivedDate : null,
-        source: 'aftership',
+        source: bulkPreview.source || 'aftership',
         batch_id: batchId,
       })), userEmail);
       if (historyOk) setHistoryWarn('');
@@ -833,6 +1259,7 @@ export default function BaoCaoHoanChuaNhan() {
       setBulkMsg(`Đã cập nhật ${payloads.length} đơn: ${nNhan} Đã nhận, ${nChua} Chưa nhận.${bulkPreview.unmatched.length > 0 ? ` ${bulkPreview.unmatched.length} mã không khớp.` : ''}${(bulkPreview.alreadyChecked?.length || 0) > 0 ? ` ${bulkPreview.alreadyChecked.length} mã đã kiểm rồi.` : ''}`);
       setBulkPreview(null);
       setPasteText('');
+      setExcelUpload(null);
     } catch (e) {
       setBulkError('Lỗi cập nhật: ' + (e.message || e));
     } finally {
@@ -1163,6 +1590,7 @@ export default function BaoCaoHoanChuaNhan() {
             <div className="p-6 space-y-5">
               <div className="flex gap-2">
                 <button onClick={() => setBulkTab('doi-chieu')} className={`px-4 py-2 text-sm font-bold rounded-xl cursor-pointer ${bulkTab === 'doi-chieu' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>Đối chiếu</button>
+                <button onClick={() => setBulkTab('quet-nhan')} className={`px-4 py-2 text-sm font-bold rounded-xl cursor-pointer ${bulkTab === 'quet-nhan' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>Quét nhận hàng</button>
                 <button onClick={() => setBulkTab('lich-su')} className={`px-4 py-2 text-sm font-bold rounded-xl cursor-pointer ${bulkTab === 'lich-su' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>Lịch sử</button>
               </div>
               {bulkTab === 'lich-su' ? (
@@ -1179,7 +1607,7 @@ export default function BaoCaoHoanChuaNhan() {
                     </div>
                     <button onClick={fetchHistory} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer">Tải lại</button>
                   </div>
-                  <p className="text-xs text-slate-500">Lịch sử kiểm nhận gần nhất (tối đa 200 dòng): mỗi lần dán AfterShip là 1 lô, sửa tay từng đơn ghi riêng 1 dòng "Thủ công". Đơn Delivered sau khi cập nhật không biến mất — nó nhảy từ nhóm Đang chờ sang Cần đi đòi, vẫn xem lại được ở đây.</p>
+                  <p className="text-xs text-slate-500">Lịch sử kiểm nhận gần nhất (tối đa 200 dòng): mỗi lần dán kết quả hoặc quét 1 lô là 1 lô, sửa tay từng đơn ghi riêng 1 dòng "Thủ công". Đơn Delivered sau khi cập nhật không biến mất — nó nhảy từ nhóm Đang chờ sang Cần đi đòi, vẫn xem lại được ở đây.</p>
                   {historyError && <p className="text-sm font-bold text-amber-700">{historyError}</p>}
                   {historyLoading ? (
                     <div className="p-8 flex items-center justify-center gap-2 text-sm font-bold text-slate-500">
@@ -1193,7 +1621,7 @@ export default function BaoCaoHoanChuaNhan() {
                         <div key={g.key} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                           {g.batch ? (
                             <p className="text-sm font-bold text-slate-900 mb-2">
-                              Lô kiểm {fmtDateTime(g.checkedAt)} · {g.checkedBy || '—'} · {g.rows.length} đơn · {g.rows.filter((r) => r.received_status === 'Đã nhận').length} Đã nhận
+                              Lô kiểm {fmtDateTime(g.checkedAt)} · {g.checkedBy || '—'} · {g.rows.length} đơn · {g.rows.filter((r) => r.received_status === 'Đã nhận').length} Đã nhận{g.rows[0]?.source ? ` · ${CARRIER_SOURCE_LABELS[g.rows[0].source] || g.rows[0].source}` : ''}
                             </p>
                           ) : (
                             <p className="text-sm font-bold text-slate-900 mb-2">Sửa tay · {fmtDateTime(g.checkedAt)} · {g.checkedBy || '—'} · Thủ công</p>
@@ -1202,7 +1630,7 @@ export default function BaoCaoHoanChuaNhan() {
                             {g.rows.map((r) => (
                               <div key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
                                 <span className="font-mono font-bold text-indigo-700 break-all">{r.tracking_number || '—'}</span>
-                                <span className="text-xs text-slate-500">{r.shipment_status || (r.source === 'thu_cong' ? 'Thủ công' : '—')}</span>
+                                <span className="text-xs text-slate-500">{r.shipment_status || CARRIER_SOURCE_LABELS[r.source] || '—'}</span>
                                 <span className={`ml-auto text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap ${r.received_status === 'Đã nhận' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
                                   {r.received_status || '—'}{r.received_date ? ` · ${fmtDateOnly(r.received_date)}` : ''}
                                 </span>
@@ -1214,6 +1642,93 @@ export default function BaoCaoHoanChuaNhan() {
                     </div>
                   )}
                 </div>
+              ) : bulkTab === 'quet-nhan' ? (
+              <div className="space-y-4">
+                <p className="text-sm text-slate-600">
+                  Bắn mã vạch từng đơn nhận về từ shipper — đơn nào bắn rồi thì lưu ngay là <strong>Đã nhận hàng hoàn</strong>, chưa bắn thì vẫn là <strong>Chưa nhận hàng hoàn</strong>. Danh sách chờ gồm đơn trả (trạng thái Nhanh Đã hoàn tiền / Đang xử lý / Đang hoàn tiền) và đơn Nhanh ở trạng thái Đang chuyển hoàn / Xác nhận hoàn.
+                </p>
+                {scanError && <p className="text-sm font-bold text-red-500">{scanError}</p>}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <span className="text-sm font-bold text-slate-700">Đã quét {scanStats.done} / Tổng {scanStats.total} — Còn lại {scanStats.left}</span>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-pointer">
+                      <input type="checkbox" checked={scanOnlyUnscanned} onChange={(e) => { setScanOnlyUnscanned(e.target.checked); setScanPage(1); }} className="w-4 h-4 accent-emerald-600" />
+                      Chỉ hiện chưa quét
+                    </label>
+                    <button onClick={fetchScanExpected} disabled={scanLoading} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-50 cursor-pointer">Tải lại</button>
+                  </div>
+                </div>
+                {/* Ô bắn mã */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Bắn mã vạch vào đây (súng bắn xong bấm Enter)</label>
+                  <input
+                    ref={scanInputRef}
+                    value={scanInput}
+                    onChange={(e) => setScanInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleScanEnter(); } }}
+                    placeholder="Quét mã vận đơn rồi Enter..."
+                    autoFocus
+                    className={`w-full text-base font-mono font-bold border-2 rounded-xl px-4 py-3 outline-none ${scanFlash?.kind === 'ok' ? 'border-emerald-500 bg-emerald-50' : scanFlash?.kind === 'dup' ? 'border-amber-400 bg-amber-50' : scanFlash?.kind === 'nomatch' || scanFlash?.kind === 'err' ? 'border-red-400 bg-red-50' : 'border-slate-300 focus:border-slate-700'}`}
+                  />
+                  {scanFlash && (
+                    <p className={`text-sm font-bold mt-1 ${scanFlash.kind === 'ok' ? 'text-emerald-600' : scanFlash.kind === 'dup' ? 'text-amber-700' : 'text-red-500'}`}>{scanFlash.msg}</p>
+                  )}
+                </div>
+                {/* Vừa quét */}
+                {scanRecent.length > 0 && (
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Vừa quét (mới nhất trước)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {scanRecent.map((s, i) => (
+                        <span key={`${s.code}-${i}`} title={s.label} className={`px-2 py-1 rounded-lg text-xs font-mono font-bold ${s.kind === 'return' || s.kind === 'order-only' ? 'bg-emerald-100 text-emerald-800' : s.kind === 'dup' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-700'}`}>{s.code}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Dán danh sách mã */}
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Hoặc dán danh sách mã (1 mã 1 dòng)</label>
+                  <textarea value={scanPasteText} onChange={(e) => setScanPasteText(e.target.value)} rows={4} placeholder={'SPXVN06943735682A\nSPXVN06929026928A'} className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-mono" />
+                  <div className="flex flex-wrap items-center gap-3 mt-2">
+                    <button onClick={handleScanPaste} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer">Xử lý danh sách</button>
+                    {scanPasteMsg && <p className="text-sm font-bold text-slate-600">{scanPasteMsg}</p>}
+                  </div>
+                </div>
+                {/* Danh sách chờ quét */}
+                {scanLoading ? (
+                  <div className="p-8 flex items-center justify-center gap-2 text-sm font-bold text-slate-500"><Loader2 size={18} className="animate-spin" /> Đang tải...</div>
+                ) : scanVisible.length === 0 ? (
+                  <p className="text-sm font-bold text-slate-600">{scanExpected.length === 0 ? 'Không có đơn nào trong danh sách chờ quét.' : 'Đã quét xong tất cả đơn trong danh sách.'}</p>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <span className="text-sm font-bold text-slate-700">Trang {safeScanPage} / {scanTotalPages} — {scanVisible.length} đơn{scanOnlyUnscanned ? ' chưa quét' : ''}</span>
+                      <div className="flex gap-2">
+                        <button disabled={safeScanPage <= 1} onClick={() => setScanPage(safeScanPage - 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1"><ChevronLeft size={14} /> Trước</button>
+                        <button disabled={safeScanPage >= scanTotalPages} onClick={() => setScanPage(safeScanPage + 1)} className="px-3 py-2 text-sm font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-1">Sau <ChevronRight size={14} /></button>
+                      </div>
+                    </div>
+                    <div className="space-y-1 max-h-96 overflow-y-auto pr-1">
+                      {scanPageRows.map((it) => {
+                        const done = scanItemReceived(it);
+                        return (
+                          <div key={it.code} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                            <span className="font-mono font-bold text-indigo-700 break-all">{it.code}</span>
+                            <span className="text-xs text-slate-500">
+                              {it.returnRow ? `Trả ${it.returnRow.return_id}` : ''}{it.returnRow && it.orderRow ? ' · ' : ''}{it.orderRow ? `Đơn ${it.orderRow.id}` : ''}
+                            </span>
+                            <span className="text-xs text-slate-500">
+                              {it.returnRow ? `${it.returnRow.platform_name || ''}${it.returnRow.shop_id ? ` · Shop ${it.returnRow.shop_id}` : ''}` : it.orderRow ? `Kênh ${CHANNEL_NAMES[String(it.orderRow.sale_channel)] || it.orderRow.sale_channel}` : ''}
+                            </span>
+                            <span className={`ml-auto text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap ${done ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>{done ? 'Đã nhận hàng hoàn' : 'Chưa nhận hàng hoàn'}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+                <p className="text-xs text-slate-500">Chưa có hoàn tác trong phiên này — quét nhầm thì sửa lại bằng nút "Sửa" từng dòng ở bảng chính.</p>
+              </div>
               ) : (
               <>
               {loading ? (
@@ -1275,16 +1790,17 @@ export default function BaoCaoHoanChuaNhan() {
                       <Copy size={15} /> Sao chép {bulkPageCopyRows.length} mã
                     </button>
                   </div>
-                  {/* Dán kết quả AfterShip */}
+                  {/* Dán kết quả AfterShip / 17Track */}
                   <div>
-                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Dán kết quả AfterShip vào đây</label>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Dán kết quả AfterShip / 17Track vào đây</label>
                     <textarea
                       value={pasteText}
-                      onChange={(e) => setPasteText(e.target.value)}
+                      onChange={(e) => { setPasteText(e.target.value); if (excelUpload) setExcelUpload(null); }}
                       rows={8}
-                      placeholder={'Tracking number: 854169939715\nCourier name: J&T Express Vietnam\nShipment status: Delivered\nDelivery date: Nov 7, 2026 (Sat)\n\n===============================\n\nTracking number: 854169610860\nCourier name: J&T Express Vietnam\nShipment status: In transit'}
+                      placeholder={'AfterShip:\nTracking number: 854169939715\nCourier name: J&T Express Vietnam\nShipment status: Delivered\nDelivery date: Nov 7, 2026 (Sat)\n\n17Track (1 dòng 1 đơn):\nSPXVN06943735682A\tVietnam\tUnknown\t2026-11-04 08:45 Parcel has been delivered\tDelivered\t(5 Days)'}
                       className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-mono"
                     />
+                    <p className="text-xs text-slate-500 mt-1">Chấp nhận cả 2 dạng: AfterShip (khối nhiều dòng) hoặc 17Track / các bên khác (1 dòng 1 đơn: mã + trạng thái + ngày). Delivered → Đã nhận, trạng thái khác → Chưa nhận.</p>
                     <div className="flex flex-wrap items-center gap-3 mt-2">
                       <button onClick={handleBulkPreview} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer">Cập nhật trạng thái</button>
                       {bulkError && <p className="text-sm font-bold text-red-500">{bulkError}</p>}
@@ -1292,11 +1808,30 @@ export default function BaoCaoHoanChuaNhan() {
                       {historyWarn && <p className="text-sm font-bold text-amber-700">{historyWarn}</p>}
                     </div>
                   </div>
+                  {/* Tải file Excel thay cho dán tay — cùng 1 luồng xem trước -> xác nhận */}
+                  <div className="border border-slate-200 rounded-2xl p-4 space-y-2 bg-slate-50">
+                    <p className="text-sm font-bold text-slate-900">Hoặc tải file Excel (2 cột: Mã vận đơn, Trạng thái)</p>
+                    <p className="text-xs text-slate-500">Trạng thái "Đã giao" (hoặc "Delivered") tính là đã giao hàng, còn lại tính là chưa giao. Tải file sẽ thay thế đoạn dán tay ở trên (và ngược lại, dán tay sẽ bỏ file đã tải).</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer flex items-center gap-2">
+                        <FileDown size={15} /> Chọn file Excel (.xlsx / .xls / .csv)
+                        <input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleExcelUpload} />
+                      </label>
+                      <button onClick={downloadExcelTemplate} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer">Tải form mẫu</button>
+                      {excelUpload && (
+                        <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+                          Đang dùng: Excel — {excelUpload.fileName} ({excelUpload.rows.length} mã)
+                          <button onClick={() => setExcelUpload(null)} className="ml-2 text-slate-500 hover:text-slate-800 cursor-pointer underline">Bỏ file</button>
+                        </span>
+                      )}
+                    </div>
+                  </div>
                   {/* Xem trước — chưa ghi gì cả */}
                   {bulkPreview && (
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
                       <p className="text-sm font-bold text-slate-900">
                         Xem trước — chưa lưu gì cả: tìm thấy {bulkPreview.matched.length} đơn, không khớp {bulkPreview.unmatched.length} mã{(bulkPreview.alreadyChecked?.length || 0) > 0 ? `, đã kiểm rồi ${bulkPreview.alreadyChecked.length} mã` : ''}.
+                        {bulkPreview.source && ` Nguồn: ${CARRIER_SOURCE_LABELS[bulkPreview.source] || bulkPreview.source}.`}
                       </p>
                       {bulkPreview.matched.length > 0 && (
                         <div className="space-y-1 max-h-64 overflow-y-auto pr-1">
