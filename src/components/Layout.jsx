@@ -97,6 +97,12 @@ export default function Layout() {
     if (!me) return;
     const { data: { user: fresh }, error } = await supabase.auth.getUser();
     if (error || !fresh) { await kickSession(); return; }
+    // Dong bo user moi tu server vao state: neu metadata doi o server
+    // (vd Owner doi avatar cho tai khoan nay), header lay ngay ma khong
+    // phai doi toi lan dang nhap sau. Ham nay chay moi 60s + khi quay lai
+    // tab nen tu chua duoc avatar cu.
+    setUser(fresh);
+    userRef.current = fresh;
     const snap = sessionSnapshotRef.current;
     if (snap && (fresh.user_metadata?.role !== snap.role || (fresh.user_metadata?.is_owner === true) !== snap.isOwner)) {
       await kickSession(); return;
@@ -301,7 +307,13 @@ export default function Layout() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!session) { clearAllPermCaches(); navigate('/login'); }
       else {
-        setUser(session.user); userRef.current = session.user;
+        // INITIAL_SESSION mang user tu phien luu san (snapshot metadata luc
+        // cap token) nen co the cu hon user moi tu server (vd avatar vua
+        // duoc doi). Bo qua no khi da co user — user luc mount lay bang
+        // getUser() tu server, luon moi. Chi nhan session khi chua co user.
+        if (event !== 'INITIAL_SESSION' || !userRef.current) {
+          setUser(session.user); userRef.current = session.user;
+        }
         if (!sessionSnapshotRef.current) sessionSnapshotRef.current = { role: session.user.user_metadata?.role, isOwner: session.user.user_metadata?.is_owner === true };
         // Chi ghi khi dang nhap that (SIGNED_IN), khong ghi khi load lai
         // trang (INITIAL_SESSION) hay refresh token (TOKEN_REFRESHED).
