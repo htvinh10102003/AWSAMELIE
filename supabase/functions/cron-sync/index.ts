@@ -46,7 +46,12 @@ serve(async (req) => {
           updatedAtFrom: Math.floor(startDate.getTime() / 1000),
           updatedAtTo: Math.floor(endDate.getTime() / 1000)
         },
-        paginator: { size: 50, sort: { id: "desc" } }
+        // Nhanh KHONG ho tro sort o order/list (loi that 2026-11-02:
+        // "Khong ho tro sort", code 0) nen khong gui sort nua; phan trang
+        // chay bang cursor (paginator.next), thu tu mac dinh cua Nhanh
+        // khong anh huong tinh dung dan vi upsert theo id va quet du
+        // khoang updatedAt.
+        paginator: { size: 50 }
       };
       if (nextCursor) payload.paginator.next = nextCursor;
 
