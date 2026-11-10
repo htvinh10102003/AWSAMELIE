@@ -298,11 +298,11 @@ function bucketNameOfItem(it) {
   if (isWaitingItem(it)) return 'waiting';
   return null;
 }
-// Nhãn "Nhóm" cho Excel (chỉ đơn trả): đã nhập kho / đã nhận / B / C / R / Đang chờ.
+// Nhãn "Nhóm" cho Excel (chỉ đơn trả): đã nhận / B / C / R / Đang chờ.
+// "Đã nhận" gộp 2 tín hiệu (Vinh 16:02): có đơn hoàn 1 phần HOẶC đã
+// quét/tick nhận — 1 đơn chỉ tính 1 nhãn (không cộng đôi).
 function groupNameOfReturn(row, deps) {
-  if (deps.hasPartialFn(row)) return 'Đã nhập kho';
-  const m = deps.manualChecks.get(row.return_id);
-  if (m?.received_status === 'Đã nhận') return 'Đã nhận';
+  if (deps.hasPartialFn(row) || deps.manualChecks.get(row.return_id)?.received_status === 'Đã nhận') return 'Đã nhận';
   const it = makeCheckItemReturn(row, deps);
   const b = bucketNameOfItem(it);
   if (b === 'B') return 'ĐVVC đã giao chưa thấy hàng';
@@ -1159,18 +1159,20 @@ export default function BaoCaoHoanChuaNhan() {
     return false;
   }
 
-  // "Đã nhập kho" = có đơn hoàn 1 phần -> loại khỏi danh sách chờ, chỉ đếm
-  // tổng (thẻ tổng quan). Các mục chưa nhận (b)/(c)/(R)/Đang chờ không
-  // dùng nhóm này nữa — xem checkItems + các vị từ isBucketBItem /
-  // isBucketCItem / isBucketRItem / isWaitingItem ở đầu file.
+  // "Đã nhận" = có đơn hoàn 1 phần HOẶC đã quét/tick nhận (Vinh 16:02 gộp
+  // chung 2 tín hiệu; lọc trùng: mỗi return_id chỉ có 1 dòng trong allRows
+  // nên đếm theo dòng là đủ, đơn có cả 2 tín hiệu vẫn tính 1 lần) -> loại
+  // khỏi danh sách chờ, chỉ đếm tổng (thẻ tổng quan). Các mục chưa nhận
+  // (b)/(c)/(R)/Đang chờ không dùng nhóm này nữa — xem checkItems + các vị
+  // từ isBucketBItem / isBucketCItem / isBucketRItem / isWaitingItem ở đầu file.
   const groups = useMemo(() => {
-    const daNhap = [];
+    const daNhan = [];
     for (const r of allRows) {
-      if (hasPartial(r)) daNhap.push(r);
+      if (hasPartial(r) || manualChecks.get(r.return_id)?.received_status === 'Đã nhận') daNhan.push(r);
     }
-    return { daNhap };
+    return { daNhan };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allRows, partialOriginalIds, partialAppOrderIdsNoR]);
+  }, [allRows, partialOriginalIds, partialAppOrderIdsNoR, manualChecks]);
 
   const sumMoney = (rows) => rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
 
@@ -1274,7 +1276,7 @@ export default function BaoCaoHoanChuaNhan() {
 
   const summary = useMemo(() => ({
     totalMoney: sumMoney(allRows),
-    daNhapMoney: sumMoney(groups.daNhap),
+    daNhanMoney: sumMoney(groups.daNhan),
     bMoney: bucketMoney(bucketBItems),
     cMoney: bucketMoney(bucketCItems),
     rMoney: bucketMoney(bucketRItems),
@@ -2904,7 +2906,7 @@ export default function BaoCaoHoanChuaNhan() {
         </p>
         {error && <p className="text-sm font-bold text-red-500 mt-2">{error}</p>}
         {partialMissing && (
-          <p className="text-xs text-amber-700 mt-2">Chưa tải được danh sách đơn hoàn 1 phần (bảng partial_return_orders chưa có hoặc chưa có quyền đọc) — các đơn tạm xếp hết vào nhóm chưa nhập kho, chạy migration bảng đơn hoàn 1 phần rồi tải lại trang.</p>
+          <p className="text-xs text-amber-700 mt-2">Chưa tải được danh sách đơn hoàn 1 phần (bảng partial_return_orders chưa có hoặc chưa có quyền đọc) — các đơn tạm xếp hết vào nhóm chưa nhận, chạy migration bảng đơn hoàn 1 phần rồi tải lại trang.</p>
         )}
         {manualMissing && (
           <p className="text-xs text-amber-700 mt-2">Chưa tải được dữ liệu kiểm nhận tay (bảng return_receipt_checks chưa có hoặc chưa có quyền đọc) — các đơn tạm xếp hết vào nhóm đang chờ, phần sửa tay sẽ báo lỗi cho đến khi bảng được tạo.</p>
@@ -2919,7 +2921,7 @@ export default function BaoCaoHoanChuaNhan() {
         </div>
       </div>
 
-      {/* Tổng quan 6 số: tổng + đã nhập kho + 4 mục check chưa nhận */}
+      {/* Tổng quan 6 số: tổng + đã nhận + 4 mục check chưa nhận */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
           <div className="text-2xl font-bold text-slate-900">{total}</div>
@@ -2927,9 +2929,9 @@ export default function BaoCaoHoanChuaNhan() {
           <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.totalMoney)} VND</div>
         </div>
         <div className="bg-green-50 border border-green-200 rounded-2xl p-4 shadow-sm">
-          <div className="text-2xl font-bold text-green-700">{groups.daNhap.length}</div>
-          <div className="text-xs font-bold text-slate-500">Đã nhập kho (có đơn hoàn 1 phần)</div>
-          <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.daNhapMoney)} VND</div>
+          <div className="text-2xl font-bold text-green-700">{groups.daNhan.length}</div>
+          <div className="text-xs font-bold text-slate-500">Đã nhận</div>
+          <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.daNhanMoney)} VND</div>
         </div>
         <div className="bg-red-50 border border-red-200 rounded-2xl p-4 shadow-sm">
           <div className="text-2xl font-bold text-red-600">{bucketBItems.length}</div>
