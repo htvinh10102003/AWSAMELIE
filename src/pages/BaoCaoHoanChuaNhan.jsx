@@ -62,9 +62,14 @@ function fmtMoney(v) {
 function escapeLike(q) {
   return q.replace(/[\\%_]/g, (c) => '\\' + c);
 }
-// Mã đơn trả "thật" chỉ là mã vận đơn trả có đầu SPX / G / 8 / 1 / VTP.
-// Mọi mã khác đều chưa phải mã đơn trả (hiển thị "Chưa có mã đơn trả").
-const RETURN_CODE_PREFIXES = ['SPX', 'G', '8', '1', 'VTP'];
+// Mã đơn trả "thật" chỉ là mã vận đơn trả có đầu SHOPEE / SPX / VNGH / VTP /
+// EA / G / 8 / 1. Mọi mã khác đều chưa phải mã đơn trả (hiển thị
+// "Chưa có mã đơn trả"). Thứ tự dài trước: tiền tố dài phải được kiểm
+// trước tiền tố 1 ký tự (không có tiền tố 1 ký tự nào là đầu của tiền tố
+// dài ở đây, nhưng giữ thứ tự này để sau này thêm tiền tố không bị che).
+// VNGH = GHN; EA = VNPost (EMS, VD EA507283035VN); SHOPEE = mã sàn;
+// 379 = J&T (mã số VD 37910474801).
+const RETURN_CODE_PREFIXES = ['SHOPEE', 'SPX', 'VNGH', 'VTP', 'EA', '379', 'G', '8', '1'];
 function isReturnCode(code) {
   const c = String(code || '').trim().toUpperCase();
   return c !== '' && RETURN_CODE_PREFIXES.some((p) => c.startsWith(p));
@@ -110,21 +115,6 @@ function returnAgeDays(row, todayStr) {
   if (!created) return null;
   return daysBetween(created, todayStr);
 }
-// Quy tắc 1-3 của danh sách "Cần check tay". Trả về { pass, age }.
-// hasPartialFn: (row) => boolean; manualChecks: Map(return_id -> { received_status }).
-function passesNeedCheckRules123(row, hasPartialFn, manualChecks, todayStr) {
-  if (hasPartialFn(row)) return { pass: false, age: null };
-  if (manualChecks.get(row.return_id)?.received_status === 'Đã nhận') return { pass: false, age: null };
-  const age = returnAgeDays(row, todayStr);
-  if (age === null || age <= 4) return { pass: false, age };
-  return { pass: true, age };
-}
-// Quy tắc 4: trạng thái đơn gốc (null = không nối được / không tra được
-// -> vẫn tính theo quy tắc 1-3). 71/74/72 loại ra.
-function passesOrigStatusRule(status) {
-  if (status === null || status === undefined) return true;
-  return status !== 71 && status !== 74 && status !== 72;
-}
 // Tra trạng thái đơn gốc trong 2 map cache: ưu tiên ID đơn Nhanh
 // (raw_data.nhanhOrderId), sau đó mã đơn sàn gốc (original_ecom_order_id).
 // Trả về status (số) hoặc null khi không nối được.
@@ -136,46 +126,72 @@ function lookupOrigStatus(row, statusById, statusByEcom) {
   return null;
 }
 
-// --- Danh sách hợp nhất "Cần check tay": 1 lần lọc, không gộp nhánh ---
-// Một đơn nằm trong danh sách khi KHÔNG được giải quyết VÀ khớp BẤT KỲ
-// nhánh nào: (a) kiểm tay Đã nhận nhưng chưa được xác nhận nhận hàng thật,
-// (b) quá 4 ngày chưa quét + đơn gốc (nếu nối được) không ở 71/74/72,
-// (c) kiểm tay Đã khiếu nại. ĐÃ GIẢI QUYẾT = có đơn hoàn 1 phần, HOẶC
-// có dòng lịch sử kiểm nhận nguồn 'quet'/'thu_cong' với trạng thái Đã nhận
-// (xác nhận nhận hàng thật). Cổng giải quyết kiểm TRƯỚC mọi nhánh nên
-// đơn đã xác nhận nhận rồi thì không bao giờ lọt lại qua nhánh (c).
-// deps: { hasPartialFn, manualChecks, confirmedReceivedIds, todayStr,
-//         origStatusById, origStatusByEcom }.
-function unifiedBranchOf(row, deps) {
-  const { hasPartialFn, manualChecks, confirmedReceivedIds, todayStr, origStatusById, origStatusByEcom } = deps;
-  if (hasPartialFn(row)) return null;
-  if (confirmedReceivedIds && confirmedReceivedIds.has(String(row.return_id))) return null;
-  const manual = manualChecks.get(row.return_id)?.received_status;
-  if (manual === 'Đã khiếu nại') return 'c';
-  if (manual === 'Đã nhận') return 'a';
-  const { pass } = passesNeedCheckRules123(row, hasPartialFn, manualChecks, todayStr);
-  if (!pass) return null;
-  if (!passesOrigStatusRule(lookupOrigStatus(row, origStatusById, origStatusByEcom))) return null;
-  return 'b';
-}
-function isInUnifiedList(row, deps) {
-  return unifiedBranchOf(row, deps) !== null;
-}
-// Ứng viên để tra lịch sử xác nhận nhận hàng: chưa có đơn 1 phần VÀ
-// (kiểm tay Đã nhận HOẶC Đã khiếu nại HOẶC tuổi > 4 ngày).
-function isUnifiedCandidate(row, hasPartialFn, manualChecks, todayStr) {
-  if (hasPartialFn(row)) return false;
-  const manual = manualChecks.get(row.return_id)?.received_status;
-  if (manual === 'Đã nhận' || manual === 'Đã khiếu nại') return true;
+// --- Danh sách "Cần check tay" (quy tắc đơn giản 2026-11-10) ---
+// Một đơn nằm trong danh sách khi ĐỦ cả 5 điều kiện:
+// (i) có mã đơn trả thật (đầu SHOPEE/SPX/VNGH/VTP/EA/G/8/1);
+// (ii) chưa có đơn hoàn 1 phần (kho đã tick nhận ở Nhanh thì coi là đã nhận);
+// (iii) chưa có xác nhận nhận hàng thật: manualChecks[return_id]
+//       .received_status !== 'Đã nhận' (chỉ quét/tick mới ghi 'Đã nhận');
+// (iv) tuổi > 4 ngày VN (đúng 4 ngày chưa tính; tuổi null thì không tính);
+// (v) đơn gốc, KHI NỐI ĐƯỢC, không ở trạng thái 72 (chủ shop tự đổi tay
+//     khi đã nhận hàng). Đơn gốc ở 71/74 sau 4 ngày VẪN bị cảnh báo
+//     (quá hạn là quá hạn). Trạng thái hãng (carrier_status "Đã hoàn" /
+//     "Chưa hoàn") KHÔNG ảnh hưởng danh sách này: hãng báo đã giao chưa
+//     chắc chủ shop đã cầm hàng.
+// Trả về { pass, age }. hasPartialFn: (row) => boolean; manualChecks:
+// Map(return_id -> { received_status }); deps còn có origStatusById /
+// origStatusByEcom (Map cache trạng thái đơn gốc).
+function needCheckBaseOf(row, deps) {
+  const { hasPartialFn, manualChecks, todayStr } = deps;
+  if (!returnCodeOf(row)) return { pass: false, age: null };
+  if (hasPartialFn(row)) return { pass: false, age: null };
+  if (manualChecks.get(row.return_id)?.received_status === 'Đã nhận') return { pass: false, age: null };
   const age = returnAgeDays(row, todayStr);
-  return age !== null && age > 4;
+  if (age === null || age <= 4) return { pass: false, age };
+  return { pass: true, age };
+}
+function needCheckOf(row, deps) {
+  const base = needCheckBaseOf(row, deps);
+  if (!base.pass) return base;
+  // Quy tắc (v): chỉ loại khi nối được đơn gốc VÀ nó đang ở 72.
+  // Không nối được (null) -> vẫn tính là cần check.
+  if (lookupOrigStatus(row, deps.origStatusById, deps.origStatusByEcom) === 72) return { pass: false, age: base.age };
+  return base;
+}
+function isInNeedCheckList(row, deps) {
+  return needCheckOf(row, deps).pass;
+}
+// "Đang chờ hàng về" = phần bù trong tập báo cáo: có mã trả thật,
+// tuổi <= 4 ngày (tuổi null cũng chờ, vì chưa chứng minh được quá hạn),
+// chưa có xác nhận nhận thật. Đơn đã nhận / không có mã thật / quá
+// 4 ngày (thuộc "Cần check tay") đều không nằm ở đây.
+function isWaitingRow(row, manualChecks, todayStr) {
+  if (!returnCodeOf(row)) return false;
+  if (manualChecks.get(row.return_id)?.received_status === 'Đã nhận') return false;
+  const age = returnAgeDays(row, todayStr);
+  return age === null || age <= 4;
+}
+
+// --- Tách trạng thái hãng ("Đã hoàn") khỏi trạng thái nhận ("Đã nhận") ---
+// Dán kết quả AfterShip/17Track/Excel chỉ cho biết HÃNG đã giao hàng trả
+// về hay chưa — KHÔNG chứng minh chủ shop đã cầm hàng. Delivered / "Đã
+// giao" -> carrier_status 'Đã hoàn'; còn lại -> 'Chưa hoàn'. Hàm thuần
+// để test được; received_status KHÔNG được chạm tới ở luồng dán.
+function carrierStatusOfPaste(delivered) {
+  return delivered ? 'Đã hoàn' : 'Chưa hoàn';
 }
 
 // --- Đối chiếu hàng loạt: hãng theo đầu mã vận đơn ---
-// Kiểm tra tiền tố dài trước (SPX, VTP) rồi mới tới tiền tố 1 ký tự (8, G, 1).
+// Kiểm tra tiền tố dài trước (SHOPEE, SPX, VNGH, VTP, EA, 379) rồi mới tới
+// tiền tố 1 ký tự (8, G, 1). VNGH = GHN (cùng hãng với đầu G);
+// 379 = J&T (cùng hãng với đầu 8).
 const CARRIER_BY_PREFIX = [
+  { prefix: 'SHOPEE', name: 'Hãng khác' },
   { prefix: 'SPX', name: 'SPX (Shopee Express)' },
+  { prefix: 'VNGH', name: 'GHN' },
   { prefix: 'VTP', name: 'Viettel Post' },
+  { prefix: 'EA', name: 'VNPost' },
+  { prefix: '379', name: 'J&T Express' },
   { prefix: '8', name: 'J&T Express' },
   { prefix: 'G', name: 'GHN' },
   { prefix: '1', name: 'GHTK' },
@@ -440,15 +456,14 @@ export default function BaoCaoHoanChuaNhan() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   // Tập riêng cho mục hợp nhất "Cần check tay": tải độc lập, không phụ
-  // thuộc bộ lọc trang (không lọc ngày/sàn/shop/tìm kiếm).
+  // thuộc bộ lọc trang (không lọc sàn/shop/tìm kiếm); mặc định chỉ tải
+  // đơn tạo trong 30 ngày gần nhất (xem uniCrtFrom/uniCrtTo bên dưới).
   const [checkRows, setCheckRows] = useState([]);
   const [checkLoading, setCheckLoading] = useState(false);
   const [checkError, setCheckError] = useState('');
-  // Đơn đã XÁC NHẬN nhận hàng thật: có dòng lịch sử nguồn 'quet' hoặc
-  // 'thu_cong' với received_status 'Đã nhận'. Cổng giải quyết của danh
-  // sách hợp nhất; lỗi tra thì coi như tập rỗng, không sập trang.
-  const [confirmedReceivedIds, setConfirmedReceivedIds] = useState(new Set());
-  const [confirmedError, setConfirmedError] = useState(false);
+  // Số thứ tự lần tải checkRows: lần tải cũ về sau thì bỏ kết quả (đổi
+  // ô ngày liên tiếp sẽ chạy nhiều lần tải chồng nhau).
+  const checkFetchSeq = useRef(0);
   // Đơn hoàn 1 phần (type 16) + kiểm nhận tay.
   const [partialRows, setPartialRows] = useState([]);
   const [partialMissing, setPartialMissing] = useState(false);
@@ -469,8 +484,10 @@ export default function BaoCaoHoanChuaNhan() {
   const [uniProduct, setUniProduct] = useState('');
   const [uniStatus, setUniStatus] = useState('');
   const [uniTick, setUniTick] = useState('');
-  const [uniCrtFrom, setUniCrtFrom] = useState('');
-  const [uniCrtTo, setUniCrtTo] = useState('');
+  // Khoảng ngày tạo của mục: mặc định 30 ngày gần nhất; người dùng nới
+  // rộng ô ngày để tải thêm đơn cũ hơn (tải lại theo khoảng này).
+  const [uniCrtFrom, setUniCrtFrom] = useState(() => addDaysStr(vnTodayStr(), -30));
+  const [uniCrtTo, setUniCrtTo] = useState(() => vnTodayStr());
   const [uniMoneyMin, setUniMoneyMin] = useState('');
   const [uniMoneyMax, setUniMoneyMax] = useState('');
   // Tick hàng loạt trong mục hợp nhất (chỉ owner): tập return_id đã chọn.
@@ -530,12 +547,12 @@ export default function BaoCaoHoanChuaNhan() {
   const filters = applied || { updFrom, updTo, crtFrom, crtTo, platform, shop, search };
 
   // Lọc gốc của báo cáo (áp dụng cho cả đếm + tải đủ tập):
-  // có mã đơn trả thật (đầu SPX/G/8/1/VTP) + trạng thái Nhanh Đã hoàn tiền (1)
+  // có mã đơn trả thật (đầu SHOPEE/SPX/VNGH/VTP/EA/379/G/8/1) + trạng thái Nhanh Đã hoàn tiền (1)
   // hoặc Đang hoàn tiền (5); đơn hủy đã loại.
   function applyBaseFilters(query, f) {
     query = query.not('return_tracking_number', 'is', null).neq('return_tracking_number', '');
     query = query.in('nhanh_status_id', [1, 5]);
-    query = query.or('return_tracking_number.ilike.SPX%,return_tracking_number.ilike.G%,return_tracking_number.ilike.8%,return_tracking_number.ilike.1%,return_tracking_number.ilike.VTP%');
+    query = query.or('return_tracking_number.ilike.SHOPEE%,return_tracking_number.ilike.SPX%,return_tracking_number.ilike.VNGH%,return_tracking_number.ilike.VTP%,return_tracking_number.ilike.EA%,return_tracking_number.ilike.379%,return_tracking_number.ilike.G%,return_tracking_number.ilike.8%,return_tracking_number.ilike.1%');
     if (f.updFrom) query = query.gte('return_updated_at', `${f.updFrom}T00:00:00+07:00`);
     if (f.updTo) query = query.lt('return_updated_at', `${addDaysStr(f.updTo, 1)}T00:00:00+07:00`);
     if (f.crtFrom) query = query.gte('return_created_at', `${f.crtFrom}T00:00:00+07:00`);
@@ -582,12 +599,14 @@ export default function BaoCaoHoanChuaNhan() {
     }
   }
 
-  // Tải tập riêng cho mục hợp nhất "Cần check tay": toàn bộ đơn trả có
-  // mã đơn trả thật + trạng thái Nhanh Đã hoàn tiền (1) / Đang hoàn tiền
-  // (5), KHÔNG lọc ngày/sàn/shop/tìm kiếm. Lọc mã thật 2 lớp: or ilike
-  // theo đầu mã ở server + isReturnCode ở client. Lỗi -> ghi chú mờ
-  // trong mục, không sập trang.
-  async function fetchCheckRows() {
+  // Tải tập riêng cho mục hợp nhất "Cần check tay": đơn trả có mã đơn
+  // trả thật + trạng thái Nhanh Đã hoàn tiền (1) / Đang hoàn tiền (5),
+  // lọc server-side theo ngày tạo (crtFrom/crtTo, mặc định 30 ngày gần
+  // nhất; rỗng = không giới hạn đầu đó). KHÔNG lọc sàn/shop/tìm kiếm.
+  // Lọc mã thật 2 lớp: or ilike theo đầu mã ở server + isReturnCode ở
+  // client. Lỗi -> ghi chú mờ trong mục, không sập trang.
+  async function fetchCheckRows(crtFrom, crtTo) {
+    const seq = ++checkFetchSeq.current;
     setCheckLoading(true);
     setCheckError('');
     try {
@@ -595,13 +614,16 @@ export default function BaoCaoHoanChuaNhan() {
       let from = 0;
       const STEP = 1000;
       for (;;) {
-        const { data, error: err } = await supabase
+        let q = supabase
           .from('ecom_return_orders')
           .select('*')
           .in('nhanh_status_id', [1, 5])
           .not('return_tracking_number', 'is', null)
           .neq('return_tracking_number', '')
-          .or('return_tracking_number.ilike.SPX%,return_tracking_number.ilike.G%,return_tracking_number.ilike.8%,return_tracking_number.ilike.1%,return_tracking_number.ilike.VTP%')
+          .or('return_tracking_number.ilike.SHOPEE%,return_tracking_number.ilike.SPX%,return_tracking_number.ilike.VNGH%,return_tracking_number.ilike.VTP%,return_tracking_number.ilike.EA%,return_tracking_number.ilike.379%,return_tracking_number.ilike.G%,return_tracking_number.ilike.8%,return_tracking_number.ilike.1%');
+        if (crtFrom) q = q.gte('return_created_at', `${crtFrom}T00:00:00+07:00`);
+        if (crtTo) q = q.lt('return_created_at', `${addDaysStr(crtTo, 1)}T00:00:00+07:00`);
+        const { data, error: err } = await q
           .order('return_updated_at', { ascending: false })
           .range(from, from + STEP - 1);
         if (err) throw err;
@@ -610,12 +632,14 @@ export default function BaoCaoHoanChuaNhan() {
         from += data.length;
         if (data.length < STEP) break;
       }
+      if (seq !== checkFetchSeq.current) return; // có lần tải mới hơn, bỏ kết quả cũ
       setCheckRows(all.filter((r) => isReturnCode(r.return_tracking_number)));
     } catch (e) {
+      if (seq !== checkFetchSeq.current) return;
       setCheckError('Lỗi tải danh sách cần check tay: ' + (e.message || e));
       setCheckRows([]);
     } finally {
-      setCheckLoading(false);
+      if (seq === checkFetchSeq.current) setCheckLoading(false);
     }
   }
 
@@ -624,10 +648,12 @@ export default function BaoCaoHoanChuaNhan() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applied]);
 
+  // Tải lại tập "Cần check tay" khi đổi khoảng ngày tạo của mục (mặc
+  // định 30 ngày gần nhất; nới rộng ô ngày để tải thêm đơn cũ hơn).
   useEffect(() => {
-    fetchCheckRows();
+    fetchCheckRows(uniCrtFrom, uniCrtTo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [uniCrtFrom, uniCrtTo]);
 
   // Owner nhận diện giống TraHangHoanTien: user_metadata.is_owner hoặc email owner.
   useEffect(() => {
@@ -703,6 +729,9 @@ export default function BaoCaoHoanChuaNhan() {
         }
       }
       try {
+        // select('*') nên cột carrier_status (migration 20261110) tự về
+        // cùng received_status/received_date khi cột đã có; chưa chạy
+        // migration thì các dòng chỉ thiếu carrier_status (hiển thị trống).
         const { data, error: err } = await supabase.from('return_receipt_checks').select('*');
         if (err) throw err;
         const m = new Map();
@@ -747,14 +776,17 @@ export default function BaoCaoHoanChuaNhan() {
   }
 
   // "Đã nhập kho" = có đơn hoàn 1 phần -> loại khỏi danh sách chờ, chỉ đếm tổng.
-  // Còn lại là "Đang chờ hàng về" (chưa có đơn hoàn 1 phần). Nhóm cũ
-  // "Cần đi đòi" đã gộp vào mục hợp nhất "Cần check tay" bên dưới.
+  // "Đang chờ hàng về" (isWaitingRow): có mã trả thật + tuổi <= 4 ngày
+  // (tuổi null cũng chờ) + chưa có xác nhận nhận thật. Đơn đã nhận, đơn
+  // không có mã thật, đơn quá 4 ngày (thuộc "Cần check tay") đều không
+  // nằm ở đây — xem isWaitingRow / needCheckOf ở đầu file.
   const groups = useMemo(() => {
+    const today = vnTodayStr();
     const cho = [];
     const daNhap = [];
     for (const r of allRows) {
       if (hasPartial(r)) { daNhap.push(r); continue; }
-      cho.push(r);
+      if (isWaitingRow(r, manualChecks, today)) cho.push(r);
     }
     return { cho, daNhap };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -762,42 +794,37 @@ export default function BaoCaoHoanChuaNhan() {
 
   const sumMoney = (rows) => rows.reduce((s, r) => s + (Number(r.amount) || 0), 0);
 
-  // Deps chung cho vị từ danh sách hợp nhất (dùng ở danh sách, Excel, ...).
+  // Deps chung cho vị từ danh sách "Cần check tay" (dùng ở danh sách, Excel, ...).
   function unifiedDeps() {
     return {
       hasPartialFn: hasPartial,
       manualChecks,
-      confirmedReceivedIds,
       todayStr: vnTodayStr(),
       origStatusById,
       origStatusByEcom,
     };
   }
 
-  // --- Mục hợp nhất "Cần check tay" (trên tập tải riêng checkRows) ---
-  // Ứng viên tra lịch sử xác nhận + ứng viên nhánh (b) để tra trạng thái
-  // đơn gốc. Dẫn xuất từ cùng manualChecks + tập đơn 1 phần + tập xác
-  // nhận như các nhóm khác nên quét / xác nhận / sửa tay xong là đơn tự
-  // biến khỏi danh sách, không cần tải lại trang.
-  const unifiedCandidates = useMemo(() => {
+  // --- Mục "Cần check tay" (trên tập tải riêng checkRows) ---
+  // Ứng viên để tra trạng thái đơn gốc (quy tắc v): đủ các điều kiện
+  // (i)-(iv) của needCheckBaseOf — tức là chỉ còn chờ kiểm tra đơn gốc
+  // có ở 72 không. Dẫn xuất từ cùng manualChecks + tập đơn 1 phần như
+  // các nhóm khác nên quét / sửa tay xong là đơn tự biến khỏi danh sách,
+  // không cần tải lại trang.
+  const needCheckCandidates = useMemo(() => {
     const today = vnTodayStr();
-    return checkRows.filter((r) => isUnifiedCandidate(r, hasPartial, manualChecks, today));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR]);
-  const unifiedBranchBCandidates = useMemo(() => {
-    const today = vnTodayStr();
-    return checkRows.filter((r) => passesNeedCheckRules123(r, hasPartial, manualChecks, today).pass);
+    return checkRows.filter((r) => needCheckBaseOf(r, { hasPartialFn: hasPartial, manualChecks, todayStr: today }).pass);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR]);
 
-  // Tra trạng thái đơn gốc cho ứng viên nhánh (b) (quy tắc 4).
+  // Tra trạng thái đơn gốc cho ứng viên (quy tắc v: loại khi đơn gốc ở 72).
   // Chỉ tra những đơn chưa có trong cache (chia lô 100); lỗi -> bỏ qua
-  // quy tắc 4 (giữ luật 1-3) và hiện ghi chú, không sập trang.
+  // quy tắc v (giữ luật (i)-(iv)) và hiện ghi chú, không sập trang.
   useEffect(() => {
     let cancelled = false;
     const needIds = new Set();
     const needEcoms = new Set();
-    for (const row of unifiedBranchBCandidates) {
+    for (const row of needCheckCandidates) {
       const nid = row?.raw_data?.nhanhOrderId;
       if (nid !== null && nid !== undefined && nid !== '' && !origStatusById.has(String(nid))) needIds.add(String(nid));
       const oid = row?.original_ecom_order_id;
@@ -836,57 +863,20 @@ export default function BaoCaoHoanChuaNhan() {
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unifiedBranchBCandidates]);
+  }, [needCheckCandidates]);
 
-  // Tra lịch sử xác nhận nhận hàng thật cho các ứng viên: chỉ những
-  // return_id chưa tra bao giờ (cache trong ref) mới tra, chia lô 100.
-  // Lỗi -> coi như chưa xác nhận đơn nào + ghi chú mờ, không sập trang.
-  const confirmedFetchedRef = useRef(new Set());
-  useEffect(() => {
-    let cancelled = false;
-    const missing = unifiedCandidates
-      .map((r) => String(r.return_id))
-      .filter((id) => id && !confirmedFetchedRef.current.has(id));
-    if (missing.length === 0) return;
-    const chunk = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
-    (async () => {
-      try {
-        const found = new Set();
-        for (const part of chunk(missing, 100)) {
-          const { data, error } = await supabase
-            .from('return_receipt_check_history')
-            .select('return_id')
-            .in('return_id', part)
-            .in('source', ['quet', 'thu_cong'])
-            .eq('received_status', 'Đã nhận');
-          if (error) throw error;
-          for (const r of data || []) if (r.return_id) found.add(String(r.return_id));
-        }
-        if (cancelled) return;
-        missing.forEach((id) => confirmedFetchedRef.current.add(id));
-        if (found.size > 0) setConfirmedReceivedIds((prev) => new Set([...prev, ...found]));
-        setConfirmedError(false);
-      } catch (e) {
-        console.error('Lỗi tra lịch sử xác nhận nhận hàng:', e);
-        if (!cancelled) setConfirmedError(true);
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unifiedCandidates]);
-
-  // Danh sách hợp nhất cuối: 1 lần lọc qua vị từ thuần (không gộp nhánh)
-  // nên mỗi đơn xuất hiện tối đa 1 lần. Kèm nhánh + tuổi để hiển thị.
+  // Danh sách "Cần check tay" cuối: 1 lần lọc qua vị từ thuần nên mỗi
+  // đơn xuất hiện tối đa 1 lần. Kèm tuổi để hiển thị.
   const unifiedList = useMemo(() => {
     const deps = unifiedDeps();
     const out = [];
     for (const r of checkRows) {
-      const branch = unifiedBranchOf(r, deps);
-      if (branch) out.push({ row: r, branch, age: returnAgeDays(r, deps.todayStr) });
+      const { pass, age } = needCheckOf(r, deps);
+      if (pass) out.push({ row: r, age });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR, confirmedReceivedIds, origStatusById, origStatusByEcom]);
+  }, [checkRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR, origStatusById, origStatusByEcom]);
 
   const summary = useMemo(() => ({
     totalMoney: sumMoney(allRows),
@@ -969,7 +959,9 @@ export default function BaoCaoHoanChuaNhan() {
   const unifiedPageRows = filteredUnified.slice((safePageUnifiedFiltered - 1) * PAGE_SIZE, safePageUnifiedFiltered * PAGE_SIZE);
   function clearUniFilters() {
     setUniSearch(''); setUniPlatform(''); setUniShop(''); setUniProduct('');
-    setUniStatus(''); setUniTick(''); setUniCrtFrom(''); setUniCrtTo('');
+    setUniStatus(''); setUniTick('');
+    // "Xóa lọc" về lại mặc định: chỉ 30 ngày gần nhất (không để trống = tải hết).
+    setUniCrtFrom(addDaysStr(vnTodayStr(), -30)); setUniCrtTo(vnTodayStr());
     setUniMoneyMin(''); setUniMoneyMax(''); setPageUnified(1);
   }
 
@@ -1035,7 +1027,8 @@ export default function BaoCaoHoanChuaNhan() {
           'Số lượng': totalQty(r),
           'Ngày hàng về': m?.received_date ? fmtDateOnly(m.received_date) : '',
           'Trạng thái nhận': m?.received_status || '',
-          'Nhóm': hasPartial(r) ? 'Đã nhập kho' : (isInUnifiedList(r, deps) ? 'Cần check tay' : 'Đang chờ hàng về'),
+          'Trạng thái hãng': m?.carrier_status || '',
+          'Nhóm': hasPartial(r) ? 'Đã nhập kho' : (m?.received_status === 'Đã nhận' ? 'Đã nhận' : (isInNeedCheckList(r, deps) ? 'Cần check tay' : 'Đang chờ hàng về')),
         };
       });
       const worksheet = XLSX.utils.json_to_sheet(rowData);
@@ -1083,16 +1076,9 @@ export default function BaoCaoHoanChuaNhan() {
       if (err) throw err;
       setManualChecks((prev) => {
         const next = new Map(prev);
-        next.set(row.return_id, { return_id: row.return_id, received_date: date || null, received_status: status });
-        return next;
-      });
-      // Ghi tay là xác nhận của người dùng: Đã nhận -> thêm vào tập xác
-      // nhận (đơn biến khỏi "Cần check tay"); Chưa nhận / Đã khiếu nại
-      // -> gỡ khỏi tập xác nhận (ghi đè của người dùng thắng lịch sử cũ).
-      setConfirmedReceivedIds((prev) => {
-        const next = new Set(prev);
-        if (status === 'Đã nhận') next.add(String(row.return_id));
-        else next.delete(String(row.return_id));
+        // Giữ carrier_status đã có trong bộ nhớ (upsert chỉ ghi các cột
+        // received_*, không chạm tới carrier_status ở DB).
+        next.set(row.return_id, { ...(prev.get(row.return_id) || {}), return_id: row.return_id, received_date: date || null, received_status: status });
         return next;
       });
       // Ghi lịch sử (best-effort): sửa tay = 1 dòng riêng, source 'thu_cong'.
@@ -1142,15 +1128,9 @@ export default function BaoCaoHoanChuaNhan() {
       if (err) throw err;
       setManualChecks((prev) => {
         const next = new Map(prev);
-        for (const p of payloads) next.set(p.return_id, { return_id: p.return_id, received_date: p.received_date, received_status: p.received_status });
-        return next;
-      });
-      setConfirmedReceivedIds((prev) => {
-        const next = new Set(prev);
-        for (const id of ids) {
-          if (status === 'Đã nhận') next.add(String(id));
-          else next.delete(String(id));
-        }
+        // Giữ carrier_status đã có trong bộ nhớ (upsert chỉ ghi các cột
+        // received_*, không chạm tới carrier_status ở DB).
+        for (const p of payloads) next.set(p.return_id, { ...(prev.get(p.return_id) || {}), return_id: p.return_id, received_date: p.received_date, received_status: p.received_status });
         return next;
       });
       const batchId = genUuid();
@@ -1184,9 +1164,7 @@ export default function BaoCaoHoanChuaNhan() {
   // Đã nhận (và đơn đã có đơn hoàn 1 phần) bị loại khỏi danh sách — xong
   // là biến mất. Thêm nữa: đơn nào hôm nay đã check rồi (có dòng trong
   // bảng lịch sử từ 00:00 VN hôm nay) cũng bỏ qua luôn, khỏi check đi
-  // check lại; sang hôm sau đơn Chưa nhận lại hiện để check tiếp. Bảng
-  // chính không đổi: đơn Đã nhận (chưa được xác nhận nhận hàng thật qua
-  // quét/tick) vẫn nằm trong mục hợp nhất "Cần check tay" để đi đòi.
+  // check lại; sang hôm sau đơn Chưa hoàn lại hiện để check tiếp.
   const bulkRows = useMemo(
     () => allRows.filter((r) => !hasPartial(r) && manualChecks.get(r.return_id)?.received_status !== 'Đã nhận' && !checkedTodayIds.has(r.return_id)),
     [allRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR, checkedTodayIds]
@@ -1203,7 +1181,7 @@ export default function BaoCaoHoanChuaNhan() {
       if (!map.has(name)) map.set(name, []);
       map.get(name).push(r);
     }
-    const order = ['SPX (Shopee Express)', 'J&T Express', 'GHN', 'GHTK', 'Viettel Post', 'Hãng khác'];
+    const order = ['SPX (Shopee Express)', 'J&T Express', 'GHN', 'GHTK', 'Viettel Post', 'VNPost', 'Hãng khác'];
     return order.filter((n) => map.has(n)).map((n) => ({ name: n, rows: map.get(n) }));
   }, [bulkRows]);
 
@@ -1479,7 +1457,9 @@ export default function BaoCaoHoanChuaNhan() {
         if (err) throw err;
         setManualChecks((prev) => {
           const next = new Map(prev);
-          next.set(payload.return_id, { return_id: payload.return_id, received_date: today, received_status: 'Đã nhận' });
+          // Giữ carrier_status đã có trong bộ nhớ (upsert chỉ ghi các cột
+          // received_*, không chạm tới carrier_status ở DB).
+          next.set(payload.return_id, { ...(prev.get(payload.return_id) || {}), return_id: payload.return_id, received_date: today, received_status: 'Đã nhận' });
           return next;
         });
         setCheckedTodayIds((prev) => {
@@ -1487,9 +1467,6 @@ export default function BaoCaoHoanChuaNhan() {
           next.add(payload.return_id);
           return next;
         });
-        // Quét là xác nhận nhận hàng thật (lịch sử nguồn 'quet'): đơn
-        // biến khỏi mục "Cần check tay" ngay, không chờ tra lại lịch sử.
-        setConfirmedReceivedIds((prev) => new Set(prev).add(String(payload.return_id)));
         // Quét trong phiên này cũng tính vào "Đã quét hôm nay".
         setScannedTodayIds((prev) => {
           const next = new Set(prev);
@@ -1657,56 +1634,100 @@ export default function BaoCaoHoanChuaNhan() {
     setBulkPreview({ matched, alreadyChecked, unmatched, source: pasteSource });
   }
 
-  // Ghi xem trước vào return_receipt_checks. Chỉ đơn có trong đoạn dán
-  // mới bị chạm tới (lần dán mới nhất thắng với những đơn đó); đơn nào
-  // không có trong đoạn dán thì để nguyên. Ghi xong map kiểm tay cập nhật
-  // trong bộ nhớ nên các đơn tự nhảy nhóm ngay, không cần tải lại trang.
+  // Ghi xem trước vào return_receipt_checks — CHỈ trạng thái HÃNG
+  // (carrier_status), KHÔNG chạm tới trạng thái nhận (received_status):
+  // hãng báo Delivered / "Đã giao" chỉ nghĩa là ship đã trả hàng về,
+  // chưa chứng minh chủ shop đã cầm hàng. Chỉ đơn có trong đoạn dán mới
+  // bị chạm tới (lần dán mới nhất thắng với những đơn đó); đơn nào không
+  // có trong đoạn dán thì để nguyên.
+  // - Dòng đã có trong manualChecks: chỉ UPDATE carrier_status (giữ
+  //   nguyên received_status/received_date). Gộp theo từng giá trị
+  //   carrier_status để chỉ cần tối đa 2 câu update.
+  // - Dòng chưa có: INSERT 1 dòng mới với carrier_status đã set,
+  //   received_status='Chưa nhận', received_date NULL.
+  // Lịch sử vẫn ghi (source aftership/17track/excel/generic, batch_id
+  // chung 1 lô, shipment_status = trạng thái hãng thô), nhưng dòng lịch
+  // sử ghi received_status = trạng thái nhận HIỆN TẠI (chưa đổi) chứ
+  // không phải 'Đã nhận' — vì dán kết quả không đổi trạng thái nhận.
   async function handleBulkConfirm() {
     if (!bulkPreview || bulkPreview.matched.length === 0 || bulkSaving) return;
     setBulkSaving(true);
     setBulkMsg('');
     setBulkError('');
     try {
-      const payloads = bulkPreview.matched.map(({ row, delivered, receivedDate }) => ({
-        return_id: row.return_id,
-        received_date: delivered ? receivedDate : null,
-        received_status: delivered ? 'Đã nhận' : 'Chưa nhận',
-        updated_by: userEmail || '',
-        updated_at: new Date().toISOString(),
+      const nowIso = new Date().toISOString();
+      const items = bulkPreview.matched.map(({ row, tracking, shipStatus, delivered }) => ({
+        row,
+        tracking,
+        shipStatus,
+        carrierStatus: carrierStatusOfPaste(delivered),
+        // Trạng thái nhận hiện tại (trước khi ghi) — để ghi lịch sử.
+        currentReceipt: manualChecks.get(row.return_id)?.received_status || 'Chưa nhận',
+        currentReceiptDate: manualChecks.get(row.return_id)?.received_date || null,
       }));
-      const { error: err } = await supabase.from('return_receipt_checks').upsert(payloads, { onConflict: 'return_id' });
-      if (err) throw err;
+      const existing = items.filter((it) => manualChecks.has(it.row.return_id));
+      const fresh = items.filter((it) => !manualChecks.has(it.row.return_id));
+      // 1) Dòng đã có: update riêng carrier_status, gộp theo giá trị.
+      for (const carrierStatus of ['Đã hoàn', 'Chưa hoàn']) {
+        const ids = existing.filter((it) => it.carrierStatus === carrierStatus).map((it) => it.row.return_id);
+        if (ids.length === 0) continue;
+        const { error: err } = await supabase
+          .from('return_receipt_checks')
+          .update({ carrier_status: carrierStatus, updated_by: userEmail || '', updated_at: nowIso })
+          .in('return_id', ids);
+        if (err) throw err;
+      }
+      // 2) Dòng chưa có: insert mới, nhận mặc định 'Chưa nhận', chưa có ngày về.
+      if (fresh.length > 0) {
+        const { error: err } = await supabase.from('return_receipt_checks').insert(fresh.map((it) => ({
+          return_id: it.row.return_id,
+          carrier_status: it.carrierStatus,
+          received_status: 'Chưa nhận',
+          received_date: null,
+          updated_by: userEmail || '',
+          updated_at: nowIso,
+        })));
+        if (err) throw err;
+      }
       setManualChecks((prev) => {
         const next = new Map(prev);
-        for (const p of payloads) {
-          next.set(p.return_id, { return_id: p.return_id, received_date: p.received_date, received_status: p.received_status });
+        for (const it of items) {
+          const old = prev.get(it.row.return_id) || {};
+          next.set(it.row.return_id, {
+            ...old,
+            return_id: it.row.return_id,
+            carrier_status: it.carrierStatus,
+            // Dòng mới chưa có nhận: mặc định 'Chưa nhận', ngày null.
+            received_status: old.received_status || 'Chưa nhận',
+            received_date: old.received_date || null,
+          });
         }
         return next;
       });
-      // Đơn vừa xác nhận xong tính là "đã check hôm nay" ngay trong bộ
-      // nhớ — biến mất khỏi danh sách, trang sau tự đôn lên, không cần
-      // tải lại.
+      // Đơn vừa check xong tính là "đã check hôm nay" ngay trong bộ
+      // nhớ — biến mất khỏi danh sách dán, trang sau tự đôn lên, không
+      // cần tải lại.
       setCheckedTodayIds((prev) => {
         const next = new Set(prev);
-        for (const p of payloads) next.add(p.return_id);
+        for (const it of items) next.add(it.row.return_id);
         return next;
       });
-      const nNhan = payloads.filter((p) => p.received_status === 'Đã nhận').length;
-      const nChua = payloads.length - nNhan;
+      const nHoan = items.filter((it) => it.carrierStatus === 'Đã hoàn').length;
+      const nChuaHoan = items.length - nHoan;
       // Ghi lịch sử (best-effort): 1 lô dán = 1 batch_id chung cho cả lô.
       const batchId = genUuid();
-      const historyOk = await logCheckHistory(bulkPreview.matched.map(({ row, tracking, shipStatus, delivered, receivedDate }) => ({
-        return_id: row.return_id,
-        tracking_number: tracking,
-        shipment_status: shipStatus || null,
-        received_status: delivered ? 'Đã nhận' : 'Chưa nhận',
-        received_date: delivered ? receivedDate : null,
+      const historyOk = await logCheckHistory(items.map((it) => ({
+        return_id: it.row.return_id,
+        tracking_number: it.tracking || null,
+        shipment_status: it.shipStatus || null,
+        received_status: it.currentReceipt,
+        received_date: it.currentReceiptDate,
         source: bulkPreview.source || 'aftership',
         batch_id: batchId,
       })), userEmail);
       if (historyOk) setHistoryWarn('');
       else setHistoryWarn('Không lưu được lịch sử — chạy migration bảng lịch sử trước.');
-      setBulkMsg(`Đã cập nhật ${payloads.length} đơn: ${nNhan} Đã nhận, ${nChua} Chưa nhận.${bulkPreview.unmatched.length > 0 ? ` ${bulkPreview.unmatched.length} mã không khớp.` : ''}${(bulkPreview.alreadyChecked?.length || 0) > 0 ? ` ${bulkPreview.alreadyChecked.length} mã đã kiểm rồi.` : ''}`);
+      setBulkMsg(`Đã cập nhật trạng thái hãng cho ${items.length} đơn: ${nHoan} hãng đã hoàn, ${nChuaHoan} hãng chưa hoàn. Trạng thái nhận hàng không đổi (chỉ quét/tick mới đổi).${bulkPreview.unmatched.length > 0 ? ` ${bulkPreview.unmatched.length} mã không khớp.` : ''}${(bulkPreview.alreadyChecked?.length || 0) > 0 ? ` ${bulkPreview.alreadyChecked.length} mã đã kiểm rồi.` : ''}`);
       setBulkPreview(null);
       setPasteText('');
       setExcelUpload(null);
@@ -1790,12 +1811,17 @@ export default function BaoCaoHoanChuaNhan() {
             <div className="mt-1"><span className="inline-block px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-800 border border-red-200 whitespace-nowrap">Quá {ageDays} ngày</span></div>
           )}
         </td>
-        {/* Nhận hàng: trạng thái trên, ngày về dưới */}
+        {/* Nhận hàng: trạng thái nhận trên, ngày về dưới, trạng thái hãng
+            (Hãng: Đã hoàn / Chưa hoàn) ở dòng cuối — chỉ hiện khi đã có
+            carrier_status (dán kết quả mới ghi); chưa dán thì không hiện. */}
         <td className="px-3 py-3.5 min-w-0">
           {m ? (
             <>
               <span className={`inline-block px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap ${m.received_status === 'Đã nhận' ? 'bg-green-100 text-green-800 border border-green-200' : m.received_status === 'Đã khiếu nại' ? 'bg-purple-100 text-purple-800 border border-purple-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}`}>{m.received_status}</span>
               <div className="text-xs text-slate-500 mt-1 whitespace-nowrap">{m.received_date ? fmtDateOnly(m.received_date) : '—'}</div>
+              {m.carrier_status ? (
+                <div className={`text-xs mt-1 whitespace-nowrap ${m.carrier_status === 'Đã hoàn' ? 'text-emerald-700' : 'text-slate-500'}`}>Hãng: {m.carrier_status}</div>
+              ) : null}
             </>
           ) : (<span className="text-slate-400 text-xs">Chưa kiểm</span>)}
         </td>
@@ -1885,12 +1911,15 @@ export default function BaoCaoHoanChuaNhan() {
     );
   }
 
-  // Mục hợp nhất "Cần check tay": 3 nhánh (hãng báo đã giao nhưng chưa
-  // xác nhận nhận thật / quá 4 ngày chưa quét / đã khiếu nại), trừ đơn
-  // đã có đơn hoàn 1 phần hoặc đã xác nhận nhận hàng thật (quét/tick).
-  // Bộ lọc + phân trang + tick hàng loạt riêng, không phụ thuộc bộ lọc
-  // trang. Dùng chung bảng/cột với nhóm còn lại; copy 20 hoặc 40 mã
-  // 1 lần để check tay (copy theo danh sách đã lọc).
+  // Mục "Cần check tay": đơn có mã trả thật, tạo quá 4 ngày, chưa có
+  // xác nhận nhận hàng thật (quét/tick "Đã nhận"), không có đơn hoàn
+  // 1 phần, đơn gốc (nếu nối được) không ở 72. Trạng thái hãng ("Đã
+  // hoàn"/"Chưa hoàn") không ảnh hưởng danh sách này. Mặc định chỉ tải
+  // đơn tạo trong 30 ngày gần nhất (uniCrtFrom/uniCrtTo); nới rộng ô
+  // ngày để tải thêm đơn cũ hơn. Bộ lọc + phân trang + tick hàng loạt
+  // riêng, không phụ thuộc bộ lọc trang. Dùng chung bảng/cột với nhóm
+  // còn lại; copy 20 hoặc 40 mã 1 lần để check tay (copy theo danh
+  // sách đã lọc).
   function renderUnifiedSection() {
     const rows = filteredUnified;
     const n20 = Math.min(20, rows.length);
@@ -1921,10 +1950,9 @@ export default function BaoCaoHoanChuaNhan() {
             <h2 className="text-lg font-bold text-slate-900">
               Cần check tay <span className="text-slate-500 font-medium">({unifiedList.length} đơn · Tổng hoàn {fmtMoney(sumMoney(unifiedList.map((x) => x.row)))} VND)</span>
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">Hãng báo đã giao nhưng chưa xác nhận nhận thật, đơn quá 4 ngày chưa quét, hoặc đơn đã khiếu nại — trừ đơn đã có đơn hoàn 1 phần và đơn đã xác nhận nhận hàng thật (quét/tick). Tick Đã nhận là gỡ đơn khỏi danh sách ngay.</p>
+            <p className="text-xs text-slate-500 mt-0.5">Đơn có mã trả thật, tạo quá 4 ngày, chưa có xác nhận nhận hàng thật (quét/tick "Đã nhận") — trừ đơn đã có đơn hoàn 1 phần và đơn gốc đang ở trạng thái 72. Đơn đã khiếu nại mà quá 4 ngày vẫn nằm trong danh sách. Hãng báo đã giao ("Hãng: Đã hoàn") chưa tính là đã nhận. Mặc định chỉ tải đơn tạo trong 30 ngày gần nhất — nới rộng ô "Từ ngày tạo" để xem đơn cũ hơn.</p>
             {checkError && <p className="text-xs text-red-600 mt-1">{checkError}</p>}
-            {confirmedError && <p className="text-xs text-amber-700 mt-1">Không kiểm tra được lịch sử xác nhận nhận hàng — danh sách đang hiển thị như thể chưa có đơn nào được xác nhận (đơn đã quét/tick vẫn có thể hiện lại).</p>}
-            {origStatusError && <p className="text-xs text-amber-700 mt-1">Không kiểm tra được trạng thái đơn gốc — danh sách đang hiển thị theo luật tuổi + chưa quét (chưa lọc 71/74/72).</p>}
+            {origStatusError && <p className="text-xs text-amber-700 mt-1">Không kiểm tra được trạng thái đơn gốc — danh sách đang hiển thị theo luật tuổi + chưa nhận (chưa lọc đơn gốc ở 72).</p>}
           </div>
           <div className="flex flex-wrap gap-2">
             <button disabled={rows.length === 0} onClick={() => copyCodes(rows.slice(0, 20).map((x) => x.row), 'Cần check tay (20 mã)')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
@@ -2112,7 +2140,7 @@ export default function BaoCaoHoanChuaNhan() {
           <button onClick={handleFilter} className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer">Lọc</button>
         </div>
         <p className="text-xs text-slate-500 mt-3">
-          Tổng: <strong className="text-slate-800">{total}</strong> đơn theo bộ lọc (có mã đơn trả thật SPX/G/8/1/VTP, trạng thái Nhanh Đã hoàn tiền hoặc Đang hoàn tiền). Ngày cập nhật lọc theo ngày cập nhật trên Nhanh; ngày tạo lọc theo ngày tạo yêu cầu.
+          Tổng: <strong className="text-slate-800">{total}</strong> đơn theo bộ lọc (có mã đơn trả thật SHOPEE/SPX/VNGH/VTP/EA/379/G/8/1, trạng thái Nhanh Đã hoàn tiền hoặc Đang hoàn tiền). Ngày cập nhật lọc theo ngày cập nhật trên Nhanh; ngày tạo lọc theo ngày tạo yêu cầu.
         </p>
         {error && <p className="text-sm font-bold text-red-500 mt-2">{error}</p>}
         {partialMissing && (
@@ -2185,7 +2213,7 @@ export default function BaoCaoHoanChuaNhan() {
       {renderGroupSection({
         sectionKey: 'cho',
         title: 'Đang chờ hàng về',
-        desc: 'Chưa kiểm nhận, hoặc kiểm tay vẫn là Chưa nhận — đang chờ hãng giao hàng về kho.',
+        desc: 'Đơn tạo trong 4 ngày gần đây (hoặc chưa đọc được ngày tạo), có mã trả thật, chưa có xác nhận nhận hàng thật — đang chờ hãng giao hàng về kho.',
         rows: groups.cho,
         page: safePageCho,
         setPage: setPageCho,
@@ -2200,7 +2228,7 @@ export default function BaoCaoHoanChuaNhan() {
             <div className="sticky top-0 z-10 bg-slate-900 text-white px-6 py-4 flex items-start justify-between gap-4 rounded-t-2xl">
               <div>
                 <h2 className="text-lg font-bold">Đối chiếu hàng loạt</h2>
-                <p className="text-xs text-slate-300 mt-0.5">Copy mã vận đơn theo từng hãng đi check AfterShip, rồi dán kết quả vào để cập nhật trạng thái. Delivered → Đã nhận (kèm ngày giao), còn lại → Chưa nhận.</p>
+                <p className="text-xs text-slate-300 mt-0.5">Copy mã vận đơn theo từng hãng đi check AfterShip, rồi dán kết quả vào để cập nhật trạng thái hãng. Delivered → Hãng: Đã hoàn, còn lại → Hãng: Chưa hoàn. Dán kết quả chỉ cập nhật trạng thái hãng, KHÔNG đổi trạng thái nhận hàng (chỉ quét mã / tick tay mới xác nhận đã nhận hàng thật).</p>
               </div>
               <button onClick={closeBulk} className="p-2 rounded-lg hover:bg-slate-700 cursor-pointer flex-shrink-0" aria-label="Đóng">
                 <X size={18} />
@@ -2226,7 +2254,7 @@ export default function BaoCaoHoanChuaNhan() {
                     </div>
                     <button onClick={fetchHistory} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer">Tải lại</button>
                   </div>
-                  <p className="text-xs text-slate-500">Lịch sử kiểm nhận gần nhất (tối đa 200 dòng): mỗi lần dán kết quả hoặc quét 1 lô là 1 lô, sửa tay từng đơn ghi riêng 1 dòng "Thủ công". Đơn Delivered sau khi cập nhật không biến mất — nó nhảy từ nhóm Đang chờ sang mục Cần check tay, vẫn xem lại được ở đây.</p>
+                  <p className="text-xs text-slate-500">Lịch sử kiểm nhận gần nhất (tối đa 200 dòng): mỗi lần dán kết quả hoặc quét 1 lô là 1 lô, sửa tay từng đơn ghi riêng 1 dòng "Thủ công". Dán kết quả chỉ cập nhật trạng thái hãng nên đơn không nhảy nhóm sau khi dán — chỉ quét/tick "Đã nhận" mới gỡ đơn khỏi "Cần check tay" / "Đang chờ".</p>
                   {historyError && <p className="text-sm font-bold text-amber-700">{historyError}</p>}
                   {historyLoading ? (
                     <div className="p-8 flex items-center justify-center gap-2 text-sm font-bold text-slate-500">
@@ -2376,7 +2404,7 @@ export default function BaoCaoHoanChuaNhan() {
                       placeholder={'AfterShip:\nTracking number: 854169939715\nCourier name: J&T Express Vietnam\nShipment status: Delivered\nDelivery date: Nov 7, 2026 (Sat)\n\n17Track (1 dòng 1 đơn):\nSPXVN06943735682A\tVietnam\tUnknown\t2026-11-04 08:45 Parcel has been delivered\tDelivered\t(5 Days)'}
                       className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-mono"
                     />
-                    <p className="text-xs text-slate-500 mt-1">Chấp nhận cả 2 dạng: AfterShip (khối nhiều dòng) hoặc 17Track / các bên khác (1 dòng 1 đơn: mã + trạng thái + ngày). Delivered → Đã nhận, trạng thái khác → Chưa nhận.</p>
+                    <p className="text-xs text-slate-500 mt-1">Chấp nhận cả 2 dạng: AfterShip (khối nhiều dòng) hoặc 17Track / các bên khác (1 dòng 1 đơn: mã + trạng thái + ngày). Delivered → Hãng: Đã hoàn, trạng thái khác → Hãng: Chưa hoàn. Trạng thái nhận hàng không đổi.</p>
                     <div className="flex flex-wrap items-center gap-3 mt-2">
                       <button onClick={handleBulkPreview} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer">Cập nhật trạng thái</button>
                       {bulkError && <p className="text-sm font-bold text-red-500">{bulkError}</p>}
@@ -2416,7 +2444,7 @@ export default function BaoCaoHoanChuaNhan() {
                               <span className="font-mono font-bold text-indigo-700 break-all">{p.tracking}</span>
                               <span className="text-xs text-slate-500">{p.shipStatus || '(không có trạng thái)'}</span>
                               <span className={`ml-auto text-xs font-bold px-2 py-1 rounded-full ${p.delivered ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                                {p.delivered ? `Đã nhận${p.receivedDate ? ` · ${fmtDateOnly(p.receivedDate)}` : ''}` : 'Chưa nhận'}
+                                {p.delivered ? 'Hãng: Đã hoàn' : 'Hãng: Chưa hoàn'}
                               </span>
                             </div>
                           ))}

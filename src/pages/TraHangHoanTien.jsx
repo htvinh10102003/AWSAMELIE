@@ -60,9 +60,12 @@ function escapeLike(q) {
 function normCode(s) {
   return String(s || '').trim().toUpperCase().replace(/[\s,]+/g, '');
 }
-// Mã đơn trả "thật" chỉ là mã vận đơn trả có đầu SPX / G / 8 / 1 / VTP.
-// Mọi mã khác đều chưa phải mã đơn trả (hiển thị "Chưa có mã đơn trả").
-const RETURN_CODE_PREFIXES = ['SPX', 'G', '8', '1', 'VTP'];
+// Mã đơn trả "thật" chỉ là mã vận đơn trả có đầu SHOPEE / SPX / VNGH / VTP /
+// EA / G / 8 / 1. Mọi mã khác đều chưa phải mã đơn trả (hiển thị
+// "Chưa có mã đơn trả"). Thứ tự dài trước (xem BaoCaoHoanChuaNhan.jsx).
+// VNGH = GHN; EA = VNPost (EMS, VD EA507283035VN); SHOPEE = mã sàn;
+// 379 = J&T (mã số VD 37910474801).
+const RETURN_CODE_PREFIXES = ['SHOPEE', 'SPX', 'VNGH', 'VTP', 'EA', '379', 'G', '8', '1'];
 function isReturnCode(code) {
   const c = String(code || '').trim().toUpperCase();
   return c !== '' && RETURN_CODE_PREFIXES.some((p) => c.startsWith(p));
