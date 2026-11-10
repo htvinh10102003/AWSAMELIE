@@ -268,14 +268,21 @@ export default function OrderReport() {
     const [specialMode, setSpecialMode] = useState(false);
     const [specialTab, setSpecialTab] = useState('all'); // all | confirm | print | transit
     // Phân trang thật phía server: tổng số load đúng bằng count query,
-    // dữ liệu chỉ tải đúng 20 đơn của trang đang mở, bấm sang trang nào
+    // dữ liệu chỉ tải đúng số đơn của trang đang mở (theo số dòng đã
+    // chọn), bấm sang trang nào
     // mới tải trang đó (không còn lazyload 1000 đơn + Tải thêm nữa).
     const [specialPage, setSpecialPage] = useState(1);
+    const [specialPageSize, setSpecialPageSize] = useState(20);
     const [specialTotal, setSpecialTotal] = useState(0);
     const [specialPageOrders, setSpecialPageOrders] = useState([]);
     const [specialCounts, setSpecialCounts] = useState({});
     const [specialMissingTotal, setSpecialMissingTotal] = useState(null);
     const [specialReloadToken, setSpecialReloadToken] = useState(0);
+    // Toàn bộ đơn khớp bộ lọc hiện tại (chỉ id + trường phục vụ copy):
+    // đường tìm theo nhãn / tồn kho / khách / sản phẩm đã có sẵn danh
+    // sách đầy đủ trong bộ nhớ nên lưu luôn; đường thường thì null và
+    // chỉ tải lười khi bấm Copy (xem fetchNormalBranchCopyRows).
+    const [specialAllCopyRows, setSpecialAllCopyRows] = useState(null);
     // Tập ID đơn đã xóa trên Nhanh (bảng deleted_orders): tải 1 lần khi
     // vào báo cáo đặc biệt. Bảng chưa có (chưa chạy migration) thì coi
     // như tập rỗng, không làm hỏng trang; lần vào sau sẽ thử tải lại.
@@ -447,6 +454,7 @@ export default function OrderReport() {
     const [isUpdatingMissingCarrier, setIsUpdatingMissingCarrier] = useState(false);
     const [missingCarrierProgress, setMissingCarrierProgress] = useState(0);
     const [copyMessage, setCopyMessage] = useState('');
+    const [copyLoading, setCopyLoading] = useState(false);
     const [sendingOrder, setSendingOrder] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
 
@@ -612,10 +620,12 @@ export default function OrderReport() {
     // allocation theo ID để giữ nguyên logic đủ hàng / tạm giữ / hết hàng.
     // --- Báo cáo đặc biệt: phân trang thật phía server ---
     // Tổng số đơn load đúng bằng count query (không còn … hay 1000+),
-    // còn dữ liệu đơn chỉ tải đúng 20 đơn của trang đang mở, bấm sang
+    // còn dữ liệu đơn chỉ tải đúng số đơn của trang đang mở (theo số
+    // dòng đã chọn), bấm sang
     // trang nào mới tải trang đó. Bộ lọc dùng chung với báo cáo cũ được
     // đẩy xuống query server để tổng số và các trang khớp nhau.
-    const SPECIAL_PAGE_SIZE = 20;
+    // Số dòng / trang do người dùng chọn (20 / 50 / 100 / 200), xem
+    // specialPageSize ở trên.
     // Giới hạn số id đơn đã xóa đưa vào query .in() / .not() để URL
     // PostgREST không quá dài; vượt quá thì tab Đơn đã xóa / việc loại
     // đơn đã xóa khỏi các tab khác sẽ không đầy đủ.
@@ -654,7 +664,7 @@ export default function OrderReport() {
         return false;
     };
     // Tìm theo tên khách / SĐT ở báo cáo đặc biệt: phân trang thật phía
-    // server nên không lọc 20 dòng của trang đang mở được — phải kéo id
+    // server nên không lọc các dòng của trang đang mở được — phải kéo id
     // khớp trước qua đường JSON của raw_data (giống đường tìm theo sản
     // phẩm), rồi mới tính tổng số + lấy trang từ tập id đó. Chỉ khớp
     // được đơn nào có raw_data mang shippingAddress; đơn đồng bộ chỉ
@@ -853,7 +863,7 @@ export default function OrderReport() {
                 for (let i = 0; i < candidateIds.length; i += 1000) {
                     const chunkIds = candidateIds.slice(i, i + 1000);
                     let q = supabase.from('orders')
-                        .select('id, status, carrier_name, carrier_code, created_at');
+                        .select('id, status, carrier_name, carrier_code, created_at, sale_channel, ecom_order_id');
                     q = applySpecialFilters(q, { tabId: null, missingOnly: false });
                     q = orderBy(q).in('id', chunkIds);
                     const { data: rows, error } = await q;
@@ -886,11 +896,14 @@ export default function OrderReport() {
                     : specialOnlyMissingPrint
                     ? fieldRowsVisible.filter(isMissingTag)
                     : fieldRowsVisible.filter(o => specialTab === 'all' ? true : specialTab === 'confirm' ? isConfirmTag(o) : specialTab === 'print' ? isPrintTag(o) : isTransitTag(o));
+                // Lưu toàn bộ danh sách khớp bộ lọc (không chỉ trang đang
+                // mở) để nút Copy dùng khi không tick đơn nào.
+                setSpecialAllCopyRows(viewListTag.map(o => ({ id: o.id, sale_channel: o.sale_channel, ecom_order_id: o.ecom_order_id, carrier_code: o.carrier_code, carrier_name: o.carrier_name })));
                 const totalTag = viewListTag.length;
-                const totalPagesTag = Math.max(1, Math.ceil(totalTag / SPECIAL_PAGE_SIZE));
+                const totalPagesTag = Math.max(1, Math.ceil(totalTag / specialPageSize));
                 const effectivePageTag = totalTag > 0 ? Math.min(page, totalPagesTag) : 1;
                 if (effectivePageTag !== page) setSpecialPage(effectivePageTag);
-                const pageIdsTag = viewListTag.slice((effectivePageTag - 1) * SPECIAL_PAGE_SIZE, effectivePageTag * SPECIAL_PAGE_SIZE).map(o => o.id);
+                const pageIdsTag = viewListTag.slice((effectivePageTag - 1) * specialPageSize, effectivePageTag * specialPageSize).map(o => o.id);
                 let rowsTag = [];
                 if (pageIdsTag.length) {
                     const { data: full, error } = await supabase.from('orders').select(SPECIAL_COLUMNS).in('id', pageIdsTag);
@@ -908,15 +921,16 @@ export default function OrderReport() {
                 // Đường tìm theo sản phẩm: phải nối bảng order_products nên
                 // không đếm bằng count query được (join làm trùng đơn).
                 // Kéo id + trường phục vụ lọc tab theo từng đợt 1000 rồi
-                // khử trùng, từ đó tính đúng tổng số các tab và lấy 20 id
-                // của trang đang mở, sau đó mới kéo đủ dữ liệu 20 đơn đó.
+                // khử trùng, từ đó tính đúng tổng số các tab và lấy id
+                // của trang đang mở (theo số dòng đã chọn), sau đó mới kéo
+                // đủ dữ liệu các đơn đó.
                 const pq = escapeLike(debouncedSearchProduct.trim());
                 const matched = [];
                 const seen = new Set();
                 let offset = 0;
                 for (let chunk = 0; chunk < 50; chunk++) {
                     let q = supabase.from('orders')
-                        .select('id, status, carrier_name, carrier_code, order_products!inner(product_name, product_code)');
+                        .select('id, status, carrier_name, carrier_code, sale_channel, ecom_order_id, order_products!inner(product_name, product_code)');
                     q = applySpecialFilters(q, { tabId: null, missingOnly: false });
                     q = q.or(`product_name.ilike.%${pq}%,product_code.ilike.%${pq}%`, { foreignTable: 'order_products' });
                     q = orderBy(q).range(offset, offset + 999);
@@ -947,11 +961,14 @@ export default function OrderReport() {
                     : specialOnlyMissingPrint
                     ? matchedVisible.filter(isMissing)
                     : matchedVisible.filter(o => specialTab === 'all' ? true : specialTab === 'confirm' ? isConfirm(o) : specialTab === 'print' ? isPrint(o) : isTransit(o));
+                // Lưu toàn bộ danh sách khớp bộ lọc (không chỉ trang đang
+                // mở) để nút Copy dùng khi không tick đơn nào.
+                setSpecialAllCopyRows(viewList.map(o => ({ id: o.id, sale_channel: o.sale_channel, ecom_order_id: o.ecom_order_id, carrier_code: o.carrier_code, carrier_name: o.carrier_name })));
                 const total = viewList.length;
-                const totalPages = Math.max(1, Math.ceil(total / SPECIAL_PAGE_SIZE));
+                const totalPages = Math.max(1, Math.ceil(total / specialPageSize));
                 const effectivePage = total > 0 ? Math.min(page, totalPages) : 1;
                 if (effectivePage !== page) setSpecialPage(effectivePage);
-                const pageIds = viewList.slice((effectivePage - 1) * SPECIAL_PAGE_SIZE, effectivePage * SPECIAL_PAGE_SIZE).map(o => o.id);
+                const pageIds = viewList.slice((effectivePage - 1) * specialPageSize, effectivePage * specialPageSize).map(o => o.id);
                 let rows = [];
                 if (pageIds.length) {
                     const { data: full, error } = await supabase.from('orders').select(SPECIAL_COLUMNS).in('id', pageIds);
@@ -966,7 +983,8 @@ export default function OrderReport() {
                 return;
             }
             // Đường thường: 4 count query cho 4 tab (chạy song song) +
-            // 1 query lấy đúng 20 đơn của trang. Khi ở tab print thì đếm
+            // 1 query lấy đúng số đơn của trang (theo số dòng đã chọn).
+            // Khi ở tab print thì đếm
             // thêm số đơn thiếu mã để hiện ở tick lọc.
             const countFor = async (tabId, missingOnly) => {
                 let q = supabase.from('orders').select('id', { count: 'exact', head: true });
@@ -984,14 +1002,14 @@ export default function OrderReport() {
             const counts = { all: cAll, confirm: cConfirm, print: cPrint, transit: cTransit, deleted: cDeleted };
             const missingTotal = specialTab === 'print' ? await countFor('print', true) : null;
             const total = specialOnlyMissingPrint ? (missingTotal || 0) : counts[specialTab];
-            const totalPages = Math.max(1, Math.ceil(total / SPECIAL_PAGE_SIZE));
+            const totalPages = Math.max(1, Math.ceil(total / specialPageSize));
             const effectivePage = total > 0 ? Math.min(page, totalPages) : 1;
             if (effectivePage !== page) setSpecialPage(effectivePage);
             let rows = [];
             if (total > 0) {
                 let q = supabase.from('orders').select(SPECIAL_COLUMNS);
                 q = applySpecialFilters(q, { tabId: specialTab, missingOnly: specialOnlyMissingPrint });
-                q = orderBy(q).range((effectivePage - 1) * SPECIAL_PAGE_SIZE, effectivePage * SPECIAL_PAGE_SIZE - 1);
+                q = orderBy(q).range((effectivePage - 1) * specialPageSize, effectivePage * specialPageSize - 1);
                 const { data, error } = await q;
                 if (error) throw error;
                 rows = data || [];
@@ -1000,6 +1018,10 @@ export default function OrderReport() {
             setSpecialMissingTotal(missingTotal);
             setSpecialTotal(total);
             setSpecialPageOrders(rows);
+            // Đường thường không giữ danh sách đầy đủ trong bộ nhớ — nút
+            // Copy sẽ tải lười toàn bộ id theo bộ lọc khi bấm (xem
+            // fetchNormalBranchCopyRows trong executeCopy).
+            setSpecialAllCopyRows(null);
         } catch (err) {
             console.error('Lỗi tải báo cáo đặc biệt:', err);
             setSpecialError(err.message || 'Không tải được đơn từ bảng orders.');
@@ -1010,7 +1032,7 @@ export default function OrderReport() {
 
     // Đổi tab / ngày / bộ lọc / sắp xếp thì quay về trang 1 rồi mới tải,
     // để khỏi tải nhầm trang cũ với bộ lọc mới.
-    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), selectedTags.join(','), selectedStock.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0', specialAgingFilter ? '1' : '0', deletedOrderIds.size].join('|');
+    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), selectedTags.join(','), selectedStock.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0', specialAgingFilter ? '1' : '0', deletedOrderIds.size, specialPageSize].join('|');
     useEffect(() => {
         if (!specialMode) return;
         if (specialFilterSigRef.current !== specialFilterSig) {
@@ -1019,13 +1041,15 @@ export default function OrderReport() {
         }
         fetchSpecialData(specialPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, selectedTags, selectedStock, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialAgingFilter, specialPage, specialReloadToken, deletedOrderIds, data]);
+    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, selectedTags, selectedStock, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialAgingFilter, specialPage, specialPageSize, specialReloadToken, deletedOrderIds, data]);
 
-    // Đổi trang thì bỏ chọn cũ để nút Copy / Xuất chỉ tính trên trang mới.
+    // Đổi trang / đổi số dòng trên trang thì bỏ chọn cũ (các đơn đã tick
+    // chỉ thuộc trang cũ; nút Xuất vẫn tính trên trang mới, còn nút Copy
+    // khi không tick thì tính trên toàn bộ bộ lọc).
     useEffect(() => {
         if (specialMode) setSelectedOrders([]);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [specialPage]);
+    }, [specialPage, specialPageSize]);
 
     const handleToggleSpecialMode = () => {
         const next = !specialMode;
@@ -1857,7 +1881,7 @@ export default function OrderReport() {
     // Cửa sổ số trang cho pager của báo cáo đặc biệt: trang hiện tại ±2,
     // kèm trang đầu / cuối, chèn … ở khoảng trống.
     const specialPageWindow = () => {
-        const total = Math.max(1, Math.ceil(specialTotal / SPECIAL_PAGE_SIZE));
+        const total = Math.max(1, Math.ceil(specialTotal / specialPageSize));
         const pages = new Set([1, total]);
         for (let p = specialPage - 2; p <= specialPage + 2; p++) if (p >= 1 && p <= total) pages.add(p);
         const sorted = [...pages].sort((a, b) => a - b);
@@ -1866,21 +1890,37 @@ export default function OrderReport() {
         return out;
     };
 
-    // Danh sách hiển thị / thao tác: báo cáo đặc biệt chỉ dùng 20 đơn của
-    // trang đang mở, báo cáo cũ dùng filteredOrders. Các nút Copy / Xuất
-    // Excel / Thao tác ở dưới đều dùng chung các biến này nên ở chế độ
-    // đặc biệt chúng chỉ tính trên trang đang xem, không phải toàn bộ.
+    // Danh sách hiển thị / thao tác: báo cáo đặc biệt chỉ dùng các đơn của
+    // trang đang mở (theo số dòng đã chọn), báo cáo cũ dùng filteredOrders.
+    // Nút Xuất Excel / Thao tác dùng chung các biến này nên ở chế độ đặc
+    // biệt chúng chỉ tính trên trang đang xem, không phải toàn bộ. Riêng
+    // nút Copy: không tick đơn nào thì copy hết đơn khớp bộ lọc hiện tại
+    // (xem executeCopy + specialAllCopyRows), tick rồi thì chỉ copy các
+    // đơn đã tick.
     const effectiveFiltered = specialMode ? specialPageOrders : filteredOrders;
     const targetOrdersAction = selectedOrders.length > 0
         ? effectiveFiltered.filter(o => selectedOrders.includes(o.id))
         : effectiveFiltered;
 
-    const copyTargetCount = targetOrdersAction.length;
-    const ecomOrdersCount = targetOrdersAction.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id).length;
-    const carrierOrdersCount = targetOrdersAction.filter(o => specialMode ? hasRealCarrier(o) : o.carrier_code).length;
+    // Số lượng hiển thị trên nút Copy: không tick đơn nào ở báo cáo đặc
+    // biệt thì đếm trên toàn bộ bộ lọc (specialTotal), không chỉ trang
+    // đang mở; tick rồi thì đếm đúng các đơn đã tick.
+    const copyTargetCount = (specialMode && selectedOrders.length === 0) ? specialTotal : targetOrdersAction.length;
+    // Nguồn đếm cho 2 mục còn lại trong menu Copy: dùng danh sách đầy đủ
+    // đã lưu sẵn khi có (đường tìm theo nhãn / tồn kho / khách / sản
+    // phẩm); đường thường chưa tải thì đếm tạm trên trang đang mở, số
+    // thật sẽ hiện ở thông báo sau khi copy xong.
+    const copyCountSource = (specialMode && selectedOrders.length === 0 && specialAllCopyRows) ? specialAllCopyRows : targetOrdersAction;
+    const ecomOrdersCount = copyCountSource.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id).length;
+    const carrierOrdersCount = copyCountSource.filter(o => specialMode ? hasRealCarrier(o) : o.carrier_code).length;
+    // Khi không tick đơn nào ở báo cáo đặc biệt, 2 mục ID đơn sàn / Mã
+    // vận đơn luôn bấm được (số trên nhãn chỉ là ước lượng từ trang đang
+    // mở ở đường thường; bấm vào sẽ tải đủ rồi báo nếu thật sự không có).
+    const copyEcomDisabled = copyLoading || (!(specialMode && selectedOrders.length === 0) && ecomOrdersCount === 0);
+    const copyCarrierDisabled = copyLoading || (!(specialMode && selectedOrders.length === 0) && carrierOrdersCount === 0);
 
     const totalOrdersCount = specialMode ? specialTotal : effectiveFiltered.length;
-    const totalPages = specialMode ? (Math.ceil(specialTotal / SPECIAL_PAGE_SIZE) || 1) : (Math.ceil(totalOrdersCount / pageSize) || 1);
+    const totalPages = specialMode ? (Math.ceil(specialTotal / specialPageSize) || 1) : (Math.ceil(totalOrdersCount / pageSize) || 1);
     const paginatedOrders = specialMode ? specialPageOrders : effectiveFiltered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
     // Tùy chọn lọc cho báo cáo đặc biệt: trạng thái lấy đủ từ bảng
@@ -2101,22 +2141,65 @@ export default function OrderReport() {
         }
     };
 
+    // Đường thường của báo cáo đặc biệt: tải lười toàn bộ id khớp bộ lọc
+    // hiện tại (chỉ 5 cột phục vụ copy), từng đợt 1000, tối đa 50 đợt.
+    // Dùng đúng applySpecialFilters như đường tải trang nên tập id khớp
+    // với tổng số đang hiện; thứ tự xếp như bảng (created_at + id).
+    const fetchNormalBranchCopyRows = async () => {
+        const asc = specialSortOrder === 'asc';
+        const orderBy = (q) => q.order('created_at', { ascending: asc }).order('id', { ascending: asc });
+        const rows = [];
+        let offset = 0;
+        for (let chunk = 0; chunk < 50; chunk++) {
+            let q = supabase.from('orders').select('id, sale_channel, ecom_order_id, carrier_code, carrier_name');
+            q = applySpecialFilters(q, { tabId: specialTab, missingOnly: specialOnlyMissingPrint });
+            q = orderBy(q).range(offset, offset + 999);
+            const { data, error } = await q;
+            if (error) throw error;
+            const list = data || [];
+            rows.push(...list);
+            if (list.length < 1000) break;
+            offset += 1000;
+        }
+        return rows;
+    };
+
     const executeCopy = async (type) => {
-        if (targetOrdersAction.length === 0) return;
+        // Nguồn copy: tick đơn nào thì copy đúng các đơn đó; không tick
+        // đơn nào thì ở báo cáo đặc biệt copy HẾT đơn khớp bộ lọc hiện
+        // tại (không chỉ trang đang mở), còn báo cáo cũ thì copy hết đơn
+        // đã lọc (filteredOrders vốn đã là toàn bộ).
+        let sourceRows = targetOrdersAction;
+        if (selectedOrders.length === 0 && specialMode) {
+            setCopyLoading(true);
+            setCopyMessage('Đang tải toàn bộ ID theo bộ lọc hiện tại...');
+            try {
+                sourceRows = specialAllCopyRows ?? await fetchNormalBranchCopyRows();
+            } catch (err) {
+                setCopyMessage(`Không tải được danh sách: ${err.message}`);
+                setTimeout(() => setCopyMessage(''), 5000);
+                setCopyLoading(false);
+                setShowCopyMenu(false);
+                return;
+            } finally {
+                setCopyLoading(false);
+            }
+        }
+        if (sourceRows.length === 0) return;
         
         let textToCopy = '';
         let count = 0;
 
         if (type === 'system') {
-            textToCopy = targetOrdersAction.map(order => order.id).join('\n');
-            count = targetOrdersAction.length;
+            textToCopy = sourceRows.map(order => order.id).join('\n');
+            count = sourceRows.length;
         } else if (type === 'ecom') {
-            const validOrders = targetOrdersAction.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id);
+            const validOrders = sourceRows.filter(o => ['42', '48'].includes(String(o.sale_channel)) && o.ecom_order_id);
             textToCopy = validOrders.map(o => o.ecom_order_id).join('\n');
             count = validOrders.length;
         } else if (type === 'carrier') {
             // Báo cáo đặc biệt: GHN mã NVN coi như chưa có mã nên không copy.
-            const validOrders = targetOrdersAction.filter(o => specialMode ? hasRealCarrier(o) : o.carrier_code);
+            const validOrders = sourceRows.filter(o => specialMode ? hasRealCarrier(o) : o.carrier_code);
             textToCopy = validOrders.map(o => o.carrier_code).join('\n');
             count = validOrders.length;
         }
@@ -2564,10 +2647,10 @@ export default function OrderReport() {
                             <div className="relative" onMouseLeave={() => setShowCopyMenu(false)}>
                                 <button 
                                     onClick={() => setShowCopyMenu(!showCopyMenu)} 
-                                    disabled={copyTargetCount === 0} 
-                                    className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${copyTargetCount > 0 ? 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50' : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'}`}
+                                    disabled={copyTargetCount === 0 || copyLoading} 
+                                    className={`px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${copyTargetCount > 0 && !copyLoading ? 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50' : 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'}`}
                                 >
-                                    <Copy size={15} /> Copy ({copyTargetCount}) <ChevronDown size={14} />
+                                    <Copy size={15} /> {copyLoading ? 'Đang tải...' : `Copy (${copyTargetCount})`} <ChevronDown size={14} />
                                 </button>
                                 
                                 {showCopyMenu && copyTargetCount > 0 && (
@@ -2575,28 +2658,29 @@ export default function OrderReport() {
                                         <div className="bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden py-1">
                                             <button 
                                                 onClick={() => executeCopy('system')} 
-                                                className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center justify-between"
+                                                disabled={copyLoading}
+                                                className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between ${copyLoading ? 'text-slate-400 cursor-not-allowed' : 'text-slate-700 hover:bg-slate-50'}`}
                                             >
                                                 <span className="font-medium">ID Hệ thống</span>
                                                 <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-bold">{copyTargetCount}</span>
                                             </button>
                                             <button 
                                                 onClick={() => executeCopy('ecom')} 
-                                                disabled={ecomOrdersCount === 0}
-                                                className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between border-t border-slate-100 ${ecomOrdersCount > 0 ? 'text-slate-700 hover:bg-slate-50' : 'text-slate-400 cursor-not-allowed'}`}
+                                                disabled={copyEcomDisabled}
+                                                className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between border-t border-slate-100 ${!copyEcomDisabled ? 'text-slate-700 hover:bg-slate-50' : 'text-slate-400 cursor-not-allowed'}`}
                                             >
                                                 <span className="font-medium">ID Đơn sàn (Shopee/TikTok)</span>
-                                                <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${ecomOrdersCount > 0 ? 'bg-pink-100 text-pink-700' : 'bg-slate-100 text-slate-400'}`}>
+                                                <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${!copyEcomDisabled ? 'bg-pink-100 text-pink-700' : 'bg-slate-100 text-slate-400'}`}>
                                                     {ecomOrdersCount}
                                                 </span>
                                             </button>
                                             <button 
                                                 onClick={() => executeCopy('carrier')} 
-                                                disabled={carrierOrdersCount === 0}
-                                                className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between border-t border-slate-100 ${carrierOrdersCount > 0 ? 'text-slate-700 hover:bg-slate-50' : 'text-slate-400 cursor-not-allowed'}`}
+                                                disabled={copyCarrierDisabled}
+                                                className={`w-full text-left px-4 py-2.5 text-sm flex items-center justify-between border-t border-slate-100 ${!copyCarrierDisabled ? 'text-slate-700 hover:bg-slate-50' : 'text-slate-400 cursor-not-allowed'}`}
                                             >
                                                 <span className="font-medium">Mã Vận đơn</span>
-                                                <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${carrierOrdersCount > 0 ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-400'}`}>
+                                                <span className={`text-xs px-2 py-0.5 rounded-md font-bold ${!copyCarrierDisabled ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-400'}`}>
                                                     {carrierOrdersCount}
                                                 </span>
                                             </button>
@@ -2983,17 +3067,22 @@ export default function OrderReport() {
                         )}
                     </div>
 
-                    {/* Pagination: báo cáo đặc biệt cố định 20 đơn / trang,
-                        bấm sang trang nào mới tải trang đó từ server. */}
+                    {/* Pagination: báo cáo đặc biệt tải đúng số dòng đã chọn
+                        / trang, bấm sang trang nào mới tải trang đó từ server. */}
                     {((specialMode && totalOrdersCount > 0) || (!specialMode && !loading && totalOrdersCount > 0)) && (
                         <div className="bg-slate-50 px-4 py-3 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
                             <div className="flex items-center gap-4">
                                 <span className="text-sm text-slate-600">
-                                    Đang xem <span className="font-semibold text-slate-900">{specialMode ? (specialTotal === 0 ? 0 : (specialPage - 1) * SPECIAL_PAGE_SIZE + 1) : (currentPage - 1) * pageSize + 1}</span> - <span className="font-semibold text-slate-900">{specialMode ? Math.min(specialPage * SPECIAL_PAGE_SIZE, totalOrdersCount) : Math.min(currentPage * pageSize, totalOrdersCount)}</span> / <span className="font-semibold text-slate-900">{totalOrdersCount}</span> đơn
+                                    Đang xem <span className="font-semibold text-slate-900">{specialMode ? (specialTotal === 0 ? 0 : (specialPage - 1) * specialPageSize + 1) : (currentPage - 1) * pageSize + 1}</span> - <span className="font-semibold text-slate-900">{specialMode ? Math.min(specialPage * specialPageSize, totalOrdersCount) : Math.min(currentPage * pageSize, totalOrdersCount)}</span> / <span className="font-semibold text-slate-900">{totalOrdersCount}</span> đơn
                                 </span>
                                 <div className="border-l border-slate-300 pl-4">
                                     {specialMode ? (
-                                        <span className="text-sm text-slate-600">20 dòng / trang</span>
+                                        <select value={specialPageSize} onChange={(e) => setSpecialPageSize(Number(e.target.value))} className="px-2 py-1 border border-slate-300 rounded text-sm outline-none focus:ring-1 focus:ring-slate-500">
+                                            <option value={20}>20 dòng / trang</option>
+                                            <option value={50}>50 dòng / trang</option>
+                                            <option value={100}>100 dòng / trang</option>
+                                            <option value={200}>200 dòng / trang</option>
+                                        </select>
                                     ) : (
                                         <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="px-2 py-1 border border-slate-300 rounded text-sm outline-none focus:ring-1 focus:ring-slate-500">
                                             <option value={20}>20 dòng / trang</option>
