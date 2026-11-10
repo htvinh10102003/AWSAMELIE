@@ -1980,17 +1980,27 @@ export default function OrderReport() {
         return chunks;
     };
 
+    // Chạy đa luồng: chia thành các cục 5 đơn, các cục chạy song song
+    // (cùng mẫu với handleUpdateMissingCarrierWebhooks); mỗi cục vẫn
+    // gọi tuần tự từng đơn + delay nhẹ để không gọi quá dày.
     const handleAutoUpdateWebhooks = async () => {
         setIsUpdatingWebhooks(true);
         setUpdateProgress(0);
-        for (let i = 0; i < missedWebhookOrders.length; i++) {
-            const orderId = missedWebhookOrders[i].id;
-            try {
-                await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
-            } catch (err) { console.error(`Lỗi kích hoạt webhook đơn ${orderId}:`, err); }
-            setUpdateProgress(i + 1);
-            await new Promise(resolve => setTimeout(resolve, 300));
-        }
+        const orderIds = missedWebhookOrders.map(o => o.id);
+        const chunks = chunkArray(orderIds, 5);
+        let completed = 0;
+        const processChunk = async (chunk) => {
+            for (let i = 0; i < chunk.length; i++) {
+                const orderId = chunk[i];
+                try {
+                    await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
+                } catch (err) { console.error(`Lỗi kích hoạt webhook đơn ${orderId}:`, err); }
+                completed += 1;
+                setUpdateProgress(completed);
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+        };
+        await Promise.all(chunks.map(chunk => processChunk(chunk)));
         await new Promise(resolve => setTimeout(resolve, 1500));
         await fetchAllocation(statusDict);
         setIsUpdatingWebhooks(false);
@@ -2901,8 +2911,13 @@ export default function OrderReport() {
                                         const agingDays = order.printable_date ? Math.floor((new Date() - new Date(order.printable_date)) / (1000 * 60 * 60 * 24)) : 0;
                                         const isAgingOrder = activeTab === 'printable' && agingDays >= 2;
 
-                                        return products.map((prod, index) => {
-                                            const shortItem = data.holding?.concat(data.outOfStock)?.find(o => o.id === order.id)?.debug_shortItems?.find(i => i.name === prod.product_name);
+                                        // Đơn không có sản phẩm vẫn phải hiện 1 dòng (báo "Thiếu
+                                        // sản phẩm") — trước đây products.map trên mảng rỗng
+                                        // không vẽ dòng nào nên đơn "biến mất" khỏi bảng dù
+                                        // tổng số + phân trang vẫn đếm nó.
+                                        const rowsToRender = products.length > 0 ? products : [null];
+                                        return rowsToRender.map((prod, index) => {
+                                            const shortItem = prod ? data.holding?.concat(data.outOfStock)?.find(o => o.id === order.id)?.debug_shortItems?.find(i => i.name === prod.product_name) : undefined;
 
                                             return (
                                                 <tr key={`${order.id}-${index}`} 
@@ -3010,13 +3025,19 @@ export default function OrderReport() {
 
                                                     {/* Cột 6: Sản phẩm */}
                                                     <td className="py-3.5 px-5 align-top">
-                                                        <div className="font-medium text-slate-800 text-sm leading-tight mb-1">{prod.product_name}</div>
-                                                        <div className="text-xs text-slate-500 font-mono">{prod.product_code}</div>
+                                                        {prod ? (
+                                                            <>
+                                                                <div className="font-medium text-slate-800 text-sm leading-tight mb-1">{prod.product_name}</div>
+                                                                <div className="text-xs text-slate-500 font-mono">{prod.product_code}</div>
+                                                            </>
+                                                        ) : (
+                                                            <div className="font-medium text-red-600 text-sm leading-tight">Thiếu sản phẩm</div>
+                                                        )}
                                                     </td>
 
                                                     {/* Cột 7: Số lượng */}
                                                     <td className="py-3.5 px-5 align-top text-center font-bold text-slate-900">
-                                                        {prod.quantity}
+                                                        {prod ? prod.quantity : '—'}
                                                     </td>
 
                                                     {/* Cột 8: Báo cáo đặc biệt luôn hiển thị tình trạng kho, báo cáo cũ giữ theo cột đã chọn */}
