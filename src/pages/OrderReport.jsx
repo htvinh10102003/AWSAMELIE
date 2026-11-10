@@ -116,6 +116,14 @@ const hasRealCarrier = (order) => {
     return true;
 };
 
+// Đơn sàn đã có mã vận đơn thật (để in mã đơn sàn / phiếu gửi sàn):
+// kênh Shopee (42) / TikTok Shop (48) / Lazada (41) + mã vận đơn thật.
+// Hàm thuần (module-level) để test Node trích xuất được.
+const isPrintableEcomOrder = (order) => {
+    if (!['42', '48', '41'].includes(String(order?.sale_channel))) return false;
+    return hasRealCarrier(order);
+};
+
 // --- Helpers trình bày số thành chữ thuần cho popup chi tiết ---
 const fmtMoney = (v) => {
     if (v === null || v === undefined || v === '') return 'Chưa có';
@@ -399,6 +407,17 @@ export default function OrderReport() {
     // Gộp nhiều nhãn PDF sàn thành 1 file.
     const [mergingLabels, setMergingLabels] = useState(false);
     const [mergeLabelsMsg, setMergeLabelsMsg] = useState('');
+    // In mã đơn sàn hàng loạt từ nút Thao tác: lấy nhãn PDF sàn của các
+    // đơn sàn đã có mã vận đơn thật (không gửi lại, chỉ lấy nhãn qua
+    // ecom/getprintlabel rồi gộp 1 file để in).
+    const [showPrintLabelsModal, setShowPrintLabelsModal] = useState(false);
+    const [printLabelsRunning, setPrintLabelsRunning] = useState(false);
+    const [printLabelsResult, setPrintLabelsResult] = useState(null);
+    // Tiến trình lấy nhãn hàng loạt (lấy tuần tự từng đơn): done/total
+    // + đơn đang lấy, và kết quả từng đơn append ngay khi xong.
+    const [printLabelsProgress, setPrintLabelsProgress] = useState({ done: 0, total: 0, currentId: null });
+    const [printLabelsLiveResults, setPrintLabelsLiveResults] = useState([]);
+    const printLabelsStopRef = useRef(false);
     // Đơn nào đang kéo lại nhãn (key = orderId) để disable đúng nút đó.
     const [relabelLoadingIds, setRelabelLoadingIds] = useState({});
     // Đồng bộ đơn đã xóa từ Nhanh (owner, trong khu vực báo cáo đặc biệt).
@@ -1491,6 +1510,18 @@ export default function OrderReport() {
         if (result?.success && result.labelUrl) return result.labelUrl;
         throw new Error(result?.message || 'Không lấy được nhãn PDF của đơn này.');
     };
+    // Lấy nhãn PDF sàn cho 1 đơn, thử lại 1 lần sau 2s nếu lỗi (nhãn Nhanh
+    // đôi khi chưa sẵn ngay sau khi gửi — lỗi RACE đã gặp ở
+    // ecomReadyToShip). Chỉ dùng cho luồng in mã đơn sàn hàng loạt; nút
+    // "Kéo lại nhãn" từng đơn vẫn gọi fetchEcomLabel 1 lần như cũ.
+    const fetchEcomLabelWithRetry = async (orderId) => {
+        try {
+            return await fetchEcomLabel(orderId);
+        } catch (err) {
+            await new Promise((r) => setTimeout(r, 2000));
+            return await fetchEcomLabel(orderId);
+        }
+    };
     // Kéo lại nhãn cho 1 đơn trong modal kết quả bulk: vá labelUrl vào
     // cả bulkEcomLiveResults lẫn bulkEcomResult để hiện nút In phiếu;
     // lỗi thì ghi labelError vào đúng dòng đó để hiện câu lỗi.
@@ -1507,6 +1538,26 @@ export default function OrderReport() {
             const patchErr = (list) => (list || []).map(r => String(r.orderId) === sid ? { ...r, labelError: msg } : r);
             setBulkEcomLiveResults(prev => patchErr(prev));
             setBulkEcomResult(prev => prev ? { ...prev, results: patchErr(prev.results) } : prev);
+        } finally {
+            setRelabelLoadingIds(prev => ({ ...prev, [sid]: false }));
+        }
+    };
+    // Kéo lại nhãn cho 1 đơn trong modal in mã đơn sàn: vá labelUrl vào
+    // cả printLabelsLiveResults lẫn printLabelsResult để hiện nút In phiếu;
+    // lỗi thì ghi labelError vào đúng dòng đó để hiện câu lỗi.
+    const handleRelabelPrintLabels = async (orderId) => {
+        const sid = String(orderId);
+        setRelabelLoadingIds(prev => ({ ...prev, [sid]: true }));
+        try {
+            const labelUrl = await fetchEcomLabel(orderId);
+            const patchOk = (list) => (list || []).map(r => String(r.orderId) === sid ? { ...r, labelUrl, labelError: '' } : r);
+            setPrintLabelsLiveResults(prev => patchOk(prev));
+            setPrintLabelsResult(prev => prev ? { ...prev, results: patchOk(prev.results) } : prev);
+        } catch (err) {
+            const msg = err.message || 'Không lấy được nhãn PDF của đơn này.';
+            const patchErr = (list) => (list || []).map(r => String(r.orderId) === sid ? { ...r, labelError: msg } : r);
+            setPrintLabelsLiveResults(prev => patchErr(prev));
+            setPrintLabelsResult(prev => prev ? { ...prev, results: patchErr(prev.results) } : prev);
         } finally {
             setRelabelLoadingIds(prev => ({ ...prev, [sid]: false }));
         }
@@ -1689,6 +1740,60 @@ export default function OrderReport() {
             });
             setBulkEcomRunning(false);
             setBulkEcomProgress(prev => ({ ...prev, currentId: null }));
+        }
+    };
+    // In mã đơn sàn hàng loạt: lấy nhãn PDF sàn (ecom/getprintlabel)
+    // TUẦN TỰ từng đơn sàn đã có mã vận đơn thật — KHÔNG gửi lại đơn.
+    // Modal kết quả mở ngay khi bắt đầu; sau mỗi đơn xong thì cập nhật
+    // tiến trình + append kết quả đơn đó vào printLabelsLiveResults để
+    // hiện ngay trong modal. Nút Dừng chỉ dừng sau khi đơn hiện tại
+    // xong, giữ lại kết quả đã xong và hiện tổng kết như bình thường.
+    // Xong thì bấm "In tất cả phiếu (1 file PDF)" để gộp + mở tab in.
+    const handlePrintLabels = async () => {
+        if (selectedPrintableEcomIds.length === 0 || printLabelsRunning) return;
+        const ids = [...selectedPrintableEcomIds];
+        const skippedIds = selectedOrders.filter(id => !selectedPrintableEcomIds.some(a => String(a) === String(id)));
+        setShowActionMenu(false);
+        printLabelsStopRef.current = false;
+        setPrintLabelsLiveResults([]);
+        setPrintLabelsResult({ success: true, results: [], okCount: 0, failCount: 0, skippedIds });
+        setPrintLabelsProgress({ done: 0, total: ids.length, currentId: ids[0] ?? null });
+        setMergeLabelsMsg('');
+        setPrintLabelsRunning(true);
+        setShowPrintLabelsModal(true);
+        const live = [];
+        try {
+            for (let i = 0; i < ids.length; i++) {
+                if (printLabelsStopRef.current) break;
+                const orderId = ids[i];
+                setPrintLabelsProgress({ done: i, total: ids.length, currentId: orderId });
+                let one;
+                try {
+                    const labelUrl = await fetchEcomLabelWithRetry(orderId);
+                    const row = effectiveFiltered.find(o => String(o.id) === String(orderId));
+                    one = { orderId, ok: true, labelUrl, trackingNumber: row?.carrier_code || '' };
+                } catch (err) {
+                    one = { orderId, ok: false, error: err.message || 'Không lấy được nhãn PDF của đơn này.' };
+                }
+                live.push(one);
+                setPrintLabelsLiveResults([...live]);
+                setPrintLabelsProgress({ done: i + 1, total: ids.length, currentId: ids[i + 1] ?? null });
+            }
+        } finally {
+            const stopped = printLabelsStopRef.current;
+            const okCount = live.filter(r => r.ok).length;
+            const failCount = live.filter(r => !r.ok).length;
+            setPrintLabelsResult({
+                success: failCount === 0,
+                results: live,
+                okCount,
+                failCount,
+                skippedIds,
+                stopped,
+                message: stopped ? `Đã dừng theo yêu cầu sau ${live.length}/${ids.length} đơn.` : undefined,
+            });
+            setPrintLabelsRunning(false);
+            setPrintLabelsProgress(prev => ({ ...prev, currentId: null }));
         }
     };
     // Hủy hàng loạt: tick bao nhiêu hủy bấy nhiêu, 1 lý do chung.
@@ -2346,6 +2451,13 @@ export default function OrderReport() {
         const row = effectiveFiltered.find(o => String(o.id) === String(id));
         return row && isMarketplaceChannel(row);
     });
+    // Đơn sàn đã có mã vận đơn thật trong list đã tick (để in mã đơn sàn /
+    // phiếu gửi sàn hàng loạt). Đơn không phải đơn sàn hoặc chưa có mã thật
+    // thì bỏ qua (không chặn nút, chỉ in những đơn đủ điều kiện).
+    const selectedPrintableEcomIds = selectedOrders.filter(id => {
+        const row = effectiveFiltered.find(o => String(o.id) === String(id));
+        return row && isPrintableEcomOrder(row);
+    });
     // Kết quả hiển thị trong modal kết quả gửi sàn: lúc đang chạy thì
     // lấy từ bulkEcomLiveResults (append từng đơn khi xong), lúc xong
     // thì lấy từ bulkEcomResult (đã gồm toàn bộ kết quả đã xong).
@@ -2357,6 +2469,17 @@ export default function OrderReport() {
         ? bulkEcomLiveResults.filter(r => !r.ok).length
         : (bulkEcomResult?.failCount ?? bulkEcomLiveResults.filter(r => !r.ok).length);
     const bulkEcomDisplayLabelUrls = bulkEcomDisplayResults.filter(r => r.ok && r.labelUrl).map(r => r.labelUrl);
+    // Kết quả hiển thị trong modal in mã đơn sàn: lúc đang chạy thì lấy từ
+    // printLabelsLiveResults (append từng đơn khi xong), lúc xong thì lấy
+    // từ printLabelsResult (đã gồm toàn bộ kết quả đã xong).
+    const printLabelsDisplayResults = printLabelsLiveResults.length > 0 ? printLabelsLiveResults : (printLabelsResult?.results || []);
+    const printLabelsDisplayOkCount = printLabelsRunning
+        ? printLabelsLiveResults.filter(r => r.ok).length
+        : (printLabelsResult?.okCount ?? printLabelsLiveResults.filter(r => r.ok).length);
+    const printLabelsDisplayFailCount = printLabelsRunning
+        ? printLabelsLiveResults.filter(r => !r.ok).length
+        : (printLabelsResult?.failCount ?? printLabelsLiveResults.filter(r => !r.ok).length);
+    const printLabelsDisplayLabelUrls = printLabelsDisplayResults.filter(r => r.ok && r.labelUrl).map(r => r.labelUrl);
     // Mở trang in của Nhanh cho đúng các đơn truyền vào (mẫu từ báo cáo
     // cũ), rồi popup list các đơn vừa in: khổ A thì list mã vận đơn,
     // khổ K80 thì list ID đơn. Dùng chung cho: in đơn đã tick, in 1 đơn
@@ -2766,6 +2889,7 @@ export default function OrderReport() {
                                             <div className="px-3 py-1.5 mt-1 text-xs font-semibold text-slate-400 uppercase bg-slate-50 border-t border-slate-100">Vận Chuyển</div>
                                             <button onClick={handleBulkSend} className="w-full text-left px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 flex items-center gap-2"><Send size={15} /> Gửi đơn sang hãng</button>
                                             {!printSubLocked('gui_don_san') && (<button onClick={openBulkEcom} disabled={selectedMarketplaceIds.length === 0} className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${selectedMarketplaceIds.length > 0 ? 'text-amber-700 hover:bg-amber-50' : 'text-slate-400 cursor-not-allowed'}`}><Send size={15} /> Gửi đơn sàn{selectedMarketplaceIds.length > 0 ? ` (${selectedMarketplaceIds.length})` : ''}</button>)}
+                                            {!printSubLocked('gui_don_san') && (<button onClick={handlePrintLabels} disabled={selectedPrintableEcomIds.length === 0 || printLabelsRunning} className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${selectedPrintableEcomIds.length > 0 ? 'text-amber-700 hover:bg-amber-50' : 'text-slate-400 cursor-not-allowed'}`}><Printer size={15} /> In mã đơn sàn{selectedPrintableEcomIds.length > 0 ? ` (${selectedPrintableEcomIds.length})` : ''}</button>)}
                                             <button onClick={() => { setShowActionMenu(false); setBulkCancelResult(null); setCancelReasonBulk(''); setShowBulkCancelModal(true); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><XCircle size={15} /> Hủy đơn</button>
 
                                             <div className="px-3 py-1.5 mt-1 text-xs font-semibold text-slate-400 uppercase bg-slate-50 border-t border-slate-100">Hệ Thống</div>
@@ -3613,6 +3737,60 @@ export default function OrderReport() {
                             )}
                             {mergeLabelsMsg && <p className="text-sm text-red-600">{mergeLabelsMsg}</p>}
                             <p className="text-xs text-slate-500">Mã vận đơn đã cập nhật ngay trong bảng; nhãn PDF mở trong tab mới.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* In mã đơn sàn hàng loạt: lấy nhãn PDF sàn của các đơn sàn
+                đã có mã vận đơn thật rồi gộp 1 file để in (không gửi lại).
+                Đóng modal bị chặn trong lúc đang lấy để khỏi mất tiến trình;
+                bấm Dừng thì dừng sau đơn hiện tại, giữ kết quả đã xong. */}
+            {showPrintLabelsModal && printLabelsResult && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50" onClick={() => !printLabelsRunning && setShowPrintLabelsModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                        <div className="px-6 py-4 border-b border-slate-900 flex justify-between items-center bg-slate-900">
+                            <h3 className="font-bold text-white">In mã đơn sàn</h3>
+                            <button onClick={() => !printLabelsRunning && setShowPrintLabelsModal(false)} disabled={printLabelsRunning} className="text-slate-300 hover:text-white"><XCircle size={20} /></button>
+                        </div>
+                        <div className="p-5 overflow-y-auto space-y-3">
+                            {printLabelsRunning && (
+                                <div className="space-y-2">
+                                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
+                                        <div className="h-full bg-emerald-600 transition-all" style={{ width: `${printLabelsProgress.total > 0 ? Math.round((printLabelsProgress.done / printLabelsProgress.total) * 100) : 0}%` }} />
+                                    </div>
+                                    <p className="text-sm font-medium text-slate-700">Đang lấy nhãn {printLabelsProgress.done}/{printLabelsProgress.total}{printLabelsProgress.currentId ? ` — đơn #${printLabelsProgress.currentId}...` : '...'}</p>
+                                    <button onClick={() => { printLabelsStopRef.current = true; }} className="px-4 py-2 bg-white border border-red-300 text-red-600 text-sm font-bold rounded-lg hover:bg-red-50">Dừng</button>
+                                </div>
+                            )}
+                            <p className="text-sm font-medium text-slate-700">
+                                Lấy được <span className="font-bold text-green-700">{printLabelsDisplayOkCount}</span>/{printLabelsProgress.total} nhãn
+                                {printLabelsDisplayFailCount > 0 && (<> · Thất bại <span className="font-bold text-red-600">{printLabelsDisplayFailCount}</span> đơn</>)}
+                                {(printLabelsResult?.skippedIds || []).length > 0 && (<> · Bỏ qua <span className="font-bold text-amber-700">{(printLabelsResult?.skippedIds || []).length}</span> đơn</>)}.
+                            </p>
+                            {(printLabelsResult?.skippedIds || []).length > 0 && (
+                                <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                                    Bỏ qua vì không phải đơn sàn (Shopee/TikTok/Lazada) hoặc chưa có mã vận đơn thật: {(printLabelsResult?.skippedIds || []).join(', ')}
+                                </p>
+                            )}
+                            {printLabelsDisplayResults.filter(r => r.ok).length > 0 && (
+                                <div className="space-y-1">
+                                    {printLabelsDisplayResults.filter(r => r.ok).map(r => renderEcomResultRow(r, handleRelabelPrintLabels))}
+                                </div>
+                            )}
+                            {printLabelsDisplayResults.filter(r => !r.ok).length > 0 && (
+                                <div className="space-y-1 border-t border-slate-200 pt-2">
+                                    {printLabelsDisplayResults.filter(r => !r.ok).map(r => renderEcomResultRow(r, handleRelabelPrintLabels))}
+                                </div>
+                            )}
+                            {printLabelsResult?.message && <p className="text-sm text-red-600">{printLabelsResult.message}</p>}
+                            {printLabelsDisplayLabelUrls.length >= 1 && (
+                                <button onClick={() => downloadMergedLabels(printLabelsDisplayLabelUrls).catch(() => {})} disabled={mergingLabels} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">
+                                    {mergingLabels && <RefreshCw size={14} className="animate-spin" />} In tất cả phiếu (1 file PDF)
+                                </button>
+                            )}
+                            {mergeLabelsMsg && <p className="text-sm text-red-600">{mergeLabelsMsg}</p>}
+                            <p className="text-xs text-slate-500">Nhãn PDF lấy qua API Nhanh (ecom/getprintlabel), không gửi lại đơn; gộp thành 1 file rồi mở trong tab mới để in.</p>
                         </div>
                     </div>
                 </div>
