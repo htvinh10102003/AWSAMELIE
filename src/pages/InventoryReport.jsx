@@ -7,6 +7,7 @@ import {
 import * as XLSX from 'xlsx';
 import JsBarcode from 'jsbarcode';
 import QRCode from 'qrcode';
+import FeatureGuard, { useFeatureLocks, isSubLocked } from '../components/FeatureGuard';
 
 const escapeHtml = (s) => String(s ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -154,6 +155,11 @@ export default function InventoryReport() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [onlyReturns, setOnlyReturns] = useState(false);
+  // Khóa cấp con trong trang (manager: inventory_report) — đọc cùng key
+  // feature_lock_inventory_report, owner bypass. Popup chi tiết dùng
+  // FeatureGuard (màn hình bảo trì chuẩn); mục trong popup thì ẩn hẳn.
+  const invLocks = useFeatureLocks('inventory_report');
+  const invSubLocked = (id) => !invLocks.isOwner && isSubLocked(invLocks.subs, id);
 
   // Gọi edge nhanh-order-actions theo đúng mẫu callNhanhActionRaw trong
   // OrderReport.jsx, nhưng giữ lại HTTP status để nhận biết 403 (non-owner).
@@ -982,6 +988,7 @@ export default function InventoryReport() {
       {/* POPUP CHI TIẾT SẢN PHẨM */}
       {/* ========================================== */}
       {selectedProduct && (
+        <FeatureGuard featureId="inventory_report" subFeatureId="chi_tiet_san_pham">
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
           <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh] overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50">
@@ -1120,6 +1127,7 @@ export default function InventoryReport() {
               </section>
 
               {/* Đơn làm thay đổi tồn kho */}
+              {!invSubLocked('don_thay_doi_ton_kho') && (
               <section>
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                   <h4 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Đơn làm thay đổi tồn kho</h4>
@@ -1174,9 +1182,11 @@ export default function InventoryReport() {
                 )}
                 <p className="text-xs text-slate-400 mt-2">Tối đa 20 dòng gần nhất.</p>
               </section>
+              )}
             </div>
           </div>
         </div>
+        </FeatureGuard>
       )}
 
       {/* ========================================== */}

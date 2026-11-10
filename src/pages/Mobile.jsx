@@ -8,6 +8,7 @@ import { getUserRole, isAdminRole, roleLabel } from '../lib/roles';
 import { sessionRevokedKey, isRevokedAfterLogin } from '../lib/session';
 import { reportPresence, recordLoginHistory } from '../lib/presence';
 import { getMaintenanceMode, setMaintenanceMode } from '../lib/maintenance';
+import { clearPermCache } from '../lib/permCache';
 
 // Giao diện điện thoại riêng, chỉ xem nhanh và thao tác gọn trên điện thoại.
 // - Đơn in: thẻ đơn chỉ ID, sản phẩm, trạng thái (kèm mã vận đơn nhỏ nếu có
@@ -204,6 +205,7 @@ export default function Mobile() {
                 if (!user) return;
                 const { data: revoked } = await supabase.from('system_configs').select('value').eq('key', sessionRevokedKey(user.id)).maybeSingle();
                 if (revoked && isRevokedAfterLogin(revoked.value, user)) {
+                    clearPermCache(user.id);
                     await supabase.auth.signOut();
                     setSession(null);
                 }
@@ -709,11 +711,20 @@ export default function Mobile() {
     const saveLocks = async () => {
         setLocksSaving(true); setLocksMessage('');
         try {
-            const rows = FEATURE_PARENTS.map(p => ({
-                key: `feature_lock_${p.id}`,
-                value: JSON.stringify({ isLocked: !!locks[p.id], message: 'Tính năng đang bảo trì.', subs: {} }),
-                description: `Cấu hình khóa tính năng ${p.id}`,
-            }));
+            // Giữ nguyên subs + message đã lưu ở Desktop (FeatureLockManager):
+            // bản cũ ghi đè subs: {} nên 1 lần lưu trên mobile sẽ xóa sạch
+            // mọi khóa cấp con đã cấu hình. Chỉ đổi isLocked cấp cha.
+            const { data: currentRows } = await supabase.from('system_configs').select('key, value').ilike('key', 'feature_lock_%');
+            const rows = FEATURE_PARENTS.map(p => {
+                let prev = { isLocked: false, message: 'Tính năng đang bảo trì.', subs: {} };
+                const row = currentRows?.find(r => r.key === `feature_lock_${p.id}`);
+                if (row?.value) { try { prev = JSON.parse(row.value); } catch (e) {} }
+                return {
+                    key: `feature_lock_${p.id}`,
+                    value: JSON.stringify({ ...prev, isLocked: !!locks[p.id], subs: prev.subs || {} }),
+                    description: `Cấu hình khóa tính năng ${p.id}`,
+                };
+            });
             const { error } = await supabase.from('system_configs').upsert(rows, { onConflict: 'key' });
             if (error) throw error;
             setLocksMessage('Đã lưu khóa tính năng.');
@@ -770,6 +781,7 @@ export default function Mobile() {
         // Bản này: chờ signOut tối đa 3 giây rồi chuyển thẳng sang /login,
         // giống cách Layout bản máy tính làm (signOut xong navigate).
         try {
+            clearPermCache(session?.user?.id);
             await Promise.race([
                 supabase.auth.signOut(),
                 new Promise(resolve => setTimeout(resolve, 3000)),

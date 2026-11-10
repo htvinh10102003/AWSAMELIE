@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Search, ChevronLeft, ChevronRight, Loader2, Package, Copy, FileDown, Pencil, ScanLine, X, Volume2, VolumeX } from 'lucide-react';
 import { mapReturnProduct, buildInventoryIndex } from '../lib/tiktokProductMap';
+import { useFeatureLocks, isSubLocked } from '../components/FeatureGuard';
 
 const NHANH_STATUS_NAMES = {
   1: 'Đã hoàn tiền',
@@ -527,6 +528,13 @@ export default function BaoCaoHoanChuaNhan() {
   // --- Quyền sửa tay (chỉ owner) ---
   const [isOwner, setIsOwner] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  // Khóa cấp con trong trang (manager: return_orders) — đọc cùng key
+  // feature_lock_return_orders, owner bypass. Popup "Đối chiếu hàng loạt"
+  // và 2 tab trong đó hiện chỉ owner mới mở được nên khóa chỉ có tác
+  // dụng khi cửa owner-only này được nới sau này; mục "Cần check tay"
+  // thì mọi người đều thấy nên khóa ẩn hẳn mục đó với non-owner.
+  const returnLocks = useFeatureLocks('return_orders');
+  const returnSubLocked = (id) => !returnLocks.isOwner && isSubLocked(returnLocks.subs, id);
   // --- Dữ liệu ---
   const [allRows, setAllRows] = useState([]);
   const [total, setTotal] = useState(0);
@@ -2306,7 +2314,7 @@ export default function BaoCaoHoanChuaNhan() {
         >
           <FileDown size={16} /> {exporting ? 'Đang tạo file...' : `Tải Excel (${groups.cho.length} đơn chưa nhận)`}
         </button>
-        {isOwner && (
+        {isOwner && !returnSubLocked('doi_chieu_hang_loat') && (
           <button
             onClick={openBulk}
             className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer flex items-center gap-2"
@@ -2321,7 +2329,12 @@ export default function BaoCaoHoanChuaNhan() {
       </div>
 
       {/* Cần check tay (mục hợp nhất): hãng báo đã giao / quá 4 ngày / đã khiếu nại */}
-      {renderUnifiedSection()}
+      {returnSubLocked('can_check_tay') ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 text-center">
+          <p className="text-sm font-bold text-slate-700">Mục "Cần check tay" đang bảo trì</p>
+          <p className="text-xs text-slate-500 mt-1">Mục này tạm thời bị khóa để nâng cấp hoặc xử lý sự cố. Vui lòng quay lại sau hoặc liên hệ Quản trị viên.</p>
+        </div>
+      ) : renderUnifiedSection()}
 
       {/* Nhóm: Đang chờ hàng về */}
       {renderGroupSection({
@@ -2336,7 +2349,7 @@ export default function BaoCaoHoanChuaNhan() {
       })}
 
       {/* Đối chiếu hàng loạt — popup copy theo hãng + dán kết quả AfterShip */}
-      {showBulk && isOwner && (
+      {showBulk && isOwner && !returnSubLocked('doi_chieu_hang_loat') && (
         <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={closeBulk}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 z-10 bg-slate-900 text-white px-6 py-4 flex items-start justify-between gap-4 rounded-t-2xl">
@@ -2351,8 +2364,8 @@ export default function BaoCaoHoanChuaNhan() {
             <div className="p-6 space-y-5">
               <div className="flex gap-2">
                 <button onClick={() => setBulkTab('doi-chieu')} className={`px-4 py-2 text-sm font-bold rounded-xl cursor-pointer ${bulkTab === 'doi-chieu' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>Đối chiếu</button>
-                <button onClick={() => setBulkTab('quet-nhan')} className={`px-4 py-2 text-sm font-bold rounded-xl cursor-pointer ${bulkTab === 'quet-nhan' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>Quét nhận hàng</button>
-                <button onClick={() => setBulkTab('lich-su')} className={`px-4 py-2 text-sm font-bold rounded-xl cursor-pointer ${bulkTab === 'lich-su' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>Lịch sử</button>
+                {!returnSubLocked('quet_nhan_hang') && (<button onClick={() => setBulkTab('quet-nhan')} className={`px-4 py-2 text-sm font-bold rounded-xl cursor-pointer ${bulkTab === 'quet-nhan' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>Quét nhận hàng</button>)}
+                {!returnSubLocked('lich_su_kiem_nhan') && (<button onClick={() => setBulkTab('lich-su')} className={`px-4 py-2 text-sm font-bold rounded-xl cursor-pointer ${bulkTab === 'lich-su' ? 'bg-emerald-600 text-white shadow-md' : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'}`}>Lịch sử</button>)}
               </div>
               {bulkTab === 'lich-su' ? (
                 <div className="space-y-3">

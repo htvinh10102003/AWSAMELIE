@@ -59,120 +59,124 @@ export default function App() {
 
           {/* 📊 TAB DASHBOARD (TỔNG QUAN) - Cụm featureId="dashboard" */}
           <Route index element={
-            <FeatureGuard featureId="dashboard" subFeatureId="tong_quan">
+            <FeatureGuard featureId="dashboard" subFeatureId="don_di_hang_ngay">
               <Dashboard />
             </FeatureGuard>
           } />
           <Route path="dashboard-returns" element={
-            <FeatureGuard featureId="dashboard" subFeatureId="don_hoan">
+            <FeatureGuard featureId="dashboard" subFeatureId="dashboard_don_hoan">
               <DashboardDonHoan />
             </FeatureGuard>
           } />
           <Route path="dashboard-kpi" element={
-            <FeatureGuard featureId="dashboard" subFeatureId="kpi">
+            <FeatureGuard featureId="dashboard" subFeatureId="dashboard_kpi">
               <KPI_Report />
             </FeatureGuard>
           } />
           <Route path="status-transitions" element={
-            <FeatureGuard featureId="dashboard" subFeatureId="tra_cuu">
+            <FeatureGuard featureId="dashboard" subFeatureId="tra_cuu_luan_chuyen">
               <StatusTransitionTracker />
             </FeatureGuard>
           } />
           
           {/* 🖨️ TAB ĐƠN IN - Cụm featureId="print_orders" */}
           <Route path="order-report" element={
-            <FeatureGuard featureId="print_orders" subFeatureId="bao_cao">
+            <FeatureGuard featureId="print_orders" subFeatureId="bao_cao_don">
               <OrderReport />
             </FeatureGuard>
           } />
           <Route path="printed-today" element={
-            <FeatureGuard featureId="print_orders" subFeatureId="da_in">
+            <FeatureGuard featureId="print_orders" subFeatureId="don_da_in">
               <PrintedOrdersToday />
             </FeatureGuard>
           } />
           <Route path="filter-by-zone" element={
-            <FeatureGuard featureId="print_orders" subFeatureId="loc_day_ke">
+            <FeatureGuard featureId="print_orders" subFeatureId="loc_don_day_ke">
               <FilterByZone />
             </FeatureGuard>
           } />
           <Route path="awb-locations" element={
-            <FeatureGuard featureId="print_orders" subFeatureId="chen_awb">
+            <FeatureGuard featureId="print_orders" subFeatureId="chen_vi_tri_awb">
               <AWBProcessor />
             </FeatureGuard>
           } />
           <Route path="print-spx-orders" element={
-            <FeatureGuard featureId="print_orders" subFeatureId="in_spx">
+            <FeatureGuard featureId="print_orders" subFeatureId="in_don_spx">
               <SpxPrinter />
             </FeatureGuard>
           } />
-          <Route path="in-bill" element={<BillPrint />} />
+          <Route path="in-bill" element={
+            <FeatureGuard featureId="print_orders" subFeatureId="in_bill">
+              <BillPrint />
+            </FeatureGuard>
+          } />
 
           {/* 📦 TAB ĐÓNG GÓI - Cụm featureId="packing" */}
           <Route path="packing-orders" element={
-            <FeatureGuard featureId="packing" subFeatureId="dong_goi">
+            <FeatureGuard featureId="packing" subFeatureId="dong_goi_don_hang">
               <UnderDevelopment />
             </FeatureGuard>
           } />
           <Route path="packing-speed" element={
-            <FeatureGuard featureId="packing" subFeatureId="toc_do_chung">
+            <FeatureGuard featureId="packing" subFeatureId="toc_do_dong_goi_chung">
               <PackingSpeed mode="general" />
             </FeatureGuard>
           } />
           <Route path="packing-speed-by-staff" element={
-            <FeatureGuard featureId="packing" subFeatureId="toc_do_ns">
+            <FeatureGuard featureId="packing" subFeatureId="toc_do_dong_goi_nhan_su">
               <UnderDevelopment />
             </FeatureGuard>
           } />
           
-          {/* 🔄 TAB ĐƠN HOÀN - Cụm featureId="returns" */}
+          {/* 🔄 TAB ĐƠN HOÀN - Cụm featureId="return_orders" */}
           <Route path="bao-cao-hoan" element={<Navigate to="/check-returns" replace />} />
           <Route path="returns-summary" element={
-            <FeatureGuard featureId="returns" subFeatureId="tong_hop">
+            <FeatureGuard featureId="return_orders" subFeatureId="bao_cao_hoan_tong_hop">
               <UnderDevelopment />
             </FeatureGuard>
           } />
           <Route path="check-returns" element={
-            <FeatureGuard featureId="returns" subFeatureId="kiem_tra">
+            <FeatureGuard featureId="return_orders" subFeatureId="kiem_tra_don_hoan">
               <KiemTraDonHoan />
             </FeatureGuard>
           } />
           <Route path="process-returns" element={
-            <FeatureGuard featureId="returns" subFeatureId="xu_ly">
+            <FeatureGuard featureId="return_orders" subFeatureId="xu_ly_don_hoan">
               <ReturnProcessing />
             </FeatureGuard>
           } />
           <Route path="returns-refunds" element={
-            <FeatureGuard featureId="returns" subFeatureId="tra_hang_hoan_tien">
+            <FeatureGuard featureId="return_orders" subFeatureId="tra_hang_hoan_tien">
               <TraHangHoanTien />
             </FeatureGuard>
           } />
           <Route path="unreceived-returns" element={
-            <FeatureGuard featureId="returns" subFeatureId="chua_nhan">
+            <FeatureGuard featureId="return_orders" subFeatureId="bao_cao_hoan_chua_nhan">
               <BaoCaoHoanChuaNhan />
             </FeatureGuard>
           } />
 
-          {/* 📋 TAB BÁO CÁO KIỂM KÊ - Cụm featureId="inventory" */}
+          {/* 📋 TAB BÁO CÁO KIỂM KÊ - Cụm featureId="inventory_check" */}
           <Route path="bao-cao-kiem-ke" element={<Navigate to="/inventory-count-stats" replace />} />
           <Route path="inventory-count-stats" element={
-            <FeatureGuard featureId="inventory" subFeatureId="thong_ke_kiem_ke">
+            <FeatureGuard featureId="inventory_check" subFeatureId="thong_ke_kiem_ke">
               <UnderDevelopment />
             </FeatureGuard>
           } />
           <Route path="inventory-count-list" element={
-            <FeatureGuard featureId="inventory" subFeatureId="ds_kiem_ke">
+            <FeatureGuard featureId="inventory_check" subFeatureId="danh_sach_kiem_ke">
               <UnderDevelopment />
             </FeatureGuard>
           } />
 
-          {/* 🏢 TAB TỒN KHO - Cụm featureId="inventory" */}
+          {/* 🏢 TAB TỒN KHO - Cụm featureId="inventory_report" */}
           <Route path="inventory-report" element={
-            <FeatureGuard featureId="inventory" subFeatureId="ton_kho">
+            <FeatureGuard featureId="inventory_report" subFeatureId="bao_cao_ton_kho">
               <InventoryReport />
             </FeatureGuard>
           } />
           <Route path="product-locations" element={
-            <FeatureGuard featureId="inventory" subFeatureId="vi_tri">
+            <FeatureGuard featureId="inventory_report" subFeatureId="vi_tri_san_pham">
               <ProductLocation />
             </FeatureGuard>
           } />
@@ -190,8 +194,16 @@ export default function App() {
           } />
 
           {/* ⚠️ CÁC BÁO CÁO ĐƠN LẺ */}
-          <Route path="undeclared-fee-orders" element={<DeclaredFeeReport />} />
-          <Route path="stock-reconciliation" element={<OrderReconciliation />} />
+          <Route path="undeclared-fee-orders" element={
+            <FeatureGuard featureId="standalone_khai_gia">
+              <DeclaredFeeReport />
+            </FeatureGuard>
+          } />
+          <Route path="stock-reconciliation" element={
+            <FeatureGuard featureId="standalone_doi_soat">
+              <OrderReconciliation />
+            </FeatureGuard>
+          } />
           
           {/* 🔒 KHÓA CỔNG CÀI ĐẶT ADMIN: Bọc ProtectedRoute bảo vệ nghiêm ngặt */}
           <Route path="admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />

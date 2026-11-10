@@ -21,7 +21,10 @@ const FEATURES = [
       { id: 'don_da_in', name: 'Đơn đã in hôm nay' },
       { id: 'loc_don_day_ke', name: 'Lọc đơn chia theo dãy kệ' },
       { id: 'chen_vi_tri_awb', name: 'Chèn vị trí SP vào AWB' },
-      { id: 'in_don_spx', name: 'In Đơn SPX Tự Động' }
+      { id: 'in_don_spx', name: 'In Đơn SPX Tự Động' },
+      { id: 'don_da_xoa', name: 'Đơn đã xóa' },
+      { id: 'gui_don_san', name: 'Gửi đơn sàn' },
+      { id: 'in_bill', name: 'In bill tùy chỉnh' }
     ]
   },
   { 
@@ -37,7 +40,13 @@ const FEATURES = [
     subs: [
       { id: 'bao_cao_hoan_tong_hop', name: 'Tổng hợp đơn hoàn' },
       { id: 'xu_ly_don_hoan', name: 'Xử lý Đơn hoàn' },
-      { id: 'kiem_tra_don_hoan', name: 'Kiểm tra & Chốt SL' }
+      { id: 'kiem_tra_don_hoan', name: 'Kiểm tra & Chốt SL' },
+      { id: 'bao_cao_hoan_chua_nhan', name: 'Đơn hoàn chưa nhận' },
+      { id: 'tra_hang_hoan_tien', name: 'Trả hàng hoàn tiền' },
+      { id: 'doi_chieu_hang_loat', name: 'Đối chiếu hàng loạt' },
+      { id: 'quet_nhan_hang', name: 'Quét nhận hàng' },
+      { id: 'lich_su_kiem_nhan', name: 'Lịch sử kiểm nhận' },
+      { id: 'can_check_tay', name: 'Cần check tay' }
     ]
   },
   { 
@@ -55,7 +64,9 @@ const FEATURES = [
     id: 'inventory_report', name: 'Báo cáo tồn kho',
     subs: [
       { id: 'bao_cao_ton_kho', name: 'Tồn kho thực tế' },
-      { id: 'vi_tri_san_pham', name: 'Vị trí sản phẩm' }
+      { id: 'vi_tri_san_pham', name: 'Vị trí sản phẩm' },
+      { id: 'chi_tiet_san_pham', name: 'Chi tiết sản phẩm' },
+      { id: 'don_thay_doi_ton_kho', name: 'Đơn làm thay đổi tồn kho' }
     ]
   },
   // === MỚI THÊM: CỤM KHIẾU NẠI ===

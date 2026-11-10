@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { logOrderPrint } from '../lib/presence';
+import { useFeatureLocks, isSubLocked } from '../components/FeatureGuard';
 import { Search, CheckCircle, AlertTriangle, XCircle, RefreshCw, MessageSquare, Lock, User, ChevronDown, Printer, ChevronLeft, ChevronRight, Copy, Send, Settings2, PackageSearch, Pencil, Save, Download } from 'lucide-react';
 
 const SALE_CHANNELS = {
@@ -255,6 +256,10 @@ export default function OrderReport() {
     // hoặc email super owner. Chỉ owner thấy nút miss mã vận đơn và nút
     // chuyển sang báo cáo đặc biệt (super_admin cũng không thấy).
     const [isOwner, setIsOwner] = useState(false);
+    // Khóa cấp con trong trang (manager: print_orders) — đọc cùng key
+    // feature_lock_print_orders, owner bypass.
+    const printLocks = useFeatureLocks('print_orders');
+    const printSubLocked = (id) => !printLocks.isOwner && isSubLocked(printLocks.subs, id);
     // Trạng thái được chọn ở Admin > Cấu hình Lọc & Ưu tiên Đơn In.
     const [printAllowedStatuses, setPrintAllowedStatuses] = useState(PRINT_ALLOWED_DEFAULT);
 
@@ -2442,7 +2447,7 @@ export default function OrderReport() {
                                 { id: 'print', label: 'In và đóng gói' },
                                 { id: 'transit', label: 'Đang chuyển' },
                                 { id: 'deleted', label: 'Đơn đã xóa' },
-                            ].map(tab => {
+                            ].filter(tab => tab.id !== 'deleted' || !printSubLocked('don_da_xoa')).map(tab => {
                                 const count = specialTabCount(tab.id);
                                 return (
                                     <button
@@ -2666,7 +2671,7 @@ export default function OrderReport() {
                                             
                                             <div className="px-3 py-1.5 mt-1 text-xs font-semibold text-slate-400 uppercase bg-slate-50 border-t border-slate-100">Vận Chuyển</div>
                                             <button onClick={handleBulkSend} className="w-full text-left px-4 py-2 text-sm text-amber-700 hover:bg-amber-50 flex items-center gap-2"><Send size={15} /> Gửi đơn sang hãng</button>
-                                            <button onClick={openBulkEcom} disabled={selectedMarketplaceIds.length === 0} className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${selectedMarketplaceIds.length > 0 ? 'text-amber-700 hover:bg-amber-50' : 'text-slate-400 cursor-not-allowed'}`}><Send size={15} /> Gửi đơn sàn{selectedMarketplaceIds.length > 0 ? ` (${selectedMarketplaceIds.length})` : ''}</button>
+                                            {!printSubLocked('gui_don_san') && (<button onClick={openBulkEcom} disabled={selectedMarketplaceIds.length === 0} className={`w-full text-left px-4 py-2 text-sm flex items-center gap-2 ${selectedMarketplaceIds.length > 0 ? 'text-amber-700 hover:bg-amber-50' : 'text-slate-400 cursor-not-allowed'}`}><Send size={15} /> Gửi đơn sàn{selectedMarketplaceIds.length > 0 ? ` (${selectedMarketplaceIds.length})` : ''}</button>)}
                                             <button onClick={() => { setShowActionMenu(false); setBulkCancelResult(null); setCancelReasonBulk(''); setShowBulkCancelModal(true); }} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"><XCircle size={15} /> Hủy đơn</button>
 
                                             <div className="px-3 py-1.5 mt-1 text-xs font-semibold text-slate-400 uppercase bg-slate-50 border-t border-slate-100">Hệ Thống</div>
@@ -3203,7 +3208,7 @@ export default function OrderReport() {
                                             </div>
                                         </section>
 
-                                        {isMarketplaceChannel(base) && (
+                                        {isMarketplaceChannel(base) && !printSubLocked('gui_don_san') && (
                                             <section className="border border-slate-200 rounded-2xl overflow-hidden">
                                                 <h4 className="px-5 py-3 bg-slate-100 border-b border-slate-200 text-base font-bold text-slate-900">Gửi đơn sàn</h4>
                                                 <div className="px-4 py-3 space-y-3">

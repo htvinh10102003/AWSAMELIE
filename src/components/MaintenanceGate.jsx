@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { getMaintenanceMode, setMaintenanceMode, isOwnerUser, MAINTENANCE_KEY } from '../lib/maintenance';
 import Maintenance404 from './Maintenance404';
 import MaintenanceMobile from './MaintenanceMobile';
+import BootSplash from './BootSplash';
 
 // Chan toan bo web khi dang bao tri.
 // - maintenance = true + khong phai Owner (ke ca chua dang nhap) => chi thay man hinh xam 404.
@@ -83,10 +84,10 @@ export default function MaintenanceGate({ children }) {
     }
   };
 
-  // Chi lan dau tien chua co cache moi phai cho kiem tra, va cho bang man
-  // hinh trang co chu dang tai chu khong phai man hinh xam nua.
+  // Chi lan dau tien chua co cache moi phai cho kiem tra bao tri: hien
+  // splash khoi dong chung (giong Layout), khong phai man hinh xam nua.
   if (maintenance === null) {
-    return <div className="min-h-screen w-full flex items-center justify-center font-sans text-slate-500 font-semibold animate-pulse">Đang tải...</div>;
+    return <BootSplash />;
   }
 
   if (maintenance && !isOwnerUser(user)) {

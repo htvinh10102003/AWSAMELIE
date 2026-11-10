@@ -1,15 +1,18 @@
 import { useEffect, useState, useRef } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import UserAvatar from './UserAvatar';
 import { isAdminRole, isSuperAdminRole } from '../lib/roles';
 import { sessionRevokedKey, isRevokedAfterLogin } from '../lib/session';
+import { readPermCache, writePermCache, updatePermCache, clearPermCache, clearAllPermCaches, FOCUS_REVALIDATE_MS } from '../lib/permCache';
+import BootSplash from './BootSplash';
 import { reportPresence, recordLoginHistory } from '../lib/presence';
 import { 
   TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
   BarChart3, User, Pin, PinOff, ClipboardCheck, PackageMinus, CheckCircle2, 
   LayoutDashboard, Target, Box, ListChecks, MapPin, BarChart2,
-  Filter, FileEdit, LayoutGrid, Webhook, History, ShieldAlert, Settings2, Loader2, Info,
+  Filter, FileEdit, LayoutGrid, Webhook, History, ShieldAlert, Settings2, Info,
   AlignLeft, AlignRight, AlignVerticalSpaceAround, Settings as SettingsIcon,
   Megaphone, Bell, Sparkles, Gift, Rocket, Flame, Star, Zap, Lock,
   MessageSquareWarning, Video, UploadCloud
@@ -27,6 +30,7 @@ const ROUTE_TO_FEATURE_MAP = {
   '/filter-by-zone': { parent: 'print_orders', sub: 'loc_don_day_ke' },
   '/awb-locations': { parent: 'print_orders', sub: 'chen_vi_tri_awb' },
   '/print-spx-orders': { parent: 'print_orders', sub: 'in_don_spx' },
+  '/in-bill': { parent: 'print_orders', sub: 'in_bill' },
 
   '/packing-orders': { parent: 'packing', sub: 'dong_goi_don_hang' },
   '/packing-speed': { parent: 'packing', sub: 'toc_do_dong_goi_chung' },
@@ -71,11 +75,18 @@ export default function Layout() {
   const userRef = useRef(null);
   const sessionSnapshotRef = useRef(null);
   const kickingRef = useRef(false);
+  // Ban sao locks hien tai de realtime handler (dong 1 lan) luon thay duoc
+  // ban moi nhat khi cap nhat cache, tranh closure cu.
+  const featureLocksRef = useRef({});
+  // Ham revalidate nen, gan lai moi lan render de onFocus dang ky 1 lan
+  // van goi duoc ban moi nhat.
+  const refreshPermsRef = useRef(null);
 
   // Da nguoi dung ra man hinh dang nhap voi thong bao het phien (chi goi 1 lan).
   const kickSession = async () => {
     if (kickingRef.current) return;
     kickingRef.current = true;
+    clearPermCache(userRef.current?.id);
     try { await supabase.auth.signOut(); } catch (e) {}
     navigate('/login?session_expired=1', { replace: true });
   };
@@ -150,6 +161,37 @@ export default function Layout() {
     }));
   }, [location.pathname]);
 
+  useEffect(() => { featureLocksRef.current = featureLocks; }, [featureLocks]);
+
+  // Tai lai quyen/locks tuoi tu server, khong doi isInitializing: dung cho
+  // revalidate nen (sau khi ve menu tu cache) va khi quay lai tab (chi khi
+  // cache cu hon 5 phut). That bai thi giu cache cu, khong crash giao dien.
+  const refreshPermsFromServer = async () => {
+    const me = userRef.current;
+    if (!me) return;
+    try {
+      const [lockConfigs, maint] = await Promise.all([
+        supabase.from('system_configs').select('key, value').ilike('key', 'feature_lock_%'),
+        supabase.from('system_configs').select('value').eq('key', 'maintenance_mode').maybeSingle(),
+      ]);
+      const loadedLocks = {};
+      (lockConfigs.data || []).forEach(item => {
+        try { loadedLocks[item.key.replace('feature_lock_', '')] = JSON.parse(item.value); } catch (e) {}
+      });
+      const maintenanceOn = maint?.data?.value === 'true' || maint?.data?.value === true;
+      setFeatureLocks(loadedLocks);
+      updatePermCache(me.id, {
+        role: me.user_metadata?.role || 'user',
+        isOwner: me.user_metadata?.is_owner === true,
+        isAdmin: isAdminRole(me.user_metadata?.role),
+        isSuperAdmin: isSuperAdminRole(me.user_metadata?.role),
+        featureLocks: loadedLocks,
+        maintenance: maintenanceOn,
+      });
+    } catch (e) { /* giu cache cu */ }
+  };
+  refreshPermsRef.current = refreshPermsFromServer;
+
   useEffect(() => {
     const fetchUserAndConfigs = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -162,26 +204,39 @@ export default function Layout() {
         if (revoked && isRevokedAfterLogin(revoked.value, user)) { await kickSession(); return; }
       }
       
+      // Cache quyen hien thi (DISPLAY-ONLY, chi de ve menu): co cache cua
+      // dung user nay thi hien menu ngay tu cache, tat splash luon, roi moi
+      // tai lai tuoi o duoi. Khong co cache (hoac doi user) thi giu splash
+      // cho toi khi tai xong.
+      if (user) {
+        const cachedPerms = readPermCache(user.id);
+        if (cachedPerms) {
+          setFeatureLocks(cachedPerms.featureLocks || {});
+          setIsInitializing(false);
+        }
+      }
+
       if (user) {
         const userConfigKey = `layout_pref_${user.id}`;
-        const keys = ['global_notification', 'global_banner', userConfigKey];
-        
+        const keys = ['global_notification', 'global_banner', 'maintenance_mode', userConfigKey];
+
         // CÁCH FETCH AN TOÀN ĐỂ KHÔNG BAO GIỜ BỊ CRASH GIAO DIỆN
         const [normalConfigs, lockConfigs] = await Promise.all([
           supabase.from('system_configs').select('key, value').in('key', keys),
           supabase.from('system_configs').select('key, value').ilike('key', 'feature_lock_%')
         ]);
-        
+
         const data = [...(normalConfigs.data || []), ...(lockConfigs.data || [])];
-        
+
+        const loadedLocks = {};
+        let maintenanceOn = false;
         if (data.length > 0) {
-          const loadedLocks = {};
           data.forEach(item => {
             try {
               if (item.key === userConfigKey) {
                 const parsedPrefs = JSON.parse(item.value);
                 setLayoutPrefs(parsedPrefs);
-                localStorage.setItem('amelie_layout_prefs', JSON.stringify(parsedPrefs)); 
+                localStorage.setItem('amelie_layout_prefs', JSON.stringify(parsedPrefs));
               }
               else if (item.key === 'global_notification') {
                 const notifData = JSON.parse(item.value);
@@ -193,6 +248,9 @@ export default function Layout() {
               else if (item.key === 'global_banner') {
                 setBannerNotif(JSON.parse(item.value));
               }
+              else if (item.key === 'maintenance_mode') {
+                maintenanceOn = item.value === 'true' || item.value === true;
+              }
               else if (item.key.startsWith('feature_lock_')) {
                 const parentId = item.key.replace('feature_lock_', '');
                 loadedLocks[parentId] = JSON.parse(item.value);
@@ -201,8 +259,17 @@ export default function Layout() {
               console.error("Lỗi parse config:", item.key, e);
             }
           });
-          setFeatureLocks(loadedLocks);
         }
+        setFeatureLocks(loadedLocks);
+        // Luu cache quyen hien thi cho lan load sau (key theo user id).
+        writePermCache(user.id, {
+          role: user.user_metadata?.role || 'user',
+          isOwner: user.user_metadata?.is_owner === true,
+          isAdmin: isAdminRole(user.user_metadata?.role),
+          isSuperAdmin: isSuperAdminRole(user.user_metadata?.role),
+          featureLocks: loadedLocks,
+          maintenance: maintenanceOn,
+        });
       }
       setIsInitializing(false);
     };
@@ -217,11 +284,22 @@ export default function Layout() {
     // Kiem tra dinh ky + khi quay lai tab, de tai khoan bi xoa/doi quyen bi da ra trong vong ~1 phut
     // ngay ca khi realtime khong toi (vi du dang o tab khac).
     const intervalId = setInterval(() => { checkSessionValid(); }, 60000);
-    const onFocus = () => { checkSessionValid(); };
+    const onFocus = () => {
+      checkSessionValid();
+      // Safety net: quay lai tab ma cache quyen da cu hon 5 phut thi tai
+      // lai ngam; moi hon thi giu nguyen, tranh spam server.
+      const me = userRef.current;
+      if (me) {
+        const cached = readPermCache(me.id);
+        if (!cached || Date.now() - (cached.cachedAt || 0) > FOCUS_REVALIDATE_MS) {
+          refreshPermsRef.current?.();
+        }
+      }
+    };
     window.addEventListener('focus', onFocus);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!session) navigate('/login');
+      if (!session) { clearAllPermCaches(); navigate('/login'); }
       else {
         setUser(session.user); userRef.current = session.user;
         if (!sessionSnapshotRef.current) sessionSnapshotRef.current = { role: session.user.user_metadata?.role, isOwner: session.user.user_metadata?.is_owner === true };
@@ -232,13 +310,28 @@ export default function Layout() {
     });
 
     const channel = supabase.channel('system_configs_listener')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_configs' }, 
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'system_configs' },
         (payload) => {
           try {
-            if (payload.new.key && payload.new.key.startsWith('session_revoked_')) {
+            // payload.new null khi row bi xoa: lay key tu payload.old.
+            const changedKey = payload.new?.key ?? payload.old?.key;
+            if (changedKey && changedKey.startsWith('session_revoked_')) {
               const me = userRef.current;
-              if (me && payload.new.key === sessionRevokedKey(me.id) && isRevokedAfterLogin(payload.new.value, me)) {
+              if (me && changedKey === sessionRevokedKey(me.id) && payload.new && isRevokedAfterLogin(payload.new.value, me)) {
                 kickSession();
+              }
+              return;
+            }
+            // Row khoa tinh nang bi xoa -> coi nhu da go khoa (mo lai),
+            // cap nhat ca state lan cache hien thi.
+            if (!payload.new) {
+              if (changedKey && changedKey.startsWith('feature_lock_')) {
+                const parentId = changedKey.replace('feature_lock_', '');
+                const me = userRef.current;
+                const next = { ...(featureLocksRef.current || {}) };
+                delete next[parentId];
+                setFeatureLocks(next);
+                if (me) updatePermCache(me.id, { featureLocks: next });
               }
               return;
             }
@@ -255,13 +348,32 @@ export default function Layout() {
                 setGlobalNotif(null);
               }
             }
-            // REALTIME KHÓA TÍNH NĂNG
+            // REALTIME KHÓA TÍNH NĂNG: doi ca UI lan cache hien thi,
+            // khong can F5. Khong doi viec chan that (FeatureGuard van
+            // fetch tuoi moi lan mo trang).
             else if (payload.new.key.startsWith('feature_lock_')) {
               const parentId = payload.new.key.replace('feature_lock_', '');
+              const parsed = JSON.parse(payload.new.value);
+              const me = userRef.current;
               setFeatureLocks(prev => ({
                 ...prev,
-                [parentId]: JSON.parse(payload.new.value)
+                [parentId]: parsed
               }));
+              if (me) {
+                updatePermCache(me.id, {
+                  featureLocks: { ...(featureLocksRef.current || {}), [parentId]: parsed },
+                });
+              }
+            }
+            // REALTIME BAO TRI: chi dong bo vao cache hien thi; viec chan
+            // that van do MaintenanceGate phu trach (kenh rieng cua no).
+            else if (payload.new.key === 'maintenance_mode') {
+              const me = userRef.current;
+              if (me) {
+                updatePermCache(me.id, {
+                  maintenance: payload.new.value === 'true' || payload.new.value === true,
+                });
+              }
             }
           } catch (e) { }
         }
@@ -296,6 +408,7 @@ export default function Layout() {
   };
 
   const handleLogout = async () => {
+    clearPermCache(user?.id);
     await supabase.auth.signOut();
     navigate('/login');
   };
@@ -313,7 +426,7 @@ export default function Layout() {
 
   const userEmail = user?.email || '';
   const displayName = user?.user_metadata?.full_name || userEmail.split('@')[0] || '...';
-  const avatarLetter = displayName.charAt(0).toUpperCase();
+  const avatarUrl = user?.user_metadata?.avatar_url || null;
   const isAdmin = isAdminRole(user?.user_metadata?.role);
   const isSuperAdmin = isSuperAdminRole(user?.user_metadata?.role);
   const isOwner = user?.user_metadata?.is_owner === true;
@@ -530,6 +643,14 @@ export default function Layout() {
   };
 
   const bannerStyle = bannerNotif ? getBannerStyle(bannerNotif.type) : null;
+
+  // Splash khoi dong toan man hinh: chi hien khi chua co cache quyen cua
+  // user nay va dang cho phien + cau hinh goc tai ve. Co cache thi menu da
+  // ve tu cache nen khong hien splash; khong co delay gia tao. Thay cho
+  // spinner "Đang tải phân quyền..." trong trang truoc day.
+  if (isInitializing) {
+    return <BootSplash />;
+  }
 
   return (
     <>
@@ -821,9 +942,7 @@ export default function Layout() {
 
           <div className={`relative ${isTopLayout ? 'flex items-center pl-4 border-l' : 'p-5 border-t'} ${themeVars.headerBorder} flex items-center justify-between transition-all duration-300 ${!sidebarExpanded && !isTopLayout ? 'flex-col gap-3 py-4' : ''}`}>
             <div className={`flex items-center gap-3 overflow-hidden ${!sidebarExpanded && !isTopLayout ? 'justify-center' : ''}`}>
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shadow-sm shrink-0 relative ${themeVars.logoBg} ${themeVars.logoIcon}`}>
-                {avatarLetter}
-              </div>
+              <UserAvatar avatarUrl={avatarUrl} name={displayName} email={userEmail} size={36} className="shadow-sm" />
               <div className={`flex flex-col transition-all duration-300 overflow-hidden ${sidebarExpanded || isTopLayout ? 'opacity-100 w-auto' : 'opacity-0 w-0 hidden'}`}>
                 <span className={`text-sm font-bold truncate leading-tight whitespace-nowrap max-w-[120px] ${themeVars.textPrimary}`}>{displayName}</span>
                 <span className={`text-xs font-bold uppercase tracking-widest mt-0.5 ${themeVars.textMuted}`}>
@@ -864,12 +983,7 @@ export default function Layout() {
 
         <div className="layout-main-col flex-1 overflow-y-auto overflow-x-hidden relative h-full z-10 flex flex-col">
           <div className="layout-page-wrap relative p-6 sm:p-8 flex-1 flex flex-col">
-            {isInitializing ? (
-              <div className="flex flex-col items-center justify-center m-auto gap-4">
-                <Loader2 size={32} className="animate-spin text-blue-600" />
-                <span className="text-sm font-bold uppercase tracking-widest text-slate-500">Đang tải phân quyền...</span>
-              </div>
-            ) : !hasAccess ? (
+            {!hasAccess ? (
                <div className="flex flex-col items-center justify-center m-auto text-center animate-in fade-in zoom-in-95 duration-500 max-w-md w-full">
                  <div className="w-24 h-24 bg-white/80 rounded-full flex items-center justify-center mb-6 border-[8px] border-white/40 shadow-inner">
                    <ShieldAlert size={40} className="text-red-600" />

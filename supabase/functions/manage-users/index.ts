@@ -31,12 +31,41 @@ serve(async (req) => {
     // Super admin ke thua admin o day (list/create). Doi role / xoa tai khoan van chi Owner, xem ben duoi.
     const isReqOwner = reqUser.user_metadata?.is_owner === true; // Kiểm tra cờ Tài khoản chủ
 
+    const { action, email, password, fullName, role, userId, avatarUrl, removeAvatar, filterUserId, filterAction, filterOrderId, logLimit, logOffset } = await req.json();
+
+    // Anh dai dien: chi chap nhan URL public cua bucket Storage `avatars`
+    // (xem supabase/20261110_avatars_storage_bucket.sql + src/lib/avatar.js).
+    // Khong nhan data URL base64: metadata di kem trong JWT moi request.
+    const isValidAvatarUrl = (url: unknown): url is string => {
+      if (typeof url !== 'string') return false;
+      if (url.length === 0 || url.length > 500) return false;
+      if (!url.startsWith('https://')) return false;
+      return url.includes('/storage/v1/object/public/avatars/');
+    };
+
+    // 0. TU KHOA TAI KHOAN (DevTools guard): bat ky tai khoan dang dang nhap nao
+    // cung goi duoc, nhung chi khoa CHINH MINH — khong nhan userId tu client.
+    // Tai khoan Chu duoc mien (tu khoa thi khong con ai mo lai duoc).
+    if (action === 'self_lock') {
+      const OWNER_EMAILS = ['contact.hotavinh@gmail.com', 'contact.hotavinhh@gmail.com'];
+      if (reqUser.user_metadata?.is_owner === true || OWNER_EMAILS.includes(reqUser.email || '')) {
+        return new Response(JSON.stringify({ error: 'Tài khoản Chủ không thể tự khóa!' }), { status: 403, headers: corsHeaders });
+      }
+      // Khoa dang nhap 10 nam (giong action 'ban'); dong thoi ghi dau thu hoi
+      // phien de Layout/Mobile da tai khoan ra ngay lap tuc.
+      const { error: banErr } = await supabaseAdmin.auth.admin.updateUserById(reqUser.id, { ban_duration: '87600h' });
+      if (banErr) throw banErr;
+      const { error: upErr } = await supabaseAdmin.from('system_configs').upsert({ key: `session_revoked_${reqUser.id}`, value: new Date().toISOString() }, { onConflict: 'key' });
+      if (upErr) console.error('self_lock: khong ghi duoc session_revoked:', upErr.message);
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
     // Chỉ Admin hoặc Chủ mới được quyền sờ vào cổng này
     if (!isReqAdmin && !isReqOwner) {
       return new Response(JSON.stringify({ error: 'Bạn không có quyền truy cập cổng quản trị!' }), { status: 403, headers: corsHeaders });
     }
-
-    const { action, email, password, fullName, role, userId, filterUserId, filterAction, filterOrderId, logLimit, logOffset } = await req.json();
 
     // 1. LẤY DANH SÁCH THÀNH VIÊN
     if (action === 'list') {
@@ -49,11 +78,14 @@ serve(async (req) => {
 
     // 2. TẠO TÀI KHOẢN MỚI (Admin hoặc Nhân viên đều tạo được)
     if (action === 'create') {
+      if (avatarUrl !== undefined && !isValidAvatarUrl(avatarUrl)) {
+        return new Response(JSON.stringify({ error: 'Đường dẫn ảnh đại diện không hợp lệ!' }), { status: 400, headers: corsHeaders });
+      }
       const { data: { user }, error } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
-        user_metadata: { full_name: fullName, role: role || 'user' }
+        user_metadata: { full_name: fullName, role: role || 'user', ...(avatarUrl !== undefined ? { avatar_url: avatarUrl } : {}) }
       });
       if (error) throw error;
       return new Response(JSON.stringify({ success: true, user }), { 
@@ -73,6 +105,23 @@ serve(async (req) => {
           return new Response(JSON.stringify({ error: '🚨 Từ chối! Chỉ có Tài khoản Chủ mới có quyền nâng/hạ cấp Admin!' }), { status: 403, headers: corsHeaders });
         }
         updateData.user_metadata.role = role;
+      }
+
+      // Anh dai dien cho nguoi khac: chi CHU. (Doi anh cua chinh minh thi
+      // dung supabase.auth.updateUser truc tiep, khong qua edge nay.)
+      // updateUserById gop (merge) user_metadata nen full_name/role/is_owner
+      // cu van duoc giu nguyen nhu cac truong hop tren.
+      if (avatarUrl !== undefined || removeAvatar === true) {
+        if (!isReqOwner) {
+          return new Response(JSON.stringify({ error: 'Chỉ có Tài khoản Chủ mới được đổi ảnh đại diện cho người khác!' }), { status: 403, headers: corsHeaders });
+        }
+        if (removeAvatar === true) {
+          updateData.user_metadata.avatar_url = null;
+        } else if (!isValidAvatarUrl(avatarUrl)) {
+          return new Response(JSON.stringify({ error: 'Đường dẫn ảnh đại diện không hợp lệ!' }), { status: 400, headers: corsHeaders });
+        } else {
+          updateData.user_metadata.avatar_url = avatarUrl;
+        }
       }
 
       const { data: { user }, error } = await supabaseAdmin.auth.admin.updateUserById(userId, updateData);

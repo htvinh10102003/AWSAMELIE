@@ -114,3 +114,47 @@ export default function FeatureGuard({ featureId, subFeatureId, children }) {
     </>
   );
 }
+// Hook nhẹ cho khóa cấp con TRONG trang (tab / mục / modal con): đọc cùng key
+// feature_lock_<featureId> và cùng cấu trúc JSON như FeatureGuard, owner được
+// bypass. Dùng để ẨN mục con khi bị khóa thay vì hiện cả màn hình bảo trì
+// (màn hình đó chỉ hợp cho khóa cả trang). Trong lúc đang tải thì coi như
+// chưa khóa để không làm mất nội dung trang.
+export function useFeatureLocks(featureId) {
+  const [state, setState] = useState({ loading: true, isOwner: false, isLocked: false, subs: {} });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const isOwner = user?.user_metadata?.is_owner === true || user?.user_metadata?.is_owner === 'true';
+        const { data } = await supabase
+          .from('system_configs')
+          .select('value')
+          .eq('key', `feature_lock_${featureId}`)
+          .maybeSingle();
+        let isLocked = false;
+        let subs = {};
+        if (data && data.value) {
+          try {
+            const config = JSON.parse(data.value);
+            isLocked = config.isLocked === true || config.isLocked === 'true';
+            subs = config.subs || {};
+          } catch (e) { /* JSON lỗi -> coi như không khóa, giống FeatureGuard */ }
+        }
+        if (!cancelled) setState({ loading: false, isOwner, isLocked, subs });
+      } catch (err) {
+        if (!cancelled) setState((s) => ({ ...s, loading: false }));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [featureId]);
+
+  return state;
+}
+
+// Kiểm tra 1 sub có bị khóa không (chấp nhận true hoặc 'true', như FeatureGuard).
+export function isSubLocked(subs, subFeatureId) {
+  const sub = subs && subFeatureId ? subs[subFeatureId] : null;
+  return sub ? (sub.isLocked === true || sub.isLocked === 'true') : false;
+}

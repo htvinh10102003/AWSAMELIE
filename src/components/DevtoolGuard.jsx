@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import detectorPkg from 'devtools-detector';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
+import { clearPermCache } from '../lib/permCache';
 
 // Chong mo DevTools tren web bao cao (repo: AEPKILL/devtools-detector,
 // npm devtools-detector 2.0.25, MIT).
@@ -145,6 +146,7 @@ export default function DevtoolGuard() {
               localStorage.setItem('wms_devtool_account_locked', '1');
             } catch {}
             setLocked(true);
+            clearPermCache(u.id);
             await supabase.auth.signOut().catch(() => {});
           }
           // Khoa that bai (mang/edge) thi de lan mo sau thu lai.
@@ -167,9 +169,20 @@ export default function DevtoolGuard() {
       <div className="text-3xl sm:text-4xl font-bold text-white">Á à, bắt được rồi nhé!</div>
       <div className="text-sm text-slate-400">Có cố gắng, nhưng không phải ở đây</div>
       {locked ? (
-        <div className="text-sm font-bold text-red-400">Tài khoản của bạn đã bị khóa vì mở DevTools quá 3 lần. Liên hệ chủ tài khoản để mở lại.</div>
+        <div className="flex max-w-md items-center gap-2 rounded-lg border border-red-500/60 bg-red-500/10 px-3 py-2 text-left">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-black text-white">!</span>
+          <span className="text-sm font-bold text-red-400">Tài khoản của bạn đã bị khóa vì mở DevTools quá 3 lần. Liên hệ chủ tài khoản để mở lại.</span>
+        </div>
       ) : strikes > 0 ? (
-        <div className="text-xs font-bold text-amber-400">Cảnh báo lần {strikes}/{MAX_STRIKES} — đóng DevTools lại để tiếp tục làm việc.</div>
+        <div className="flex flex-col items-center gap-3">
+          <div className="text-xs font-bold text-amber-400">Cảnh báo lần {strikes}/{MAX_STRIKES} — đóng DevTools lại để tiếp tục làm việc.</div>
+          {strikes < MAX_STRIKES && (
+            <div className="flex max-w-md items-center gap-2 rounded-lg border border-red-500/60 bg-red-500/10 px-3 py-2 text-left">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-red-500 text-xs font-black text-white">!</span>
+              <span className="text-xs font-bold text-red-400">Mở DevTools và tải lại trang quá 3 lần sẽ bị khóa tài khoản.</span>
+            </div>
+          )}
+        </div>
       ) : null}
     </div>
   );

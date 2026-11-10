@@ -11,6 +11,10 @@ import {
 } from 'lucide-react';
 import { shortDeviceName } from '../lib/presence';
 import PrintSettings from '../components/PrintSettings';
+import ProfileAvatarSection from '../components/ProfileAvatarSection';
+import UserAvatar from '../components/UserAvatar';
+import AvatarUploader from '../components/AvatarUploader';
+import { uploadAvatarBlob } from '../lib/avatar';
 
 // --- UTILS ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -83,6 +87,9 @@ export default function Admin() {
   const [loading, setLoading] = useState(false); 
   const [editingUser, setEditingUser] = useState(null); 
   const [editForm, setEditForm] = useState({ fullName: '', role: 'user' });
+  const [editAvatarUrl, setEditAvatarUrl] = useState(null);
+  const [editAvatarBlob, setEditAvatarBlob] = useState(null);
+  const [editAvatarRemoved, setEditAvatarRemoved] = useState(false);
   const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false);
   const [upgradePassword, setUpgradePassword] = useState('');
 
@@ -459,6 +466,9 @@ export default function Admin() {
   const handleOpenEditModal = (targetUser) => {
     setEditingUser(targetUser);
     setEditForm({ fullName: targetUser.user_metadata?.full_name || '', role: targetUser.user_metadata?.role || 'user' });
+    setEditAvatarUrl(targetUser.user_metadata?.avatar_url || null);
+    setEditAvatarBlob(null);
+    setEditAvatarRemoved(false);
     setShowUpgradeConfirm(false); setUpgradePassword('');
   };
 
@@ -471,7 +481,14 @@ export default function Admin() {
     setLoading(true);
     try {
       const oldRole = editingUser.user_metadata?.role || 'user';
-      await callUserManagementApi({ action: 'update_info', userId: editingUser.id, fullName: editForm.fullName, role: isOwner ? editForm.role : undefined });
+      let avatarUrl;
+      let removeAvatar;
+      if (editAvatarRemoved) {
+        removeAvatar = true;
+      } else if (editAvatarBlob) {
+        avatarUrl = await uploadAvatarBlob(supabase, editingUser.id, editAvatarBlob);
+      }
+      await callUserManagementApi({ action: 'update_info', userId: editingUser.id, fullName: editForm.fullName, role: isOwner ? editForm.role : undefined, avatarUrl, removeAvatar });
       if (isOwner && editForm.role && editForm.role !== oldRole) await notifySessionRevoked(editingUser.id);
       setUserMessage(` Đã cập nhật thông tin thành công.`);
       setEditingUser(null); await fetchSystemUsers();
@@ -866,7 +883,7 @@ export default function Admin() {
     } catch (err) {
       const msg = String(err.message || err);
       if (/request_cleanup_batched|does not exist|PGRST202/i.test(msg)) {
-        setCleanMessage({ text: 'Chưa cài RPC xóa theo lô. Hãy chạy file supabase/20261030_cleanup_batched.sql trong SQL Editor một lần, rồi bấm dọn dẹp lại.', type: 'error' });
+        setCleanMessage({ text: 'Chưa cài RPC xóa theo lô. Hãy chạy file supabase/20261110_cleanup_new_tables.sql trong SQL Editor một lần, rồi bấm dọn dẹp lại.', type: 'error' });
       } else {
         setCleanMessage({ text: `Lỗi xóa dữ liệu: ${msg}. Các lô đã xóa trước đó vẫn được giữ, có thể bấm lại để tiếp tục từ chỗ đã dừng.`, type: 'error' });
       }
@@ -960,7 +977,7 @@ export default function Admin() {
     <div className="max-w-6xl mx-auto space-y-8 pb-12 mt-8 px-4 sm:px-6 relative">
       
       {/* HEADER & TABS */}
-      <div className="bg-white p-4 sm:p-6 border border-slate-200 rounded-2xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-6 sticky top-4 z-40 backdrop-blur-xl bg-white/90">
+      <div className="bg-white p-4 sm:p-6 border border-slate-200 rounded-2xl shadow-sm flex flex-col gap-4 sticky top-4 z-40 backdrop-blur-xl bg-white/90">
         <div className="flex items-center gap-4">
           <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-2xl border border-emerald-100">
             <Settings size={26} strokeWidth={2.5} />
@@ -972,7 +989,7 @@ export default function Admin() {
         </div>
 
         {/* Segmented Control Tabs */}
-        <div className="flex bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/60 w-full md:w-auto overflow-x-auto shadow-inner hide-scrollbar">
+        <div className="flex flex-wrap bg-slate-100/80 p-1.5 rounded-2xl border border-slate-200/60 w-full shadow-inner">
           <button onClick={() => { setActiveTab('configs'); setUserMessage(''); }} className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl text-sm font-bold transition-all duration-300 whitespace-nowrap ${activeTab === 'configs' ? 'bg-slate-900 text-white shadow' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-200/50'}`}>
             Cấu hình & Data
           </button>
@@ -1409,7 +1426,7 @@ export default function Admin() {
                 {cleanProgress && (
                 <div className="p-4 mb-6 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700">
                   Đã xóa: <strong>{cleanProgress.totalDeleted} dòng</strong> · Số lô: {cleanProgress.rounds}
-                  {cleanProgress.remaining && (<span> · Còn lại: đơn hàng {cleanProgress.remaining.orders ?? '?'}, lịch sử {cleanProgress.remaining.order_histories ?? '?'}</span>)}
+                  {cleanProgress.remaining && (<span> · Còn lại: {Object.entries(cleanProgress.remaining).filter(([, v]) => (v ?? 0) > 0).map(([k, v]) => `${k}: ${v}`).join(', ') || '0 dòng'}</span>)}
                 </div>
               )}
 
@@ -1691,11 +1708,16 @@ export default function Admin() {
                       return (
                         <tr key={u.id} className="hover:bg-slate-50 transition-colors group rounded-xl">
                           <td className="py-3.5 px-4 rounded-l-xl">
-                            <div className={`font-bold text-slate-800 flex items-center gap-2 ${isOwner ? 'cursor-pointer hover:text-slate-900' : ''}`} onClick={() => isOwner && fetchUserDetail(u)} title={isOwner ? 'Bấm để xem chi tiết tài khoản' : ''}>
-                              {uName} {isMe && <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-widest">(Bạn)</span>}
+                            <div className="flex items-center gap-3">
+                              <UserAvatar avatarUrl={u.user_metadata?.avatar_url || null} name={uName} email={u.email} size={36} />
+                              <div className="min-w-0">
+                                <div className={`font-bold text-slate-800 flex items-center gap-2 ${isOwner ? 'cursor-pointer hover:text-slate-900' : ''}`} onClick={() => isOwner && fetchUserDetail(u)} title={isOwner ? 'Bấm để xem chi tiết tài khoản' : ''}>
+                                  {uName} {isMe && <span className="text-xs bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-bold uppercase tracking-widest">(Bạn)</span>}
+                                </div>
+                                <div className="text-xs text-slate-500 font-medium">{u.email}</div>
+                                {isUserBanned(u) && <div className="text-xs font-bold text-red-600 mt-0.5">Đã khóa tài khoản</div>}
+                              </div>
                             </div>
-                            <div className="text-xs text-slate-500 font-medium">{u.email}</div>
-                            {isUserBanned(u) && <div className="text-xs font-bold text-red-600 mt-0.5">Đã khóa tài khoản</div>}
                           </td>
                           <td className="py-3.5 px-4 text-center">
                             <span className={`px-3 py-1 border rounded-lg text-xs font-bold uppercase tracking-widest inline-block ${isTargetOwner ? 'bg-amber-50 text-amber-700 border-amber-200' : uRole === 'super_admin' ? 'bg-rose-50 text-rose-700 border-rose-200' : uRole === 'admin' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
@@ -1916,6 +1938,8 @@ export default function Admin() {
               </div>
             </div>
 
+            <ProfileAvatarSection />
+
             {profileMessage && <div className={`p-4 mb-8 rounded-xl font-bold text-sm flex gap-2 shadow-sm ${profileMessage.includes('') ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}><CheckCircle2 size={18} className="flex-shrink-0"/> {profileMessage}</div>}
 
             <form onSubmit={handleUpdateProfile} className="space-y-6">
@@ -1989,6 +2013,18 @@ export default function Admin() {
                     className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 transition font-medium" 
                     disabled={editingUser.email === SUPER_OWNER_EMAIL && currentUserEmail !== SUPER_OWNER_EMAIL}
                   />
+                </div>
+
+                <div>
+                  <label className="block mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Ảnh đại diện</label>
+                  <AvatarUploader
+                    currentUrl={editAvatarRemoved ? null : editAvatarUrl}
+                    name={editForm.fullName || editingUser.email}
+                    disabled={loading}
+                    onSelect={({ blob }) => { setEditAvatarBlob(blob); setEditAvatarRemoved(false); }}
+                    onRemove={() => { setEditAvatarBlob(null); setEditAvatarRemoved(true); }}
+                  />
+                  <p className="text-xs text-slate-500 font-medium mt-2">Ảnh chỉ được tải lên khi bấm “Lưu”.</p>
                 </div>
 
                 <div>
