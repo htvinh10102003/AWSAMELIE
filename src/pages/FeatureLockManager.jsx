@@ -85,7 +85,7 @@ const FEATURES = [
   { 
     id: 'system_adjust', name: 'Cập nhật & Hiệu chỉnh',
     subs: [
-      // Bỏ qua Khóa tính năng (cap-nhat-tinh-nang) để tránh Owner tự khóa chính mình
+      // Bỏ qua Khóa tính năng (feature-locks) để tránh Owner tự khóa chính mình
       { id: 'cap_nhat_nguoi_dong_goi', name: 'Người đóng gói' },
       { id: 'cap_nhat_lich_lam_viec', name: 'Lịch làm việc' },
       { id: 'cap_nhat_san_pham', name: 'Hiệu chỉnh sản phẩm' },

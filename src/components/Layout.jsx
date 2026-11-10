@@ -18,50 +18,50 @@ import {
 // === MAP URL VỚI TÍNH NĂNG ===
 const ROUTE_TO_FEATURE_MAP = {
   '/': { parent: 'dashboard', sub: 'don_di_hang_ngay' },
-  '/dashboard-don-hoan': { parent: 'dashboard', sub: 'dashboard_don_hoan' },
+  '/dashboard-returns': { parent: 'dashboard', sub: 'dashboard_don_hoan' },
   '/dashboard-kpi': { parent: 'dashboard', sub: 'dashboard_kpi' },
-  '/tra-cuu-luan-chuyen': { parent: 'dashboard', sub: 'tra_cuu_luan_chuyen' },
+  '/status-transitions': { parent: 'dashboard', sub: 'tra_cuu_luan_chuyen' },
   
-  '/bao-cao-don': { parent: 'print_orders', sub: 'bao_cao_don' },
-  '/don-da-in-hom-nay': { parent: 'print_orders', sub: 'don_da_in' },
-  '/loc-don-theo-day-ke': { parent: 'print_orders', sub: 'loc_don_day_ke' },
-  '/chen-vi-tri-awb': { parent: 'print_orders', sub: 'chen_vi_tri_awb' },
-  '/in-don-spx': { parent: 'print_orders', sub: 'in_don_spx' },
+  '/order-report': { parent: 'print_orders', sub: 'bao_cao_don' },
+  '/printed-today': { parent: 'print_orders', sub: 'don_da_in' },
+  '/filter-by-zone': { parent: 'print_orders', sub: 'loc_don_day_ke' },
+  '/awb-locations': { parent: 'print_orders', sub: 'chen_vi_tri_awb' },
+  '/print-spx-orders': { parent: 'print_orders', sub: 'in_don_spx' },
 
-  '/dong-goi-don-hang': { parent: 'packing', sub: 'dong_goi_don_hang' },
-  '/toc-do-dong-goi-chung': { parent: 'packing', sub: 'toc_do_dong_goi_chung' },
-  '/toc-do-dong-goi-nhan-su': { parent: 'packing', sub: 'toc_do_dong_goi_nhan_su' },
+  '/packing-orders': { parent: 'packing', sub: 'dong_goi_don_hang' },
+  '/packing-speed': { parent: 'packing', sub: 'toc_do_dong_goi_chung' },
+  '/packing-speed-by-staff': { parent: 'packing', sub: 'toc_do_dong_goi_nhan_su' },
 
-  '/bao-cao-hoan-tong-hop': { parent: 'return_orders', sub: 'bao_cao_hoan_tong_hop' },
-  '/xu-ly-don-hoan': { parent: 'return_orders', sub: 'xu_ly_don_hoan' },
-  '/kiem-tra-don-hoan': { parent: 'return_orders', sub: 'kiem_tra_don_hoan' },
-  '/tra-hang-hoan-tien': { parent: 'return_orders', sub: 'tra_hang_hoan_tien' },
-  '/bao-cao-hoan-chua-nhan': { parent: 'return_orders', sub: 'bao_cao_hoan_chua_nhan' },
+  '/returns-summary': { parent: 'return_orders', sub: 'bao_cao_hoan_tong_hop' },
+  '/process-returns': { parent: 'return_orders', sub: 'xu_ly_don_hoan' },
+  '/check-returns': { parent: 'return_orders', sub: 'kiem_tra_don_hoan' },
+  '/returns-refunds': { parent: 'return_orders', sub: 'tra_hang_hoan_tien' },
+  '/unreceived-returns': { parent: 'return_orders', sub: 'bao_cao_hoan_chua_nhan' },
 
-  '/thong-ke-kiem-ke': { parent: 'inventory_check', sub: 'thong_ke_kiem_ke' },
-  '/danh-sach-kiem-ke': { parent: 'inventory_check', sub: 'danh_sach_kiem_ke' },
+  '/inventory-count-stats': { parent: 'inventory_check', sub: 'thong_ke_kiem_ke' },
+  '/inventory-count-list': { parent: 'inventory_check', sub: 'danh_sach_kiem_ke' },
 
-  '/doi-soat-kho': { parent: 'standalone_doi_soat', sub: null },
+  '/stock-reconciliation': { parent: 'standalone_doi_soat', sub: null },
 
-  '/bao-cao-ton-kho': { parent: 'inventory_report', sub: 'bao_cao_ton_kho' },
-  '/vi-tri-san-pham': { parent: 'inventory_report', sub: 'vi_tri_san_pham' },
+  '/inventory-report': { parent: 'inventory_report', sub: 'bao_cao_ton_kho' },
+  '/product-locations': { parent: 'inventory_report', sub: 'vi_tri_san_pham' },
 
-  '/tong-hop-khieu-nai': { parent: 'complaints', sub: 'tong_hop_khieu_nai' },
-  '/video-khieu-nai': { parent: 'complaints', sub: 'video_khieu_nai' },
+  '/complaints': { parent: 'complaints', sub: 'tong_hop_khieu_nai' },
+  '/complaint-videos': { parent: 'complaints', sub: 'video_khieu_nai' },
 
-  '/don-khong-khai-gia': { parent: 'standalone_khai_gia', sub: null },
+  '/undeclared-fee-orders': { parent: 'standalone_khai_gia', sub: null },
   '/admin': { parent: 'admin_sys', sub: null },
 
-  '/quan-ly-kpi': { parent: 'kpi', sub: 'quan_ly_kpi' },
-  '/nhap-lieu-kpi': { parent: 'kpi', sub: 'nhap_lieu_kpi' },
+  '/kpi-management': { parent: 'kpi', sub: 'quan_ly_kpi' },
+  '/kpi-data-entry': { parent: 'kpi', sub: 'nhap_lieu_kpi' },
 
-  '/cap-nhat-nguoi-dong-goi': { parent: 'system_adjust', sub: 'cap_nhat_nguoi_dong_goi' },
-  '/cap-nhat-lich-lam-viec': { parent: 'system_adjust', sub: 'cap_nhat_lich_lam_viec' },
-  '/cap-nhat-san-pham': { parent: 'system_adjust', sub: 'cap_nhat_san_pham' },
-  '/cap-nhat-so-do-kho': { parent: 'system_adjust', sub: 'cap_nhat_so_do_kho' },
-  '/cap-nhat-day-ke': { parent: 'system_adjust', sub: 'cap_nhat_day_ke' },
-  '/cap-nhat-webhook': { parent: 'system_adjust', sub: 'cap_nhat_webhook' },
-  '/upload-video-hoan': { parent: 'system_adjust', sub: 'upload_video_hoan' }
+  '/update-packers': { parent: 'system_adjust', sub: 'cap_nhat_nguoi_dong_goi' },
+  '/update-work-schedule': { parent: 'system_adjust', sub: 'cap_nhat_lich_lam_viec' },
+  '/update-products': { parent: 'system_adjust', sub: 'cap_nhat_san_pham' },
+  '/update-warehouse-map': { parent: 'system_adjust', sub: 'cap_nhat_so_do_kho' },
+  '/update-shelf-zones': { parent: 'system_adjust', sub: 'cap_nhat_day_ke' },
+  '/webhook-retry': { parent: 'system_adjust', sub: 'cap_nhat_webhook' },
+  '/upload-return-videos': { parent: 'system_adjust', sub: 'upload_video_hoan' }
 };
 
 export default function Layout() {
@@ -138,15 +138,15 @@ export default function Layout() {
     const p = location.pathname;
     setMenuStates(prev => ({
       ...prev,
-      dashboard: prev.dashboard || ['/', '/dashboard-', '/tra-cuu-luan-chuyen'].some(m => p.includes(m)),
-      print_orders: prev.print_orders || ['/bao-cao-don', '/don-da-in-hom-nay', '/loc-don-theo-day-ke', '/chen-vi-tri-awb', '/in-don-spx'].some(m => p.includes(m)),
-      packing: prev.packing || ['/dong-goi-', '/toc-do-dong-goi-'].some(m => p.includes(m)),
-      return_orders: prev.return_orders || ['/bao-cao-hoan-', '/kiem-tra-don-hoan', '/xu-ly-don-hoan', '/tra-hang-hoan-tien'].some(m => p.includes(m)),
-      inventory_check: prev.inventory_check || ['/thong-ke-kiem-ke', '/danh-sach-kiem-ke'].some(m => p.includes(m)),
-      inventory_report: prev.inventory_report || ['/bao-cao-ton-kho', '/vi-tri-san-pham'].some(m => p.includes(m)),
-      complaints: prev.complaints || ['/tong-hop-khieu-nai', '/video-khieu-nai'].some(m => p.includes(m)),
-      kpi: prev.kpi || ['/quan-ly-kpi', '/nhap-lieu-kpi'].some(m => p.includes(m)),
-      system_adjust: prev.system_adjust || ['/cap-nhat-', '/upload-video-hoan'].some(m => p.includes(m))
+      dashboard: prev.dashboard || ['/', '/dashboard-', '/status-transitions'].some(m => p.includes(m)),
+      print_orders: prev.print_orders || ['/order-report', '/printed-today', '/filter-by-zone', '/awb-locations', '/print-spx-orders'].some(m => p.includes(m)),
+      packing: prev.packing || ['/packing-'].some(m => p.includes(m)),
+      return_orders: prev.return_orders || ['/returns-summary', '/check-returns', '/process-returns', '/returns-refunds', '/unreceived-returns'].some(m => p.includes(m)),
+      inventory_check: prev.inventory_check || ['/inventory-count-stats', '/inventory-count-list'].some(m => p.includes(m)),
+      inventory_report: prev.inventory_report || ['/inventory-report', '/product-locations'].some(m => p.includes(m)),
+      complaints: prev.complaints || ['/complaints', '/complaint-videos'].some(m => p.includes(m)),
+      kpi: prev.kpi || ['/kpi-management', '/kpi-data-entry'].some(m => p.includes(m)),
+      system_adjust: prev.system_adjust || ['/update-', '/webhook-retry', '/upload-return-videos', '/feature-locks'].some(m => p.includes(m))
     }));
   }, [location.pathname]);
 
@@ -318,8 +318,8 @@ export default function Layout() {
   const isSuperAdmin = isSuperAdminRole(user?.user_metadata?.role);
   const isOwner = user?.user_metadata?.is_owner === true;
   
-  const adminRoutes = ['/admin', '/quan-ly-kpi', '/nhap-lieu-kpi', '/cap-nhat-nguoi-dong-goi', '/cap-nhat-lich-lam-viec', '/cap-nhat-san-pham', '/cap-nhat-so-do-kho', '/cap-nhat-day-ke', '/cap-nhat-webhook', '/upload-video-hoan'];
-  const ownerRoutes = ['/cap-nhat-tinh-nang'];
+  const adminRoutes = ['/admin', '/kpi-management', '/kpi-data-entry', '/update-packers', '/update-work-schedule', '/update-products', '/update-warehouse-map', '/update-shelf-zones', '/webhook-retry', '/upload-return-videos'];
+  const ownerRoutes = ['/feature-locks'];
 
   let hasAccess = true;
   if (ownerRoutes.some(route => location.pathname.startsWith(route))) hasAccess = isOwner;
@@ -364,71 +364,71 @@ export default function Layout() {
       items: [
         {
           id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard,
-          matchRoutes: ['/', '/dashboard-', '/tra-cuu-luan-chuyen'],
+          matchRoutes: ['/', '/dashboard-', '/status-transitions'],
           subItems: [
             { path: '/', label: 'Đơn đi hàng ngày', icon: TrendingUp },
-            { path: '/dashboard-don-hoan', label: 'SL Đơn hoàn theo ngày', icon: BarChart2 },
+            { path: '/dashboard-returns', label: 'SL Đơn hoàn theo ngày', icon: BarChart2 },
             { path: '/dashboard-kpi', label: 'Tổng quan KPI tháng', icon: Target },
-            { path: '/tra-cuu-luan-chuyen', label: 'Tra cứu luân chuyển', icon: History }
+            { path: '/status-transitions', label: 'Tra cứu luân chuyển', icon: History }
           ]
         },
         {
           id: 'print_orders', label: 'Đơn in', icon: Printer,
-          matchRoutes: ['/bao-cao-don', '/don-da-in-hom-nay', '/loc-don-theo-day-ke', '/chen-vi-tri-awb', '/in-don-spx'],
+          matchRoutes: ['/order-report', '/printed-today', '/filter-by-zone', '/awb-locations', '/print-spx-orders'],
           subItems: [
-            { path: '/bao-cao-don', label: 'Đơn có thể in', icon: Printer },
-            { path: '/don-da-in-hom-nay', label: 'Đơn đã in hôm nay', icon: CheckCircle2 },
-            { path: '/loc-don-theo-day-ke', label: 'Lọc đơn chia theo dãy kệ', icon: Filter },
-            { path: '/chen-vi-tri-awb', label: 'Chèn vị trí SP vào AWB', icon: FileEdit },
-            { path: '/in-don-spx', label: 'In Đơn SPX Tự Động', icon: Printer, highlight: true }
+            { path: '/order-report', label: 'Đơn có thể in', icon: Printer },
+            { path: '/printed-today', label: 'Đơn đã in hôm nay', icon: CheckCircle2 },
+            { path: '/filter-by-zone', label: 'Lọc đơn chia theo dãy kệ', icon: Filter },
+            { path: '/awb-locations', label: 'Chèn vị trí SP vào AWB', icon: FileEdit },
+            { path: '/print-spx-orders', label: 'In Đơn SPX Tự Động', icon: Printer, highlight: true }
           ]
         },
         {
           id: 'packing', label: 'Đóng gói', icon: Timer,
-          matchRoutes: ['/dong-goi-', '/toc-do-dong-goi-'],
+          matchRoutes: ['/packing-'],
           subItems: [
-            { path: '/dong-goi-don-hang', label: 'Đóng gói đơn hàng', subtitle: 'Tab dành cho NVĐG', icon: Box },
-            { path: '/toc-do-dong-goi-chung', label: 'Đóng gói chung', icon: BarChart3 },
-            { path: '/toc-do-dong-goi-nhan-su', label: 'Theo nhân sự', icon: User }
+            { path: '/packing-orders', label: 'Đóng gói đơn hàng', subtitle: 'Tab dành cho NVĐG', icon: Box },
+            { path: '/packing-speed', label: 'Đóng gói chung', icon: BarChart3 },
+            { path: '/packing-speed-by-staff', label: 'Theo nhân sự', icon: User }
           ]
         },
         {
           id: 'return_orders', label: 'Báo cáo đơn hoàn', icon: Undo2,
-          matchRoutes: ['/bao-cao-hoan-', '/kiem-tra-don-hoan', '/xu-ly-don-hoan', '/tra-hang-hoan-tien'],
+          matchRoutes: ['/returns-summary', '/check-returns', '/process-returns', '/returns-refunds', '/unreceived-returns'],
           subItems: [
-            { path: '/bao-cao-hoan-tong-hop', label: 'Tổng hợp đơn hoàn', icon: BarChart3 },
-            { path: '/xu-ly-don-hoan', label: 'Xử lý Đơn hoàn', icon: PackageMinus },
-            { path: '/kiem-tra-don-hoan', label: 'Kiểm tra & Chốt SL', icon: ScanLine },
-            { path: '/tra-hang-hoan-tien', label: 'Trả hàng hoàn tiền', icon: Undo2 },
-            { path: '/bao-cao-hoan-chua-nhan', label: 'Đơn hoàn chưa nhận', icon: PackageSearch }
+            { path: '/returns-summary', label: 'Tổng hợp đơn hoàn', icon: BarChart3 },
+            { path: '/process-returns', label: 'Xử lý Đơn hoàn', icon: PackageMinus },
+            { path: '/check-returns', label: 'Kiểm tra & Chốt SL', icon: ScanLine },
+            { path: '/returns-refunds', label: 'Trả hàng hoàn tiền', icon: Undo2 },
+            { path: '/unreceived-returns', label: 'Đơn hoàn chưa nhận', icon: PackageSearch }
           ]
         },
         {
           id: 'inventory_check', label: 'Báo cáo kiểm kê', icon: ClipboardCheck,
-          matchRoutes: ['/thong-ke-kiem-ke', '/danh-sach-kiem-ke'],
+          matchRoutes: ['/inventory-count-stats', '/inventory-count-list'],
           subItems: [
-            { path: '/thong-ke-kiem-ke', label: 'Báo cáo chung', icon: BarChart3 },
-            { path: '/danh-sach-kiem-ke', label: 'Danh sách cần kiểm kê', icon: ListChecks }
+            { path: '/inventory-count-stats', label: 'Báo cáo chung', icon: BarChart3 },
+            { path: '/inventory-count-list', label: 'Danh sách cần kiểm kê', icon: ListChecks }
           ]
         },
-        { id: 'standalone_doi_soat', label: 'Đối soát đơn cuối ngày', path: '/doi-soat-kho', icon: ScanLine },
+        { id: 'standalone_doi_soat', label: 'Đối soát đơn cuối ngày', path: '/stock-reconciliation', icon: ScanLine },
         {
           id: 'inventory_report', label: 'Báo cáo tồn kho', icon: Boxes,
-          matchRoutes: ['/bao-cao-ton-kho', '/vi-tri-san-pham'],
+          matchRoutes: ['/inventory-report', '/product-locations'],
           subItems: [
-            { path: '/bao-cao-ton-kho', label: 'Tồn kho thực tế', icon: Boxes },
-            { path: '/vi-tri-san-pham', label: 'Vị trí sản phẩm', icon: MapPin }
+            { path: '/inventory-report', label: 'Tồn kho thực tế', icon: Boxes },
+            { path: '/product-locations', label: 'Vị trí sản phẩm', icon: MapPin }
           ]
         },
         {
           id: 'complaints', label: 'Khiếu nại', icon: MessageSquareWarning,
-          matchRoutes: ['/tong-hop-khieu-nai', '/video-khieu-nai'],
+          matchRoutes: ['/complaints', '/complaint-videos'],
           subItems: [
-            { path: '/tong-hop-khieu-nai', label: 'Tổng hợp đơn khiếu nại', icon: BarChart3 },
-            { path: '/video-khieu-nai', label: 'Video khiếu nại', icon: Video }
+            { path: '/complaints', label: 'Tổng hợp đơn khiếu nại', icon: BarChart3 },
+            { path: '/complaint-videos', label: 'Video khiếu nại', icon: Video }
           ]
         },
-        { id: 'standalone_khai_gia', label: 'Đơn không khai giá', path: '/don-khong-khai-gia', icon: AlertTriangle }
+        { id: 'standalone_khai_gia', label: 'Đơn không khai giá', path: '/undeclared-fee-orders', icon: AlertTriangle }
       ]
     },
     ...(isAdmin || isOwner ? [{
@@ -437,24 +437,24 @@ export default function Layout() {
         { id: 'admin_sys', label: 'Quản trị Hệ thống', path: '/admin', icon: Settings },
         {
           id: 'kpi', label: 'Quản lý KPI & Lỗi', icon: Target,
-          matchRoutes: ['/quan-ly-kpi', '/nhap-lieu-kpi'],
+          matchRoutes: ['/kpi-management', '/kpi-data-entry'],
           subItems: [
-            { path: '/quan-ly-kpi', label: 'Cấu hình KPI', icon: Settings2 },
-            { path: '/nhap-lieu-kpi', label: 'Nhập liệu hàng ngày', icon: FileEdit }
+            { path: '/kpi-management', label: 'Cấu hình KPI', icon: Settings2 },
+            { path: '/kpi-data-entry', label: 'Nhập liệu hàng ngày', icon: FileEdit }
           ]
         },
         {
           id: 'system_adjust', label: 'Cập nhật & Hiệu chỉnh', icon: Wrench,
-          matchRoutes: ['/cap-nhat-', '/upload-video-hoan'],
+          matchRoutes: ['/update-', '/webhook-retry', '/upload-return-videos', '/feature-locks'],
           subItems: [
-            ...(isOwner ? [{ path: '/cap-nhat-tinh-nang', label: 'Khóa tính năng', icon: ShieldAlert }] : []),
-            { path: '/cap-nhat-nguoi-dong-goi', label: 'Người đóng gói', icon: UserCog },
-            { path: '/cap-nhat-lich-lam-viec', label: 'Lịch làm việc', icon: CalendarDays },
-            { path: '/cap-nhat-san-pham', label: 'Hiệu chỉnh sản phẩm', icon: PackageSearch },
-            { path: '/cap-nhat-so-do-kho', label: 'Sơ đồ Kho hàng', icon: MapPin },
-            { path: '/cap-nhat-day-ke', label: 'Quy ước dãy kệ', icon: LayoutGrid },
-            { path: '/cap-nhat-webhook', label: 'Chạy lại Webhook', icon: Webhook },
-            { path: '/upload-video-hoan', label: 'Upload video hàng hoàn', icon: UploadCloud }
+            ...(isOwner ? [{ path: '/feature-locks', label: 'Khóa tính năng', icon: ShieldAlert }] : []),
+            { path: '/update-packers', label: 'Người đóng gói', icon: UserCog },
+            { path: '/update-work-schedule', label: 'Lịch làm việc', icon: CalendarDays },
+            { path: '/update-products', label: 'Hiệu chỉnh sản phẩm', icon: PackageSearch },
+            { path: '/update-warehouse-map', label: 'Sơ đồ Kho hàng', icon: MapPin },
+            { path: '/update-shelf-zones', label: 'Quy ước dãy kệ', icon: LayoutGrid },
+            { path: '/webhook-retry', label: 'Chạy lại Webhook', icon: Webhook },
+            { path: '/upload-return-videos', label: 'Upload video hàng hoàn', icon: UploadCloud }
           ]
         }
       ]

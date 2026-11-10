@@ -63,7 +63,7 @@ export default function App() {
               <Dashboard />
             </FeatureGuard>
           } />
-          <Route path="dashboard-don-hoan" element={
+          <Route path="dashboard-returns" element={
             <FeatureGuard featureId="dashboard" subFeatureId="don_hoan">
               <DashboardDonHoan />
             </FeatureGuard>
@@ -73,34 +73,34 @@ export default function App() {
               <KPI_Report />
             </FeatureGuard>
           } />
-          <Route path="tra-cuu-luan-chuyen" element={
+          <Route path="status-transitions" element={
             <FeatureGuard featureId="dashboard" subFeatureId="tra_cuu">
               <StatusTransitionTracker />
             </FeatureGuard>
           } />
           
           {/* 🖨️ TAB ĐƠN IN - Cụm featureId="print_orders" */}
-          <Route path="bao-cao-don" element={
+          <Route path="order-report" element={
             <FeatureGuard featureId="print_orders" subFeatureId="bao_cao">
               <OrderReport />
             </FeatureGuard>
           } />
-          <Route path="don-da-in-hom-nay" element={
+          <Route path="printed-today" element={
             <FeatureGuard featureId="print_orders" subFeatureId="da_in">
               <PrintedOrdersToday />
             </FeatureGuard>
           } />
-          <Route path="loc-don-theo-day-ke" element={
+          <Route path="filter-by-zone" element={
             <FeatureGuard featureId="print_orders" subFeatureId="loc_day_ke">
               <FilterByZone />
             </FeatureGuard>
           } />
-          <Route path="chen-vi-tri-awb" element={
+          <Route path="awb-locations" element={
             <FeatureGuard featureId="print_orders" subFeatureId="chen_awb">
               <AWBProcessor />
             </FeatureGuard>
           } />
-          <Route path="in-don-spx" element={
+          <Route path="print-spx-orders" element={
             <FeatureGuard featureId="print_orders" subFeatureId="in_spx">
               <SpxPrinter />
             </FeatureGuard>
@@ -108,112 +108,147 @@ export default function App() {
           <Route path="in-bill" element={<BillPrint />} />
 
           {/* 📦 TAB ĐÓNG GÓI - Cụm featureId="packing" */}
-          <Route path="dong-goi-don-hang" element={
+          <Route path="packing-orders" element={
             <FeatureGuard featureId="packing" subFeatureId="dong_goi">
               <UnderDevelopment />
             </FeatureGuard>
           } />
-          <Route path="toc-do-dong-goi-chung" element={
+          <Route path="packing-speed" element={
             <FeatureGuard featureId="packing" subFeatureId="toc_do_chung">
               <PackingSpeed mode="general" />
             </FeatureGuard>
           } />
-          <Route path="toc-do-dong-goi-nhan-su" element={
+          <Route path="packing-speed-by-staff" element={
             <FeatureGuard featureId="packing" subFeatureId="toc_do_ns">
               <UnderDevelopment />
             </FeatureGuard>
           } />
           
           {/* 🔄 TAB ĐƠN HOÀN - Cụm featureId="returns" */}
-          <Route path="bao-cao-hoan" element={<Navigate to="/kiem-tra-don-hoan" replace />} />
-          <Route path="bao-cao-hoan-tong-hop" element={
+          <Route path="bao-cao-hoan" element={<Navigate to="/check-returns" replace />} />
+          <Route path="returns-summary" element={
             <FeatureGuard featureId="returns" subFeatureId="tong_hop">
               <UnderDevelopment />
             </FeatureGuard>
           } />
-          <Route path="kiem-tra-don-hoan" element={
+          <Route path="check-returns" element={
             <FeatureGuard featureId="returns" subFeatureId="kiem_tra">
               <KiemTraDonHoan />
             </FeatureGuard>
           } />
-          <Route path="xu-ly-don-hoan" element={
+          <Route path="process-returns" element={
             <FeatureGuard featureId="returns" subFeatureId="xu_ly">
               <ReturnProcessing />
             </FeatureGuard>
           } />
-          <Route path="tra-hang-hoan-tien" element={
+          <Route path="returns-refunds" element={
             <FeatureGuard featureId="returns" subFeatureId="tra_hang_hoan_tien">
               <TraHangHoanTien />
             </FeatureGuard>
           } />
-          <Route path="bao-cao-hoan-chua-nhan" element={
+          <Route path="unreceived-returns" element={
             <FeatureGuard featureId="returns" subFeatureId="chua_nhan">
               <BaoCaoHoanChuaNhan />
             </FeatureGuard>
           } />
 
           {/* 📋 TAB BÁO CÁO KIỂM KÊ - Cụm featureId="inventory" */}
-          <Route path="bao-cao-kiem-ke" element={<Navigate to="/thong-ke-kiem-ke" replace />} />
-          <Route path="thong-ke-kiem-ke" element={
+          <Route path="bao-cao-kiem-ke" element={<Navigate to="/inventory-count-stats" replace />} />
+          <Route path="inventory-count-stats" element={
             <FeatureGuard featureId="inventory" subFeatureId="thong_ke_kiem_ke">
               <UnderDevelopment />
             </FeatureGuard>
           } />
-          <Route path="danh-sach-kiem-ke" element={
+          <Route path="inventory-count-list" element={
             <FeatureGuard featureId="inventory" subFeatureId="ds_kiem_ke">
               <UnderDevelopment />
             </FeatureGuard>
           } />
 
           {/* 🏢 TAB TỒN KHO - Cụm featureId="inventory" */}
-          <Route path="bao-cao-ton-kho" element={
+          <Route path="inventory-report" element={
             <FeatureGuard featureId="inventory" subFeatureId="ton_kho">
               <InventoryReport />
             </FeatureGuard>
           } />
-          <Route path="vi-tri-san-pham" element={
+          <Route path="product-locations" element={
             <FeatureGuard featureId="inventory" subFeatureId="vi_tri">
               <ProductLocation />
             </FeatureGuard>
           } />
 
           {/* ⚠️ TAB KHIẾU NẠI - Cụm featureId="complaints" (MỚI) */}
-          <Route path="tong-hop-khieu-nai" element={
+          <Route path="complaints" element={
             <FeatureGuard featureId="complaints" subFeatureId="tong_hop_khieu_nai">
               <TongHopKhieuNai />
             </FeatureGuard>
           } />
-          <Route path="video-khieu-nai" element={
+          <Route path="complaint-videos" element={
             <FeatureGuard featureId="complaints" subFeatureId="video_khieu_nai">
               <VideoKhieuNai />
             </FeatureGuard>
           } />
 
           {/* ⚠️ CÁC BÁO CÁO ĐƠN LẺ */}
-          <Route path="don-khong-khai-gia" element={<DeclaredFeeReport />} />
-          <Route path="doi-soat-kho" element={<OrderReconciliation />} />
+          <Route path="undeclared-fee-orders" element={<DeclaredFeeReport />} />
+          <Route path="stock-reconciliation" element={<OrderReconciliation />} />
           
           {/* 🔒 KHÓA CỔNG CÀI ĐẶT ADMIN: Bọc ProtectedRoute bảo vệ nghiêm ngặt */}
           <Route path="admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
 
           {/* 🔒 KHÓA CỔNG HIỆU CHỈNH: Được bảo vệ nghiêm ngặt bằng ProtectedRoute */}
-          <Route path="cap-nhat-nguoi-dong-goi" element={<ProtectedRoute><UpdatePacker /></ProtectedRoute>} />
-          <Route path="cap-nhat-lich-lam-viec" element={<ProtectedRoute><UpdateSchedule /></ProtectedRoute>} /> 
-          <Route path="cap-nhat-san-pham" element={<ProtectedRoute><UpdateProduct /></ProtectedRoute>} />
-          <Route path="cap-nhat-so-do-kho" element={<ProtectedRoute><UpdateWarehouseMap /></ProtectedRoute>} />
+          <Route path="update-packers" element={<ProtectedRoute><UpdatePacker /></ProtectedRoute>} />
+          <Route path="update-work-schedule" element={<ProtectedRoute><UpdateSchedule /></ProtectedRoute>} /> 
+          <Route path="update-products" element={<ProtectedRoute><UpdateProduct /></ProtectedRoute>} />
+          <Route path="update-warehouse-map" element={<ProtectedRoute><UpdateWarehouseMap /></ProtectedRoute>} />
           
-          <Route path="quan-ly-kpi" element={<ProtectedRoute><KPI_Management /></ProtectedRoute>} />
-          <Route path="nhap-lieu-kpi" element={<ProtectedRoute><KPI_DataEntry /></ProtectedRoute>} />
+          <Route path="kpi-management" element={<ProtectedRoute><KPI_Management /></ProtectedRoute>} />
+          <Route path="kpi-data-entry" element={<ProtectedRoute><KPI_DataEntry /></ProtectedRoute>} />
           
-          <Route path="cap-nhat-day-ke" element={<ProtectedRoute><SetupZone /></ProtectedRoute>} />
-          <Route path="cap-nhat-webhook" element={<ProtectedRoute><WebhookRetrier /></ProtectedRoute>} />
+          <Route path="update-shelf-zones" element={<ProtectedRoute><SetupZone /></ProtectedRoute>} />
+          <Route path="webhook-retry" element={<ProtectedRoute><WebhookRetrier /></ProtectedRoute>} />
 
           {/* === TRANG UPLOAD VIDEO CHO ADMIN === */}
-          <Route path="upload-video-hoan" element={<ProtectedRoute><UploadVideoHoan /></ProtectedRoute>} />
+          <Route path="upload-return-videos" element={<ProtectedRoute><UploadVideoHoan /></ProtectedRoute>} />
 
           {/* 🛡️ TRANG QUẢN LÝ KHÓA TÍNH NĂNG (DÀNH RIÊNG CHO OWNER) */}
-          <Route path="cap-nhat-tinh-nang" element={<ProtectedRoute><FeatureLockManager /></ProtectedRoute>} />
+          <Route path="feature-locks" element={<ProtectedRoute><FeatureLockManager /></ProtectedRoute>} />
 
+
+          {/* === LEGACY REDIRECTS: old Vietnamese slugs -> new English slugs (bookmarks/shared links keep working) === */}
+          <Route path="bao-cao-don" element={<Navigate to="/order-report" replace />} />
+          <Route path="bao-cao-hoan-chua-nhan" element={<Navigate to="/unreceived-returns" replace />} />
+          <Route path="bao-cao-hoan-tong-hop" element={<Navigate to="/returns-summary" replace />} />
+          <Route path="bao-cao-ton-kho" element={<Navigate to="/inventory-report" replace />} />
+          <Route path="cap-nhat-day-ke" element={<Navigate to="/update-shelf-zones" replace />} />
+          <Route path="cap-nhat-lich-lam-viec" element={<Navigate to="/update-work-schedule" replace />} />
+          <Route path="cap-nhat-nguoi-dong-goi" element={<Navigate to="/update-packers" replace />} />
+          <Route path="cap-nhat-san-pham" element={<Navigate to="/update-products" replace />} />
+          <Route path="cap-nhat-so-do-kho" element={<Navigate to="/update-warehouse-map" replace />} />
+          <Route path="cap-nhat-tinh-nang" element={<Navigate to="/feature-locks" replace />} />
+          <Route path="cap-nhat-webhook" element={<Navigate to="/webhook-retry" replace />} />
+          <Route path="chen-vi-tri-awb" element={<Navigate to="/awb-locations" replace />} />
+          <Route path="danh-sach-kiem-ke" element={<Navigate to="/inventory-count-list" replace />} />
+          <Route path="dashboard-don-hoan" element={<Navigate to="/dashboard-returns" replace />} />
+          <Route path="doi-soat-kho" element={<Navigate to="/stock-reconciliation" replace />} />
+          <Route path="don-da-in-hom-nay" element={<Navigate to="/printed-today" replace />} />
+          <Route path="don-khong-khai-gia" element={<Navigate to="/undeclared-fee-orders" replace />} />
+          <Route path="dong-goi-don-hang" element={<Navigate to="/packing-orders" replace />} />
+          <Route path="in-don-spx" element={<Navigate to="/print-spx-orders" replace />} />
+          <Route path="kiem-tra-don-hoan" element={<Navigate to="/check-returns" replace />} />
+          <Route path="loc-don-theo-day-ke" element={<Navigate to="/filter-by-zone" replace />} />
+          <Route path="nhap-lieu-kpi" element={<Navigate to="/kpi-data-entry" replace />} />
+          <Route path="quan-ly-kpi" element={<Navigate to="/kpi-management" replace />} />
+          <Route path="thong-ke-kiem-ke" element={<Navigate to="/inventory-count-stats" replace />} />
+          <Route path="toc-do-dong-goi-chung" element={<Navigate to="/packing-speed" replace />} />
+          <Route path="toc-do-dong-goi-nhan-su" element={<Navigate to="/packing-speed-by-staff" replace />} />
+          <Route path="tong-hop-khieu-nai" element={<Navigate to="/complaints" replace />} />
+          <Route path="tra-cuu-luan-chuyen" element={<Navigate to="/status-transitions" replace />} />
+          <Route path="tra-hang-hoan-tien" element={<Navigate to="/returns-refunds" replace />} />
+          <Route path="upload-video-hoan" element={<Navigate to="/upload-return-videos" replace />} />
+          <Route path="vi-tri-san-pham" element={<Navigate to="/product-locations" replace />} />
+          <Route path="video-khieu-nai" element={<Navigate to="/complaint-videos" replace />} />
+          <Route path="xu-ly-don-hoan" element={<Navigate to="/process-returns" replace />} />
           {/* 🚀 BẮT MỌI LINK SAI Ở ĐÂY - PHẢI ĐẶT Ở DƯỚI CÙNG TRONG THẺ BỌC LAYOUT */}
           <Route path="*" element={<NotFound />} />
 

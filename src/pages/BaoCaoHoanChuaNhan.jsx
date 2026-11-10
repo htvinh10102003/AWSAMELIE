@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, ChevronLeft, ChevronRight, Loader2, Package, Copy, FileDown, Pencil, ScanLine, X } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Package, Copy, FileDown, Pencil, ScanLine, X, Volume2, VolumeX } from 'lucide-react';
 import { mapReturnProduct, buildInventoryIndex } from '../lib/tiktokProductMap';
 
 const NHANH_STATUS_NAMES = {
@@ -415,6 +415,83 @@ async function logCheckHistory(rows, userEmail) {
   }
 }
 
+// --- Âm thanh quét mã (Web Audio API, không file âm thanh, chạy offline) ---
+// getScanSoundPattern là hàm thuần: outcome -> danh sách { frequency,
+// duration, delay } (tần số Hz, thời lượng giây, trễ giây). Trả về
+// literal mới mỗi lần gọi nên test Node được và không bị mutate.
+//   match:     2 beep ngắn đi lên  880 -> 1174 Hz, mỗi beep 0.08s
+//   notfound:  1 buzz trầm 200 Hz, 0.25s
+//   duplicate: 2 beep ngắn giống nhau 660 Hz, mỗi beep 0.08s
+// Đơn 71/74-only (không có đơn trả) cũng tính là "tìm thấy mã" -> match.
+// outcome lạ -> [] (không phát tiếng).
+function getScanSoundPattern(outcome) {
+  if (outcome === 'match') {
+    return [
+      { frequency: 880, duration: 0.08, delay: 0 },
+      { frequency: 1174, duration: 0.08, delay: 0.09 },
+    ];
+  }
+  if (outcome === 'duplicate') {
+    return [
+      { frequency: 660, duration: 0.08, delay: 0 },
+      { frequency: 660, duration: 0.08, delay: 0.09 },
+    ];
+  }
+  if (outcome === 'notfound') {
+    return [{ frequency: 200, duration: 0.25, delay: 0 }];
+  }
+  return [];
+}
+
+// AudioContext chỉ tạo khi cần phát tiếng (lazy, KHÔNG tạo lúc load
+// module — trình duyệt chặn autoplay nếu tạo trước tương tác người dùng).
+// Giữ 1 context dùng lại cho mọi lần quét; resume khi đang suspended.
+let scanAudioCtx = null;
+function getScanAudioContext() {
+  if (typeof window === 'undefined') return null;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!scanAudioCtx) {
+    try {
+      scanAudioCtx = new AC();
+    } catch {
+      return null;
+    }
+  }
+  if (scanAudioCtx.state === 'suspended') {
+    scanAudioCtx.resume().catch(() => {});
+  }
+  return scanAudioCtx;
+}
+
+// Phát 1 mẫu âm theo outcome ('match' | 'notfound' | 'duplicate').
+// Best-effort: lỗi (không có AudioContext, trình duyệt chặn) thì bỏ qua,
+// không làm hỏng luồng quét.
+function playScanSound(outcome) {
+  try {
+    const ctx = getScanAudioContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    for (const tone of getScanSoundPattern(outcome)) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = tone.frequency;
+      const start = now + (tone.delay || 0);
+      const dur = tone.duration || 0.08;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.25, start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + dur + 0.05);
+    }
+  } catch {
+    // Âm thanh chỉ là phản hồi phụ — lỗi thì im lặng.
+  }
+}
+
 // Cột bảng: % cố định (table-fixed + colgroup) để khớp với strip tiêu đề
 // gộp vào cụm lọc phía trên. Cả 2 bảng nhóm dùng chung 1 bộ cột.
 // 11 cột gộp (tổng 100%): mỗi cột đủ rộng cho nội dung nowrap của nó
@@ -538,6 +615,26 @@ export default function BaoCaoHoanChuaNhan() {
   const [scanPage, setScanPage] = useState(1);
   // Giao diện quét-ưu-tiên: danh sách chờ quét ẩn sau nút bấm (mặc định đóng).
   const [scanShowList, setScanShowList] = useState(false);
+  // Bật/tắt âm thanh quét (mặc định Bật), lưu localStorage 'wms_scan_sound'
+  // ('1' = bật, '0' = tắt). Chỉ áp dụng cho tab quét trang này.
+  const [scanSoundEnabled, setScanSoundEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('wms_scan_sound') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  function toggleScanSound() {
+    setScanSoundEnabled((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('wms_scan_sound', next ? '1' : '0');
+      } catch {
+        // localStorage lỗi thì chỉ đổi trong phiên.
+      }
+      return next;
+    });
+  }
   // Mã đơn trả đã quét hôm nay (nguồn 'quet' trong lịch sử + quét trong
   // phiên này) — đếm "Đã quét hôm nay", lỗi tải thì chỉ đếm trong phiên.
   const [scannedTodayIds, setScannedTodayIds] = useState(new Set());
@@ -1034,7 +1131,7 @@ export default function BaoCaoHoanChuaNhan() {
       const worksheet = XLSX.utils.json_to_sheet(rowData);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'DonHoanChuaNhan');
-      XLSX.writeFile(workbook, `bao-cao-hoan-chua-nhan-${vnTodayStr().replaceAll('-', '')}.xlsx`);
+      XLSX.writeFile(workbook, `unreceived-returns-${vnTodayStr().replaceAll('-', '')}.xlsx`);
       setExportMsg(`Đã xuất ${rowData.length} đơn ra file Excel.`);
     } catch (e) {
       console.error('Lỗi xuất Excel:', e);
@@ -1428,19 +1525,33 @@ export default function BaoCaoHoanChuaNhan() {
   // sử nguồn 'quet'. Chỉ có đơn 71/74 (không có đơn trả) thì chỉ ghi
   // nhận trong phiên, không có bảng nào để ghi. Trả về { kind, msg } để
   // hiện phản hồi ngay dưới ô nhập.
-  async function processScanCode(rawCode) {
+  // Âm thanh: options.silent = true (đường dán danh sách) thì KHÔNG phát
+  // tiếng nào; quét lẻ từ ô nhập thì phát theo kết quả — 'ok' (cả đơn trả
+  // lẫn đơn 71/74-only) -> match, 'dup' -> duplicate, 'nomatch'/'err'
+  // (lưu lỗi) -> notfound. Tắt tiếng (scanSoundEnabled = false) thì im.
+  async function processScanCode(rawCode, options = {}) {
+    const silent = options.silent === true;
+    const playOutcome = (kind) => {
+      if (silent || !scanSoundEnabled) return;
+      if (kind === 'ok') playScanSound('match');
+      else if (kind === 'dup') playScanSound('duplicate');
+      else if (kind === 'nomatch' || kind === 'err') playScanSound('notfound');
+    };
     const code = String(rawCode || '').trim().toUpperCase();
     if (!code) return { kind: 'err', msg: 'Mã trống.' };
     const it = scanMap.get(code);
     if (!it) {
       pushScanRecent({ code, kind: 'nomatch', label: 'Không khớp' });
+      playOutcome('nomatch');
       return { kind: 'nomatch', msg: `${code}: không khớp với đơn nào trong danh sách chờ quét.` };
     }
     if (scanSession.has(code)) {
+      playOutcome('dup');
       return { kind: 'dup', msg: `${code}: đã quét rồi trong phiên này.` };
     }
     if (it.returnRow && manualChecks.get(it.returnRow.return_id)?.received_status === 'Đã nhận') {
       pushScanRecent({ code, kind: 'dup', label: 'Đã nhận từ trước' });
+      playOutcome('dup');
       return { kind: 'dup', msg: `${code}: đơn này đã có trạng thái Đã nhận từ trước.` };
     }
     if (it.returnRow) {
@@ -1485,14 +1596,17 @@ export default function BaoCaoHoanChuaNhan() {
         if (!historyOk) setHistoryWarn('Không lưu được lịch sử — chạy migration bảng lịch sử trước.');
       } catch (e) {
         console.error('Lỗi lưu quét nhận hàng:', e);
+        playOutcome('err');
         return { kind: 'err', msg: `${code}: lỗi lưu — ${e.message || e}` };
       }
       setScanSession((prev) => new Map(prev).set(code, { kind: 'return', label: 'Đã nhận hàng hoàn' }));
       pushScanRecent({ code, kind: 'return', label: 'Đã nhận hàng hoàn' });
+      playOutcome('ok');
       return { kind: 'ok', msg: `${code}: đã nhận hàng hoàn.` };
     }
     setScanSession((prev) => new Map(prev).set(code, { kind: 'order-only', label: 'Đã quét — không có đơn trả' }));
     pushScanRecent({ code, kind: 'order-only', label: 'Đã quét — không có đơn trả' });
+    playOutcome('ok');
     return { kind: 'ok', msg: `${code}: đã quét (đơn 71/74, không có đơn trả nên không ghi kiểm nhận).` };
   }
 
@@ -1515,7 +1629,7 @@ export default function BaoCaoHoanChuaNhan() {
       const key = c.toUpperCase();
       if (seen.has(key)) { dup++; continue; }
       seen.add(key);
-      const res = await processScanCode(c);
+      const res = await processScanCode(c, { silent: true });
       if (res.kind === 'ok') ok++;
       else if (res.kind === 'dup') dup++;
       else if (res.kind === 'nomatch') nomatch++;
@@ -2297,11 +2411,18 @@ export default function BaoCaoHoanChuaNhan() {
                 {scanError && <p className="text-sm font-bold text-red-500">{scanError}</p>}
                 {/* Ô bắn mã */}
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Bắn mã vạch vào đây (súng bắn xong bấm Enter)</label>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">Bắn mã vạch vào đây (súng bắn xong bấm Enter)</label>
+                    <button type="button" onClick={toggleScanSound} title={scanSoundEnabled ? 'Tắt âm thanh quét' : 'Bật âm thanh quét'} className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 text-xs font-bold rounded-xl hover:bg-slate-50 cursor-pointer shrink-0">
+                      {scanSoundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+                      Âm thanh: {scanSoundEnabled ? 'Bật' : 'Tắt'}
+                    </button>
+                  </div>
                   <input
                     ref={scanInputRef}
                     value={scanInput}
                     onChange={(e) => setScanInput(e.target.value)}
+                    onFocus={() => { if (scanSoundEnabled) getScanAudioContext(); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleScanEnter(); } }}
                     placeholder="Quét mã vận đơn rồi Enter..."
                     autoFocus
