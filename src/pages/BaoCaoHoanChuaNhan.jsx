@@ -1132,6 +1132,13 @@ export default function BaoCaoHoanChuaNhan() {
 
   function handleFilter() {
     setApplied({ updFrom, updTo, crtFrom, crtTo, platform, shop, search });
+    // Đồng bộ ô tìm kiếm trên cùng xuống bộ lọc danh sách (uni): trước
+    // đây tìm ở trên chỉ đổi con số tổng kết (allRows), danh sách bên
+    // dưới vẫn hiện hết nên đơn tìm được chìm trong phân trang (VD:
+    // SPXVN06320754307B báo "Tổng: 1" nhưng không thấy đơn). Chỉ đồng bộ
+    // ô tìm kiếm, không đồng bộ sàn/shop (bộ lọc uni loại đơn gốc 71/74
+    // khi chọn shop). setUniFilter còn đưa 4 mục về trang 1.
+    setUniFilter(setUniSearch, search.trim());
   }
 
   // --- Ghép nối đơn hoàn 1 phần (trong bộ nhớ, đọc cột index sẵn) ---
