@@ -23,16 +23,16 @@ import { clearPermCache } from '../lib/permCache';
 //   CSDL, không chỉ đơn có thể in). Kết quả gồm mã vận đơn/ID đơn, ngày tạo
 //   đơn, sản phẩm, số lượng, trạng thái.
 // - Đối soát (chỉ ngày hôm nay, đơn in trong ngày làm gốc, giống phiên đối
-//   soát bản máy tính): Tổng in, Tổng đóng, Tổng hủy, Tổng bàn giao; danh
-//   sách đơn cần bàn giao lại chỉ gồm đơn in trong ngày có trạng thái Đang
-//   đóng gói (42), Đã xác nhận (56) hoặc Chờ xác nhận (57). Đơn Đã đóng gói
-//   (40), Đang chuyển (59) và các trạng thái khác đã giao cho đơn vị vận
-//   chuyển rồi nên không cần bàn giao lại. Tổng bàn giao = Tổng in - Cần bàn
-//   giao lại - Tổng hủy (KHÔNG đếm bằng carrier_date vì field này không được
-//   điền trong quy trình bàn giao). Nút lọc "chỉ đơn cần đi tránh quá hạn"
-//   hiện riêng đơn viền đỏ (Shopee/TikTok, sáng: tạo hôm qua, chiều: tạo hôm
-//   nay trước 14h). Không còn mục Biên bản đối soát (từ PC) — đã bỏ theo
-//   yêu cầu, chỉ hiện ngày hôm nay.
+//   soát bản máy tính): 4 ô tổng quan — Tổng in; Tổng đóng gói = đơn Đã đóng
+//   gói (40) + Đang chuyển (59) + Thành công (60); Tổng trả lại = Tổng đơn
+//   hủy + Đơn chưa đóng gói (Đơn đang đóng gói 42 + Đã xác nhận 56); Tổng
+//   đơn hủy (58/63/64). Danh sách bên dưới là các đơn cần trả lại, dùng
+//   đúng logic máy tính (OrderReconciliation expectedCorrect: đơn in trong
+//   ngày, loại trạng thái đã bàn giao/xong 40/43/59/60/61/71/72/74 và loại
+//   đơn hủy 58/63/64). Nút lọc "chỉ đơn cần đi tránh quá hạn" hiện riêng
+//   đơn viền đỏ (Shopee/TikTok, sáng: tạo hôm qua, chiều: tạo hôm nay trước
+//   14h). Không còn mục Biên bản đối soát (từ PC) — đã bỏ theo yêu cầu, chỉ
+//   hiện ngày hôm nay.
 // - Cài đặt: tài khoản (xem thông tin, đổi mật khẩu, đăng xuất) cho mọi người;
 //   quét Google Sheet cho admin/owner;
 //   thông báo toàn hệ thống và khóa tính năng cho owner (đúng phân quyền bản máy tính).
@@ -44,6 +44,11 @@ const LOCAL_STATUS_NAMES = {
     '71': 'Đang chuyển hoàn', '72': 'Đã chuyển hoàn', '73': 'Đổi kho xuất hàng', '74': 'Xác nhận hoàn'
 };
 const CANCELED_STATUS = [58, 63, 64];
+// Trạng thái đã bàn giao / đã xong, không còn nằm trong "Đơn cần trả" —
+// giống logic máy tính (OrderReconciliation EXCLUDED_STATUS_CODES): 40 Đã
+// đóng gói, 43 Chờ thu gom, 59 Đang chuyển, 60 Thành công, 61 Thất bại,
+// 71 Đang chuyển hoàn, 72 Đã chuyển hoàn, 74 Xác nhận hoàn.
+const HANDED_EXCLUDED_STATUS = [40, 43, 59, 60, 61, 71, 72, 74];
 const CHANNEL_NAMES = {
     '1': 'Admin', '2': 'Website', '10': 'API', '20': 'Facebook', '21': 'Instagram',
     '41': 'Lazada', '42': 'Shopee', '43': 'Sendo', '45': 'Tiki', '48': 'Tiktok Shop',
@@ -570,18 +575,21 @@ export default function Mobile() {
 
     const reconTotals = useMemo(() => {
         const totalPrint = reconData.length;
-        const totalPacked = reconData.filter(o => o.packed_at).length;
+        // Tổng đóng gói = đơn Đã đóng gói (40) + Đang chuyển (59) + Thành
+        // công (60).
+        const totalPackedShipped = reconData.filter(o => [40, 59, 60].includes(Number(o.status))).length;
+        // Tổng đơn hủy = đơn ở trạng thái hủy (58/63/64).
         const totalCanceled = reconData.filter(o => CANCELED_STATUS.includes(Number(o.status))).length;
-        const needHandover = reconData.filter(o => [42, 56, 57].includes(Number(o.status)));
-        // Tổng bàn giao KHÔNG đếm bằng carrier_date: field này không được
-        // điền trong quy trình bàn giao (11/11: 0/391 đơn in hôm nay có
-        // carrier_date, trong khi 92 đơn đã ở trạng thái 59 Đang chuyển).
-        // Đếm bằng phần bù cho khớp với danh sách Cần bàn giao lại:
-        // đã bàn giao = đã in - cần bàn giao lại - đã hủy (gồm 40 Đã đóng
-        // gói, 59 Đang chuyển và các trạng thái khác, theo đúng ghi chú đầu
-        // file: các trạng thái này coi như đã giao cho đơn vị vận chuyển).
-        const totalHanded = totalPrint - needHandover.length - totalCanceled;
-        return { totalPrint, totalPacked, totalCanceled, totalHanded, needHandover };
+        // Đơn chưa đóng gói = Đơn đang đóng gói (42) + Đã xác nhận (56).
+        const notPacked = reconData.filter(o => [42, 56].includes(Number(o.status))).length;
+        // Tổng trả lại = Tổng đơn hủy + Đơn chưa đóng gói.
+        const totalReturned = totalCanceled + notPacked;
+        // Đơn cần trả (danh sách bên dưới) — giống logic máy tính
+        // (OrderReconciliation expectedCorrect): đơn in trong ngày, loại
+        // trạng thái đã bàn giao/xong (40/43/59/60/61/71/72/74) và loại đơn
+        // hủy (58/63/64).
+        const needReturn = reconData.filter(o => !HANDED_EXCLUDED_STATUS.includes(Number(o.status)) && !CANCELED_STATUS.includes(Number(o.status)));
+        return { totalPrint, totalPackedShipped, totalCanceled, totalReturned, needReturn };
     }, [reconData]);
 
     const loadSettings = async () => {
@@ -741,10 +749,10 @@ export default function Mobile() {
 
     const currentList = printOrders;
     const visibleList = currentList.slice(0, visibleCount);
-    // Danh sách cần bàn giao lại, lọc chỉ viền đỏ khi bật nút lọc.
+    // Danh sách đơn cần trả, lọc chỉ viền đỏ khi bật nút lọc.
     const reconFilteredHandover = reconOnlyWarning
-        ? reconTotals.needHandover.filter(isHandoverWarning)
-        : reconTotals.needHandover;
+        ? reconTotals.needReturn.filter(isHandoverWarning)
+        : reconTotals.needReturn;
     const reconVisibleList = reconFilteredHandover.slice(0, reconVisible);
     // Nhãn ngày hôm nay (giờ VN) cho tiêu đề tab Đối soát.
     const todayVnLabel = (() => { const d = toVnDate(new Date().toISOString()); return d ? `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}` : ''; })();
@@ -945,9 +953,9 @@ export default function Mobile() {
                         </div>
                         <div className="grid grid-cols-2 gap-2">
                             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-slate-900">{reconTotals.totalPrint}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng in</div></div>
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-slate-900">{reconTotals.totalPacked}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng đóng</div></div>
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-red-700">{reconTotals.totalCanceled}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng hủy</div></div>
-                            <div className="bg-emerald-50 rounded-2xl border border-emerald-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-green-700">{reconTotals.totalHanded}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng bàn giao</div></div>
+                            <div className="bg-emerald-50 rounded-2xl border border-emerald-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-green-700">{reconTotals.totalPackedShipped}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng đóng gói</div></div>
+                            <div className="bg-red-50 rounded-2xl border border-red-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-red-700">{reconTotals.totalReturned}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng trả lại</div></div>
+                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-red-700">{reconTotals.totalCanceled}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng đơn hủy</div></div>
                         </div>
                         {reconError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm font-medium text-red-700">{reconError}</div>}
                         <button
@@ -957,11 +965,11 @@ export default function Mobile() {
                         >
                             <span>Hiển thị những đơn cần đi tránh quá hạn</span>
                             <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-bold ${reconOnlyWarning ? 'bg-white/20 text-white' : 'bg-red-50 text-red-700'}`}>
-                                {reconTotals.needHandover.filter(isHandoverWarning).length} đơn
+                                {reconTotals.needReturn.filter(isHandoverWarning).length} đơn
                             </span>
                         </button>
                         <div className="font-bold text-slate-900 text-base border-b border-slate-200 pb-2">
-                            Cần bàn giao lại ({reconFilteredHandover.length}{reconOnlyWarning ? ` / ${reconTotals.needHandover.length}` : ''})
+                            Cần bàn giao lại ({reconFilteredHandover.length}{reconOnlyWarning ? ` / ${reconTotals.needReturn.length}` : ''})
                         </div>
                         {reconLoading && <div className="text-center text-sm text-slate-500 font-medium py-10">Đang tải...</div>}
                         {!reconLoading && reconVisibleList.length === 0 && (
