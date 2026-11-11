@@ -22,12 +22,17 @@ import { clearPermCache } from '../lib/permCache';
 //   lấy mã vận đơn đó tìm thẳng cột carrier_code trong bảng orders (toàn bộ
 //   CSDL, không chỉ đơn có thể in). Kết quả gồm mã vận đơn/ID đơn, ngày tạo
 //   đơn, sản phẩm, số lượng, trạng thái.
-// - Đối soát: chỉ Tổng in, Tổng đóng, Tổng hủy, Tổng bàn giao trong ngày hôm
-//   nay (đơn in trong ngày làm gốc, giống phiên đối soát bản máy tính), và
-//   danh sách đơn cần bàn giao lại chỉ gồm đơn in trong ngày có trạng thái
-//   Đang đóng gói (42), Đã xác nhận (56) hoặc Chờ xác nhận (57). Đơn Đã đóng
-//   gói (40), Đang chuyển (59) và các trạng thái khác đã giao cho đơn vị vận
-//   chuyển rồi nên không cần bàn giao lại.
+// - Đối soát (chỉ ngày hôm nay, đơn in trong ngày làm gốc, giống phiên đối
+//   soát bản máy tính): Tổng in, Tổng đóng, Tổng hủy, Tổng bàn giao; danh
+//   sách đơn cần bàn giao lại chỉ gồm đơn in trong ngày có trạng thái Đang
+//   đóng gói (42), Đã xác nhận (56) hoặc Chờ xác nhận (57). Đơn Đã đóng gói
+//   (40), Đang chuyển (59) và các trạng thái khác đã giao cho đơn vị vận
+//   chuyển rồi nên không cần bàn giao lại. Tổng bàn giao = Tổng in - Cần bàn
+//   giao lại - Tổng hủy (KHÔNG đếm bằng carrier_date vì field này không được
+//   điền trong quy trình bàn giao). Nút lọc "chỉ đơn cần đi tránh quá hạn"
+//   hiện riêng đơn viền đỏ (Shopee/TikTok, sáng: tạo hôm qua, chiều: tạo hôm
+//   nay trước 14h). Không còn mục Biên bản đối soát (từ PC) — đã bỏ theo
+//   yêu cầu, chỉ hiện ngày hôm nay.
 // - Cài đặt: tài khoản (xem thông tin, đổi mật khẩu, đăng xuất) cho mọi người;
 //   quét Google Sheet cho admin/owner;
 //   thông báo toàn hệ thống và khóa tính năng cho owner (đúng phân quyền bản máy tính).
@@ -148,14 +153,9 @@ export default function Mobile() {
     const [reconLoading, setReconLoading] = useState(false);
     const [reconError, setReconError] = useState('');
     const [reconVisible, setReconVisible] = useState(30);
-    // Biên bản đối soát xem lại (chỉ xem, không tạo/sửa/chốt — biên bản
-    // do PC tạo, mobile chỉ đọc nguyên dữ liệu từ reconciliation_sessions).
-    const [bbSessions, setBbSessions] = useState([]);
-    const [bbLoading, setBbLoading] = useState(false);
-    const [bbError, setBbError] = useState('');
-    const [bbExpandedId, setBbExpandedId] = useState(null);
-    const [bbDetails, setBbDetails] = useState({});
-    const [bbDetailLoading, setBbDetailLoading] = useState({});
+    // Chỉ hiện đơn viền đỏ (cần đi gấp tránh quá hạn): Shopee/TikTok tạo
+    // hôm qua (sáng) hoặc hôm nay trước 14h (chiều) — theo isHandoverWarning.
+    const [reconOnlyWarning, setReconOnlyWarning] = useState(false);
     const [searchMode, setSearchMode] = useState('carrier');
     const [dbSearchResults, setDbSearchResults] = useState([]);
     const [dbSearching, setDbSearching] = useState(false);
@@ -238,7 +238,7 @@ export default function Mobile() {
 
     useEffect(() => {
         setSearch(''); setVisibleCount(30); setReconVisible(30); setDbSearched(false); setDbSearchResults([]); setDbSearchError('');
-        if (tab === 'reconcile') { fetchRecon(); fetchBbSessions(); }
+        if (tab === 'reconcile') { fetchRecon(); }
         if (tab === 'settings' && !settingsLoaded) loadSettings();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tab]);
@@ -545,7 +545,7 @@ export default function Mobile() {
             if (reconErr) throw reconErr;
             let mergedRecon = rows || [];
             // Chỉ kéo thêm raw_data cho đơn cần bàn giao lại (để lấy tên khách),
-            // chia đợt 200 ID như fetchBbDetail, không phình query chính.
+            // chia đợt 200 ID, không phình query chính.
             // Lỗi ở bước này không được làm hỏng cả danh sách đối soát.
             try {
                 const handoverIds = mergedRecon.filter(o => [42, 56, 57].includes(Number(o.status))).map(o => o.id);
@@ -572,74 +572,17 @@ export default function Mobile() {
         const totalPrint = reconData.length;
         const totalPacked = reconData.filter(o => o.packed_at).length;
         const totalCanceled = reconData.filter(o => CANCELED_STATUS.includes(Number(o.status))).length;
-        const totalHanded = reconData.filter(o => o.carrier_date).length;
         const needHandover = reconData.filter(o => [42, 56, 57].includes(Number(o.status)));
+        // Tổng bàn giao KHÔNG đếm bằng carrier_date: field này không được
+        // điền trong quy trình bàn giao (11/11: 0/391 đơn in hôm nay có
+        // carrier_date, trong khi 92 đơn đã ở trạng thái 59 Đang chuyển).
+        // Đếm bằng phần bù cho khớp với danh sách Cần bàn giao lại:
+        // đã bàn giao = đã in - cần bàn giao lại - đã hủy (gồm 40 Đã đóng
+        // gói, 59 Đang chuyển và các trạng thái khác, theo đúng ghi chú đầu
+        // file: các trạng thái này coi như đã giao cho đơn vị vận chuyển).
+        const totalHanded = totalPrint - needHandover.length - totalCanceled;
         return { totalPrint, totalPacked, totalCanceled, totalHanded, needHandover };
     }, [reconData]);
-
-    // Danh sách biên bản mới nhất (mặc định 30 biên bản, mới nhất trước).
-    const fetchBbSessions = async () => {
-        setBbLoading(true); setBbError('');
-        try {
-            const { data, error } = await supabase
-                .from('reconciliation_sessions')
-                .select('id, session_name, audit_date, status, created_at, completed_at, total_printed, total_expected, total_canceled, total_scanned, total_missing, total_surplus')
-                .order('audit_date', { ascending: false })
-                .order('created_at', { ascending: false })
-                .range(0, 29);
-            if (error) throw error;
-            setBbSessions(data || []);
-        } catch (err) { setBbError(err.message || 'Không tải được biên bản.'); }
-        finally { setBbLoading(false); }
-    };
-
-    // Chi tiết 1 biên bản: danh sách đơn thiếu + đơn thừa. Các mảng trong
-    // bảng có thể chứa ID hoặc object có id (giống bản PC), nên chuẩn hóa
-    // về ID rồi mới kéo thông tin đơn theo đợt 200 ID.
-    const fetchBbDetail = async (session) => {
-        if (bbDetails[session.id] || bbDetailLoading[session.id]) return;
-        setBbDetailLoading(prev => ({ ...prev, [session.id]: true }));
-        try {
-            const { data, error } = await supabase
-                .from('reconciliation_sessions')
-                .select('scanned_codes, surplus_orders, expected_correct, expected_canceled, missing_orders')
-                .eq('id', session.id)
-                .single();
-            if (error) throw error;
-            const toIds = (arr) => (arr || []).map(item => (typeof item === 'object' && item !== null ? item.id : item)).filter(v => v !== undefined && v !== null && v !== '');
-            const missingIds = toIds(data.missing_orders);
-            const surplusIds = toIds(data.surplus_orders);
-            const allIds = Array.from(new Set([...missingIds.map(String), ...surplusIds.map(String)]));
-            const ordersMap = {};
-            for (let i = 0; i < allIds.length; i += 200) {
-                const chunk = allIds.slice(i, i + 200);
-                const { data: rows, error: ordersError } = await supabase
-                    .from('orders')
-                    .select('id, carrier_code, status, sale_channel')
-                    .in('id', chunk);
-                if (ordersError) throw ordersError;
-                (rows || []).forEach(o => { ordersMap[String(o.id)] = o; });
-            }
-            const resolve = (ids, unknownStatus) => ids.map(id => ordersMap[String(id)] || { id, carrier_code: 'Không rõ', status: unknownStatus });
-            setBbDetails(prev => ({ ...prev, [session.id]: { missing: resolve(missingIds, null), surplus: resolve(surplusIds, 'Mã vạch lạ hoắc') } }));
-        } catch (err) {
-            setBbDetails(prev => ({ ...prev, [session.id]: { error: err.message || 'Không tải được chi tiết biên bản.' } }));
-        } finally {
-            setBbDetailLoading(prev => ({ ...prev, [session.id]: false }));
-        }
-    };
-
-    const toggleBbSession = (session) => {
-        if (bbExpandedId === session.id) { setBbExpandedId(null); return; }
-        setBbExpandedId(session.id);
-        fetchBbDetail(session);
-    };
-
-    const fmtAuditDate = (d) => {
-        if (!d) return '';
-        const parts = String(d).split('-');
-        return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : String(d);
-    };
 
     const loadSettings = async () => {
         setSettingsLoaded(true);
@@ -798,7 +741,13 @@ export default function Mobile() {
 
     const currentList = printOrders;
     const visibleList = currentList.slice(0, visibleCount);
-    const reconVisibleList = reconTotals.needHandover.slice(0, reconVisible);
+    // Danh sách cần bàn giao lại, lọc chỉ viền đỏ khi bật nút lọc.
+    const reconFilteredHandover = reconOnlyWarning
+        ? reconTotals.needHandover.filter(isHandoverWarning)
+        : reconTotals.needHandover;
+    const reconVisibleList = reconFilteredHandover.slice(0, reconVisible);
+    // Nhãn ngày hôm nay (giờ VN) cho tiêu đề tab Đối soát.
+    const todayVnLabel = (() => { const d = toVnDate(new Date().toISOString()); return d ? `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}` : ''; })();
 
     const OrderCard = ({ order, showStock = true, showChannel = false, showCustomer = false, showCreated = false, warnHandover = false }) => {
         const stock = stockOf(order);
@@ -851,7 +800,7 @@ export default function Mobile() {
                         <div className="font-bold text-base leading-tight">WMS</div>
                         <div className="text-xs text-slate-300">Xem nhanh trên điện thoại</div>
                     </div>
-                    <button onClick={tab === 'reconcile' ? () => { fetchRecon(); fetchBbSessions(); } : fetchAllocation} disabled={loading || reconLoading} className="p-3 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50" aria-label="Làm mới">
+                    <button onClick={tab === 'reconcile' ? () => { fetchRecon(); } : fetchAllocation} disabled={loading || reconLoading} className="p-3 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50" aria-label="Làm mới">
                         <RefreshCw size={18} className={(loading || reconLoading) ? 'animate-spin' : ''} />
                     </button>
                 </header>
@@ -990,88 +939,42 @@ export default function Mobile() {
 
                 {tab === 'reconcile' && (
                     <div className="space-y-3">
-                        <div className="font-bold text-slate-900 text-base border-b border-slate-200 pb-2">Tổng quan hôm nay</div>
+                        <div className="flex items-baseline justify-between border-b border-slate-200 pb-2">
+                            <div className="font-bold text-slate-900 text-base">Đối soát hôm nay</div>
+                            <div className="text-xs font-bold text-slate-500">{todayVnLabel}</div>
+                        </div>
                         <div className="grid grid-cols-2 gap-2">
                             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-slate-900">{reconTotals.totalPrint}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng in</div></div>
                             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-slate-900">{reconTotals.totalPacked}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng đóng</div></div>
                             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-red-700">{reconTotals.totalCanceled}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng hủy</div></div>
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-green-700">{reconTotals.totalHanded}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng bàn giao</div></div>
+                            <div className="bg-emerald-50 rounded-2xl border border-emerald-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-green-700">{reconTotals.totalHanded}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng bàn giao</div></div>
                         </div>
                         {reconError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm font-medium text-red-700">{reconError}</div>}
-                        <div className="font-bold text-slate-900 text-base border-b border-slate-200 pb-2">Cần bàn giao lại ({reconTotals.needHandover.length})</div>
+                        <button
+                            type="button"
+                            onClick={() => { setReconOnlyWarning(v => !v); setReconVisible(30); }}
+                            className={`w-full flex items-center justify-between gap-2 px-4 py-3 rounded-2xl border text-sm font-bold text-left ${reconOnlyWarning ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-red-300 text-red-700'}`}
+                        >
+                            <span>Hiển thị những đơn cần đi tránh quá hạn</span>
+                            <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-bold ${reconOnlyWarning ? 'bg-white/20 text-white' : 'bg-red-50 text-red-700'}`}>
+                                {reconTotals.needHandover.filter(isHandoverWarning).length} đơn
+                            </span>
+                        </button>
+                        <div className="font-bold text-slate-900 text-base border-b border-slate-200 pb-2">
+                            Cần bàn giao lại ({reconFilteredHandover.length}{reconOnlyWarning ? ` / ${reconTotals.needHandover.length}` : ''})
+                        </div>
                         {reconLoading && <div className="text-center text-sm text-slate-500 font-medium py-10">Đang tải...</div>}
-                        {!reconLoading && reconVisibleList.length === 0 && <div className="text-center text-sm text-slate-500 py-6">Tất cả đơn in hôm nay đã được bàn giao.</div>}
+                        {!reconLoading && reconVisibleList.length === 0 && (
+                            <div className="text-center text-sm text-slate-500 py-6">
+                                {reconOnlyWarning ? 'Không có đơn nào cần đi gấp tránh quá hạn.' : 'Tất cả đơn in hôm nay đã được bàn giao.'}
+                            </div>
+                        )}
                         {!reconLoading && reconVisibleList.map(order => <OrderCard key={order.id} order={order} showStock={false} showChannel showCustomer showCreated warnHandover />)}
-                        {!reconLoading && reconTotals.needHandover.length > reconVisible && (
+                        {!reconLoading && reconFilteredHandover.length > reconVisible && (
                             <button onClick={() => setReconVisible(c => c + 30)} className="w-full py-3 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl text-sm font-bold text-slate-700">
-                                Tải thêm ({reconTotals.needHandover.length - reconVisible} đơn còn lại)
+                                Tải thêm ({reconFilteredHandover.length - reconVisible} đơn còn lại)
                             </button>
                         )}
-                        <div className="pt-2">
-                            <div className="font-bold text-slate-900 text-base border-b border-slate-200 pb-2">Biên bản đối soát (từ PC)</div>
-                            <div className="text-xs text-slate-500 mt-0.5">Chỉ xem lại, không tạo hay chốt trên điện thoại. Hiển thị 30 biên bản gần nhất.</div>
-                            {bbLoading && <div className="text-center text-sm text-slate-500 font-medium py-6">Đang tải biên bản...</div>}
-                            {bbError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm font-medium text-red-700 mt-2">{bbError}</div>}
-                            {!bbLoading && !bbError && bbSessions.length === 0 && <div className="text-center text-sm text-slate-500 py-6">Chưa có biên bản nào.</div>}
-                            {!bbLoading && bbSessions.map(session => {
-                                const expanded = bbExpandedId === session.id;
-                                const detail = bbDetails[session.id];
-                                const isCompleted = session.status === 'completed';
-                                return (
-                                    <div key={session.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm mt-2 overflow-hidden">
-                                        <button onClick={() => toggleBbSession(session)} className="w-full text-left p-3">
-                                            <div className="flex items-center justify-between gap-2">
-                                                <span className="font-bold text-sm text-slate-900 break-words">{session.session_name || `Biên bản ngày ${fmtAuditDate(session.audit_date)}`}</span>
-                                                <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-bold ${isCompleted ? 'bg-green-100 border border-green-200 text-green-700' : 'bg-amber-100 border border-amber-200 text-amber-700'}`}>{isCompleted ? 'Đã chốt' : 'Chưa chốt'}</span>
-                                            </div>
-                                            <div className="text-xs text-slate-500 mt-1">Ngày kiểm kê: {fmtAuditDate(session.audit_date)}{session.completed_at ? ` · Chốt: ${new Date(session.completed_at).toLocaleString('vi-VN')}` : ''}</div>
-                                            <div className="text-xs text-slate-600 mt-1">In {session.total_printed ?? 0} · Kỳ vọng {session.total_expected ?? 0} · Quét {session.total_scanned ?? 0} · Hủy {session.total_canceled ?? 0} · <span className="text-red-700 font-bold">Thiếu {session.total_missing ?? 0}</span> · <span className="text-amber-700 font-bold">Thừa {session.total_surplus ?? 0}</span></div>
-                                            <div className="text-xs font-bold text-blue-700 mt-1">{expanded ? 'Ẩn chi tiết' : 'Xem chi tiết'}</div>
-                                        </button>
-                                        {expanded && (
-                                            <div className="border-t border-slate-200 p-3 space-y-3">
-                                                <div className="grid grid-cols-3 gap-2 text-center">
-                                                    <div className="bg-slate-50 rounded-lg p-2"><div className="text-base font-bold text-slate-900">{session.total_printed ?? 0}</div><div className="text-xs text-slate-500">Tổng in</div></div>
-                                                    <div className="bg-slate-50 rounded-lg p-2"><div className="text-base font-bold text-slate-900">{session.total_expected ?? 0}</div><div className="text-xs text-slate-500">Kỳ vọng</div></div>
-                                                    <div className="bg-slate-50 rounded-lg p-2"><div className="text-base font-bold text-slate-900">{session.total_scanned ?? 0}</div><div className="text-xs text-slate-500">Đã quét</div></div>
-                                                    <div className="bg-slate-50 rounded-lg p-2"><div className="text-base font-bold text-slate-900">{session.total_canceled ?? 0}</div><div className="text-xs text-slate-500">Đã hủy</div></div>
-                                                    <div className="bg-red-50 rounded-lg p-2"><div className="text-base font-bold text-red-700">{session.total_missing ?? 0}</div><div className="text-xs text-slate-500">Thiếu</div></div>
-                                                    <div className="bg-amber-50 rounded-lg p-2"><div className="text-base font-bold text-amber-700">{session.total_surplus ?? 0}</div><div className="text-xs text-slate-500">Thừa</div></div>
-                                                </div>
-                                                {bbDetailLoading[session.id] && <div className="text-center text-sm text-slate-500 py-4">Đang tải chi tiết...</div>}
-                                                {detail?.error && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm font-medium text-red-700">{detail.error}</div>}
-                                                {detail && !detail.error && (
-                                                    <>
-                                                        <div>
-                                                            <div className="font-bold text-sm text-slate-900">Đơn thiếu ({detail.missing.length})</div>
-                                                            {detail.missing.length === 0 && <div className="text-sm text-slate-500 mt-1">Không có đơn thiếu.</div>}
-                                                            {detail.missing.map(o => (
-                                                                <div key={`miss-${o.id}`} className="flex justify-between gap-2 py-1.5 border-b border-slate-100 text-sm">
-                                                                    <span className="flex items-center gap-1.5"><span className="font-medium text-slate-900">Đơn #{o.id}</span>{o.sale_channel && <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700">{CHANNEL_NAMES[String(o.sale_channel)] || `Kênh ${o.sale_channel}`}</span>}</span>
-                                                                    <span className="text-slate-600 break-all">{o.carrier_code || 'Chưa có mã'}</span>
-                                                                    <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 border border-slate-200 text-slate-700 h-fit">{o.status ? statusName(o.status) : 'Không rõ'}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                        <div>
-                                                            <div className="font-bold text-sm text-slate-900">Đơn thừa ({detail.surplus.length})</div>
-                                                            {detail.surplus.length === 0 && <div className="text-sm text-slate-500 mt-1">Không có đơn thừa.</div>}
-                                                            {detail.surplus.map(o => (
-                                                                <div key={`surp-${o.id}`} className="flex justify-between gap-2 py-1.5 border-b border-slate-100 text-sm">
-                                                                    <span className="flex items-center gap-1.5"><span className="font-medium text-slate-900">Đơn #{o.id}</span>{o.sale_channel && <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700">{CHANNEL_NAMES[String(o.sale_channel)] || `Kênh ${o.sale_channel}`}</span>}</span>
-                                                                    <span className="text-slate-600 break-all">{o.carrier_code || 'Chưa có mã'}</span>
-                                                                    <span className="shrink-0 px-2 py-0.5 rounded-full text-xs font-bold bg-slate-100 border border-slate-200 text-slate-700 h-fit">{o.status ? statusName(o.status) : 'Không rõ'}</span>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
                     </div>
                 )}
 

@@ -131,6 +131,8 @@ export default function OrderReconciliation() {
 
   // AUDIT STATE
   const [inputCode, setInputCode] = useState('');
+  // Chỉ hiện đơn viền đỏ trong danh sách Đơn tồn (cần đi gấp tránh quá hạn).
+  const [showOnlyWarning, setShowOnlyWarning] = useState(false);
   const [todayOrders, setTodayOrders] = useState([]);
   const [scannedCodes, setScannedCodes] = useState([]);
   const [surplusOrders, setSurplusOrders] = useState([]); 
@@ -438,6 +440,14 @@ export default function OrderReconciliation() {
   const expectedCorrect = isConfirmed 
     ? (isDetailsVisible ? (currentSession?.expected_correct || []).map(item => resolveOrderFromMap(item)) : [])
     : todayOrders.filter(o => !EXCLUDED_STATUS_CODES.includes(Number(o.status)) && !CANCELED_STATUS_CODES.includes(Number(o.status)));
+
+  // Danh sách Đơn tồn hiển thị: khi bật nút lọc chỉ viền đỏ thì chỉ hiện
+  // đơn chưa quét mà isHandoverWarning (Shopee/TikTok cần đi gấp tránh quá
+  // hạn — sáng: tạo hôm qua, chiều: tạo hôm nay trước 14h).
+  const visibleCorrect = showOnlyWarning
+    ? expectedCorrect.filter(o => !isScanned(o) && isHandoverWarning(o))
+    : expectedCorrect;
+  const warningCorrectCount = expectedCorrect.filter(o => !isScanned(o) && isHandoverWarning(o)).length;
       
   const expectedCanceled = isConfirmed 
     ? (isDetailsVisible ? (currentSession?.expected_canceled || []).map(item => resolveOrderFromMap(item)) : [])
@@ -1010,14 +1020,24 @@ export default function OrderReconciliation() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           {/* Đơn đúng cần trả */}
           <div className="p-4 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col min-h-[300px] sm:min-h-[350px]">
-            <h3 className="text-base font-bold text-emerald-700 uppercase tracking-wider mb-4 pb-3 border-b border-slate-100 flex items-center gap-1.5">
-              <span className="p-1 bg-emerald-50 rounded-md"><CheckCircle size={14} /></span> Đơn tồn ({expectedCorrect.length})
+            <h3 className="text-base font-bold text-emerald-700 uppercase tracking-wider mb-3 pb-3 border-b border-slate-100 flex items-center gap-1.5">
+              <span className="p-1 bg-emerald-50 rounded-md"><CheckCircle size={14} /></span> Đơn tồn ({visibleCorrect.length}{showOnlyWarning ? ` / ${expectedCorrect.length}` : ''})
             </h3>
+            <button
+              type="button"
+              onClick={() => setShowOnlyWarning(v => !v)}
+              className={`mb-3 w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl border text-xs font-bold text-left ${showOnlyWarning ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}
+            >
+              <span>Hiển thị những đơn cần đi tránh quá hạn</span>
+              <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-bold ${showOnlyWarning ? 'bg-white/20 text-white' : 'bg-red-50 text-red-700'}`}>
+                {warningCorrectCount} đơn
+              </span>
+            </button>
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[450px]">
-              {expectedCorrect.length === 0 ? (
-                <div className="text-center text-slate-400 text-xs py-10">Tất cả đơn in đã được bàn giao!</div>
+              {visibleCorrect.length === 0 ? (
+                <div className="text-center text-slate-400 text-xs py-10">{showOnlyWarning ? 'Không có đơn nào cần đi gấp tránh quá hạn.' : 'Tất cả đơn in đã được bàn giao!'}</div>
               ) : (
-                expectedCorrect.map((order, idx) => {
+                visibleCorrect.map((order, idx) => {
                   const scanned = isScanned(order);
                   const customerName = getCustomerName(order);
                   const createdLabel = fmtVnCreated(order.created_at);
