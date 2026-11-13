@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
-  Boxes, Search, RefreshCw, ChevronLeft, ChevronRight, FileX, Package, 
+  Boxes, Search, RefreshCw, ChevronLeft, ChevronRight, ChevronDown, Filter, FileX, Package, 
   Truck, Home, Printer, FileSpreadsheet, UploadCloud, Download, Plus, Trash2, X, Settings2
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -44,6 +44,28 @@ const statusName = (code) => STATUS_NAMES[String(code)] ?? `Mã ${code}`;
 
 // Tên kho theo id depot Nhanh.vn (khớp DEPOT_NAMES trong OrderReport.jsx).
 const DEPOT_NAMES = { '180540': 'AMELIE', '225005': 'LUNARA' };
+
+// --- GOM NHÓM THEO MÃ CHA ---
+// Tên kho dạng "TÊN MÃ - MÀU - SIZE" (VD "PRISCA 610 - Beige - S").
+// Mã cha = tên bỏ hậu tố size cuối ("PRISCA 610 - Beige"); size nhận
+// diện theo đúng SIZE_RE dùng ở tiktokProductMap.js (XS/S/M/L/XL/...).
+// Không có hậu tố size thì chính nó là mã cha (vd hàng quà tặng).
+const SIZE_RE = /^(XXS|XS|S|M|L|XL|XXL|XXXL|2XL|3XL|4XL|5XL|F|FREE)$/i;
+const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '2XL', '3XL', '4XL', '5XL', 'F', 'FREE'];
+const parentKeyOf = (name) => {
+  const n = String(name || '').trim();
+  const idx = n.lastIndexOf(' - ');
+  if (idx === -1) return n;
+  const tail = n.slice(idx + 3).trim();
+  return SIZE_RE.test(tail) ? n.slice(0, idx).trim() : n;
+};
+const sizeOfName = (name) => {
+  const n = String(name || '').trim();
+  const idx = n.lastIndexOf(' - ');
+  if (idx === -1) return '';
+  const tail = n.slice(idx + 3).trim();
+  return SIZE_RE.test(tail) ? tail.toUpperCase() : '';
+};
 
 // Vị trí góc tem cho Số lệnh (dùng chung cho bản xem trước và bản in thật)
 const ORDER_CORNER_STYLE = {
@@ -112,6 +134,9 @@ export default function InventoryReport() {
   const [inventory, setInventory] = useState([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
+  // Lọc chỉ còn tồn (mã cha còn hàng trong kho) + mã cha đang mở xem size.
+  const [onlyInStock, setOnlyInStock] = useState(false);
+  const [expandedParents, setExpandedParents] = useState(() => new Set());
   const pageSize = 50;
 
   // ==========================================
@@ -293,33 +318,44 @@ export default function InventoryReport() {
     : historyRows;
 
   // --- HÀM KÉO DATA BÁO CÁO TỒN KHO ---
+  // Lấy TẤT CẢ dòng khớp tìm kiếm (chia nhỏ 1000 dòng/lần vì PostgREST
+  // giới hạn) để gom nhóm theo mã cha cho đúng — phân trang theo SKU sẽ
+  // tách các size của cùng 1 mã cha sang 2 trang khác nhau, tổng sai.
   const fetchInventoryData = async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('product_inventories')
-        // product_id / available / location_code / last_synced đều đã
-        // kiểm chứng có trên product_inventories: sync-products ghi cả 4
-        // cột (update + upsert onConflict product_id), nhiều trang khác
-        // select product_id và location_code từ bảng này.
-        .select('product_code, product_name, remain, shipping, on_hand, product_id, available, location_code, last_synced', { count: 'exact' });
+      const buildQuery = () => {
+        let q = supabase
+          .from('product_inventories')
+          // product_id / available / location_code / last_synced đều đã
+          // kiểm chứng có trên product_inventories: sync-products ghi cả 4
+          // cột (update + upsert onConflict product_id), nhiều trang khác
+          // select product_id và location_code từ bảng này.
+          .select('product_code, product_name, remain, shipping, on_hand, product_id, available, location_code, last_synced', { count: 'exact' });
+        if (searchTerm.trim()) {
+          const term = searchTerm.trim();
+          q = q.or(`product_name.ilike.%${term}%,product_code.ilike.%${term}%`);
+        }
+        return q;
+      };
 
-      if (searchTerm.trim()) {
-        const term = searchTerm.trim();
-        query = query.or(`product_name.ilike.%${term}%,product_code.ilike.%${term}%`);
+      const all = [];
+      let from = 0;
+      const CHUNK = 1000;
+      let total = 0;
+      for (;;) {
+        const { data, error, count } = await buildQuery()
+          .order('remain', { ascending: false })
+          .range(from, from + CHUNK - 1);
+        if (error) throw error;
+        if (count !== null && count !== undefined) total = count;
+        all.push(...(data || []));
+        if (!data || data.length < CHUNK) break;
+        from += CHUNK;
       }
 
-      const from = currentPage * pageSize;
-      const to = from + pageSize - 1;
-
-      const { data, error, count } = await query
-        .order('remain', { ascending: false }) 
-        .range(from, to);
-
-      if (error) throw error;
-
-      setInventory(data || []);
-      setTotalCount(count || 0);
+      setInventory(all);
+      setTotalCount(total);
     } catch (err) {
       console.error(" Lỗi tải báo cáo tồn kho:", err.message);
     } finally {
@@ -327,9 +363,11 @@ export default function InventoryReport() {
     }
   };
 
+  // Tải 1 lần lúc mở trang; chuyển trang nhóm KHÔNG tải lại (phân trang
+  // theo mã cha làm ở client). Tìm kiếm thì gọi fetchInventoryData trực tiếp.
   useEffect(() => {
     fetchInventoryData();
-  }, [currentPage]);
+  }, []);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -337,7 +375,62 @@ export default function InventoryReport() {
     fetchInventoryData();
   };
 
-  const totalPages = Math.ceil(totalCount / pageSize);
+  // Gom SKU theo mã cha, tính tổng từng mã cha (gộp S/M/L/...).
+  const groups = useMemo(() => {
+    const map = new Map();
+    for (const item of inventory) {
+      const parent = parentKeyOf(item.product_name);
+      let g = map.get(parent);
+      if (!g) {
+        g = { parent, items: [], totalRemain: 0, totalShipping: 0, totalOnHand: 0 };
+        map.set(parent, g);
+      }
+      g.items.push(item);
+      g.totalRemain += Number(item.remain) || 0;
+      g.totalShipping += Number(item.shipping) || 0;
+      g.totalOnHand += Number(item.on_hand) || 0;
+    }
+    const list = [...map.values()];
+    // Xếp size trong nhóm theo thứ tự XS -> S -> M -> L -> XL...
+    for (const g of list) {
+      g.items.sort((a, b) => {
+        const sa = sizeOfName(a.product_name);
+        const sb = sizeOfName(b.product_name);
+        const ia = SIZE_ORDER.indexOf(sa);
+        const ib = SIZE_ORDER.indexOf(sb);
+        if (ia === -1 && ib === -1) return String(a.product_name).localeCompare(String(b.product_name));
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+      });
+    }
+    // Lọc chỉ còn tồn: mã cha còn hàng trong kho mới hiện. Nhóm hết hàng
+    // đóng góp 0 vào tổng nên số "Tổng SL tồn trong kho" không đổi.
+    const filtered = onlyInStock ? list.filter((g) => g.totalOnHand > 0) : list;
+    // Nhóm nhiều tồn nhất lên trước.
+    filtered.sort((a, b) => b.totalRemain - a.totalRemain || a.parent.localeCompare(b.parent));
+    return filtered;
+  }, [inventory, onlyInStock]);
+
+  // Tổng SL tồn trong kho = tổng on_hand của tất cả SKU đang lọc theo
+  // tìm kiếm (hàng đang ở trong kho, không tính đang chuyển).
+  const totalOnHand = useMemo(
+    () => inventory.reduce((s, it) => s + (Number(it.on_hand) || 0), 0),
+    [inventory]
+  );
+
+  // Phân trang theo MÃ CHA (không phải theo SKU).
+  const totalPages = Math.ceil(groups.length / pageSize);
+  const visibleGroups = groups.slice(currentPage * pageSize, currentPage * pageSize + pageSize);
+
+  const toggleParent = (key) => {
+    setExpandedParents((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   // ==========================================
   // LUỒNG XỬ LÝ CHỨC NĂNG IN MÃ VẠCH
@@ -863,12 +956,51 @@ export default function InventoryReport() {
   })();
 
   const INV_COLS = [
-    { id: 'code', label: 'Mã vạch', w: 15 },
-    { id: 'name', label: 'Tên sản phẩm', w: 46 },
+    { id: 'expand', label: '', w: 5 },
+    { id: 'code', label: 'Mã vạch', w: 14 },
+    { id: 'name', label: 'Tên sản phẩm', w: 42 },
     { id: 'total', label: 'Tổng tồn', w: 12 },
     { id: 'shipping', label: 'Đang chuyển', w: 12 },
     { id: 'onhand', label: 'Tồn trong kho', w: 15 },
   ];
+
+  // 1 dòng SKU. indented = dòng con trong mã cha đã mở (thụt vào + hiện size).
+  const renderSkuRow = (item, indented) => (
+    <tr key={item.product_code} onClick={() => openProductDetail(item)} className={`hover:bg-slate-100 transition cursor-pointer ${indented ? 'bg-slate-50/70' : ''}`}>
+      <td className="px-2 py-4" />
+      <td className="px-5 py-4 font-bold text-slate-900 tracking-wide font-mono text-sm">{item.product_code}</td>
+      <td className="px-5 py-4">
+        <div className={`flex items-center gap-2 ${indented ? 'pl-4' : ''}`}>
+          {indented ? (
+            <>
+              <span className="inline-flex px-2 py-0.5 bg-white border border-slate-200 text-slate-600 rounded-md text-[11px] font-bold min-w-[32px] justify-center">{sizeOfName(item.product_name) || '—'}</span>
+              <span className="font-semibold text-slate-600 text-sm truncate max-w-sm" title={item.product_name}>{item.product_name}</span>
+            </>
+          ) : (
+            <>
+              <div className="p-1.5 bg-slate-100 text-slate-500 rounded-md"><Package size={12} /></div>
+              <span className="font-bold text-slate-800 text-sm truncate max-w-sm" title={item.product_name}>{item.product_name}</span>
+            </>
+          )}
+        </div>
+      </td>
+      <td className="px-5 py-4 text-center">
+        <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-bold min-w-[56px] justify-center">
+          {item.remain}
+        </span>
+      </td>
+      <td className="px-5 py-4 text-center">
+        <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold min-w-[56px] justify-center border ${Number(item.shipping) > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-slate-50 border-slate-100 text-slate-400 font-medium'}`}>
+          {Number(item.shipping) > 0 && <Truck size={10} />} {item.shipping}
+        </span>
+      </td>
+      <td className="px-5 py-4 text-center">
+        <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold min-w-[64px] justify-center border ${Number(item.on_hand) > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600 text-sm' : 'bg-red-50 border-red-100 text-red-500'}`}>
+          {Number(item.on_hand) > 0 && <Home size={10} />} {item.on_hand}
+        </span>
+      </td>
+    </tr>
+  );
 
   return (
     <div className="space-y-6 provinces pb-10 animate-in fade-in duration-300">
@@ -883,8 +1015,16 @@ export default function InventoryReport() {
           <p className="text-sm text-slate-500 font-medium mt-1">Theo dõi tồn kho</p>
         </div>
 
-        <div className="text-sm font-bold text-slate-600 bg-emerald-50 border border-emerald-200 px-5 py-2.5 rounded-full">
-          Tổng số mặt hàng (SKU): <span className="text-emerald-700 font-bold text-base">{totalCount}</span> mã
+        <div className="flex flex-wrap gap-2 justify-start md:justify-end">
+          <div className="text-sm font-bold text-slate-600 bg-emerald-50 border border-emerald-200 px-5 py-2.5 rounded-full">
+            Tổng số mặt hàng (SKU): <span className="text-emerald-700 font-bold text-base">{totalCount}</span> mã
+          </div>
+          <div className="text-sm font-bold text-slate-600 bg-slate-50 border border-slate-200 px-5 py-2.5 rounded-full">
+            Mã cha: <span className="text-slate-900 font-bold text-base">{groups.length}</span> mẫu
+          </div>
+          <div className="text-sm font-bold text-slate-600 bg-emerald-50 border border-emerald-200 px-5 py-2.5 rounded-full">
+            Tổng SL tồn trong kho: <span className="text-emerald-700 font-bold text-base">{totalOnHand}</span>
+          </div>
         </div>
       </div>
 
@@ -906,6 +1046,15 @@ export default function InventoryReport() {
             Tìm kiếm
           </button>
         </form>
+
+        <button
+          type="button"
+          onClick={() => { setOnlyInStock((v) => !v); setCurrentPage(0); }}
+          title="Chỉ hiện mã cha còn hàng trong kho (tổng tồn trong kho > 0)"
+          className={`px-5 py-3 text-sm font-bold rounded-xl shadow-md transition cursor-pointer flex items-center gap-2 border flex-shrink-0 ${onlyInStock ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+        >
+          <Filter size={16} /> Chỉ còn tồn
+        </button>
 
         <button 
           onClick={() => setShowPrintModal(true)}
@@ -929,45 +1078,58 @@ export default function InventoryReport() {
             <tbody className="divide-y divide-slate-100 font-semibold text-slate-700">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="p-20 text-center text-slate-400 animate-pulse font-bold">
+                  <td colSpan={6} className="p-20 text-center text-slate-400 animate-pulse font-bold">
                     <RefreshCw size={18} className="animate-spin mx-auto mb-2 text-slate-500" />
                     Đang bốc tách dữ liệu kho hàng...
                   </td>
                 </tr>
-              ) : inventory.length === 0 ? (
+              ) : groups.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="p-20 text-center text-slate-400 font-medium">
+                  <td colSpan={6} className="p-20 text-center text-slate-400 font-medium">
                     <FileX size={36} className="mx-auto mb-2 text-slate-300" />
                     Không tìm thấy sản phẩm nào.
                   </td>
                 </tr>
               ) : (
-                inventory.map(item => (
-                  <tr key={item.product_code} onClick={() => openProductDetail(item)} className="hover:bg-slate-100 transition cursor-pointer">
-                    <td className="px-5 py-4 font-bold text-slate-900 tracking-wide font-mono text-sm">{item.product_code}</td>
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-slate-100 text-slate-500 rounded-md"><Package size={12} /></div>
-                        <span className="font-bold text-slate-800 text-sm truncate max-w-sm" title={item.product_name}>{item.product_name}</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 text-center">
-                      <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-bold min-w-[56px] justify-center">
-                        {item.remain}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-center">
-                      <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold min-w-[56px] justify-center border ${Number(item.shipping) > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-slate-50 border-slate-100 text-slate-400 font-medium'}`}>
-                        {Number(item.shipping) > 0 && <Truck size={10} />} {item.shipping}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-center">
-                      <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold min-w-[64px] justify-center border ${Number(item.on_hand) > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600 text-sm' : 'bg-red-50 border-red-100 text-red-500'}`}>
-                        {Number(item.on_hand) > 0 && <Home size={10} />} {item.on_hand}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+                visibleGroups.map((g) => {
+                  // Mã cha chỉ có 1 size thì hiện thẳng dòng SKU, khỏi gom.
+                  if (g.items.length === 1) return renderSkuRow(g.items[0], false);
+                  const expanded = expandedParents.has(g.parent);
+                  return (
+                    <Fragment key={`parent:${g.parent}`}>
+                      <tr onClick={() => toggleParent(g.parent)} className="hover:bg-slate-100 transition cursor-pointer">
+                        <td className="px-2 py-4 text-center text-slate-500">
+                          {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span className="inline-flex px-2.5 py-1 bg-slate-100 border border-slate-200 text-slate-600 rounded-lg text-xs font-bold whitespace-nowrap">{g.items.length} size</span>
+                        </td>
+                        <td className="px-5 py-4">
+                          <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-emerald-50 text-emerald-700 rounded-md"><Package size={12} /></div>
+                            <span className="font-bold text-slate-900 text-sm truncate max-w-sm" title={g.parent}>{g.parent}</span>
+                          </div>
+                        </td>
+                        <td className="px-5 py-4 text-center">
+                          <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-900 border border-slate-900 text-white rounded-lg text-xs font-bold min-w-[56px] justify-center">
+                            {g.totalRemain}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-center">
+                          <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold min-w-[56px] justify-center border ${g.totalShipping > 0 ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-slate-50 border-slate-100 text-slate-400 font-medium'}`}>
+                            {g.totalShipping > 0 && <Truck size={10} />} {g.totalShipping}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 text-center">
+                          <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold min-w-[64px] justify-center border ${g.totalOnHand > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-600 text-sm' : 'bg-red-50 border-red-100 text-red-500'}`}>
+                            {g.totalOnHand > 0 && <Home size={10} />} {g.totalOnHand}
+                          </span>
+                        </td>
+                      </tr>
+                      {expanded && g.items.map((item) => renderSkuRow(item, true))}
+                    </Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
