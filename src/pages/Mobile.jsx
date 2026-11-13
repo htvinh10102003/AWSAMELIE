@@ -99,6 +99,27 @@ const isHandoverWarning = (order) => {
     }
     return sameVnDate(created, nowVn) && created.getUTCHours() < 14;
 };
+// Buổi chiều (>= 12h): đơn từng tô đỏ buổi sáng (tạo ngày hôm qua, giờ
+// VN) vẫn hiện nhưng NHẤP NHÁY đỏ, để phân biệt với đơn tô đỏ buổi
+// chiều (tạo hôm nay trước 14h, viền đỏ đứng yên). Buổi sáng hàm này
+// luôn false — đơn hôm qua lúc đó đang là viền đỏ đứng yên. Chỉ kênh
+// Shopee (42) và TikTok (48); Admin và các kênh khác bỏ qua.
+const isHandoverWarningBlink = (order) => {
+    const ch = String(order?.sale_channel);
+    if (ch !== '42' && ch !== '48') return false;
+    const created = order?.created_at ? toVnDate(order.created_at) : null;
+    if (!created) return false;
+    const nowVn = toVnDate(new Date().toISOString());
+    if (!nowVn || nowVn.getUTCHours() < 12) return false;
+    const sameVnDate = (a, b) => a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
+    const yest = new Date(Date.UTC(nowVn.getUTCFullYear(), nowVn.getUTCMonth(), nowVn.getUTCDate()));
+    yest.setUTCDate(yest.getUTCDate() - 1);
+    return sameVnDate(created, yest);
+};
+// Viền đỏ cần đi gấp: đỏ đứng yên HOẶC đỏ nhấp nháy (buổi chiều).
+// Dùng cho nút lọc + số đếm — đơn hôm qua chưa bàn giao buổi chiều
+// vẫn là đơn cần đi gấp, không được rớt khỏi bộ lọc.
+const isHandoverWarningAny = (order) => isHandoverWarning(order) || isHandoverWarningBlink(order);
 const FEATURE_PARENTS = [
     { id: 'dashboard', name: 'Dashboard' }, { id: 'print_orders', name: 'Đơn in' },
     { id: 'packing', name: 'Đóng gói' }, { id: 'return_orders', name: 'Báo cáo đơn hoàn' },
@@ -751,7 +772,7 @@ export default function Mobile() {
     const visibleList = currentList.slice(0, visibleCount);
     // Danh sách đơn cần trả, lọc chỉ viền đỏ khi bật nút lọc.
     const reconFilteredHandover = reconOnlyWarning
-        ? reconTotals.needReturn.filter(isHandoverWarning)
+        ? reconTotals.needReturn.filter(isHandoverWarningAny)
         : reconTotals.needReturn;
     const reconVisibleList = reconFilteredHandover.slice(0, reconVisible);
     // Nhãn ngày hôm nay (giờ VN) cho tiêu đề tab Đối soát.
@@ -763,11 +784,12 @@ export default function Mobile() {
         const customerName = showCustomer ? getCustomerName(order) : '';
         const createdLabel = showCreated ? fmtVnCreated(order.created_at) : '';
         const warning = warnHandover && isHandoverWarning(order);
+        const warningBlink = warnHandover && isHandoverWarningBlink(order);
         const shortItem = [...(data.holding || []), ...(data.outOfStock || [])]
             .find(o => o.id === order.id)?.debug_shortItems?.[0];
         const hasSecondaryPills = (showChannel && order.sale_channel) || (showStock && stock) || (showStock && shortItem);
         return (
-            <div className={`bg-white rounded-2xl border shadow-sm p-4 ${warning ? 'border-red-500 ring-1 ring-red-500' : 'border-slate-200'}`}>
+            <div className={`bg-white rounded-2xl border shadow-sm p-4 ${warning ? 'border-red-500 ring-1 ring-red-500' : warningBlink ? 'border-red-500 ring-1 ring-red-500 blink-red-border' : 'border-slate-200'}`}>
                 <div className="flex items-start justify-between gap-2">
                     <div className="font-bold text-slate-900 text-lg leading-tight min-w-0">
                         {showCustomer ? (<>ID: <span className="font-mono">{order.id}</span>{customerName ? ` - [${customerName}]` : ''}</>) : (<span className="font-mono">{order.id}</span>)}
@@ -965,7 +987,7 @@ export default function Mobile() {
                         >
                             <span>Hiển thị những đơn cần đi tránh quá hạn</span>
                             <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-bold ${reconOnlyWarning ? 'bg-white/20 text-white' : 'bg-red-50 text-red-700'}`}>
-                                {reconTotals.needReturn.filter(isHandoverWarning).length} đơn
+                                {reconTotals.needReturn.filter(isHandoverWarningAny).length} đơn
                             </span>
                         </button>
                         <div className="font-bold text-slate-900 text-base border-b border-slate-200 pb-2">

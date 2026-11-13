@@ -84,6 +84,29 @@ const isHandoverWarning = (order) => {
   return sameVnDate(created, nowVn) && created.getUTCHours() < 14;
 };
 
+// Buổi chiều (>= 12h): đơn từng tô đỏ buổi sáng (tạo ngày hôm qua, giờ
+// VN) vẫn hiện nhưng NHẤP NHÁY đỏ, để phân biệt với đơn tô đỏ buổi
+// chiều (tạo hôm nay trước 14h, viền đỏ đứng yên). Buổi sáng hàm này
+// luôn false — đơn hôm qua lúc đó đang là viền đỏ đứng yên. Chỉ kênh
+// Shopee (42) và TikTok (48); Admin và các kênh khác bỏ qua.
+const isHandoverWarningBlink = (order) => {
+  const ch = String(order?.sale_channel);
+  if (ch !== '42' && ch !== '48') return false;
+  const created = order?.created_at ? toVnDate(order.created_at) : null;
+  if (!created) return false;
+  const nowVn = toVnDate(new Date().toISOString());
+  if (!nowVn || nowVn.getUTCHours() < 12) return false;
+  const sameVnDate = (a, b) => a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
+  const yest = new Date(Date.UTC(nowVn.getUTCFullYear(), nowVn.getUTCMonth(), nowVn.getUTCDate()));
+  yest.setUTCDate(yest.getUTCDate() - 1);
+  return sameVnDate(created, yest);
+};
+
+// Viền đỏ cần đi gấp: đỏ đứng yên HOẶC đỏ nhấp nháy (buổi chiều).
+// Dùng cho nút lọc + số đếm — đơn hôm qua chưa bàn giao buổi chiều
+// vẫn là đơn cần đi gấp, không được rớt khỏi bộ lọc.
+const isHandoverWarningAny = (order) => isHandoverWarning(order) || isHandoverWarningBlink(order);
+
 // Hàm chuẩn hóa để tương thích cả dữ liệu mới (lưu chuỗi ID) và dữ liệu cũ (lưu object)
 const extractOrderId = (item) => (typeof item === 'object' && item !== null ? item.id : item);
 
@@ -128,6 +151,13 @@ export default function OrderReconciliation() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const LIMIT = 10;
+
+  // Lịch sử đơn quá hạn (chỉ owner): bảng overdue_order_snapshots,
+  // chụp tự động 12h trưa (buổi sáng) và 12h đêm (buổi chiều).
+  const [histDate, setHistDate] = useState(getTodayStr());
+  const [histSession, setHistSession] = useState('all');
+  const [histRows, setHistRows] = useState([]);
+  const [histLoading, setHistLoading] = useState(false);
 
   // AUDIT STATE
   const [inputCode, setInputCode] = useState('');
@@ -211,6 +241,35 @@ export default function OrderReconciliation() {
   useEffect(() => {
     if (view === 'list') fetchSessions(false);
   }, [view, filterStartDate, filterEndDate]);
+
+  // Tải lịch sử đơn quá hạn đã lưu (chỉ owner). Bảng chưa có (chưa chạy
+  // migration) thì query lỗi -> hiện danh sách trống, không crash app.
+  const fetchOverdueHistory = async () => {
+    if (currentUserMeta.is_owner !== true) return;
+    setHistLoading(true);
+    try {
+      let q = supabase
+        .from('overdue_order_snapshots')
+        .select('id, order_id, snapshot_date, session, sale_channel, carrier_code, status, created_at')
+        .eq('snapshot_date', histDate)
+        .order('session', { ascending: true })
+        .order('created_at', { ascending: true });
+      if (histSession !== 'all') q = q.eq('session', histSession);
+      const { data, error } = await q;
+      if (error) throw error;
+      setHistRows(data || []);
+    } catch (err) {
+      console.error('Lỗi tải lịch sử đơn quá hạn:', err.message);
+      setHistRows([]);
+    } finally {
+      setHistLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (view === 'list') fetchOverdueHistory();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, histDate, histSession, currentUserMeta.is_owner]);
 
   const handleCreateSession = async () => {
     const sessionName = `Biên bản - ${currentUserMeta.displayName || 'Hệ thống'} - ${new Date().toLocaleString('vi-VN')}`;
@@ -442,12 +501,13 @@ export default function OrderReconciliation() {
     : todayOrders.filter(o => !EXCLUDED_STATUS_CODES.includes(Number(o.status)) && !CANCELED_STATUS_CODES.includes(Number(o.status)));
 
   // Danh sách Đơn tồn hiển thị: khi bật nút lọc chỉ viền đỏ thì chỉ hiện
-  // đơn chưa quét mà isHandoverWarning (Shopee/TikTok cần đi gấp tránh quá
-  // hạn — sáng: tạo hôm qua, chiều: tạo hôm nay trước 14h).
+  // đơn chưa quét mà isHandoverWarningAny (Shopee/TikTok cần đi gấp tránh
+  // quá hạn — sáng: tạo hôm qua, chiều: tạo hôm nay trước 14h; đơn tạo
+  // hôm qua sang chiều vẫn tính, nhưng nhấp nháy đỏ).
   const visibleCorrect = showOnlyWarning
-    ? expectedCorrect.filter(o => !isScanned(o) && isHandoverWarning(o))
+    ? expectedCorrect.filter(o => !isScanned(o) && isHandoverWarningAny(o))
     : expectedCorrect;
-  const warningCorrectCount = expectedCorrect.filter(o => !isScanned(o) && isHandoverWarning(o)).length;
+  const warningCorrectCount = expectedCorrect.filter(o => !isScanned(o) && isHandoverWarningAny(o)).length;
       
   const expectedCanceled = isConfirmed 
     ? (isDetailsVisible ? (currentSession?.expected_canceled || []).map(item => resolveOrderFromMap(item)) : [])
@@ -816,6 +876,50 @@ export default function OrderReconciliation() {
             )}
           </div>
         </div>
+
+        {/* Lịch sử đơn quá hạn — chỉ owner. Đơn đỏ được lưu tự động:
+            12h trưa lưu đơn đỏ buổi sáng, 12h đêm lưu đơn đỏ buổi chiều. */}
+        {currentUserMeta.is_owner === true && (
+          <div className="bg-white p-6 border border-slate-200 rounded-2xl shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2 pb-3 border-b border-slate-100"><Clock size={16}/> Lịch sử đơn quá hạn</h3>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <input type="date" value={histDate} onChange={e => setHistDate(e.target.value)} className="w-full sm:w-40 px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-500/20" title="Ngày" />
+                <select value={histSession} onChange={e => setHistSession(e.target.value)} className="px-3 py-1.5 border border-slate-200 rounded-lg text-xs outline-none focus:border-slate-700 focus:ring-2 focus:ring-slate-500/20 bg-white">
+                  <option value="all">Cả 2 buổi</option>
+                  <option value="morning">Buổi sáng (12h trưa)</option>
+                  <option value="afternoon">Buổi chiều (12h đêm)</option>
+                </select>
+              </div>
+            </div>
+            <p className="text-xs text-slate-500 font-medium">Đơn đỏ buổi sáng được lưu lúc 12h trưa, đơn đỏ buổi chiều được lưu lúc 12h đêm. Chọn ngày + buổi để xem lại các đơn đã quá hạn.</p>
+            {histLoading ? (
+              <p className="text-sm text-slate-500 text-center py-8">Đang tải dữ liệu...</p>
+            ) : histRows.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8 border rounded-xl border-dashed">Không có đơn quá hạn nào được lưu ngày này.</p>
+            ) : (
+              <div className="space-y-2 max-h-[450px] overflow-y-auto pr-1">
+                <p className="text-xs font-bold text-slate-500">{histRows.length} đơn quá hạn</p>
+                {histRows.map(row => (
+                  <div key={row.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 p-3 border border-slate-200 rounded-xl bg-white">
+                    <div className="flex items-center gap-2 text-xs font-bold flex-wrap">
+                      <span className="text-slate-800">ID: {row.order_id}</span>
+                      {getChannelBadge(row.sale_channel)}
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${row.session === 'morning' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'}`}>{row.session === 'morning' ? 'Buổi sáng' : 'Buổi chiều'}</span>
+                    </div>
+                    <div className="text-xs text-slate-500 font-medium">
+                      <span className="font-mono">MVD: {row.carrier_code || '---'}</span>
+                      <span className="mx-2">•</span>
+                      <span>{STATUS_MAP[row.status] || row.status}</span>
+                      <span className="mx-2">•</span>
+                      <span>Lưu lúc: {fmtVnCreated(row.created_at)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -1042,8 +1146,9 @@ export default function OrderReconciliation() {
                   const customerName = getCustomerName(order);
                   const createdLabel = fmtVnCreated(order.created_at);
                   const warning = !scanned && isHandoverWarning(order);
+                  const warningBlink = !scanned && isHandoverWarningBlink(order);
                   return (
-                    <div key={order.id + idx} className={`p-4 border rounded-xl transition-all duration-300 ${scanned ? 'bg-emerald-50/60 border-emerald-300' : warning ? 'bg-white border-red-500 ring-1 ring-red-500 shadow-sm' : 'bg-white border-slate-200 shadow-sm'}`}>
+                    <div key={order.id + idx} className={`p-4 border rounded-xl transition-all duration-300 ${scanned ? 'bg-emerald-50/60 border-emerald-300' : warning ? 'bg-white border-red-500 ring-1 ring-red-500 shadow-sm' : warningBlink ? 'bg-white border-red-500 ring-1 ring-red-500 shadow-sm blink-red-border' : 'bg-white border-slate-200 shadow-sm'}`}>
                       <div className="flex justify-between items-start text-xs font-bold mb-2">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">

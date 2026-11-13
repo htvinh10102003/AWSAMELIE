@@ -64,3 +64,13 @@ button, input, select, textarea { font: inherit; }
   font-size: 12px; font-weight: 700; letter-spacing: 0.12em;
   text-transform: uppercase; line-height: 1.25;
 }
+
+/* Viền đỏ nhấp nháy — đối soát cuối ngày: buổi chiều, đơn từng tô đỏ
+   buổi sáng (tạo ngày hôm qua) vẫn hiện nhưng nhấp nháy đỏ, để phân
+   biệt với đơn tô đỏ buổi chiều (tạo hôm nay trước 14h, viền đỏ đứng
+   yên). Nhấp nháy bằng border + ring (box-shadow) giữa đỏ đậm và đỏ nhạt. */
+@keyframes blink-red-border {
+  0%, 49% { border-color: #ef4444; box-shadow: 0 0 0 1px #ef4444; }
+  50%, 100% { border-color: #fecaca; box-shadow: 0 0 0 1px #fecaca; }
+}
+.blink-red-border { animation: blink-red-border 1.1s infinite; }
