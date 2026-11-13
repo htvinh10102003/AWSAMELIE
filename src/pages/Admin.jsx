@@ -1518,7 +1518,7 @@ export default function Admin() {
                 <AlertCircle size={22} /> Danger Zone: Dọn dẹp Database
               </h2>
               <p className="text-sm text-slate-500 font-medium max-w-3xl leading-relaxed border-b border-slate-200 pb-6 mb-6">
-                Hành động này sẽ <strong className="text-red-500 font-bold">XÓA VĨNH VIỄN</strong> toàn bộ Dữ liệu giao dịch (Đơn hàng, Lịch sử, Hoàn hàng...) cũ hơn thời gian chọn để tiết kiệm dung lượng. Master Data (SP) không bị ảnh hưởng.
+                Hành động này sẽ <strong className="text-red-500 font-bold">XÓA VĨNH VIỄN</strong> toàn bộ Dữ liệu giao dịch (Đơn hàng, Lịch sử, Hoàn hàng...) cũ hơn thời gian chọn để tiết kiệm dung lượng. Lần dọn này còn xóa cả <strong className="text-red-500 font-bold">log thao tác</strong> (Gửi/Sửa/Hủy/In) và <strong className="text-red-500 font-bold">bản ghi check đơn gốc 71/74</strong> (trạng thái hãng + nhận hàng) của các đơn cũ hơn mốc chọn. Master Data (SP) không bị ảnh hưởng.
               </p>
               
               {/* Progress Bar Storage */}

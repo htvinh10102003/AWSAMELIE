@@ -9,6 +9,16 @@
 --   4. deleted_orders              - theo deleted_at
 --   5. send_history                - theo created_at
 --   6. orders_printabledate        - theo printable_date
+-- Them ngay 2026-11-13 (theo yeu cau cua Vinh: nut "Don dep DB" phai xoa
+-- duoc ca log thao tac va ban ghi check don 71/74 cu hon moc chon):
+--   7. admin_action_logs           - theo created_at
+--   8. order_carrier_checks        - KHONG co cot ngay (chi 3 cot order_id /
+--                                      carrier_status / received_status) nen xoa
+--                                      theo don goc: join public.orders
+--                                      (orders.created_at < cutoff) va them
+--                                      join public.ecom_return_orders
+--                                      (return_created_at < cutoff) neu
+--                                      bang/cot do ton tai.
 -- Tat ca deu dung chung 1 moc cutoff = now() - days_old va cung mau xoa theo lo
 -- (ctid + LIMIT batch_size) nhu cac bang cu, nen khong timeout.
 --
@@ -23,6 +33,15 @@
 --   hoac tao bang truoc theo dung cot ma wms-allocation dang dung.
 -- - Cac bang moi khong co khoa ngoai (FK) toi orders, nen buoc xoa orders (buoc 4) giu
 --   nguyen dieu kien cu (chi kiem order_products / order_histories).
+-- - order_carrier_checks (buoc 12) KHONG co cot ngay: dong nao khong noi duoc
+--   voi don goc cu (khong co trong orders cu, khong co trong ecom_return_orders
+--   cu) se o lai — an toan, khong xoa nham. Neu don goc da bi xoa khoi orders
+--   o lan don truoc thi buoc 12b (join ecom_return_orders) van bat duoc neu
+--   ban ghi tra goc con do va return_created_at < cutoff.
+-- - Buoc 12b chi chay khi bang public.ecom_return_orders va ca 2 cot
+--   original_ecom_order_id / return_created_at deu ton tai (kiem tra truoc
+--   bang to_regclass + information_schema): neu DB cu chua co bang/cot nay
+--   thi ham van chay binh thuong, chi dung buoc 12a (join orders).
 
 create or replace function public.request_cleanup_batched(days_old integer, batch_size integer default 1000)
 returns jsonb
@@ -44,6 +63,9 @@ declare
   del_deleted integer := 0;
   del_send_hist integer := 0;
   del_printable integer := 0;
+  del_action_logs integer := 0;
+  del_carrier integer := 0;
+  del_carrier_ecom integer := 0;
   rem_products integer := 0;
   rem_hist integer := 0;
   rem_returns integer := 0;
@@ -54,6 +76,10 @@ declare
   rem_deleted integer := 0;
   rem_send_hist integer := 0;
   rem_printable integer := 0;
+  rem_action_logs integer := 0;
+  rem_carrier integer := 0;
+  rem_carrier_ecom integer := 0;
+  has_ecom_returns boolean := false;
 begin
   -- Chi owner moi duoc goi. Owner duoc nhan dien bang user_metadata.is_owner = true,
   -- hoac tai khoan owner goc cua he thong (email nay cung dang dung trong Admin.jsx).
@@ -71,6 +97,17 @@ begin
 
   if batch_size is null or batch_size < 1 then batch_size := 1000; end if;
   if batch_size > 5000 then batch_size := 5000; end if;
+
+  -- Kiem tra truoc cho buoc 12b: chi dung join ecom_return_orders khi bang
+  -- va ca 2 cot original_ecom_order_id / return_created_at deu ton tai.
+  -- (Neu khong ton tai thi buoc 12 chi dung join orders, ham van chay.)
+  has_ecom_returns := to_regclass('public.ecom_return_orders') is not null
+    and exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'ecom_return_orders'
+        and column_name = 'original_ecom_order_id')
+    and exists (select 1 from information_schema.columns
+      where table_schema = 'public' and table_name = 'ecom_return_orders'
+        and column_name = 'return_created_at');
 
   -- 1. San pham cua don cu
   delete from public.order_products
@@ -152,6 +189,40 @@ begin
   );
   get diagnostics del_printable = row_count;
 
+  -- 11. Log thao tac don cu (Gui/Sua/Huy/In) — theo ngay ghi log
+  delete from public.admin_action_logs
+  where ctid in (
+    select ctid from public.admin_action_logs where created_at < cutoff limit batch_size
+  );
+  get diagnostics del_action_logs = row_count;
+
+  -- 12. Ban ghi check don goc 71/74 cu (bang KHONG co cot ngay)
+  -- 12a. Xoa theo don goc trong orders: don goc tao truoc cutoff thi ban
+  --      ghi check cua no cung cu.
+  delete from public.order_carrier_checks
+  where ctid in (
+    select c.ctid from public.order_carrier_checks c
+    join public.orders o on o.id = c.order_id
+    where o.created_at < cutoff
+    limit batch_size
+  );
+  get diagnostics del_carrier = row_count;
+
+  -- 12b. Xoa them theo don tra goc tren ecom_return_orders (bat ca dong
+  --      ma don goc da bi xoa khoi orders o lan don truoc). Chi chay khi
+  --      bang va ca 2 cot deu ton tai (da kiem tra o dau ham).
+  if has_ecom_returns then
+    delete from public.order_carrier_checks
+    where ctid in (
+      select c.ctid from public.order_carrier_checks c
+      join public.ecom_return_orders r on r.original_ecom_order_id = c.order_id
+      where r.return_created_at < cutoff
+      limit batch_size
+    );
+    get diagnostics del_carrier_ecom = row_count;
+    del_carrier := del_carrier + del_carrier_ecom;
+  end if;
+
   -- So con lai (de frontend biet khi nao xong)
   select count(*) into rem_products from public.order_products op
     join public.orders o on o.id = op.order_id where o.created_at < cutoff;
@@ -167,6 +238,18 @@ begin
   select count(*) into rem_deleted from public.deleted_orders where deleted_at < cutoff;
   select count(*) into rem_send_hist from public.send_history where created_at < cutoff;
   select count(*) into rem_printable from public.orders_printabledate where printable_date < cutoff;
+  select count(*) into rem_action_logs from public.admin_action_logs where created_at < cutoff;
+  select count(*) into rem_carrier from public.order_carrier_checks c
+    join public.orders o on o.id = c.order_id where o.created_at < cutoff;
+  -- Cong them so khop ecom (loai trung voi so da dem o join orders de
+  -- khong dem 2 lan 1 dong). Chi chay khi bang/cot ton tai.
+  if has_ecom_returns then
+    select count(*) into rem_carrier_ecom from public.order_carrier_checks c
+      join public.ecom_return_orders r on r.original_ecom_order_id = c.order_id
+      where r.return_created_at < cutoff
+        and not exists (select 1 from public.orders o where o.id = c.order_id and o.created_at < cutoff);
+    rem_carrier := rem_carrier + rem_carrier_ecom;
+  end if;
 
   analyze public.orders;
   analyze public.order_products;
@@ -178,6 +261,8 @@ begin
   analyze public.deleted_orders;
   analyze public.send_history;
   analyze public.orders_printabledate;
+  analyze public.admin_action_logs;
+  analyze public.order_carrier_checks;
 
   return jsonb_build_object(
     'cutoff', cutoff,
@@ -191,7 +276,9 @@ begin
       'partial_return_orders', del_partial,
       'deleted_orders', del_deleted,
       'send_history', del_send_hist,
-      'orders_printabledate', del_printable
+      'orders_printabledate', del_printable,
+      'admin_action_logs', del_action_logs,
+      'order_carrier_checks', del_carrier
     ),
     'remaining', jsonb_build_object(
       'order_products', rem_products,
@@ -203,11 +290,14 @@ begin
       'partial_return_orders', rem_partial,
       'deleted_orders', rem_deleted,
       'send_history', rem_send_hist,
-      'orders_printabledate', rem_printable
+      'orders_printabledate', rem_printable,
+      'admin_action_logs', rem_action_logs,
+      'order_carrier_checks', rem_carrier
     ),
     'done', (rem_products = 0 and rem_hist = 0 and rem_returns = 0 and rem_orders = 0
       and rem_receipt_checks = 0 and rem_receipt_hist = 0 and rem_partial = 0
-      and rem_deleted = 0 and rem_send_hist = 0 and rem_printable = 0)
+      and rem_deleted = 0 and rem_send_hist = 0 and rem_printable = 0
+      and rem_action_logs = 0 and rem_carrier = 0)
   );
 end;
 $$;

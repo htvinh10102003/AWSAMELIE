@@ -772,6 +772,12 @@ export default function BaoCaoHoanChuaNhan() {
   const [pageC, setPageC] = useState(1);
   const [pageR, setPageR] = useState(1);
   const [pageWaiting, setPageWaiting] = useState(1);
+  // --- Tab riêng cho từng bảng: bấm tab nào chỉ hiện bảng đó; bấm vào
+  // ô tổng quan cũng chuyển sang tab tương ứng. Tab 'all' = mọi đơn trả
+  // theo bộ lọc, 'received' = đơn đã nhận; B/C/R/waiting = 4 mục check.
+  const [activeTab, setActiveTab] = useState('B');
+  const [pageAll, setPageAll] = useState(1);
+  const [pageReceived, setPageReceived] = useState(1);
   const [uniSearch, setUniSearch] = useState('');
   const [uniPlatform, setUniPlatform] = useState('');
   const [uniShop, setUniShop] = useState('');
@@ -788,9 +794,12 @@ export default function BaoCaoHoanChuaNhan() {
   const [selectedC, setSelectedC] = useState(new Set());
   const [selectedR, setSelectedR] = useState(new Set());
   const [selectedWaiting, setSelectedWaiting] = useState(new Set());
+  const [selectedAll, setSelectedAll] = useState(new Set());
+  const [selectedReceived, setSelectedReceived] = useState(new Set());
   const [bulkTickSaving, setBulkTickSaving] = useState(false);
   const [bulkTickMsg, setBulkTickMsg] = useState('');
-  // --- Sửa tay từng dòng ---
+  // --- Sửa tay từng dòng (popup modal, không sửa inline trong ô bảng
+  // vì bảng cuộn ngang làm form tràn) ---
   const [editRowId, setEditRowId] = useState(null);
   const [editDrafts, setEditDrafts] = useState({});
   // Sửa tay từng dòng đơn gốc 71/74 (ghi vào order_carrier_checks):
@@ -798,6 +807,25 @@ export default function BaoCaoHoanChuaNhan() {
   const [editOrderId, setEditOrderId] = useState(null);
   const [editOrderDrafts, setEditOrderDrafts] = useState({});
   const [savingOrderId, setSavingOrderId] = useState(null);
+  // Đối tượng đang sửa trong popup: { kind: 'return', row } hoặc
+  // { kind: 'order', order }. Đóng popup thì xóa cả draft.
+  const [editTarget, setEditTarget] = useState(null);
+  function closeEdit() {
+    setEditRowId(null);
+    setEditOrderId(null);
+    setEditTarget(null);
+    setEditDrafts((prev) => {
+      const n = { ...prev };
+      if (editTarget?.kind === 'return' && editTarget.row) delete n[editTarget.row.return_id];
+      return n;
+    });
+    setEditOrderDrafts((prev) => {
+      const n = { ...prev };
+      if (editTarget?.kind === 'order' && editTarget.order) delete n[String(editTarget.order.id)];
+      return n;
+    });
+    setSaveMsg('');
+  }
   const [savingId, setSavingId] = useState(null);
   const [saveMsg, setSaveMsg] = useState('');
   const [toast, setToast] = useState('');
@@ -1277,6 +1305,19 @@ export default function BaoCaoHoanChuaNhan() {
   const bucketCItems = useMemo(() => checkItems.filter(isBucketCItem), [checkItems]);
   const bucketRItems = useMemo(() => checkItems.filter(isBucketRItem), [checkItems]);
   const waitingItems = useMemo(() => checkItems.filter(isWaitingItem), [checkItems]);
+  // Items cho tab Tất cả (mọi đơn trả theo bộ lọc trên) và tab Đã nhận —
+  // dựng từ allRows / groups.daNhan bằng cùng makeCheckItemReturn để dùng
+  // chung bảng + tick hàng loạt + sửa tay với 4 mục check.
+  const allTabItems = useMemo(() => {
+    const deps = checkDeps();
+    return allRows.map((r) => makeCheckItemReturn(r, deps));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allRows, manualChecks, carrierChecks, partialOriginalIds, partialAppOrderIdsNoR, origStatusById, origStatusByEcom]);
+  const receivedTabItems = useMemo(() => {
+    const deps = checkDeps();
+    return groups.daNhan.map((r) => makeCheckItemReturn(r, deps));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups, manualChecks, carrierChecks, partialOriginalIds, partialAppOrderIdsNoR, origStatusById, origStatusByEcom]);
   // Tiền hoàn từng mục: chỉ đơn trả có tiền hoàn; đơn gốc 71/74 không có
   // (amount null) nên không đóng góp vào tổng tiền.
   const bucketMoney = (items) => items.reduce((s, it) => s + (Number(it.amount) || 0), 0);
@@ -1305,7 +1346,7 @@ export default function BaoCaoHoanChuaNhan() {
   // lọc cả 2 quần thể (đơn trả: return_created_at, đơn 71/74: created_at).
   function setUniFilter(setter, value) {
     setter(value);
-    setPageB(1); setPageC(1); setPageR(1); setPageWaiting(1);
+    setPageB(1); setPageC(1); setPageR(1); setPageWaiting(1); setPageAll(1); setPageReceived(1);
   }
   const uniPlatformOptions = useMemo(() => {
     const m = new Map();
@@ -1363,17 +1404,19 @@ export default function BaoCaoHoanChuaNhan() {
       return true;
     };
     return {
+      all: allTabItems.filter(match),
+      received: receivedTabItems.filter(match),
       B: bucketBItems.filter(match),
       C: bucketCItems.filter(match),
       R: bucketRItems.filter(match),
       waiting: waitingItems.filter(match),
     };
-  }, [bucketBItems, bucketCItems, bucketRItems, waitingItems, uniSearch, uniPlatform, uniShop, uniProduct, uniCrtFrom, uniCrtTo, uniMoneyMin, uniMoneyMax, inventoryIndex]);
+  }, [allTabItems, receivedTabItems, bucketBItems, bucketCItems, bucketRItems, waitingItems, uniSearch, uniPlatform, uniShop, uniProduct, uniCrtFrom, uniCrtTo, uniMoneyMin, uniMoneyMax, inventoryIndex]);
   function clearUniFilters() {
     setUniSearch(''); setUniPlatform(''); setUniShop(''); setUniProduct('');
     // "Xóa lọc" về lại mặc định: chỉ 30 ngày gần nhất (không để trống = tải hết).
     setUniCrtFrom(addDaysStr(vnTodayStr(), -30)); setUniCrtTo(vnTodayStr());
-    setUniMoneyMin(''); setUniMoneyMax(''); setPageB(1); setPageC(1); setPageR(1); setPageWaiting(1);
+    setUniMoneyMin(''); setUniMoneyMax(''); setPageB(1); setPageC(1); setPageR(1); setPageWaiting(1); setPageAll(1); setPageReceived(1);
   }
 
   function showToast(msg) {
@@ -1473,8 +1516,9 @@ export default function BaoCaoHoanChuaNhan() {
   // --- Sửa tay kiểm nhận (chỉ owner) ---
   function startEdit(row) {
     const m = manualChecks.get(row.return_id);
-    setEditDrafts((prev) => ({ ...prev, [row.return_id]: { date: m?.received_date || '', status: m?.received_status || 'Chưa nhận' } }));
+    setEditDrafts((prev) => ({ ...prev, [row.return_id]: { date: m?.received_date || '', status: m?.received_status || 'Chưa nhận', carrier: m?.carrier_status || '' } }));
     setEditRowId(row.return_id);
+    setEditTarget({ kind: 'return', row });
     setSaveMsg('');
   }
   async function handleSaveCheck(row) {
@@ -1488,6 +1532,8 @@ export default function BaoCaoHoanChuaNhan() {
       setSaveMsg('Chọn ngày hàng về trước khi lưu trạng thái Đã nhận.');
       return;
     }
+    // Trạng thái hãng (HVC): '' = chưa check -> null; 'Đã hoàn' / 'Chưa hoàn'.
+    const carrierStatus = (d.carrier || '').trim() || null;
     setSavingId(row.return_id);
     setSaveMsg('');
     try {
@@ -1495,6 +1541,7 @@ export default function BaoCaoHoanChuaNhan() {
         return_id: row.return_id,
         received_date: date || null,
         received_status: status,
+        carrier_status: carrierStatus,
         updated_by: userEmail || '',
         updated_at: new Date().toISOString(),
       };
@@ -1502,9 +1549,7 @@ export default function BaoCaoHoanChuaNhan() {
       if (err) throw err;
       setManualChecks((prev) => {
         const next = new Map(prev);
-        // Giữ carrier_status đã có trong bộ nhớ (upsert chỉ ghi các cột
-        // received_*, không chạm tới carrier_status ở DB).
-        next.set(row.return_id, { ...(prev.get(row.return_id) || {}), return_id: row.return_id, received_date: date || null, received_status: status });
+        next.set(row.return_id, { ...(prev.get(row.return_id) || {}), return_id: row.return_id, received_date: date || null, received_status: status, carrier_status: carrierStatus });
         return next;
       });
       // Ghi lịch sử (best-effort): sửa tay = 1 dòng riêng, source 'thu_cong'.
@@ -1520,6 +1565,7 @@ export default function BaoCaoHoanChuaNhan() {
       if (historyOk) setHistoryWarn('');
       else setHistoryWarn('Không lưu được lịch sử — chạy migration bảng lịch sử trước.');
       setEditRowId(null);
+      setEditTarget(null);
       setEditDrafts((prev) => { const next = { ...prev }; delete next[row.return_id]; return next; });
       setSaveMsg(`Đã lưu kiểm nhận cho đơn ${row.return_id}.`);
       setTimeout(() => setSaveMsg(''), 5000);
@@ -1538,6 +1584,7 @@ export default function BaoCaoHoanChuaNhan() {
     const c = carrierChecks.get(String(order.id));
     setEditOrderDrafts((prev) => ({ ...prev, [String(order.id)]: { carrier: c?.carrier_status || '', received: c?.received_status || 'Chưa nhận' } }));
     setEditOrderId(String(order.id));
+    setEditTarget({ kind: 'order', order });
     setSaveMsg('');
   }
   async function handleSaveOrderCheck(order) {
@@ -1561,6 +1608,7 @@ export default function BaoCaoHoanChuaNhan() {
         return next;
       });
       setEditOrderId(null);
+      setEditTarget(null);
       setEditOrderDrafts((prev) => { const next = { ...prev }; delete next[id]; return next; });
       setSaveMsg(`Đã lưu trạng thái cho đơn gốc ${id}.`);
       setTimeout(() => setSaveMsg(''), 5000);
@@ -2443,8 +2491,6 @@ export default function BaoCaoHoanChuaNhan() {
     const first = prods[0];
     const mappedFirst = first ? mapReturnProduct(first.name, first.sku, inventoryIndex) : null;
     const m = manualChecks.get(r.return_id);
-    const editing = editRowId === r.return_id;
-    const draft = editDrafts[r.return_id] || {};
     const reasonDesc = r.raw_data?.reasonInfor?.reasonDescription || r.raw_data?.reasonDescription || '';
     const reasonFull = [r.reason_name || '', reasonDesc].filter(Boolean).join(' — ') || '—';
     return (
@@ -2521,40 +2567,9 @@ export default function BaoCaoHoanChuaNhan() {
           ) : (<span className="text-slate-400 text-xs">Chưa kiểm</span>)}
         </td>
         <td className="px-3 py-3.5">
-          {isOwner ? (editing ? (
-            <div className="space-y-1 min-w-[110px]">
-              {draft.status === 'Đã nhận' && (
-                <input
-                  type="date"
-                  value={draft.date ?? ''}
-                  onChange={(e) => setEditDrafts((prev) => ({ ...prev, [r.return_id]: { ...(prev[r.return_id] || {}), date: e.target.value } }))}
-                  className="w-full text-xs border border-slate-300 rounded-lg px-2 py-1 outline-none focus:border-slate-700"
-                />
-              )}
-              <select
-                value={draft.status ?? 'Chưa nhận'}
-                onChange={(e) => setEditDrafts((prev) => ({ ...prev, [r.return_id]: { ...(prev[r.return_id] || {}), status: e.target.value } }))}
-                className="w-full text-xs border border-slate-300 rounded-lg px-2 py-1 outline-none focus:border-slate-700 bg-white"
-              >
-                <option value="Chưa nhận">Chưa nhận</option>
-                <option value="Đã nhận">Đã nhận</option>
-                <option value="Đã khiếu nại">Đã khiếu nại</option>
-              </select>
-              <div className="flex gap-1">
-                <button onClick={() => handleSaveCheck(r)} disabled={savingId === r.return_id} className="flex-1 px-2 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 cursor-pointer">
-                  {savingId === r.return_id ? 'Đang lưu...' : 'Lưu'}
-                </button>
-                <button
-                  onClick={() => { setEditRowId(null); setEditDrafts((prev) => { const n = { ...prev }; delete n[r.return_id]; return n; }); }}
-                  className="px-2 py-1 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer"
-                >
-                  Hủy
-                </button>
-              </div>
-            </div>
-          ) : (
+          {isOwner ? (
             <button onClick={() => startEdit(r)} className="px-2 py-1 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer flex items-center gap-1"><Pencil size={12} /> Sửa</button>
-          )) : (<span className="text-slate-300 text-xs">—</span>)}
+          ) : (<span className="text-slate-300 text-xs">—</span>)}
         </td>
       </tr>
     );
@@ -2571,8 +2586,6 @@ export default function BaoCaoHoanChuaNhan() {
     const checked = !!opts.checked;
     const onToggle = opts.onToggle || null;
     const c = carrierChecks.get(item.id);
-    const editing = editOrderId === item.id;
-    const draft = editOrderDrafts[item.id] || {};
     const statusName = o.status === 71 ? 'Đang hoàn' : o.status === 74 ? 'Xác nhận hoàn' : `Trạng thái ${o.status}`;
     const carrierBadge = c?.carrier_status === 'Đã hoàn'
       ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
@@ -2633,43 +2646,9 @@ export default function BaoCaoHoanChuaNhan() {
           <div className="mt-1"><span className={`inline-block px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap ${recvBadge}`}>Shop: {c?.received_status || 'Chưa nhận'}</span></div>
         </td>
         <td className="px-3 py-3.5">
-          {isOwner ? (editing ? (
-            <div className="space-y-1 min-w-[110px]">
-              <select
-                value={draft.carrier ?? ''}
-                onChange={(e) => setEditOrderDrafts((prev) => ({ ...prev, [item.id]: { ...(prev[item.id] || {}), carrier: e.target.value } }))}
-                className="w-full text-xs border border-slate-300 rounded-lg px-2 py-1 outline-none focus:border-slate-700 bg-white"
-                title="Trạng thái hãng"
-              >
-                <option value="">Hãng: chưa check</option>
-                <option value="Đã hoàn">Hãng: Đã hoàn</option>
-                <option value="Chưa hoàn">Hãng: Chưa hoàn</option>
-              </select>
-              <select
-                value={draft.received ?? 'Chưa nhận'}
-                onChange={(e) => setEditOrderDrafts((prev) => ({ ...prev, [item.id]: { ...(prev[item.id] || {}), received: e.target.value } }))}
-                className="w-full text-xs border border-slate-300 rounded-lg px-2 py-1 outline-none focus:border-slate-700 bg-white"
-                title="Trạng thái nhận"
-              >
-                <option value="Chưa nhận">Shop: Chưa nhận</option>
-                <option value="Đã nhận">Shop: Đã nhận</option>
-                <option value="Đã khiếu nại">Shop: Đã khiếu nại</option>
-              </select>
-              <div className="flex gap-1">
-                <button onClick={() => handleSaveOrderCheck(o)} disabled={savingOrderId === item.id} className="flex-1 px-2 py-1 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 cursor-pointer">
-                  {savingOrderId === item.id ? 'Đang lưu...' : 'Lưu'}
-                </button>
-                <button
-                  onClick={() => { setEditOrderId(null); setEditOrderDrafts((prev) => { const n = { ...prev }; delete n[item.id]; return n; }); }}
-                  className="px-2 py-1 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer"
-                >
-                  Hủy
-                </button>
-              </div>
-            </div>
-          ) : (
+          {isOwner ? (
             <button onClick={() => startEditOrder(o)} className="px-2 py-1 text-xs font-bold rounded-lg border border-slate-300 bg-white hover:bg-slate-50 cursor-pointer flex items-center gap-1"><Pencil size={12} /> Sửa</button>
-          )) : (<span className="text-slate-300 text-xs">—</span>)}
+          ) : (<span className="text-slate-300 text-xs">—</span>)}
         </td>
       </tr>
     );
@@ -2691,7 +2670,18 @@ export default function BaoCaoHoanChuaNhan() {
   // (tập đã giới hạn 1/5) và "Trạng thái tick" (đơn đã nhận đã ra khỏi
   // mọi mục nên không cần lọc theo tick).
   function renderUniFilterBar() {
-    const totalFiltered = filteredBuckets.B.length + filteredBuckets.C.length + filteredBuckets.R.length + filteredBuckets.waiting.length;
+    const tabFilteredCount = activeTab === 'all' ? filteredBuckets.all.length
+      : activeTab === 'received' ? filteredBuckets.received.length
+      : activeTab === 'B' ? filteredBuckets.B.length
+      : activeTab === 'C' ? filteredBuckets.C.length
+      : activeTab === 'R' ? filteredBuckets.R.length
+      : filteredBuckets.waiting.length;
+    const tabTotalCount = activeTab === 'all' ? allTabItems.length
+      : activeTab === 'received' ? receivedTabItems.length
+      : activeTab === 'B' ? bucketBItems.length
+      : activeTab === 'C' ? bucketCItems.length
+      : activeTab === 'R' ? bucketRItems.length
+      : waitingItems.length;
     return (
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
         <div className="flex flex-wrap items-end gap-3">
@@ -2738,7 +2728,7 @@ export default function BaoCaoHoanChuaNhan() {
           </div>
           <button onClick={clearUniFilters} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer">Xóa lọc</button>
         </div>
-        <p className="text-xs text-slate-500 mt-2">Đang hiện {totalFiltered} / {checkItems.length} đơn trong 4 mục (đơn trả + đơn gốc 71/74). Mặc định chỉ tải đơn trả tạo trong 30 ngày gần nhất — nới rộng ô "Từ ngày tạo" để xem đơn cũ hơn.</p>
+        <p className="text-xs text-slate-500 mt-2">Đang hiện {tabFilteredCount} / {tabTotalCount} đơn trong tab đang chọn (đơn trả + đơn gốc 71/74). Mặc định chỉ tải đơn trả tạo trong 30 ngày gần nhất — nới rộng ô "Từ ngày tạo" để xem đơn cũ hơn.</p>
         {checkError && <p className="text-xs text-red-600 mt-1">{checkError}</p>}
         {orders7174Error && <p className="text-xs text-red-600 mt-1">{orders7174Error}</p>}
         {origStatusError && <p className="text-xs text-amber-700 mt-1">Không kiểm tra được trạng thái đơn gốc — danh sách đang hiển thị theo luật tuổi + chưa nhận (chưa lọc đơn gốc ở 72).</p>}
@@ -2846,6 +2836,81 @@ export default function BaoCaoHoanChuaNhan() {
     );
   }
 
+  // Popup sửa tay (modal, không sửa inline trong ô bảng vì bảng cuộn ngang
+  // làm form tràn). Đơn trả: sửa cả trạng thái hãng (HVC) + trạng thái
+  // nhận + ngày về (khi Đã nhận), ghi vào return_receipt_checks. Đơn gốc
+  // 71/74: sửa trạng thái hãng + nhận, ghi vào order_carrier_checks
+  // (không có ngày về — bảng này không có cột ngày).
+  function renderEditModal() {
+    if (!editTarget) return null;
+    const isReturn = editTarget.kind === 'return';
+    const row = isReturn ? editTarget.row : null;
+    const order = isReturn ? null : editTarget.order;
+    const draft = isReturn ? (editDrafts[row.return_id] || {}) : (editOrderDrafts[String(order.id)] || {});
+    const carrierVal = isReturn ? (draft.carrier ?? '') : (draft.carrier ?? '');
+    const receivedVal = isReturn ? (draft.status ?? 'Chưa nhận') : (draft.received ?? 'Chưa nhận');
+    const dateVal = isReturn ? (draft.date ?? '') : '';
+    const saving = isReturn ? savingId === row.return_id : savingOrderId === String(order.id);
+    const code = isReturn ? (returnCodeOf(row) || row.return_tracking_number || row.return_id) : (String(order.carrier_code || '').trim().toUpperCase() || String(order.id));
+    const setCarrier = (v) => {
+      if (isReturn) setEditDrafts((prev) => ({ ...prev, [row.return_id]: { ...(prev[row.return_id] || {}), carrier: v } }));
+      else setEditOrderDrafts((prev) => ({ ...prev, [String(order.id)]: { ...(prev[String(order.id)] || {}), carrier: v } }));
+    };
+    const setReceived = (v) => {
+      if (isReturn) setEditDrafts((prev) => ({ ...prev, [row.return_id]: { ...(prev[row.return_id] || {}), status: v } }));
+      else setEditOrderDrafts((prev) => ({ ...prev, [String(order.id)]: { ...(prev[String(order.id)] || {}), received: v } }));
+    };
+    const setDate = (v) => {
+      if (isReturn) setEditDrafts((prev) => ({ ...prev, [row.return_id]: { ...(prev[row.return_id] || {}), date: v } }));
+    };
+    const onSave = () => { if (isReturn) handleSaveCheck(row); else handleSaveOrderCheck(order); };
+    return (
+      <div className="fixed inset-0 bg-slate-900/50 z-50 flex items-center justify-center p-4" onClick={closeEdit}>
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Sửa kiểm nhận</h2>
+              <p className="text-xs text-slate-500 mt-0.5 font-mono break-all">{code}{isReturn ? '' : ' · Đơn gốc 71/74'}</p>
+            </div>
+            <button onClick={closeEdit} className="px-2 py-1 text-slate-400 hover:text-slate-700 text-xl leading-none cursor-pointer" aria-label="Đóng">×</button>
+          </div>
+          <div className="px-6 py-4 space-y-4">
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Trạng thái hãng (HVC)</label>
+              <select value={carrierVal} onChange={(e) => setCarrier(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-slate-700 bg-white">
+                <option value="">Chưa check</option>
+                <option value="Đã hoàn">Đã hoàn</option>
+                <option value="Chưa hoàn">Chưa hoàn</option>
+              </select>
+              <p className="text-xs text-slate-500 mt-1">Hãng báo đã giao hàng trả về thì chọn "Đã hoàn", chưa giao thì "Chưa hoàn".</p>
+            </div>
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Trạng thái nhận (shop)</label>
+              <select value={receivedVal} onChange={(e) => setReceived(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-slate-700 bg-white">
+                <option value="Chưa nhận">Chưa nhận</option>
+                <option value="Đã nhận">Đã nhận</option>
+                <option value="Đã khiếu nại">Đã khiếu nại</option>
+              </select>
+            </div>
+            {isReturn && receivedVal === 'Đã nhận' && (
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Ngày hàng về</label>
+                <input type="date" value={dateVal} onChange={(e) => setDate(e.target.value)} className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-slate-700" />
+              </div>
+            )}
+            {saveMsg && <p className="text-sm font-bold text-slate-600">{saveMsg}</p>}
+          </div>
+          <div className="px-6 py-4 border-t border-slate-100 flex gap-2 justify-end">
+            <button onClick={closeEdit} className="px-5 py-2.5 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer">Hủy</button>
+            <button onClick={onSave} disabled={saving} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md disabled:opacity-50 cursor-pointer">
+              {saving ? 'Đang lưu...' : 'Lưu'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div className="sticky top-0 z-30 flex flex-wrap justify-between items-center gap-4 rounded-2xl px-6 py-6 bg-slate-900 border border-slate-900 shadow-md">
@@ -2928,38 +2993,39 @@ export default function BaoCaoHoanChuaNhan() {
         </div>
       </div>
 
-      {/* Tổng quan 6 số: tổng + đã nhận + 4 mục check chưa nhận */}
+      {/* Tổng quan 6 số: bấm vào ô nào thì chuyển sang tab tương ứng và
+          hiện bảng lọc những đơn đó. Ô đang chọn có viền đậm. */}
       <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+        <button onClick={() => setActiveTab('all')} className={`bg-white border rounded-2xl p-4 shadow-sm text-left cursor-pointer hover:shadow-md transition ${activeTab === 'all' ? 'border-slate-900 ring-2 ring-slate-900/20' : 'border-slate-200'}`}>
           <div className="text-2xl font-bold text-slate-900">{total}</div>
           <div className="text-xs font-bold text-slate-500">Tổng đơn lọc được</div>
           <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.totalMoney)} VND</div>
-        </div>
-        <div className="bg-green-50 border border-green-200 rounded-2xl p-4 shadow-sm">
+        </button>
+        <button onClick={() => setActiveTab('received')} className={`bg-green-50 border rounded-2xl p-4 shadow-sm text-left cursor-pointer hover:shadow-md transition ${activeTab === 'received' ? 'border-green-700 ring-2 ring-green-700/20' : 'border-green-200'}`}>
           <div className="text-2xl font-bold text-green-700">{groups.daNhan.length}</div>
           <div className="text-xs font-bold text-slate-500">Đã nhận</div>
           <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.daNhanMoney)} VND</div>
-        </div>
-        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 shadow-sm">
+        </button>
+        <button onClick={() => setActiveTab('B')} className={`bg-red-50 border rounded-2xl p-4 shadow-sm text-left cursor-pointer hover:shadow-md transition ${activeTab === 'B' ? 'border-red-700 ring-2 ring-red-700/20' : 'border-red-200'}`}>
           <div className="text-2xl font-bold text-red-600">{bucketBItems.length}</div>
           <div className="text-xs font-bold text-slate-500">Hãng đã giao, chưa thấy hàng</div>
           <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.bMoney)} VND</div>
-        </div>
-        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 shadow-sm">
+        </button>
+        <button onClick={() => setActiveTab('C')} className={`bg-orange-50 border rounded-2xl p-4 shadow-sm text-left cursor-pointer hover:shadow-md transition ${activeTab === 'C' ? 'border-orange-700 ring-2 ring-orange-700/20' : 'border-orange-200'}`}>
           <div className="text-2xl font-bold text-orange-700">{bucketCItems.length}</div>
           <div className="text-xs font-bold text-slate-500">Chưa check hãng &gt;4 ngày</div>
           <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.cMoney)} VND</div>
-        </div>
-        <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 shadow-sm">
+        </button>
+        <button onClick={() => setActiveTab('R')} className={`bg-purple-50 border rounded-2xl p-4 shadow-sm text-left cursor-pointer hover:shadow-md transition ${activeTab === 'R' ? 'border-purple-700 ring-2 ring-purple-700/20' : 'border-purple-200'}`}>
           <div className="text-2xl font-bold text-purple-700">{bucketRItems.length}</div>
           <div className="text-xs font-bold text-slate-500">Hãng chưa giao &gt;4 ngày</div>
           <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.rMoney)} VND</div>
-        </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
+        </button>
+        <button onClick={() => setActiveTab('waiting')} className={`bg-amber-50 border rounded-2xl p-4 shadow-sm text-left cursor-pointer hover:shadow-md transition ${activeTab === 'waiting' ? 'border-amber-700 ring-2 ring-amber-700/20' : 'border-amber-200'}`}>
           <div className="text-2xl font-bold text-amber-700">{waitingItems.length}</div>
           <div className="text-xs font-bold text-slate-500">Chưa nhận: Đang chờ hàng về</div>
           <div className="text-xs text-slate-500 mt-1">Tổng hoàn: {fmtMoney(summary.waitingMoney)} VND</div>
-        </div>
+        </button>
       </div>
 
       {/* Tải Excel + thông báo */}
@@ -2996,7 +3062,55 @@ export default function BaoCaoHoanChuaNhan() {
       ) : (
         <>
           {renderUniFilterBar()}
-          {renderCheckSection({
+          {/* Thanh tab: bấm tab nào chỉ hiện bảng đó; bấm ô tổng quan ở
+              trên cũng chuyển sang tab tương ứng. */}
+          <div className="flex flex-wrap gap-2">
+            {[
+              { key: 'all', label: 'Tất cả', count: total },
+              { key: 'received', label: 'Đã nhận', count: groups.daNhan.length },
+              { key: 'B', label: 'Hãng đã giao, chưa thấy hàng', count: bucketBItems.length },
+              { key: 'C', label: 'Chưa check hãng >4 ngày', count: bucketCItems.length },
+              { key: 'R', label: 'Hãng chưa giao >4 ngày', count: bucketRItems.length },
+              { key: 'waiting', label: 'Đang chờ hàng về', count: waitingItems.length },
+            ].map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setActiveTab(t.key)}
+                className={`px-4 py-2 text-sm font-bold rounded-xl border cursor-pointer transition ${activeTab === t.key ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'}`}
+              >
+                {t.label} <span className={activeTab === t.key ? 'text-slate-300' : 'text-slate-500'}>({t.count})</span>
+              </button>
+            ))}
+          </div>
+          {activeTab === 'all' && renderCheckSection({
+            key: 'all',
+            title: 'Tất cả đơn trả theo bộ lọc',
+            desc: 'Mọi đơn trả hàng theo bộ lọc trên (kể cả đơn đã nhận và đơn chưa có mã trả thật). Bấm ô "Tổng đơn lọc được" để về tab này.',
+            items: filteredBuckets.all,
+            totalItems: allTabItems,
+            totalMoney: summary.totalMoney,
+            page: pageAll,
+            setPage: setPageAll,
+            selected: selectedAll,
+            setSelected: setSelectedAll,
+            copyLabel: 'Tất cả đơn trả',
+            emptyText: 'Không có đơn nào theo bộ lọc.',
+          })}
+          {activeTab === 'received' && renderCheckSection({
+            key: 'received',
+            title: 'Đơn đã nhận',
+            desc: 'Đơn đã quét nhận thật ("Đã nhận") hoặc đã có đơn hoàn 1 phần nhập kho trên Nhanh. Đơn đã nhận thì biến khỏi mọi mục chưa nhận.',
+            items: filteredBuckets.received,
+            totalItems: receivedTabItems,
+            totalMoney: summary.daNhanMoney,
+            page: pageReceived,
+            setPage: setPageReceived,
+            selected: selectedReceived,
+            setSelected: setSelectedReceived,
+            copyLabel: 'Đơn đã nhận',
+            emptyText: 'Không có đơn nào đã nhận.',
+          })}
+          {activeTab === 'B' && renderCheckSection({
             key: 'bucket-b',
             title: 'ĐVVC đã giao hàng thành công nhưng chưa thấy hàng hoàn',
             desc: 'Hãng báo đã giao hàng trả về (Hãng: Đã hoàn) nhưng shop chưa quét nhận — mọi tuổi, kể cả đơn mới 1–4 ngày. Đơn đã quét "Đã nhận" thì biến khỏi mọi mục.',
@@ -3010,7 +3124,7 @@ export default function BaoCaoHoanChuaNhan() {
             copyLabel: 'Hãng đã giao chưa thấy hàng',
             emptyText: 'Không có đơn nào hãng đã giao mà chưa thấy hàng hoàn.',
           })}
-          {renderCheckSection({
+          {activeTab === 'C' && renderCheckSection({
             key: 'bucket-c',
             title: 'Đơn chưa nhận có ngày tạo >4 ngày',
             desc: 'Chưa check hãng lần nào (chưa có trạng thái hãng) mà mã tạo đã quá 4 ngày — cần dán kết quả hãng để check. Đơn đã quét "Đã nhận" thì biến khỏi mọi mục.',
@@ -3024,7 +3138,7 @@ export default function BaoCaoHoanChuaNhan() {
             copyLabel: 'Chưa check hãng >4 ngày',
             emptyText: 'Không có đơn nào chưa check hãng mà quá 4 ngày.',
           })}
-          {renderCheckSection({
+          {activeTab === 'R' && renderCheckSection({
             key: 'bucket-r',
             title: 'Hãng báo chưa giao, quá 4 ngày',
             desc: 'Hãng báo chưa giao hàng trả về (Hãng: Chưa hoàn) mà mã tạo đã quá 4 ngày — cần đi đòi / check lại. Đơn đã quét "Đã nhận" thì biến khỏi mọi mục.',
@@ -3038,7 +3152,7 @@ export default function BaoCaoHoanChuaNhan() {
             copyLabel: 'Hãng chưa giao >4 ngày',
             emptyText: 'Không có đơn nào hãng báo chưa giao mà quá 4 ngày.',
           })}
-          {renderCheckSection({
+          {activeTab === 'waiting' && renderCheckSection({
             key: 'waiting',
             title: 'Đang chờ hàng về',
             desc: 'Đơn tạo trong 4 ngày gần đây (hoặc chưa đọc được ngày tạo), có mã thật, chưa có xác nhận nhận hàng thật, hãng chưa giao — đang chờ hãng giao hàng về kho. Đơn đã quét "Đã nhận" thì biến khỏi mọi mục.',
@@ -3054,6 +3168,9 @@ export default function BaoCaoHoanChuaNhan() {
           })}
         </>
       )}
+
+      {/* Popup sửa tay (modal) — sửa cả trạng thái hãng + nhận, không tràn bảng */}
+      {renderEditModal()}
 
       {/* Đối chiếu hàng loạt — popup copy theo hãng + dán kết quả AfterShip */}
       {showBulk && isOwner && !returnSubLocked('doi_chieu_hang_loat') && (
