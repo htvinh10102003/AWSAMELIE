@@ -785,9 +785,9 @@ export default function Mobile() {
         const createdLabel = showCreated ? fmtVnCreated(order.created_at) : '';
         const warning = warnHandover && isHandoverWarning(order);
         const warningBlink = warnHandover && isHandoverWarningBlink(order);
-        const shortItem = [...(data.holding || []), ...(data.outOfStock || [])]
-            .find(o => o.id === order.id)?.debug_shortItems?.[0];
-        const hasSecondaryPills = (showChannel && order.sale_channel) || (showStock && stock) || (showStock && shortItem);
+        const shortItems = [...(data.holding || []), ...(data.outOfStock || [])]
+            .find(o => o.id === order.id)?.debug_shortItems || [];
+        const hasSecondaryPills = (showChannel && order.sale_channel) || (showStock && stock);
         return (
             <div className={`bg-white rounded-2xl border shadow-sm p-4 ${warning ? 'border-red-500 ring-1 ring-red-500' : warningBlink ? 'border-red-500 ring-1 ring-red-500 blink-red-border' : 'border-slate-200'}`}>
                 <div className="flex items-start justify-between gap-2">
@@ -813,9 +813,22 @@ export default function Mobile() {
                     <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap gap-1.5">
                         {showChannel && order.sale_channel && <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-50 border border-blue-200 text-blue-700">{CHANNEL_NAMES[String(order.sale_channel)] || `Kênh ${order.sale_channel}`}</span>}
                         {showStock && stock && <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${stock.cls}`}>{stock.label}</span>}
-                        {showStock && shortItem && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 border border-red-200 text-red-600">Thiếu {shortItem.missing}, tồn {shortItem.remaining}</span>
-                        )}
+                    </div>
+                )}
+                {/* Chi tiết thiếu hàng (ghi rõ từng mã như báo cáo cũ): mã nào, cần bao nhiêu, đã giữ bao nhiêu, thiếu bao nhiêu, tồn còn bao nhiêu */}
+                {showStock && shortItems.length > 0 && (
+                    <div className="mt-2 space-y-1.5">
+                        {shortItems.map((si, i) => {
+                            const prod = products.find(p => p.product_name === si.name);
+                            const code = prod?.product_code || '';
+                            return (
+                                <div key={i} className="bg-red-50 border border-red-200 rounded-lg px-2.5 py-1.5 text-xs">
+                                    <div className="font-mono font-bold text-slate-900">{code || si.name}</div>
+                                    {code ? <div className="text-slate-600 truncate">{si.name}</div> : null}
+                                    <div className="text-red-600 font-medium mt-0.5">Cần {si.req} • Đã giữ {si.allocated} • Thiếu {si.missing} • Tồn {si.remaining}</div>
+                                </div>
+                            );
+                        })}
                     </div>
                 )}
             </div>

@@ -1944,13 +1944,25 @@ export default function OrderReport() {
         if (stock.group === 'printable') return { key: 'printable', label: 'Đủ hàng', detail: '' };
         if (stock.group === 'outOfStock') return { key: 'outOfStock', label: 'Hết hàng', detail: '' };
         // holding: lấy chi tiết thiếu hàng nếu allocation có debug_shortItems
+        // (ghi rõ từng mã như báo cáo cũ: mã nào, cần bao nhiêu, đã giữ
+        // bao nhiêu, thiếu bao nhiêu, tồn còn bao nhiêu — không chỉ món đầu)
         const products = order.order_products || [];
         const shortItems = stock.order?.debug_shortItems || [];
-        const firstShort = shortItems[0];
         return {
             key: 'holding',
             label: 'Tạm giữ',
-            detail: firstShort ? `Thiếu ${firstShort.missing ?? ''}, tồn ${firstShort.remaining ?? ''}` : (products.length ? 'Thiếu 1 phần' : '')
+            detail: shortItems.length ? `Thiếu ${shortItems.reduce((s, i) => s + (Number(i.missing) || 0), 0)}` : (products.length ? 'Thiếu 1 phần' : ''),
+            shortItems: shortItems.map(si => {
+                const prod = products.find(p => p.product_name === si.name);
+                return {
+                    code: prod?.product_code || '',
+                    name: si.name || '',
+                    req: si.req ?? '',
+                    allocated: si.allocated ?? '',
+                    missing: si.missing ?? '',
+                    remaining: si.remaining ?? '',
+                };
+            }),
         };
     };
 
@@ -1968,7 +1980,17 @@ export default function OrderReport() {
         return (
             <span className={`inline-block px-2 py-1 rounded text-xs font-bold border ${cls}`}>
                 {info.label}
-                {info.detail ? <span className="block font-medium text-slate-600">{info.detail}</span> : null}
+                {info.key === 'holding' && info.shortItems && info.shortItems.length > 0 ? (
+                    <span className="block mt-1 space-y-1.5 text-left">
+                        {info.shortItems.map((si, idx) => (
+                            <span key={idx} className="block font-medium leading-snug">
+                                <span className="block font-mono font-bold text-slate-900">{si.code || si.name}</span>
+                                {si.code ? <span className="block text-slate-600 truncate" title={si.name}>{si.name}</span> : null}
+                                <span className="block text-slate-700">Cần {si.req} • Đã giữ {si.allocated} • Thiếu {si.missing} • Tồn {si.remaining}</span>
+                            </span>
+                        ))}
+                    </span>
+                ) : info.detail ? <span className="block font-medium text-slate-600">{info.detail}</span> : null}
             </span>
         );
     };
