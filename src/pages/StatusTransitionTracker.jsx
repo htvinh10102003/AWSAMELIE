@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { 
   Calendar, Search, Filter, Loader2, ArrowRight, 
   PackageSearch, Clock, User, Box, Hash, ChevronDown, 
-  ChevronLeft, ChevronRight, CheckSquare, Square, AlertTriangle
+  ChevronLeft, ChevronRight, CheckSquare, Square, AlertTriangle, Truck
 } from 'lucide-react';
 
 // Các trạng thái đứng trước bước "Đã đóng gói" tại kho
@@ -38,6 +38,16 @@ const FINAL_STATUS_NAMES = [
   'đã chuyển hoàn'
 ];
 
+// Hãng vận chuyển (kiểm chứng từ DB ngày 14/11/2026: distinct carrier_name trong bảng orders)
+const CARRIER_NAMES = [
+  'Giaohangnhanh',
+  'Grab Express',
+  'JT Express',
+  'SPX Express',
+  'Tự Vận Chuyển',
+  'Viettel Post',
+];
+
 export default function StatusTransitionTracker() {
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState([]);
@@ -55,6 +65,8 @@ export default function StatusTransitionTracker() {
     orderIdSearch: '',
     productSearch: '',
     minQuantity: '',
+    operator: '',
+    carrier: '',
   });
 
   // States: Multi-select Trạng thái & Bộ lọc bất thường
@@ -77,6 +89,25 @@ export default function StatusTransitionTracker() {
       }
     };
     fetchStatuses();
+  }, []);
+
+  // Danh sách người thao tác (lấy từ lịch sử gần nhất, tự cập nhật khi có nhân sự mới)
+  const [operators, setOperators] = useState([]);
+
+  // Load danh sách người thao tác từ 5000 dòng lịch sử gần nhất (chỉ lấy tên, khử trùng)
+  useEffect(() => {
+    const fetchOperators = async () => {
+      const { data, error } = await supabase
+        .from('order_histories')
+        .select('created_by_name')
+        .order('created_at', { ascending: false })
+        .limit(5000);
+      if (!error && data) {
+        const names = [...new Set(data.map(r => (r.created_by_name || '').trim()).filter(Boolean))].sort();
+        setOperators(names);
+      }
+    };
+    fetchOperators();
   }, []);
 
   // Tự động tải trang 1 sau khi đã có danh sách trạng thái
@@ -264,6 +295,19 @@ export default function StatusTransitionTracker() {
         query = query.in('status_new', selectedToStatuses);
       }
 
+      // Lọc theo người thao tác
+      if (filters.operator === '__SYSTEM__') {
+        // Hệ thống: created_by_name rỗng (kiểm chứng 14/11/2026: 0 dòng NULL trong 90 ngày, nhóm trống là '')
+        query = query.eq('created_by_name', '');
+      } else if (filters.operator) {
+        query = query.eq('created_by_name', filters.operator);
+      }
+
+      // Lọc theo hãng vận chuyển
+      if (filters.carrier) {
+        query = query.eq('orders.carrier_name', filters.carrier);
+      }
+
       // Lọc theo ID đơn hàng (hỗ trợ nhập 1 mã gần đúng hoặc nhiều mã cách nhau bởi dấu phẩy/khoảng trắng)
       const trimmedOrderId = filters.orderIdSearch.trim();
       if (trimmedOrderId) {
@@ -323,7 +367,7 @@ export default function StatusTransitionTracker() {
         </div>
         <div>
           <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Tra cứu luân chuyển trạng thái</h2>
-          <p className="text-sm text-slate-500 font-medium mt-0.5">Lọc lịch sử thao tác đơn hàng theo thời gian, mã đơn và sản phẩm</p>
+          <p className="text-sm text-slate-500 font-medium mt-0.5">Lọc lịch sử thao tác đơn hàng theo thời gian, người thao tác, hãng vận chuyển, mã đơn và sản phẩm</p>
         </div>
       </div>
 
@@ -503,6 +547,47 @@ export default function StatusTransitionTracker() {
                   className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 />
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Hàng 2: Người thao tác & Hãng vận chuyển */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Người thao tác</label>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+              <select
+                name="operator"
+                value={filters.operator}
+                onChange={handleFilterChange}
+                className="w-full pl-9 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none cursor-pointer"
+              >
+                <option value="">Tất cả người thao tác</option>
+                <option value="__SYSTEM__">Hệ thống (không rõ người thao tác)</option>
+                {operators.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Hãng vận chuyển</label>
+            <div className="relative">
+              <Truck className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
+              <select
+                name="carrier"
+                value={filters.carrier}
+                onChange={handleFilterChange}
+                className="w-full pl-9 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none cursor-pointer"
+              >
+                <option value="">Tất cả hãng vận chuyển</option>
+                {CARRIER_NAMES.map(name => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={16} />
             </div>
           </div>
         </div>
