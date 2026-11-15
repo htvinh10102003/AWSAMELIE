@@ -84,6 +84,11 @@ export default function Login() {
   };
 
   // ️ XỬ LÝ QUÊN MẬT KHẨU
+  // Sửa 15/11/2026: trước đây gọi supabase.resetPasswordForEmail (thiếu
+  // .auth.) nên hàm là undefined -> ném TypeError ngay, không có request
+  // nào tới Supabase (nhật ký Auth không thấy gì) và nút kẹt mãi ở
+  // "Đang gửi yêu cầu...". Giờ gọi đúng supabase.auth.resetPasswordForEmail
+  // và bọc try/catch/finally + giới hạn chờ 20 giây để nút không bao giờ kẹt.
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -96,17 +101,32 @@ export default function Login() {
       return;
     }
 
-    const { error } = await supabase.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/admin`,
-      ...(captchaToken ? { captchaToken } : {}),
+    const timeoutMs = 20000;
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Hết thời gian chờ (20 giây). Máy chủ gửi mail không trả lời, vui lòng thử lại.')), timeoutMs);
     });
 
-    if (error) {
-      setError(`Lỗi gửi mail: ${error.message}`);
-    } else {
-      setMessage(' Đã gửi link đặt lại mật khẩu!');
+    try {
+      const { error } = await Promise.race([
+        supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/admin`,
+          ...(captchaToken ? { captchaToken } : {}),
+        }),
+        timeoutPromise,
+      ]);
+
+      if (error) {
+        setError(`Lỗi gửi mail: ${error.message}`);
+      } else {
+        setMessage(' Đã gửi link đặt lại mật khẩu!');
+      }
+    } catch (err) {
+      setError(`Lỗi gửi mail: ${err?.message || 'Không gửi được yêu cầu, vui lòng thử lại.'}`);
+    } finally {
+      clearTimeout(timeoutId);
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (
