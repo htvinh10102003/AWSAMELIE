@@ -91,7 +91,9 @@
   opacity: 0.9;
 }
 
-/* ---------- Hoa mai rơi: ẢNH bông mai thật, nền đen dùng screen blend ---------- */
+/* ---------- Hoa rơi: HOA VẼ BẰNG CSS, 5 cánh (không dùng ảnh) ----------
+   Mỗi bông là 1 span 22px, 5 cánh là 5 hình tròn xếp thành ngũ giác
+   + nhụy ở giữa. Hoa đào hồng, hoa mai vàng. */
 .tet-petals {
   position: fixed;
   inset: 0;
@@ -99,14 +101,33 @@
   z-index: 60;
   overflow: hidden;
 }
-.tet-petal-img {
+.tet-flower {
   position: absolute;
   top: -40px;
-  mix-blend-mode: screen;
-  opacity: 0.9;
+  width: 22px;
+  height: 22px;
+  opacity: 0.92;
   animation-name: tet-petal-fall;
   animation-timing-function: linear;
   animation-iteration-count: infinite;
+}
+.tet-flower-dao {
+  background:
+    radial-gradient(circle 5px at 50% 22%, #ffd6e8 0%, #ff9ec7 72%, transparent 76%),
+    radial-gradient(circle 5px at 80% 42%, #ffd6e8 0%, #ff9ec7 72%, transparent 76%),
+    radial-gradient(circle 5px at 68% 80%, #ffd6e8 0%, #ff9ec7 72%, transparent 76%),
+    radial-gradient(circle 5px at 32% 80%, #ffd6e8 0%, #ff9ec7 72%, transparent 76%),
+    radial-gradient(circle 5px at 20% 42%, #ffd6e8 0%, #ff9ec7 72%, transparent 76%),
+    radial-gradient(circle 3.5px at 50% 50%, #ffe27a 0%, #f5a623 72%, transparent 76%);
+}
+.tet-flower-mai {
+  background:
+    radial-gradient(circle 5px at 50% 22%, #ffedb0 0%, #e7bd68 72%, transparent 76%),
+    radial-gradient(circle 5px at 80% 42%, #ffedb0 0%, #e7bd68 72%, transparent 76%),
+    radial-gradient(circle 5px at 68% 80%, #ffedb0 0%, #e7bd68 72%, transparent 76%),
+    radial-gradient(circle 5px at 32% 80%, #ffedb0 0%, #e7bd68 72%, transparent 76%),
+    radial-gradient(circle 5px at 20% 42%, #ffedb0 0%, #e7bd68 72%, transparent 76%),
+    radial-gradient(circle 3.5px at 50% 50%, #ffb347 0%, #e8862e 72%, transparent 76%);
 }
 @keyframes tet-petal-fall {
   0% { transform: translate(0, -40px) rotate(0deg); }
