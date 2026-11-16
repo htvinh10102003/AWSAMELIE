@@ -1905,6 +1905,15 @@ export default function BaoCaoHoanChuaNhan() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showBulk, bulkTab]);
 
+  // Khi danh sách chờ quét tải xong thì focus lại ô bắn mã (ô bị khóa lúc
+  // đang tải nên focus lúc mở tab không ăn) để súng bắn mã dùng được ngay.
+  useEffect(() => {
+    if (showBulk && bulkTab === 'quet-nhan' && scanLoaded && scanInputRef.current) {
+      scanInputRef.current.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanLoaded]);
+
   // --- Quét nhận hàng: danh sách chờ, xử lý mã quét, upload Excel ---
   // Mã -> item chờ quét (1 mã có thể vừa là mã trả vừa là mã đơn 71/74).
   const scanMap = useMemo(() => {
@@ -2048,6 +2057,11 @@ export default function BaoCaoHoanChuaNhan() {
     };
     const code = String(rawCode || '').trim().toUpperCase();
     if (!code) return { kind: 'err', msg: 'Mã trống.' };
+    // Danh sách chờ quét chưa tải xong (16/11/2026): đừng báo "không khớp"
+    // gây hiểu lầm — mã có thể có trong danh sách nhưng chưa tải về kịp.
+    if (!scanLoaded) {
+      return { kind: 'err', msg: 'Danh sách chờ quét chưa tải xong — đợi vài giây rồi quét lại.' };
+    }
     const it = scanMap.get(code);
     if (!it) {
       pushScanRecent({ code, kind: 'nomatch', label: 'Không khớp' });
@@ -2154,6 +2168,7 @@ export default function BaoCaoHoanChuaNhan() {
   async function handleScanPaste() {
     const codes = scanPasteText.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
     if (codes.length === 0) { setScanPasteMsg('Dán danh sách mã (1 mã 1 dòng) trước.'); return; }
+    if (!scanLoaded) { setScanPasteMsg('Danh sách chờ quét chưa tải xong — đợi vài giây rồi bấm lại.'); return; }
     setScanPasteMsg(`Đang xử lý ${codes.length} mã...`);
     let ok = 0; let dup = 0; let nomatch = 0; let err = 0;
     const seen = new Set();
@@ -3339,10 +3354,14 @@ export default function BaoCaoHoanChuaNhan() {
                     onChange={(e) => setScanInput(e.target.value)}
                     onFocus={() => { if (scanSoundEnabled) getScanAudioContext(); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleScanEnter(); } }}
-                    placeholder="Quét mã vận đơn rồi Enter..."
+                    placeholder={scanLoading || !scanLoaded ? 'Đang tải danh sách chờ quét...' : 'Quét mã vận đơn rồi Enter...'}
+                    disabled={scanLoading || !scanLoaded}
                     autoFocus
                     className={`w-full text-base font-mono font-bold border-2 rounded-xl px-4 py-3 outline-none ${scanFlash?.kind === 'ok' ? 'border-emerald-500 bg-emerald-50' : scanFlash?.kind === 'dup' ? 'border-amber-400 bg-amber-50' : scanFlash?.kind === 'nomatch' || scanFlash?.kind === 'err' ? 'border-red-400 bg-red-50' : 'border-slate-300 focus:border-slate-700'}`}
                   />
+                  {(scanLoading || !scanLoaded) && (
+                    <p className="text-xs font-bold text-slate-500 mt-1 flex items-center gap-1.5"><Loader2 size={13} className="animate-spin" /> Đang tải danh sách chờ quét — đợi tải xong rồi mới quét.</p>
+                  )}
                   {scanFlash && (
                     <p className={`text-sm font-bold mt-1 ${scanFlash.kind === 'ok' ? 'text-emerald-600' : scanFlash.kind === 'dup' ? 'text-amber-700' : 'text-red-500'}`}>{scanFlash.msg}</p>
                   )}
@@ -3364,7 +3383,7 @@ export default function BaoCaoHoanChuaNhan() {
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Hoặc dán danh sách mã (1 mã 1 dòng)</label>
                   <textarea value={scanPasteText} onChange={(e) => setScanPasteText(e.target.value)} rows={4} placeholder={'SPXVN06943735682A\nSPXVN06929026928A'} className="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-mono" />
                   <div className="flex flex-wrap items-center gap-3 mt-2">
-                    <button onClick={handleScanPaste} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer">Xử lý danh sách</button>
+                    <button onClick={handleScanPaste} disabled={scanLoading || !scanLoaded} className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md cursor-pointer disabled:opacity-50">Xử lý danh sách</button>
                     {scanPasteMsg && <p className="text-sm font-bold text-slate-600">{scanPasteMsg}</p>}
                   </div>
                 </div>
