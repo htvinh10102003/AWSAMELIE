@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, ChevronLeft, ChevronRight, Loader2, Package, Copy, FileDown, Pencil, ScanLine, X, Volume2, VolumeX } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Loader2, Package, Copy, FileDown, Pencil, ScanLine, X, Volume2, VolumeX, RefreshCcw } from 'lucide-react';
 import { mapReturnProduct, buildInventoryIndex } from '../lib/tiktokProductMap';
 import { useFeatureLocks, isSubLocked } from '../components/FeatureGuard';
 
@@ -756,6 +756,8 @@ export default function BaoCaoHoanChuaNhan() {
   const [orders7174, setOrders7174] = useState([]);
   const [orders7174Loading, setOrders7174Loading] = useState(false);
   const [orders7174Error, setOrders7174Error] = useState('');
+  const [sync7174Loading, setSync7174Loading] = useState(false);
+  const [sync7174Msg, setSync7174Msg] = useState('');
   const [carrierChecks, setCarrierChecks] = useState(new Map());
   const [carrierChecksMissing, setCarrierChecksMissing] = useState(false);
   // Trạng thái đơn gốc cho danh sách "Cần check tay" (quy tắc 4) — cache
@@ -1136,6 +1138,36 @@ export default function BaoCaoHoanChuaNhan() {
       setOrders7174Error('Lỗi tải đơn gốc 71/74: ' + (e.message || e));
     } finally {
       setOrders7174Loading(false);
+    }
+  }
+  // Cập nhật lại webhook cho các đơn gốc 71/74 (16/11/2026): kéo lại trạng
+  // thái thật từ Nhanh theo đúng mã đơn (không phụ thuộc ngày) vì các đơn
+  // này có thể miss webhook nên trạng thái trong DB bị cũ. Edge function
+  // sync-orders-by-ids chạy song song 8 đơn/lần. Xong thì tải lại danh
+  // sách để đơn nào đã đổi khỏi 71/74 thì biến khỏi mục.
+  async function handleSync7174() {
+    if (orders7174.length === 0 || sync7174Loading) return;
+    setSync7174Loading(true);
+    setSync7174Msg('');
+    try {
+      const orderIds = orders7174.map((o) => String(o.id));
+      const { data, error } = await supabase.functions.invoke('sync-orders-by-ids', {
+        body: { orderIds },
+      });
+      if (error) throw error;
+      if (!data || data.success === false) throw new Error(data?.error || 'Edge function trả về lỗi không rõ.');
+      const parts = [`Đã cập nhật ${data.updated}/${data.total} đơn từ Nhanh.`];
+      if (data.noLonger7174 > 0) parts.push(`${data.noLonger7174} đơn đã đổi khỏi 71/74.`);
+      if (data.notFound?.length > 0) parts.push(`${data.notFound.length} đơn Nhanh không tìm thấy (${data.notFound.slice(0, 5).join(', ')}${data.notFound.length > 5 ? ', …' : ''}).`);
+      if (data.errors?.length > 0) parts.push(`${data.errors.length} đơn lỗi (${data.errors.slice(0, 3).map((e) => e.orderId + ': ' + e.message).join('; ')}${data.errors.length > 3 ? '; …' : ''}).`);
+      setSync7174Msg(parts.join(' '));
+      await fetchOrders7174();
+      await fetchCarrierChecks();
+    } catch (e) {
+      console.error('Lỗi cập nhật lại webhook 71/74:', e);
+      setSync7174Msg('Lỗi cập nhật: ' + (e.message || e));
+    } finally {
+      setSync7174Loading(false);
     }
   }
   async function fetchCarrierChecks() {
@@ -3534,9 +3566,15 @@ export default function BaoCaoHoanChuaNhan() {
                         <button disabled={orders7174.length === 0} onClick={() => copyOrderCodes(orders7174.slice(0, 40), 'Đơn gốc 71/74 (40 mã)')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
                           <Copy size={15} /> Sao chép {Math.min(40, orders7174.length)} mã
                         </button>
+                        {isOwner && (
+                          <button disabled={orders7174.length === 0 || sync7174Loading} onClick={handleSync7174} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 cursor-pointer flex items-center gap-2">
+                            {sync7174Loading ? <Loader2 size={15} className="animate-spin" /> : <RefreshCcw size={15} />} Cập nhật lại webhook
+                          </button>
+                        )}
                       </div>
                     </div>
                     <p className="text-xs text-slate-500">Đơn 71/74 không có đơn trả riêng — mã đơn đi cũng chính là mã trả. Dán kết quả AfterShip/17Track ở trên (mục xem trước sẽ hiện cả đơn gốc khớp) hoặc tải file Excel xuất từ SPX bên dưới. 'Đã trả hàng' = hãng đã giao. Trạng thái hãng lưu vào bảng order_carrier_checks; quét mã ở tab "Quét nhận hàng" thì ghi trạng thái nhận.</p>
+                    {sync7174Msg && <p className="text-xs font-bold text-slate-700 mt-2">{sync7174Msg}</p>}
                     {orders7174Loading ? (
                       <div className="p-4 flex items-center justify-center gap-2 text-sm font-bold text-slate-500"><Loader2 size={18} className="animate-spin" /> Đang tải...</div>
                     ) : orders7174Error ? (
