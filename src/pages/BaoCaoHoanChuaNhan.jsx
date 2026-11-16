@@ -2188,8 +2188,24 @@ export default function BaoCaoHoanChuaNhan() {
   // Trả về số đơn đã ghi. Lỗi thì throw để bên gọi báo.
   async function saveOrderCarrierStatuses(orderItems) {
     if (!orderItems || orderItems.length === 0) return 0;
-    const orderExisting = orderItems.filter((it) => carrierChecks.has(String(it.order.id)));
-    const orderFresh = orderItems.filter((it) => !carrierChecks.has(String(it.order.id)));
+    // Như handleBulkConfirm: cache carrierChecks có thể thiếu so với DB
+    // (tải 1 lần lúc mở trang, tối đa 1000 dòng) nên đơn xếp vào "fresh"
+    // vẫn có thể đã có dòng trong DB — insert thẳng sẽ đụng khóa chính
+    // "order_carrier_checks_pkey". Hỏi lại DB trước khi ghi.
+    const cachedExisting = orderItems.filter((it) => carrierChecks.has(String(it.order.id)));
+    const cachedFresh = orderItems.filter((it) => !carrierChecks.has(String(it.order.id)));
+    let orderExisting = cachedExisting;
+    let orderFresh = cachedFresh;
+    if (cachedFresh.length > 0) {
+      const { data: existingRows, error: checkErr } = await supabase
+        .from('order_carrier_checks')
+        .select('order_id')
+        .in('order_id', cachedFresh.map((it) => String(it.order.id)));
+      if (checkErr) throw checkErr;
+      const existingIds = new Set((existingRows || []).map((r) => String(r.order_id)));
+      orderExisting = [...cachedExisting, ...cachedFresh.filter((it) => existingIds.has(String(it.order.id)))];
+      orderFresh = cachedFresh.filter((it) => !existingIds.has(String(it.order.id)));
+    }
     for (const carrierStatus of ['Đã hoàn', 'Chưa hoàn']) {
       const ids = orderExisting.filter((it) => it.carrierStatus === carrierStatus).map((it) => String(it.order.id));
       if (ids.length === 0) continue;
@@ -2399,8 +2415,26 @@ export default function BaoCaoHoanChuaNhan() {
         currentReceipt: manualChecks.get(row.return_id)?.received_status || 'Chưa nhận',
         currentReceiptDate: manualChecks.get(row.return_id)?.received_date || null,
       }));
-      const existing = items.filter((it) => manualChecks.has(it.row.return_id));
-      const fresh = items.filter((it) => !manualChecks.has(it.row.return_id));
+      // Cache manualChecks có thể thiếu so với DB (tải 1 lần lúc mở trang,
+      // tối đa 1000 dòng) nên đơn xếp vào "fresh" vẫn có thể đã có dòng
+      // trong DB — insert thẳng sẽ đụng khóa chính
+      // "return_receipt_checks_pkey" (lỗi 16/11/2026). Hỏi lại DB trước khi
+      // ghi để phân loại đúng: đã có thì chỉ UPDATE carrier_status (giữ
+      // nguyên trạng thái nhận/ngày nhận), thật sự mới thì INSERT.
+      const cachedExisting = items.filter((it) => manualChecks.has(it.row.return_id));
+      const cachedFresh = items.filter((it) => !manualChecks.has(it.row.return_id));
+      let existing = cachedExisting;
+      let fresh = cachedFresh;
+      if (cachedFresh.length > 0) {
+        const { data: existingRows, error: checkErr } = await supabase
+          .from('return_receipt_checks')
+          .select('return_id')
+          .in('return_id', cachedFresh.map((it) => it.row.return_id));
+        if (checkErr) throw checkErr;
+        const existingIds = new Set((existingRows || []).map((r) => String(r.return_id)));
+        existing = [...cachedExisting, ...cachedFresh.filter((it) => existingIds.has(String(it.row.return_id)))];
+        fresh = cachedFresh.filter((it) => !existingIds.has(String(it.row.return_id)));
+      }
       // 1) Dòng đã có: update riêng carrier_status, gộp theo giá trị.
       for (const carrierStatus of ['Đã hoàn', 'Chưa hoàn']) {
         const ids = existing.filter((it) => it.carrierStatus === carrierStatus).map((it) => it.row.return_id);
