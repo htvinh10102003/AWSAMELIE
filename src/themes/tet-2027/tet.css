@@ -102,8 +102,6 @@
 .tet-petal-img {
   position: absolute;
   top: -40px;
-  object-fit: cover;
-  border-radius: 50%;
   mix-blend-mode: screen;
   opacity: 0.9;
   animation-name: tet-petal-fall;
