@@ -187,7 +187,7 @@ export default function Dashboard() {
 
         {/* KHỐI THẺ KPI (Responsive Grid) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          <div className="p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-colors hover:border-slate-300">
+          <div className="tet-kpi-card p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-colors hover:border-slate-300">
             <div className="p-3 sm:p-4 bg-blue-100/70 rounded-2xl text-blue-600 shadow-sm shrink-0">
               <Printer size={24} />
             </div>
@@ -209,7 +209,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-colors hover:border-slate-300 sm:col-span-2 lg:col-span-1">
+          <div className="tet-kpi-card p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex items-center gap-4 sm:gap-5 transition-colors hover:border-slate-300 sm:col-span-2 lg:col-span-1">
             <div className="p-3 sm:p-4 bg-amber-100/70 rounded-2xl text-amber-600 shadow-sm shrink-0">
               <Layers size={24} />
             </div>

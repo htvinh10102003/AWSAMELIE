@@ -1,0 +1,119 @@
+/* ============================================================
+   THEME TẾT HOÀNG GIA 2027 — WMS AWSAMELIE
+   Chỉ có hiệu lực khi phần tử gốc mang class .tet-2027.
+   Trang trí dùng ẢNH THẬT (Pexels, miễn phí) trong public/tet/:
+   - tet-lantern.jpg: đèn lồng đỏ ban đêm (nền widget, sidebar, header mobile)
+   - tet-silk.jpg: lụa đỏ (nền câu đối)
+   - tet-mai.jpg: cành hoa mai vàng (trang trí góc)
+   - tet-flower.jpg: 1 bông mai vàng, nền đen (hoa rơi, dùng screen blend)
+   KHÔNG vẽ hình bằng CSS. Chỉ đổi màu nền/chữ ở mức cần thiết,
+   khu vực làm việc giữ nền sáng để nhân viên không mỏi mắt.
+   ============================================================ */
+
+.tet-2027 {
+  --tet-red: #8F1420;
+  --tet-dark-red: #520D17;
+  --tet-gold: #E7BD68;
+  --tet-gold-light: #FFE5A3;
+  --tet-cream: #FFF8EA;
+  --tet-green: #285B43;
+  --tet-text: #34251C;
+  /* Nút chính dùng .ui-btn-primary -> đỏ hoàng gia thay vì slate. */
+  --wms-primary: #8F1420;
+}
+
+.tet-2027 .ui-btn-primary { background: var(--tet-red); }
+.tet-2027 .ui-btn-primary:hover { background: #6d0e18; }
+
+/* Header bảng dữ liệu: nền kem, chữ đỏ hoàng gia.
+   Màu trạng thái đơn (xanh/cam/đỏ) giữ nguyên, không động vào. */
+.tet-2027 thead th {
+  background: var(--tet-cream);
+  color: var(--tet-red);
+}
+
+/* Thẻ KPI trên Dashboard + ô thống kê mobile: nền kem, viền vàng. */
+.tet-2027 .tet-kpi-card {
+  background: var(--tet-cream);
+  border-color: var(--tet-gold);
+}
+
+/* Sidebar desktop: nền là ẢNH đèn lồng (đặt qua inline style trong
+   Layout.jsx, dùng data URI từ tetImages.js), phủ lớp đỏ rượu vang mờ
+   để chữ menu vẫn đọc rõ. */
+.tet-2027 .tet-sidebar {
+  background-size: cover;
+  background-position: center top;
+}
+
+/* Header mobile: nền là ẢNH đèn lồng (đặt qua inline style trong
+   Mobile.jsx), phủ lớp đỏ mờ để chữ trắng đọc rõ. */
+.tet-2027 header.bg-slate-900 {
+  background-size: cover;
+  background-position: center;
+}
+
+/* Tab dưới mobile đang chọn: nền kem, chữ đỏ, vạch vàng. */
+.tet-2027 nav button.bg-emerald-50 {
+  background: var(--tet-cream);
+  color: var(--tet-red);
+}
+.tet-2027 nav .bg-emerald-600 {
+  background: var(--tet-gold);
+}
+
+/* ---------- Widget đếm ngược: nền là ẢNH đèn lồng (đặt qua inline
+   style trong TetCountdown.jsx, dùng data URI từ tetImages.js) ---------- */
+.tet-countdown {
+  background-size: cover;
+  background-position: center;
+  border: 1px solid var(--tet-gold);
+  box-shadow: 0 12px 32px -8px rgba(82, 13, 23, 0.55), inset 0 1px 0 rgba(255, 229, 163, 0.35);
+}
+.tet-count-cell {
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(231, 189, 104, 0.45);
+}
+
+/* ---------- Câu đối: nền là ẢNH lụa đỏ (đặt qua inline style, dùng
+   data URI từ tetImages.js) ---------- */
+.tet-couplet {
+  background-size: cover;
+  background-position: center;
+  border: 1px solid var(--tet-gold);
+  box-shadow: inset 0 0 0 3px rgba(143, 20, 32, 0.55), inset 0 0 0 4px rgba(231, 189, 104, 0.6);
+}
+
+/* ---------- Cành mai trang trí góc sidebar ---------- */
+.tet-mai-corner {
+  pointer-events: none;
+  mix-blend-mode: screen;
+  opacity: 0.9;
+}
+
+/* ---------- Hoa mai rơi: ẢNH bông mai thật, nền đen dùng screen blend ---------- */
+.tet-petals {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 60;
+  overflow: hidden;
+}
+.tet-petal-img {
+  position: absolute;
+  top: -40px;
+  object-fit: cover;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  opacity: 0.9;
+  animation-name: tet-petal-fall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+@keyframes tet-petal-fall {
+  0% { transform: translate(0, -40px) rotate(0deg); }
+  25% { transform: translate(var(--tet-drift, 20px), 25vh) rotate(120deg); }
+  50% { transform: translate(calc(var(--tet-drift, 20px) * -0.6), 50vh) rotate(240deg); }
+  75% { transform: translate(var(--tet-drift, 20px), 75vh) rotate(330deg); }
+  100% { transform: translate(0, 110vh) rotate(360deg); }
+}

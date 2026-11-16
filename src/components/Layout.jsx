@@ -7,6 +7,9 @@ import { sessionRevokedKey, isRevokedAfterLogin } from '../lib/session';
 import { readPermCache, writePermCache, updatePermCache, clearPermCache, clearAllPermCaches, FOCUS_REVALIDATE_MS } from '../lib/permCache';
 import BootSplash from './BootSplash';
 import { reportPresence, recordLoginHistory } from '../lib/presence';
+import TetCountdown from './TetCountdown';
+import TetPetals from './TetPetals';
+import { TET_IMG_LANTERN, TET_IMG_SILK, TET_IMG_MAI } from '../themes/tet-2027/tetImages';
 import { 
   TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
   Boxes, AlertTriangle, X, Wrench, ChevronDown, ChevronRight, UserCog, CalendarDays, 
@@ -119,6 +122,10 @@ export default function Layout() {
   const [isNotifClosing, setIsNotifClosing] = useState(false);
   const [bannerNotif, setBannerNotif] = useState(null);
 
+  // Giao diện Tết Hoàng Gia 2027 — bật/tắt bởi Owner trong Admin
+  // (system_configs key 'tet_theme_enabled'). Mặc định tắt.
+  const [tetEnabled, setTetEnabled] = useState(false);
+
   // === STATE CẤU HÌNH KHÓA TÍNH NĂNG ===
   const [featureLocks, setFeatureLocks] = useState({});
 
@@ -224,7 +231,7 @@ export default function Layout() {
 
       if (user) {
         const userConfigKey = `layout_pref_${user.id}`;
-        const keys = ['global_notification', 'global_banner', 'maintenance_mode', userConfigKey];
+        const keys = ['global_notification', 'global_banner', 'maintenance_mode', 'tet_theme_enabled', userConfigKey];
 
         // CÁCH FETCH AN TOÀN ĐỂ KHÔNG BAO GIỜ BỊ CRASH GIAO DIỆN
         const [normalConfigs, lockConfigs] = await Promise.all([
@@ -256,6 +263,9 @@ export default function Layout() {
               }
               else if (item.key === 'maintenance_mode') {
                 maintenanceOn = item.value === 'true' || item.value === true;
+              }
+              else if (item.key === 'tet_theme_enabled') {
+                setTetEnabled(item.value === 'true' || item.value === true);
               }
               else if (item.key.startsWith('feature_lock_')) {
                 const parentId = item.key.replace('feature_lock_', '');
@@ -337,6 +347,7 @@ export default function Layout() {
             // Row khoa tinh nang bi xoa -> coi nhu da go khoa (mo lai),
             // cap nhat ca state lan cache hien thi.
             if (!payload.new) {
+              if (changedKey === 'tet_theme_enabled') setTetEnabled(false);
               if (changedKey && changedKey.startsWith('feature_lock_')) {
                 const parentId = changedKey.replace('feature_lock_', '');
                 const me = userRef.current;
@@ -386,6 +397,10 @@ export default function Layout() {
                   maintenance: payload.new.value === 'true' || payload.new.value === true,
                 });
               }
+            }
+            // REALTIME GIAO DIEN TET: Owner bat/tat trong Admin thi doi ngay, khong can F5.
+            else if (payload.new.key === 'tet_theme_enabled') {
+              setTetEnabled(payload.new.value === 'true' || payload.new.value === true);
             }
           } catch (e) { }
         }
@@ -469,6 +484,17 @@ export default function Layout() {
   }
 
   const getThemeVars = () => {
+    // Tết Hoàng Gia 2027: sidebar đỏ rượu vang, icon/chữ vàng kim.
+    if (tetEnabled) {
+      return {
+        sidebar: 'bg-[#520D17] border-[#7a2430] shadow-sm',
+        textPrimary: 'text-[#FFF8EA]', textMuted: 'text-[#C9A86A]',
+        activeBg: 'bg-[#8F1420]', activeText: 'text-[#FFE5A3] font-bold', activeBorder: 'shadow-[inset_4px_0_0_0_#E7BD68]',
+        hoverBg: 'hover:bg-white/10', iconColor: 'text-[#C9A86A] group-hover:text-[#FFE5A3]', iconActive: 'text-[#FFE5A3]',
+        activeBar: 'shadow-[inset_4px_0_0_0_#E7BD68]', sectionLabel: 'text-[#C9A86A]',
+        logoBg: 'bg-[#8F1420] border border-[#E7BD68]', logoIcon: 'text-[#FFE5A3]', headerBorder: 'border-[#7a2430]'
+      };
+    }
     return {
       sidebar: 'bg-white border-slate-200 shadow-sm',
       textPrimary: 'text-slate-700', textMuted: 'text-slate-400',
@@ -728,8 +754,10 @@ export default function Layout() {
 
       <div className={`layout-root flex h-screen font-sans antialiased overflow-hidden relative bg-slate-50 
         ${isTopLayout ? 'flex-col' : layoutPrefs.position === 'right' ? 'flex-row-reverse' : 'flex-row'}
-        ${bannerNotif?.enabled ? 'pt-10' : ''}`}
+        ${bannerNotif?.enabled ? 'pt-10' : ''}
+        ${tetEnabled ? 'tet-2027' : ''}`}
       >
+        {tetEnabled && (<><TetPetals /><TetCountdown /></>)}
         {activeTooltip && (
           <div 
             className="fixed z-[99999] px-3 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-lg whitespace-nowrap shadow-xl pointer-events-none animate-in fade-in zoom-in-95 duration-150"
@@ -748,11 +776,13 @@ export default function Layout() {
         )}
 
         <div
-          className={`no-print flex-shrink-0 z-40 flex transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] relative ${themeVars.sidebar}
+          className={`no-print flex-shrink-0 z-40 flex transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] relative ${themeVars.sidebar} ${tetEnabled && !isTopLayout ? 'tet-sidebar' : ''}
             ${isTopLayout
               ? `w-full h-16 flex-row items-center px-4 border-b ${themeVars.headerBorder}`
               : `flex-col h-full ${layoutPrefs.position === 'left' ? 'border-r' : 'border-l'} ${sidebarExpanded ? 'w-[300px]' : 'w-[72px]'}`}
-        `}>
+        `}
+          style={tetEnabled && !isTopLayout ? { backgroundImage: `linear-gradient(rgba(82,13,23,0.9), rgba(82,13,23,0.92)), url(${TET_IMG_LANTERN})` } : undefined}
+        >
           <div className={`${isTopLayout ? 'w-auto pr-8' : `h-[68px] flex items-center justify-between px-4 sticky top-0 z-20 border-b ${themeVars.headerBorder}`}`}>
             <div className="flex items-center gap-3 overflow-hidden">
               <div className={`w-10 h-10 rounded-xl shrink-0 flex items-center justify-center shadow-md ${themeVars.logoBg}`}>
@@ -771,6 +801,21 @@ export default function Layout() {
               </button>
             )}
           </div>
+
+          {tetEnabled && !isTopLayout && sidebarExpanded && (
+            <div
+              className="tet-couplet mx-3 mt-3 px-3 py-2.5 text-center shrink-0 rounded-lg"
+              style={{ backgroundImage: `linear-gradient(rgba(120,10,25,0.25), rgba(80,5,15,0.45)), url(${TET_IMG_SILK})` }}
+            >
+              <div className="text-[#FFE5A3] text-xs font-bold tracking-[0.18em]">✦ TÂN XUÂN ĐẠI CÁT ✦</div>
+              <div className="text-[#FFE5A3] text-xs font-bold tracking-[0.18em] mt-1">VẠN SỰ NHƯ Ý</div>
+              <div className="text-[#E7BD68] text-[11px] font-semibold mt-1">Đinh Mùi 2027</div>
+            </div>
+          )}
+
+          {tetEnabled && !isTopLayout && sidebarExpanded && (
+            <img src={TET_IMG_MAI} alt="" aria-hidden="true" className="tet-mai-corner absolute bottom-0 right-0 w-36 h-auto z-0" />
+          )}
 
           <div className={`${isTopLayout ? 'flex-1 flex items-center h-full px-2' : 'flex-1 overflow-y-auto overflow-x-hidden py-5 scrollbar-thin'}`}>
             

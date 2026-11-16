@@ -7,7 +7,7 @@ import {
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
   Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert,
   Database, HardDrive, Trash2, AlertTriangle, Info,
-  BellRing, Megaphone, MonitorPlay, Ban, History, LogOut, Printer
+  BellRing, Megaphone, MonitorPlay, Ban, History, LogOut, Printer, PartyPopper
 } from 'lucide-react';
 import { shortDeviceName } from '../lib/presence';
 import PrintSettings from '../components/PrintSettings';
@@ -165,6 +165,11 @@ export default function Admin() {
   const [maintenanceLoading, setMaintenanceLoading] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
 
+  // --- GIAO DIEN TET 2027 (chi Owner bat/tat) ---
+  const [tetEnabled, setTetEnabled] = useState(false);
+  const [tetLoading, setTetLoading] = useState(false);
+  const [tetMessage, setTetMessage] = useState('');
+
   // --- DB CLEANUP & STORAGE ---
   const [cleanDays, setCleanDays] = useState('180');
   const [isCleaning, setIsCleaning] = useState(false);
@@ -253,6 +258,7 @@ export default function Admin() {
       const configMap = {};
       configs.forEach(item => configMap[item.key] = item.value);
       setMaintenanceOn(configMap['maintenance_mode'] === 'true');
+      setTetEnabled(configMap['tet_theme_enabled'] === 'true');
       
       setApiConfigs(prev => ({ 
           ...prev, 
@@ -847,6 +853,30 @@ export default function Admin() {
       setMaintenanceMessage('Lỗi: ' + (err.message || err));
     } finally {
       setMaintenanceLoading(false);
+    }
+  };
+
+  const handleToggleTet = async (next) => {
+    if (!isOwner) {
+      setTetMessage('Chỉ Chủ sở hữu (Owner) mới được bật/tắt giao diện Tết.');
+      return;
+    }
+    setTetLoading(true);
+    setTetMessage('');
+    try {
+      const { error } = await supabase.from('system_configs').upsert(
+        { key: 'tet_theme_enabled', value: String(next) },
+        { onConflict: 'key' }
+      );
+      if (error) throw error;
+      setTetEnabled(next);
+      setTetMessage(next
+        ? 'Đã bật giao diện Tết: toàn bộ app khoác áo Tết Hoàng Gia, có đếm ngược và hoa mai rơi.'
+        : 'Đã tắt giao diện Tết: app trở về giao diện thường.');
+    } catch (err) {
+      setTetMessage('Lỗi: ' + (err.message || err));
+    } finally {
+      setTetLoading(false);
     }
   };
 
@@ -1509,6 +1539,31 @@ export default function Admin() {
               <LockedFeature msg="Chỉ Chủ sở hữu (Owner) hoặc Super Admin mới được quyền thay đổi cài đặt in." />
             )}
           </div>
+
+          {/* SECTION: GIAO DIỆN TẾT NGUYÊN ĐÁN 2027 (CHỈ OWNER) */}
+          {isOwner && (
+          <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border-2 border-[#E7BD68]/60 mt-8">
+            <h2 className="text-xl font-bold mb-1 text-slate-900 flex items-center gap-2">
+              <PartyPopper size={22} className="text-[#8F1420]" /> Giao diện Tết Nguyên Đán 2027
+            </h2>
+            <p className="text-sm text-slate-500 mb-4 font-medium max-w-3xl leading-relaxed">
+              Bật để toàn bộ app khoác áo Tết Hoàng Gia (đỏ rượu vang – vàng kim): sidebar đỏ, dải chữ "Tân Xuân Đại Cát – Vạn Sự Như Ý", hoa mai rơi, và widget "Đếm ngược Tết về" ở góc dưới phải (đếm tới mùng 1 Tết Đinh Mùi, thứ Bảy 6/2/2027). Tắt thì app về giao diện thường ngay, không cần F5. Chỉ Owner bật/tắt được.
+            </p>
+            {tetMessage && (
+              <div className="p-4 mb-6 rounded-xl font-bold text-sm bg-slate-50 border border-slate-200 text-slate-700">
+                {tetMessage}
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <span className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider ${tetEnabled ? 'bg-[#FFF8EA] text-[#8F1420] border border-[#E7BD68]' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`}>
+                {tetEnabled ? 'Đang bật giao diện Tết' : 'Đang tắt giao diện Tết'}
+              </span>
+              <div className={tetLoading ? 'opacity-50 pointer-events-none' : ''}>
+                <ToggleSwitch checked={tetEnabled} onChange={handleToggleTet} color="bg-[#8F1420]" />
+              </div>
+            </div>
+          </div>
+          )}
 
           {/* SECTION 7: DANGER ZONE (DB CLEANUP) */}
           <div className="bg-white p-6 sm:p-8 rounded-2xl shadow-sm border-2 border-red-100 mt-8 relative overflow-hidden">

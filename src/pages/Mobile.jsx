@@ -9,6 +9,9 @@ import { sessionRevokedKey, isRevokedAfterLogin } from '../lib/session';
 import { reportPresence, recordLoginHistory } from '../lib/presence';
 import { getMaintenanceMode, setMaintenanceMode } from '../lib/maintenance';
 import { clearPermCache } from '../lib/permCache';
+import TetCountdown from '../components/TetCountdown';
+import TetPetals from '../components/TetPetals';
+import { TET_IMG_LANTERN, TET_IMG_SILK } from '../themes/tet-2027/tetImages';
 
 // Giao diện điện thoại riêng, chỉ xem nhanh và thao tác gọn trên điện thoại.
 // - Đơn in: thẻ đơn chỉ ID, sản phẩm, trạng thái (kèm mã vận đơn nhỏ nếu có
@@ -162,6 +165,9 @@ const Toggle = ({ checked, onChange }) => (
 export default function Mobile() {
     const [session, setSession] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
+    // Giao diện Tết Hoàng Gia 2027 — bật/tắt bởi Owner trong Admin
+    // (system_configs key 'tet_theme_enabled'). Mặc định tắt.
+    const [tetEnabled, setTetEnabled] = useState(false);
     const [tab, setTab] = useState('print');
     const [data, setData] = useState({ printable: [], holding: [], outOfStock: [] });
     const [loading, setLoading] = useState(true);
@@ -248,7 +254,22 @@ export default function Mobile() {
         };
         checkRevoked();
         const revokedIntervalId = setInterval(() => { checkRevoked(); }, 60000);
-        return () => { subscription.unsubscribe(); clearInterval(presenceIntervalId); clearInterval(revokedIntervalId); };
+        // Giao diện Tết: đọc trạng thái bật/tắt + nghe realtime để Owner
+        // bật/tắt trong Admin thì mobile đổi ngay, không cần F5.
+        const fetchTet = async () => {
+            try {
+                const { data } = await supabase.from('system_configs').select('value').eq('key', 'tet_theme_enabled').maybeSingle();
+                setTetEnabled(data?.value === 'true' || data?.value === true);
+            } catch { /* giữ tắt */ }
+        };
+        fetchTet();
+        const tetChannel = supabase.channel('tet_theme_mobile')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'system_configs' }, (payload) => {
+                const key = payload.new?.key ?? payload.old?.key;
+                if (key === 'tet_theme_enabled') setTetEnabled(payload.new ? (payload.new.value === 'true' || payload.new.value === true) : false);
+            })
+            .subscribe();
+        return () => { subscription.unsubscribe(); clearInterval(presenceIntervalId); clearInterval(revokedIntervalId); supabase.removeChannel(tetChannel); };
     }, []);
 
     useEffect(() => {
@@ -848,9 +869,13 @@ export default function Mobile() {
     };
 
     return (
-        <div className="mx-auto max-w-[480px] min-h-dvh bg-slate-100 font-sans" style={{ paddingBottom: 'calc(76px + env(safe-area-inset-bottom))' }}>
+        <div className={`mx-auto max-w-[480px] min-h-dvh bg-slate-100 font-sans ${tetEnabled ? 'tet-2027' : ''}`} style={{ paddingBottom: 'calc(76px + env(safe-area-inset-bottom))' }}>
+            {tetEnabled && (<><TetPetals /><TetCountdown /></>)}
             <div className="sticky top-0 z-40">
-                <header className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
+                <header
+                    className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between"
+                    style={tetEnabled ? { backgroundImage: `linear-gradient(rgba(82,13,23,0.82), rgba(82,13,23,0.88)), url(${TET_IMG_LANTERN})` } : undefined}
+                >
                     <div>
                         <div className="font-bold text-base leading-tight">WMS</div>
                         <div className="text-xs text-slate-300">Xem nhanh trên điện thoại</div>
@@ -859,6 +884,14 @@ export default function Mobile() {
                         <RefreshCw size={18} className={(loading || reconLoading) ? 'animate-spin' : ''} />
                     </button>
                 </header>
+                {tetEnabled && (
+                    <div
+                        className="tet-couplet px-3 py-1.5 text-center"
+                        style={{ backgroundImage: `linear-gradient(rgba(120,10,25,0.25), rgba(80,5,15,0.45)), url(${TET_IMG_SILK})` }}
+                    >
+                        <span className="text-[#FFE5A3] text-xs font-bold tracking-[0.14em]">✦ TÂN XUÂN ĐẠI CÁT · VẠN SỰ NHƯ Ý ✦</span>
+                    </div>
+                )}
                 {tab === 'print' && (
                     <div className="bg-slate-100 px-3 pt-2 pb-2 space-y-2 border-b border-slate-200">
                         <div className="flex items-baseline justify-between px-1">
@@ -866,15 +899,15 @@ export default function Mobile() {
                             <span className="text-xs font-bold text-slate-500">{data.printable.length} đơn đủ hàng</span>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center">
+                            <div className="tet-kpi-card bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center">
                                 <div className="text-xl font-bold text-green-700">{data.printable.length}</div>
                                 <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Đủ hàng</div>
                             </div>
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center">
+                            <div className="tet-kpi-card bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center">
                                 <div className="text-xl font-bold text-yellow-700">{data.holding.length}</div>
                                 <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tạm giữ</div>
                             </div>
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center">
+                            <div className="tet-kpi-card bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center">
                                 <div className="text-xl font-bold text-red-700">{data.outOfStock.length}</div>
                                 <div className="text-xs font-bold uppercase tracking-wider text-slate-500">Hết hàng</div>
                             </div>
@@ -999,10 +1032,10 @@ export default function Mobile() {
                             <div className="text-xs font-bold text-slate-500">{todayVnLabel}</div>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-slate-900">{reconTotals.totalPrint}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng in</div></div>
+                            <div className="tet-kpi-card bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-slate-900">{reconTotals.totalPrint}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng in</div></div>
                             <div className="bg-emerald-50 rounded-2xl border border-emerald-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-green-700">{reconTotals.totalPackedShipped}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng đóng gói</div></div>
                             <div className="bg-red-50 rounded-2xl border border-red-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-red-700">{reconTotals.totalReturned}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng trả lại</div></div>
-                            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-red-700">{reconTotals.totalCanceled}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng đơn hủy</div></div>
+                            <div className="tet-kpi-card bg-white rounded-2xl border border-slate-200 shadow-sm p-3 text-center"><div className="text-xl font-bold text-red-700">{reconTotals.totalCanceled}</div><div className="text-xs font-bold uppercase tracking-wider text-slate-500">Tổng đơn hủy</div></div>
                         </div>
                         {reconError && <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm font-medium text-red-700">{reconError}</div>}
                         <button
