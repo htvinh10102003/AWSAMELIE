@@ -1739,6 +1739,13 @@ export default function BaoCaoHoanChuaNhan() {
     () => allRows.filter((r) => !hasPartial(r) && manualChecks.get(r.return_id)?.received_status !== 'Đã nhận' && manualChecks.get(r.return_id)?.carrier_status !== 'Đã hoàn' && !checkedTodayIds.has(r.return_id)),
     [allRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR, checkedTodayIds]
   );
+  // Đơn gốc 71/74 cần check trạng thái hãng (16/11/2026): giống bulkRows,
+  // loại đơn hãng đã báo 'Đã hoàn' — đơn đó chỉ chờ quét/tick 'Đã nhận'
+  // (tab B + tab quét), không cần check lại trạng thái hãng nữa.
+  const orders7174ToCheck = useMemo(
+    () => orders7174.filter((o) => carrierChecks.get(String(o.id))?.carrier_status !== 'Đã hoàn'),
+    [orders7174, carrierChecks]
+  );
   // Nhóm TOÀN BỘ danh sách chưa nhận theo hãng (thứ tự SPX, J&T, GHN,
   // GHTK, Viettel Post, Hãng khác; chỉ hãng nào có đơn mới hiện). Không
   // phân trang nữa — hiển thị hết 1 loạt, mỗi hãng copy 20 hoặc 40 mã
@@ -3558,13 +3565,13 @@ export default function BaoCaoHoanChuaNhan() {
                       cho dán tay, hoặc "Lưu trạng thái hãng" cho file SPX). */}
                   <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-                      <h3 className="text-sm font-bold text-slate-900">Đơn gốc đang hoàn (71/74) — {orders7174.length} đơn</h3>
+                      <h3 className="text-sm font-bold text-slate-900">Đơn gốc đang hoàn (71/74) — {orders7174ToCheck.length} đơn cần check</h3>
                       <div className="flex flex-wrap gap-2">
-                        <button disabled={orders7174.length === 0} onClick={() => copyOrderCodes(orders7174.slice(0, 20), 'Đơn gốc 71/74 (20 mã)')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
-                          <Copy size={15} /> Sao chép {Math.min(20, orders7174.length)} mã
+                        <button disabled={orders7174ToCheck.length === 0} onClick={() => copyOrderCodes(orders7174ToCheck.slice(0, 20), 'Đơn gốc 71/74 (20 mã)')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
+                          <Copy size={15} /> Sao chép {Math.min(20, orders7174ToCheck.length)} mã
                         </button>
-                        <button disabled={orders7174.length === 0} onClick={() => copyOrderCodes(orders7174.slice(0, 40), 'Đơn gốc 71/74 (40 mã)')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
-                          <Copy size={15} /> Sao chép {Math.min(40, orders7174.length)} mã
+                        <button disabled={orders7174ToCheck.length === 0} onClick={() => copyOrderCodes(orders7174ToCheck.slice(0, 40), 'Đơn gốc 71/74 (40 mã)')} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 disabled:opacity-40 cursor-pointer flex items-center gap-2">
+                          <Copy size={15} /> Sao chép {Math.min(40, orders7174ToCheck.length)} mã
                         </button>
                         {isOwner && (
                           <button disabled={orders7174.length === 0 || sync7174Loading} onClick={handleSync7174} className="px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 cursor-pointer flex items-center gap-2">
@@ -3579,11 +3586,11 @@ export default function BaoCaoHoanChuaNhan() {
                       <div className="p-4 flex items-center justify-center gap-2 text-sm font-bold text-slate-500"><Loader2 size={18} className="animate-spin" /> Đang tải...</div>
                     ) : orders7174Error ? (
                       <p className="text-sm font-bold text-red-500 mt-2">{orders7174Error}</p>
-                    ) : orders7174.length === 0 ? (
-                      <p className="text-sm font-bold text-slate-600 mt-2">Không có đơn gốc 71/74 nào đang chờ.</p>
+                    ) : orders7174ToCheck.length === 0 ? (
+                      <p className="text-sm font-bold text-slate-600 mt-2">Không có đơn gốc 71/74 nào cần check trạng thái hãng (đơn hãng đã giao rồi thì chỉ chờ quét nhận hàng).</p>
                     ) : (
                       <div className="space-y-1 max-h-80 overflow-y-auto pr-1 mt-3">
-                        {orders7174.map((o) => {
+                        {orders7174ToCheck.map((o) => {
                           const c = carrierChecks.get(String(o.id));
                           return (
                             <div key={o.id} className="flex flex-wrap items-center gap-x-4 gap-y-0.5 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm">
