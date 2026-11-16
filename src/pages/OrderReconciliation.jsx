@@ -50,6 +50,15 @@ const getCustomerName = (order) => {
   return typeof name === 'string' ? name.trim() : '';
 };
 
+// ID hiển thị trong đối soát (16/11/2026): đơn sàn TikTok (48) / Shopee (42)
+// hiện mã đơn sàn (ecom_order_id) thay vì ID Nhanh; kênh khác hoặc đơn sàn
+// không có mã thì vẫn hiện ID Nhanh để không bị trống.
+const displayOrderId = (order) => {
+  const ch = Number(order?.sale_channel);
+  if ((ch === 42 || ch === 48) && order?.ecom_order_id) return String(order.ecom_order_id);
+  return order?.id;
+};
+
 // Giờ VN = UTC + 7 bằng cộng tay, KHÔNG dùng Intl timezone (trình duyệt của
 // Vinh báo 'Invalid time zone specified' rồi trắng trang nếu dùng).
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -395,7 +404,7 @@ export default function OrderReconciliation() {
           const { data: ordersData, error: ordersError } = await supabase
             .from('orders')
             .select(`
-              id, created_at, carrier_code, status, printed_at, packed_at, carrier_date, sale_channel, raw_data,
+              id, created_at, carrier_code, status, printed_at, packed_at, carrier_date, sale_channel, ecom_order_id, raw_data,
               order_products (product_code, product_name, quantity)
             `)
             .in('id', chunk);
@@ -440,7 +449,7 @@ export default function OrderReconciliation() {
       const { data, error } = await supabase
         .from('orders')
         .select(`
-          id, created_at, carrier_code, status, printed_at, packed_at, carrier_date, sale_channel,
+          id, created_at, carrier_code, status, printed_at, packed_at, carrier_date, sale_channel, ecom_order_id,
           order_products (product_code, product_name, quantity)
         `)
         .gte('printed_at', startOfDay)
@@ -723,13 +732,15 @@ export default function OrderReconciliation() {
       const statusText = STATUS_MAP[order.status] || (order.status ? String(order.status) : '---');
       const scannedStatus = checkScannedForExport(order) ? "Đã trả lại" : "Chưa trả lại";
       const channelName = order.sale_channel ? (SALE_CHANNEL_MAP[order.sale_channel]?.name || `Kênh ${order.sale_channel}`) : '---';
+      // Cột ID trong file xuất cũng dùng mã đơn sàn cho đơn TikTok/Shopee (16/11/2026).
+      const displayId = displayOrderId(order);
 
       if (order.order_products && order.order_products.length > 0) {
         order.order_products.forEach(p => { 
-          csvContent += `"${order.id}","${channelName}","${carrierCode}","${statusText}","${scannedStatus}","${p.product_code || '---'}","${p.product_name}","${p.quantity}"\n`; 
+          csvContent += `"${displayId}","${channelName}","${carrierCode}","${statusText}","${scannedStatus}","${p.product_code || '---'}","${p.product_name}","${p.quantity}"\n`; 
         });
       } else {
-        csvContent += `"${order.id}","${channelName}","${carrierCode}","${statusText}","${scannedStatus}","---","Đơn trống sản phẩm","0"\n`;
+        csvContent += `"${displayId}","${channelName}","${carrierCode}","${statusText}","${scannedStatus}","---","Đơn trống sản phẩm","0"\n`;
       }
     });
 
@@ -1152,7 +1163,7 @@ export default function OrderReconciliation() {
                       <div className="flex justify-between items-start text-xs font-bold mb-2">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
-                            <span className={scanned ? 'text-emerald-700' : 'text-slate-800'}>ID: {order.id}{customerName ? ` - [${customerName}]` : ''}</span>
+                            <span className={scanned ? 'text-emerald-700' : 'text-slate-800'}>ID: {displayOrderId(order)}{customerName ? ` - [${customerName}]` : ''}</span>
                             {getChannelBadge(order.sale_channel)}
                           </div>
                           {createdLabel && <span className="text-xs text-slate-400 font-medium">Tạo: {createdLabel}</span>}
@@ -1195,7 +1206,7 @@ export default function OrderReconciliation() {
                       <div className="flex justify-between items-start gap-2 text-xs font-bold mb-2">
                         <div className="flex flex-col gap-1">
                           <div className="flex items-center gap-2">
-                            <span className={scanned ? 'text-red-800' : 'text-red-600'}>ID: {order.id}{customerName ? ` - [${customerName}]` : ''}</span>
+                            <span className={scanned ? 'text-red-800' : 'text-red-600'}>ID: {displayOrderId(order)}{customerName ? ` - [${customerName}]` : ''}</span>
                             {getChannelBadge(order.sale_channel)}
                           </div>
                           {createdLabel && <span className="text-xs text-slate-400 font-medium">Tạo: {createdLabel}</span>}
@@ -1235,7 +1246,7 @@ export default function OrderReconciliation() {
                   <div key={order.id + idx} className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
                     <div className="flex flex-col gap-1 text-xs font-bold">
                       <div className="flex items-center gap-2">
-                        <span className="text-slate-700">ID: {order.id}{customerName ? ` - [${customerName}]` : ''}</span>
+                        <span className="text-slate-700">ID: {displayOrderId(order)}{customerName ? ` - [${customerName}]` : ''}</span>
                         {getChannelBadge(order.sale_channel)}
                       </div>
                       <span className="text-slate-500 text-xs font-medium">Trạng thái: {STATUS_MAP[order.status] || order.status}</span>
@@ -1270,7 +1281,7 @@ export default function OrderReconciliation() {
                   return (
                   <div key={order.id + idx} className="p-4 bg-white border border-amber-200 rounded-xl flex items-center justify-between">
                     <div className="flex flex-col gap-0.5">
-                      <div className="text-xs font-bold text-amber-800">ID: {order.id}{customerName ? ` - [${customerName}]` : ''}</div>
+                      <div className="text-xs font-bold text-amber-800">ID: {displayOrderId(order)}{customerName ? ` - [${customerName}]` : ''}</div>
                       {createdLabel && <div className="text-xs font-medium text-amber-600/80">Tạo: {createdLabel}</div>}
                     </div>
                     {getChannelBadge(order.sale_channel)}

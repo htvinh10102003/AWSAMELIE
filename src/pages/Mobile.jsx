@@ -66,6 +66,15 @@ const getCustomerName = (order) => {
     return typeof name === 'string' ? name.trim() : '';
 };
 
+// ID hiển thị trong đối soát (16/11/2026): đơn sàn TikTok (48) / Shopee (42)
+// hiện mã đơn sàn (ecom_order_id) thay vì ID Nhanh; kênh khác hoặc đơn sàn
+// không có mã thì vẫn hiện ID Nhanh để không bị trống.
+const displayOrderId = (order) => {
+    const ch = Number(order?.sale_channel);
+    if ((ch === 42 || ch === 48) && order?.ecom_order_id) return String(order.ecom_order_id);
+    return order?.id;
+};
+
 // Giờ VN = UTC + 7 bằng cộng tay, KHÔNG dùng Intl timezone (trình duyệt của
 // Vinh báo 'Invalid time zone specified' rồi trắng trang nếu dùng).
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -563,7 +572,7 @@ export default function Mobile() {
             const end = new Date(); end.setHours(23, 59, 59, 999);
             const { data: rows, error: reconErr } = await supabase
                 .from('orders')
-                .select('id, created_at, carrier_code, status, printed_at, packed_at, carrier_date, sale_channel, order_products (product_code, product_name, quantity)')
+                .select('id, created_at, carrier_code, status, printed_at, packed_at, carrier_date, sale_channel, ecom_order_id, order_products (product_code, product_name, quantity)')
                 .gte('printed_at', start.toISOString())
                 .lte('printed_at', end.toISOString())
                 .order('printed_at', { ascending: false })
@@ -778,11 +787,14 @@ export default function Mobile() {
     // Nhãn ngày hôm nay (giờ VN) cho tiêu đề tab Đối soát.
     const todayVnLabel = (() => { const d = toVnDate(new Date().toISOString()); return d ? `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}` : ''; })();
 
-    const OrderCard = ({ order, showStock = true, showChannel = false, showCustomer = false, showCreated = false, warnHandover = false }) => {
+    const OrderCard = ({ order, showStock = true, showChannel = false, showCustomer = false, showCreated = false, warnHandover = false, showEcomId = false }) => {
         const stock = stockOf(order);
         const products = order.order_products || [];
         const customerName = showCustomer ? getCustomerName(order) : '';
         const createdLabel = showCreated ? fmtVnCreated(order.created_at) : '';
+        // Tab Đối soát (showEcomId) hiện mã đơn sàn cho đơn TikTok/Shopee;
+        // danh sách đơn chính vẫn hiện ID Nhanh.
+        const displayId = showEcomId ? displayOrderId(order) : order.id;
         const warning = warnHandover && isHandoverWarning(order);
         const warningBlink = warnHandover && isHandoverWarningBlink(order);
         const shortItems = [...(data.holding || []), ...(data.outOfStock || [])]
@@ -792,7 +804,7 @@ export default function Mobile() {
             <div className={`bg-white rounded-2xl border shadow-sm p-4 ${warning ? 'border-red-500 ring-1 ring-red-500' : warningBlink ? 'border-red-500 ring-1 ring-red-500 blink-red-border' : 'border-slate-200'}`}>
                 <div className="flex items-start justify-between gap-2">
                     <div className="font-bold text-slate-900 text-lg leading-tight min-w-0">
-                        {showCustomer ? (<>ID: <span className="font-mono">{order.id}</span>{customerName ? ` - [${customerName}]` : ''}</>) : (<span className="font-mono">{order.id}</span>)}
+                        {showCustomer ? (<>ID: <span className="font-mono">{displayId}</span>{customerName ? ` - [${customerName}]` : ''}</>) : (<span className="font-mono">{displayId}</span>)}
                     </div>
                     <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 border border-slate-200 text-slate-700">{statusName(order.status)}</span>
                 </div>
@@ -1012,7 +1024,7 @@ export default function Mobile() {
                                 {reconOnlyWarning ? 'Không có đơn nào cần đi gấp tránh quá hạn.' : 'Tất cả đơn in hôm nay đã được bàn giao.'}
                             </div>
                         )}
-                        {!reconLoading && reconVisibleList.map(order => <OrderCard key={order.id} order={order} showStock={false} showChannel showCustomer showCreated warnHandover />)}
+                        {!reconLoading && reconVisibleList.map(order => <OrderCard key={order.id} order={order} showStock={false} showChannel showCustomer showCreated warnHandover showEcomId />)}
                         {!reconLoading && reconFilteredHandover.length > reconVisible && (
                             <button onClick={() => setReconVisible(c => c + 30)} className="w-full py-3 bg-white border border-slate-300 hover:bg-slate-50 rounded-xl text-sm font-bold text-slate-700">
                                 Tải thêm ({reconFilteredHandover.length - reconVisible} đơn còn lại)
