@@ -1694,13 +1694,17 @@ export default function BaoCaoHoanChuaNhan() {
   // --- Đối chiếu hàng loạt (chỉ owner) ---
   // Toàn bộ tập chưa nhận theo bộ lọc (chưa có đơn hoàn 1 phần), giữ đúng thứ tự
   // return_updated_at desc như bảng (allRows đã xếp sẵn khi tải).
-  // Chỉ đơn chưa có trạng thái cuối mới hiện trong popup đối chiếu: đơn
+  // Chỉ đơn cần check trạng thái hãng mới hiện trong popup đối chiếu: đơn
   // Đã nhận (và đơn đã có đơn hoàn 1 phần) bị loại khỏi danh sách — xong
-  // là biến mất. Thêm nữa: đơn nào hôm nay đã check rồi (có dòng trong
+  // là biến mất. Đơn hãng đã báo "Đã hoàn" cũng bị loại (16/11/2026):
+  // trạng thái hãng của nó đã chốt, check lại cũng vẫn "Đã hoàn", không
+  // có thông tin mới — nó chỉ còn chờ quét/tick "Đã nhận" ở tab
+  // "Hãng đã giao chưa thấy hàng" và tab quét, không nằm trong danh sách
+  // copy đi check nữa. Thêm nữa: đơn nào hôm nay đã check rồi (có dòng trong
   // bảng lịch sử từ 00:00 VN hôm nay) cũng bỏ qua luôn, khỏi check đi
   // check lại; sang hôm sau đơn Chưa hoàn lại hiện để check tiếp.
   const bulkRows = useMemo(
-    () => allRows.filter((r) => !hasPartial(r) && manualChecks.get(r.return_id)?.received_status !== 'Đã nhận' && !checkedTodayIds.has(r.return_id)),
+    () => allRows.filter((r) => !hasPartial(r) && manualChecks.get(r.return_id)?.received_status !== 'Đã nhận' && manualChecks.get(r.return_id)?.carrier_status !== 'Đã hoàn' && !checkedTodayIds.has(r.return_id)),
     [allRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR, checkedTodayIds]
   );
   // Nhóm TOÀN BỘ danh sách chưa nhận theo hãng (thứ tự SPX, J&T, GHN,
@@ -2345,7 +2349,8 @@ export default function BaoCaoHoanChuaNhan() {
       if (code && !byCode.has(code)) byCode.set(code, r);
     }
     // Mã không nằm trong danh sách cần kiểm: phân biệt "đã kiểm rồi"
-    // (đơn đã check trong hôm nay hoặc đã có trạng thái cuối Đã nhận)
+    // (đơn đã check trong hôm nay, đã có trạng thái cuối Đã nhận, hoặc
+    // hãng đã báo "Đã hoàn" — trạng thái hãng đã chốt, không cần check lại)
     // với mã hoàn toàn không khớp với tập đã lọc.
     const byCodeAll = new Map();
     for (const r of allRows) {
@@ -2373,7 +2378,7 @@ export default function BaoCaoHoanChuaNhan() {
       if (row) matched.push({ ...p, row });
       else {
         const anyRow = byCodeAll.get(codeKey);
-        if (anyRow && (checkedTodayIds.has(anyRow.return_id) || manualChecks.get(anyRow.return_id)?.received_status === 'Đã nhận')) alreadyChecked.push(p);
+        if (anyRow && (checkedTodayIds.has(anyRow.return_id) || manualChecks.get(anyRow.return_id)?.received_status === 'Đã nhận' || manualChecks.get(anyRow.return_id)?.carrier_status === 'Đã hoàn')) alreadyChecked.push(p);
         else if (!order) unmatched.push(p);
         // Mã chỉ khớp đơn gốc 71/74 (không khớp đơn trả) thì không tính
         // là "không khớp" — nó nằm ở mục đơn gốc bên dưới.
@@ -3479,7 +3484,7 @@ export default function BaoCaoHoanChuaNhan() {
                     </div>
                   )}
                   {/* Danh sách hết 1 loạt theo hãng — không phân trang; mỗi hãng copy 20 hoặc 40 mã 1 lần */}
-                  <p className="text-sm font-bold text-slate-700">Tổng {bulkRows.length} đơn chưa nhận — chia theo hãng vận chuyển, copy 20 hoặc 40 mã 1 lần để đi check.</p>
+                  <p className="text-sm font-bold text-slate-700">Tổng {bulkRows.length} đơn cần check trạng thái hãng — chia theo hãng vận chuyển, copy 20 hoặc 40 mã 1 lần để đi check (đơn hãng đã giao rồi thì không cần check lại, chỉ chờ quét nhận hàng).</p>
                   {bulkCarriers.map((c) => {
                     const n20 = Math.min(20, c.rows.length);
                     const n40 = Math.min(40, c.rows.length);
