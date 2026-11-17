@@ -1,13 +1,14 @@
 /* ============================================================
    THEME TẾT HOÀNG GIA 2027 — WMS AWSAMELIE
    Chỉ có hiệu lực khi phần tử gốc mang class .tet-2027.
-   Trang trí dùng ẢNH THẬT (Pexels, miễn phí) trong public/tet/:
+   Nền + câu đối dùng ẢNH THẬT (Pexels, miễn phí, nhúng base64 trong
+   tetImages.js vì snapshot push không đẩy được JPG):
    - tet-lantern.jpg: đèn lồng đỏ ban đêm (nền widget, sidebar, header mobile)
    - tet-silk.jpg: lụa đỏ (nền câu đối)
-   - tet-mai.jpg: cành hoa mai vàng (trang trí góc)
-   - tet-flower.jpg: 1 bông mai vàng, nền đen (hoa rơi, dùng screen blend)
-   KHÔNG vẽ hình bằng CSS. Chỉ đổi màu nền/chữ ở mức cần thiết,
-   khu vực làm việc giữ nền sáng để nhân viên không mỏi mắt.
+   - tet-mai.jpg: cành hoa mai vàng (trang trí góc sidebar)
+   Hoa rơi + lì xì VẼ BẰNG CSS theo ý Vinh (ảnh bông hoa bị chê xấu).
+   Chỉ đổi màu nền/chữ ở mức cần thiết, khu vực làm việc giữ nền sáng
+   để nhân viên không mỏi mắt.
    ============================================================ */
 
 .tet-2027 {
@@ -135,4 +136,185 @@
   50% { transform: translate(calc(var(--tet-drift, 20px) * -0.6), 50vh) rotate(240deg); }
   75% { transform: translate(var(--tet-drift, 20px), 75vh) rotate(330deg); }
   100% { transform: translate(0, 110vh) rotate(360deg); }
+}
+
+/* ---------- Lì xì Tết: phong bao đỏ vẽ bằng CSS, chữ Lộc vàng ----------
+   3 phong bao nhỏ góc dưới trái (TetLixi.jsx). Bấm vào mở popup bốc lì xì.
+   Bốc vô hạn, tải lại trang là có lại 3 cái mới. Chỉ chơi cho vui. */
+.tet-lixi-corner {
+  gap: 4px;
+  animation: tet-lixi-bob 2.6s ease-in-out infinite;
+}
+@keyframes tet-lixi-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.tet-lixi {
+  position: relative;
+  width: 46px;
+  height: 62px;
+  background: linear-gradient(160deg, #c22733, #8F1420 70%);
+  border: 1.5px solid var(--tet-gold);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px -4px rgba(82, 13, 23, 0.55), inset 0 0 0 2px rgba(143, 20, 32, 0.55), inset 0 0 0 3px rgba(231, 189, 104, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+.tet-lixi:hover {
+  filter: brightness(1.12);
+}
+.tet-lixi::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 34%;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), transparent);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  border-bottom: 1px solid rgba(231, 189, 104, 0.55);
+}
+.tet-lixi-char {
+  color: var(--tet-gold-light);
+  font-weight: 800;
+  font-size: 15px;
+  line-height: 1;
+  margin-top: 12px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.tet-lixi-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(20, 5, 8, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.tet-lixi-modal {
+  position: relative;
+  width: min(320px, 92vw);
+  background: linear-gradient(160deg, #fff8ea, #ffeec2);
+  border: 2px solid var(--tet-gold);
+  border-radius: 20px;
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.55);
+  padding: 22px 20px 20px;
+  text-align: center;
+}
+.tet-lixi-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  background: #520d17;
+  border: 1px solid var(--tet-gold);
+  color: var(--tet-gold-light);
+  font-size: 13px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.tet-lixi-title {
+  color: var(--tet-red);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  margin-bottom: 16px;
+}
+.tet-lixi-big {
+  position: relative;
+  width: 132px;
+  height: 178px;
+  margin: 0 auto;
+  background: linear-gradient(160deg, #c22733, #8F1420 70%);
+  border: 2px solid var(--tet-gold);
+  border-radius: 10px;
+  box-shadow: 0 14px 34px -8px rgba(82, 13, 23, 0.55), inset 0 0 0 3px rgba(143, 20, 32, 0.55), inset 0 0 0 5px rgba(231, 189, 104, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.tet-lixi-big:hover {
+  transform: scale(1.04);
+}
+.tet-lixi-big::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 34%;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.22), transparent);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  border-bottom: 1px solid rgba(231, 189, 104, 0.55);
+}
+.tet-lixi-char-big {
+  color: var(--tet-gold-light);
+  font-weight: 800;
+  font-size: 42px;
+  line-height: 1;
+  margin-top: 34px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+.tet-lixi-hint {
+  color: #7a5a2e;
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 14px;
+}
+.tet-lixi-result {
+  animation: tet-lixi-pop 0.35s ease;
+}
+@keyframes tet-lixi-pop {
+  0% { transform: scale(0.85); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.tet-lixi-result-label {
+  color: #7a5a2e;
+  font-size: 14px;
+  font-weight: 600;
+}
+.tet-lixi-result-amount {
+  color: var(--tet-red);
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 6px 0 4px;
+}
+.tet-lixi-result-luck {
+  font-size: 24px;
+}
+.tet-lixi-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 18px;
+}
+.tet-lixi-btn {
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tet-lixi-btn-primary {
+  background: var(--tet-red);
+  color: #fff8ea;
+  border: 1px solid var(--tet-red);
+}
+.tet-lixi-btn-ghost {
+  background: transparent;
+  color: var(--tet-red);
+  border: 1px solid var(--tet-red);
 }
