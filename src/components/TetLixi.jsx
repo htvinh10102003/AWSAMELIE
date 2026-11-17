@@ -2,9 +2,10 @@ import { useState } from 'react';
 
 // Lì xì Tết — 3 phong bao nhỏ góc trên phải, chỉ hiện khi theme Tết bật.
 // Bấm vào 1 phong bao thì mở popup bốc lì xì. Mỗi phong bao chỉ bốc
-// được 1 lần (tổng 3 lượt / lần tải trang); bốc hết 3 cái thì tải lại
-// trang mới có lại 3 cái mới. Chỉ chơi cho vui trong app, KHÔNG phải
-// tiền thật, KHÔNG lưu DB, KHÔNG động logic/data/quyền.
+// được 1 lần, TỐI ĐA 3 LƯỢT MỖI NGÀY (theo ngày VN). Đã bốc rồi thì
+// lưu vào localStorage — tải lại trang vẫn nhớ, sang ngày mới mới có
+// lại 3 lượt mới. Chỉ chơi cho vui trong app, KHÔNG phải tiền thật,
+// KHÔNG lưu DB, KHÔNG động logic/data/quyền.
 const PRIZES = [
   { label: 'Chúc may mắn lần sau', amount: 0, weight: 30 },
   { label: '1.000đ', amount: 1000, weight: 20 },
@@ -28,6 +29,42 @@ function pickPrize() {
   return PRIZES[0];
 }
 
+// Ngày VN (yyyy-mm-dd) — dùng số học UTC+7, KHÔNG dùng Intl (app cấm).
+function vnDateString(d = new Date()) {
+  const vn = new Date(d.getTime() + 7 * 60 * 60 * 1000);
+  const y = vn.getUTCFullYear();
+  const m = String(vn.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(vn.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+const LIXI_KEY = 'tet_lixi_picked';
+
+// Đọc lượt đã bốc hôm nay từ localStorage; khác ngày thì coi như chưa bốc.
+function loadPickedIds() {
+  try {
+    const raw = localStorage.getItem(LIXI_KEY);
+    if (!raw) return new Set();
+    const data = JSON.parse(raw);
+    if (data && data.date === vnDateString() && Array.isArray(data.ids)) {
+      return new Set(
+        data.ids.filter((id) => Number.isInteger(id) && id >= 0 && id < ENVELOPES.length),
+      );
+    }
+    return new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function savePickedIds(ids) {
+  try {
+    localStorage.setItem(LIXI_KEY, JSON.stringify({ date: vnDateString(), ids: [...ids] }));
+  } catch {
+    // Chế độ ẩn danh / bộ nhớ đầy thì thôi, vẫn bốc được trong phiên.
+  }
+}
+
 // 3 phong bao xếp hơi xòe, nghiêng nhẹ cho vui.
 const ENVELOPES = [
   { id: 0, rotate: -10, offset: 0 },
@@ -39,7 +76,7 @@ export default function TetLixi() {
   const [open, setOpen] = useState(false);
   const [currentId, setCurrentId] = useState(null);
   const [picked, setPicked] = useState(null);
-  const [pickedIds, setPickedIds] = useState(() => new Set());
+  const [pickedIds, setPickedIds] = useState(loadPickedIds);
 
   const remaining = ENVELOPES.length - pickedIds.size;
 
@@ -55,11 +92,10 @@ export default function TetLixi() {
   const handlePick = () => {
     if (picked || currentId === null) return;
     setPicked(pickPrize());
-    setPickedIds((prev) => {
-      const next = new Set(prev);
-      next.add(currentId);
-      return next;
-    });
+    const next = new Set(pickedIds);
+    next.add(currentId);
+    setPickedIds(next);
+    savePickedIds(next);
   };
 
   // Bốc tiếp: đóng popup để bấm phong bao khác còn lại.
@@ -120,9 +156,9 @@ export default function TetLixi() {
                   </>
                 )}
                 {remaining === 0 ? (
-                  <div className="tet-lixi-hint">Đã hết 3 lì xì! Tải lại trang để bốc tiếp.</div>
+                  <div className="tet-lixi-hint">Đã hết 3 lì xì hôm nay rồi! Mai quay lại bốc tiếp nhé.</div>
                 ) : (
-                  <div className="tet-lixi-hint">Còn lại {remaining} lì xì</div>
+                  <div className="tet-lixi-hint">Còn lại {remaining} lì xì hôm nay</div>
                 )}
                 <div className="tet-lixi-actions">
                   {remaining > 0 && (
