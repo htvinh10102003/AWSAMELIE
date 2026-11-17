@@ -736,15 +736,6 @@ export default function BaoCaoHoanChuaNhan() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  // Tập riêng cho mục hợp nhất "Cần check tay": tải độc lập, không phụ
-  // thuộc bộ lọc trang (không lọc sàn/shop/tìm kiếm); mặc định chỉ tải
-  // đơn tạo trong 30 ngày gần nhất (xem uniCrtFrom/uniCrtTo bên dưới).
-  const [checkRows, setCheckRows] = useState([]);
-  const [checkLoading, setCheckLoading] = useState(false);
-  const [checkError, setCheckError] = useState('');
-  // Số thứ tự lần tải checkRows: lần tải cũ về sau thì bỏ kết quả (đổi
-  // ô ngày liên tiếp sẽ chạy nhiều lần tải chồng nhau).
-  const checkFetchSeq = useRef(0);
   // Đơn hoàn 1 phần (type 16) + kiểm nhận tay.
   const [partialRows, setPartialRows] = useState([]);
   const [partialMissing, setPartialMissing] = useState(false);
@@ -954,61 +945,10 @@ export default function BaoCaoHoanChuaNhan() {
     }
   }
 
-  // Tải tập riêng cho mục hợp nhất "Cần check tay": đơn trả có mã đơn
-  // trả thật + trạng thái Nhanh Đã hoàn tiền (1) / Đang hoàn tiền (5),
-  // lọc server-side theo ngày tạo (crtFrom/crtTo, mặc định 30 ngày gần
-  // nhất; rỗng = không giới hạn đầu đó). KHÔNG lọc sàn/shop/tìm kiếm.
-  // Lọc mã thật 2 lớp: or ilike theo đầu mã ở server + isReturnCode ở
-  // client. Lỗi -> ghi chú mờ trong mục, không sập trang.
-  async function fetchCheckRows(crtFrom, crtTo) {
-    const seq = ++checkFetchSeq.current;
-    setCheckLoading(true);
-    setCheckError('');
-    try {
-      let all = [];
-      let from = 0;
-      const STEP = 1000;
-      for (;;) {
-        let q = supabase
-          .from('ecom_return_orders')
-          .select('*')
-          .in('nhanh_status_id', [1, 5])
-          .not('return_tracking_number', 'is', null)
-          .neq('return_tracking_number', '')
-          .or('return_tracking_number.ilike.SHOPEE%,return_tracking_number.ilike.SPX%,return_tracking_number.ilike.VNGH%,return_tracking_number.ilike.VTP%,return_tracking_number.ilike.EA%,return_tracking_number.ilike.379%,return_tracking_number.ilike.G%,return_tracking_number.ilike.8%,return_tracking_number.ilike.1%');
-        if (crtFrom) q = q.gte('return_created_at', `${crtFrom}T00:00:00+07:00`);
-        if (crtTo) q = q.lt('return_created_at', `${addDaysStr(crtTo, 1)}T00:00:00+07:00`);
-        const { data, error: err } = await q
-          .order('return_updated_at', { ascending: false })
-          .range(from, from + STEP - 1);
-        if (err) throw err;
-        if (!data || data.length === 0) break;
-        all = all.concat(data);
-        from += data.length;
-        if (data.length < STEP) break;
-      }
-      if (seq !== checkFetchSeq.current) return; // có lần tải mới hơn, bỏ kết quả cũ
-      setCheckRows(all.filter((r) => isReturnCode(r.return_tracking_number)));
-    } catch (e) {
-      if (seq !== checkFetchSeq.current) return;
-      setCheckError('Lỗi tải danh sách cần check tay: ' + (e.message || e));
-      setCheckRows([]);
-    } finally {
-      if (seq === checkFetchSeq.current) setCheckLoading(false);
-    }
-  }
-
   useEffect(() => {
     fetchAll(filters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [applied]);
-
-  // Tải lại tập "Cần check tay" khi đổi khoảng ngày tạo của mục (mặc
-  // định 30 ngày gần nhất; nới rộng ô ngày để tải thêm đơn cũ hơn).
-  useEffect(() => {
-    fetchCheckRows(uniCrtFrom, uniCrtTo);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uniCrtFrom, uniCrtTo]);
 
   // Owner nhận diện giống TraHangHoanTien: user_metadata.is_owner hoặc email owner.
   useEffect(() => {
@@ -1261,15 +1201,17 @@ export default function BaoCaoHoanChuaNhan() {
   // đã giao, cũng cần tra đơn gốc có ở 72 không. Dẫn xuất từ cùng
   // manualChecks + tập đơn 1 phần như các nhóm khác nên quét / sửa tay
   // xong là đơn tự biến khỏi danh sách, không cần tải lại trang.
+  // Lấy từ allRows (đã lọc theo bộ lọc trên) để trạng thái đơn gốc
+  // được tra đúng cho chính các đơn đang hiển thị trong các mục.
   const needCheckCandidates = useMemo(() => {
-    return checkRows.filter((r) => {
+    return allRows.filter((r) => {
       if (!returnCodeOf(r)) return false;
       if (hasPartial(r)) return false;
       if (manualChecks.get(r.return_id)?.received_status === 'Đã nhận') return false;
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR]);
+  }, [allRows, manualChecks, partialOriginalIds, partialAppOrderIdsNoR]);
 
   // Tra trạng thái đơn gốc cho ứng viên (quy tắc v: loại khi đơn gốc ở 72).
   // Chỉ tra những đơn chưa có trong cache (chia lô 100); lỗi -> bỏ qua
@@ -1319,19 +1261,54 @@ export default function BaoCaoHoanChuaNhan() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [needCheckCandidates]);
 
-  // --- Tập check chưa nhận: 1 item cho mỗi đơn trả (checkRows) + mỗi
-  // đơn gốc 71/74 (orders7174), phân hoạch thành 4 mục (b)/(c)/(R)/
-  // Đang chờ — mỗi đơn chưa nhận chỉ thuộc đúng 1 mục (xem các vị từ
-  // isBucketBItem/isBucketCItem/isBucketRItem/isWaitingItem ở đầu file).
-  // Đơn đã nhận ('Đã nhận') không thuộc mục nào (Vinh 14:35).
+  // Lọc đơn gốc 71/74 theo bộ lọc trên (sàn/shop/ngày cập nhật/ngày
+  // tạo/tìm kiếm). Đơn 71/74 không có shop_id nên bị loại khi lọc shop
+  // (giống filteredBuckets bên dưới).
+  function order7174MatchesTopFilter(o) {
+    const f = filters;
+    if (f.platform !== '' && f.platform !== null && f.platform !== undefined) {
+      const pid = SALE_CHANNEL_TO_PLATFORM[Number(o.sale_channel)];
+      if (String(pid ?? '') !== String(f.platform)) return false;
+    }
+    if (f.shop) return false;
+    if (f.updFrom || f.updTo) {
+      const d = vnDateOf(o.updated_at);
+      if (!d) return false;
+      if (f.updFrom && d < f.updFrom) return false;
+      if (f.updTo && d > f.updTo) return false;
+    }
+    if (f.crtFrom || f.crtTo) {
+      const d = vnDateOf(o.created_at);
+      if (!d) return false;
+      if (f.crtFrom && d < f.crtFrom) return false;
+      if (f.crtTo && d > f.crtTo) return false;
+    }
+    if (f.search && f.search.trim()) {
+      const q = f.search.trim().toLowerCase();
+      const hay = [o.id, o.ecom_order_id, o.carrier_code].map((v) => String(v || '').toLowerCase()).join(' ');
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }
+
+  // --- Tập check chưa nhận: 1 item cho mỗi đơn trả theo bộ lọc trên
+  // (allRows) + mỗi đơn gốc 71/74 (orders7174, lọc theo cùng bộ lọc),
+  // phân hoạch thành 4 mục (b)/(c)/(R)/Đang chờ — mỗi đơn chưa nhận chỉ
+  // thuộc đúng 1 mục (xem các vị từ isBucketBItem/isBucketCItem/
+  // isBucketRItem/isWaitingItem ở đầu file). Đơn đã nhận ('Đã nhận')
+  // không thuộc mục nào (Vinh 14:35). Các ô tổng quan + danh sách tab
+  // đều tính từ tập này nên khớp với bộ lọc trên.
   const checkItems = useMemo(() => {
     const deps = checkDeps();
     const out = [];
-    for (const r of checkRows) out.push(makeCheckItemReturn(r, deps));
-    for (const o of orders7174) out.push(makeCheckItemOrder(o, deps));
+    for (const r of allRows) out.push(makeCheckItemReturn(r, deps));
+    for (const o of orders7174) {
+      if (!order7174MatchesTopFilter(o)) continue;
+      out.push(makeCheckItemOrder(o, deps));
+    }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkRows, orders7174, manualChecks, carrierChecks, partialOriginalIds, partialAppOrderIdsNoR, origStatusById, origStatusByEcom]);
+  }, [allRows, orders7174, filters, manualChecks, carrierChecks, partialOriginalIds, partialAppOrderIdsNoR, origStatusById, origStatusByEcom]);
 
   const bucketBItems = useMemo(() => checkItems.filter(isBucketBItem), [checkItems]);
   const bucketCItems = useMemo(() => checkItems.filter(isBucketCItem), [checkItems]);
@@ -2821,8 +2798,7 @@ export default function BaoCaoHoanChuaNhan() {
           </div>
           <button onClick={clearUniFilters} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-xl hover:bg-slate-50 cursor-pointer">Xóa lọc</button>
         </div>
-        <p className="text-xs text-slate-500 mt-2">Đang hiện {tabFilteredCount} / {tabTotalCount} đơn trong tab đang chọn (đơn trả + đơn gốc 71/74). Mặc định chỉ tải đơn trả tạo trong 30 ngày gần nhất — nới rộng ô "Từ ngày tạo" để xem đơn cũ hơn.</p>
-        {checkError && <p className="text-xs text-red-600 mt-1">{checkError}</p>}
+        <p className="text-xs text-slate-500 mt-2">Đang hiện {tabFilteredCount} / {tabTotalCount} đơn trong tab đang chọn (đơn trả + đơn gốc 71/74). Các ô trên tính theo bộ lọc trên cùng — ô "Từ ngày tạo" bên dưới lọc thêm trong tab đang chọn, nới rộng để xem đơn cũ hơn.</p>
         {orders7174Error && <p className="text-xs text-red-600 mt-1">{orders7174Error}</p>}
         {origStatusError && <p className="text-xs text-amber-700 mt-1">Không kiểm tra được trạng thái đơn gốc — danh sách đang hiển thị theo luật tuổi + chưa nhận (chưa lọc đơn gốc ở 72).</p>}
         {carrierChecksMissing && <p className="text-xs text-amber-700 mt-1">Chưa tải được trạng thái check đơn 71/74 (bảng order_carrier_checks chưa có) — chạy migration 20261110_order_carrier_checks rồi tải lại trang để lưu trạng thái đơn 71/74.</p>}
@@ -2900,7 +2876,7 @@ export default function BaoCaoHoanChuaNhan() {
           </div>
         )}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
-          {(checkLoading || orders7174Loading) ? (
+          {(loading || orders7174Loading) ? (
             <div className="p-8 flex items-center justify-center gap-2 text-sm font-bold text-slate-500">
               <Loader2 size={18} className="animate-spin" /> Đang tải...
             </div>
