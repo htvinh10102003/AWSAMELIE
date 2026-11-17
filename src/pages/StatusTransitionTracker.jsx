@@ -3,7 +3,8 @@ import { supabase } from '../lib/supabase';
 import { 
   Calendar, Search, Filter, Loader2, ArrowRight, 
   PackageSearch, Clock, User, Box, Hash, ChevronDown, 
-  ChevronLeft, ChevronRight, CheckSquare, Square, AlertTriangle, Truck
+  ChevronLeft, ChevronRight, CheckSquare, Square, AlertTriangle, Truck,
+  FileSpreadsheet
 } from 'lucide-react';
 
 // Các trạng thái đứng trước bước "Đã đóng gói" tại kho
@@ -50,6 +51,7 @@ const CARRIER_NAMES = [
 
 export default function StatusTransitionTracker() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [results, setResults] = useState([]);
   const [statuses, setStatuses] = useState([]);
 
@@ -162,8 +164,9 @@ export default function StatusTransitionTracker() {
     const oldGroup = getStatusGroup(statusOld);
     const newGroup = getStatusGroup(statusNew);
 
-    // 1. Loại trừ: Thành công -> Đã hoàn (Hợp lệ, không tính là lỗi)
-    if (oldName === 'thành công' && newName === 'đã hoàn') {
+    // 1. Loại trừ: Thành công -> Đã hoàn / Đã chuyển hoàn (Hợp lệ, không
+    // tính là lỗi — đơn giao thành công rồi khách trả, Vinh tick hoàn tay).
+    if (oldName === 'thành công' && (newName === 'đã hoàn' || newName === 'đã chuyển hoàn')) {
       return false;
     }
 
@@ -193,6 +196,7 @@ export default function StatusTransitionTracker() {
     const shippingIds = [];
     const successIds = [];
     const returnedIds = [];
+    const transferredBackIds = [];
 
     statuses.forEach(st => {
       const name = st.name ? st.name.trim().toLowerCase() : '';
@@ -204,6 +208,7 @@ export default function StatusTransitionTracker() {
       if (group === 'SHIPPING') shippingIds.push(st.id);
       if (name === 'thành công') successIds.push(st.id);
       if (name === 'đã hoàn') returnedIds.push(st.id);
+      if (name === 'đã chuyển hoàn') transferredBackIds.push(st.id);
     });
 
     const orConditions = [];
@@ -222,9 +227,10 @@ export default function StatusTransitionTracker() {
       );
     }
 
-    // TH3: Thành công -> Bất kỳ trạng thái nào khác (trừ chính nó và trừ "Đã hoàn")
+    // TH3: Thành công -> Bất kỳ trạng thái nào khác (trừ chính nó, trừ
+    // "Đã hoàn" và trừ "Đã chuyển hoàn" — 2 đích hợp lệ khi tick hoàn)
     successIds.forEach(sId => {
-      const excludedTargetIds = [sId, ...returnedIds];
+      const excludedTargetIds = [sId, ...returnedIds, ...transferredBackIds];
       orConditions.push(
         `and(status_old.eq.${sId},status_new.not.in.(${excludedTargetIds.join(',')}))`
       );
@@ -238,6 +244,86 @@ export default function StatusTransitionTracker() {
     });
 
     return orConditions.join(',');
+  };
+
+  // Xây query chung (select + mọi bộ lọc, chưa phân trang) — dùng chung
+  // cho fetchData (1 trang) và xuất Excel (toàn bộ kết quả).
+  const buildBaseQuery = () => {
+    let query = supabase
+      .from('order_histories')
+      .select(`
+        id,
+        created_at,
+        created_by_name,
+        status_old,
+        status_new,
+        order_id,
+        orders!inner (
+          id,
+          carrier_name,
+          order_products!inner (
+            product_code,
+            product_name,
+            quantity
+          )
+        )
+      `, { count: 'exact' })
+      .gte('created_at', `${filters.startDate}T00:00:00.000Z`)
+      .lte('created_at', `${filters.endDate}T23:59:59.999Z`)
+      .order('created_at', { ascending: false });
+
+    // Lọc theo trạng thái bất thường
+    if (isAbnormalOnly) {
+      const abnormalOrFilter = buildAbnormalOrFilter();
+      if (abnormalOrFilter) {
+        query = query.or(abnormalOrFilter);
+      }
+    }
+
+    // Lọc theo trạng thái người dùng chọn (nếu có chọn)
+    if (selectedFromStatuses.length > 0) {
+      query = query.in('status_old', selectedFromStatuses);
+    }
+
+    if (selectedToStatuses.length > 0) {
+      query = query.in('status_new', selectedToStatuses);
+    }
+
+    // Lọc theo người thao tác
+    if (filters.operator === '__SYSTEM__') {
+      // Hệ thống: created_by_name rỗng (kiểm chứng 14/11/2026: 0 dòng NULL trong 90 ngày, nhóm trống là '')
+      query = query.eq('created_by_name', '');
+    } else if (filters.operator) {
+      query = query.eq('created_by_name', filters.operator);
+    }
+
+    // Lọc theo hãng vận chuyển
+    if (filters.carrier) {
+      query = query.eq('orders.carrier_name', filters.carrier);
+    }
+
+    // Lọc theo ID đơn hàng (hỗ trợ nhập 1 mã gần đúng hoặc nhiều mã cách nhau bởi dấu phẩy/khoảng trắng)
+    const trimmedOrderId = filters.orderIdSearch.trim();
+    if (trimmedOrderId) {
+      const orderIds = trimmedOrderId.split(/[\s,]+/).filter(Boolean);
+      if (orderIds.length > 1) {
+        query = query.in('order_id', orderIds);
+      } else {
+        query = query.ilike('order_id', `%${orderIds[0]}%`);
+      }
+    }
+
+    // Lọc theo tên sản phẩm
+    if (filters.productSearch.trim()) {
+      query = query.ilike('orders.order_products.product_name', `%${filters.productSearch.trim()}%`);
+    }
+
+    // Lọc theo số lượng tối thiểu
+    if (filters.minQuantity) {
+      query = query.gte('orders.order_products.quantity', parseFloat(filters.minQuantity));
+    }
+
+    return query;
   };
 
   // Gắn page vào hàm fetch để gọi mỗi khi sang trang
@@ -255,82 +341,8 @@ export default function StatusTransitionTracker() {
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
 
-      let query = supabase
-        .from('order_histories')
-        .select(`
-          id,
-          created_at,
-          created_by_name,
-          status_old,
-          status_new,
-          order_id,
-          orders!inner (
-            id,
-            carrier_name,
-            order_products!inner (
-              product_code,
-              product_name,
-              quantity
-            )
-          )
-        `, { count: 'exact' })
-        .gte('created_at', `${filters.startDate}T00:00:00.000Z`)
-        .lte('created_at', `${filters.endDate}T23:59:59.999Z`)
-        .order('created_at', { ascending: false });
-
-      // Lọc theo trạng thái bất thường
-      if (isAbnormalOnly) {
-        const abnormalOrFilter = buildAbnormalOrFilter();
-        if (abnormalOrFilter) {
-          query = query.or(abnormalOrFilter);
-        }
-      }
-
-      // Lọc theo trạng thái người dùng chọn (nếu có chọn)
-      if (selectedFromStatuses.length > 0) {
-        query = query.in('status_old', selectedFromStatuses);
-      }
-
-      if (selectedToStatuses.length > 0) {
-        query = query.in('status_new', selectedToStatuses);
-      }
-
-      // Lọc theo người thao tác
-      if (filters.operator === '__SYSTEM__') {
-        // Hệ thống: created_by_name rỗng (kiểm chứng 14/11/2026: 0 dòng NULL trong 90 ngày, nhóm trống là '')
-        query = query.eq('created_by_name', '');
-      } else if (filters.operator) {
-        query = query.eq('created_by_name', filters.operator);
-      }
-
-      // Lọc theo hãng vận chuyển
-      if (filters.carrier) {
-        query = query.eq('orders.carrier_name', filters.carrier);
-      }
-
-      // Lọc theo ID đơn hàng (hỗ trợ nhập 1 mã gần đúng hoặc nhiều mã cách nhau bởi dấu phẩy/khoảng trắng)
-      const trimmedOrderId = filters.orderIdSearch.trim();
-      if (trimmedOrderId) {
-        const orderIds = trimmedOrderId.split(/[\s,]+/).filter(Boolean);
-        if (orderIds.length > 1) {
-          query = query.in('order_id', orderIds);
-        } else {
-          query = query.ilike('order_id', `%${orderIds[0]}%`);
-        }
-      }
-
-      // Lọc theo tên sản phẩm
-      if (filters.productSearch.trim()) {
-        query = query.ilike('orders.order_products.product_name', `%${filters.productSearch.trim()}%`);
-      }
-
-      // Lọc theo số lượng tối thiểu
-      if (filters.minQuantity) {
-        query = query.gte('orders.order_products.quantity', parseFloat(filters.minQuantity));
-      }
-
       // Áp dụng Phân trang (chỉ kéo đúng số dòng của trang hiện tại)
-      query = query.range(from, to);
+      const query = buildBaseQuery().range(from, to);
 
       const { data, count, error } = await query;
 
@@ -345,6 +357,49 @@ export default function StatusTransitionTracker() {
       alert("Lỗi khi lấy dữ liệu: " + error.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Xuất Excel: toàn bộ kết quả theo bộ lọc hiện tại (không chỉ 50 dòng/trang).
+  const handleExportExcel = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const all = [];
+      const STEP = 1000;
+      let from = 0;
+      for (;;) {
+        const { data, error } = await buildBaseQuery().range(from, from + STEP - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        from += data.length;
+        if (data.length < STEP) break;
+      }
+      if (all.length === 0) {
+        alert('Không có dữ liệu phù hợp với bộ lọc để xuất Excel.');
+        return;
+      }
+      const XLSX = await import('xlsx');
+      const rows = all.map((row) => ({
+        'Thời gian': new Date(row.created_at).toLocaleString('vi-VN'),
+        'Mã đơn hàng': row.order_id,
+        'Hãng vận chuyển': row.orders?.carrier_name || '',
+        'Người thực hiện': row.created_by_name || 'Hệ thống',
+        'Trạng thái cũ': getStatusName(row.status_old),
+        'Trạng thái mới': getStatusName(row.status_new),
+        'Có vấn đề': isAbnormalTransition(row.status_old, row.status_new) ? 'Có' : 'Không',
+        'Sản phẩm': (row.orders?.order_products || []).map((p) => `${p.product_name} (${p.product_code}) x${p.quantity}`).join('; '),
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Luân chuyển');
+      XLSX.writeFile(wb, `luan-chuyen-trang-thai_${filters.startDate}_${filters.endDate}.xlsx`);
+    } catch (e) {
+      console.error('Lỗi xuất Excel:', e);
+      alert('Lỗi xuất Excel: ' + (e.message || e));
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -626,6 +681,19 @@ export default function StatusTransitionTracker() {
 
       {/* KẾT QUẢ TÌM KIẾM */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 bg-slate-50">
+          <div className="text-sm font-bold text-slate-700">
+            Kết quả: <span className="text-blue-600">{totalCount}</span> dòng
+          </div>
+          <button
+            onClick={handleExportExcel}
+            disabled={isExporting || totalCount === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 disabled:opacity-50 transition-all"
+          >
+            {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet size={16} />}
+            {isExporting ? 'Đang xuất...' : 'Xuất Excel'}
+          </button>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500 font-bold">
