@@ -318,3 +318,13 @@
   color: var(--tet-red);
   border: 1px solid var(--tet-red);
 }
+
+/* Phong bao đã bốc rồi: mờ đi, không bấm được nữa. */
+.tet-lixi-used {
+  opacity: 0.4;
+  filter: saturate(0.6);
+  cursor: default;
+}
+.tet-lixi-used:hover {
+  filter: saturate(0.6);
+}

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 
-// Lì xì Tết — 3 phong bao nhỏ góc dưới trái, chỉ hiện khi theme Tết bật.
-// Bấm vào 1 phong bao thì mở popup bốc lì xì. Bốc vô hạn, tải lại trang
-// là có lại 3 cái mới. Chỉ chơi cho vui trong app, KHÔNG phải tiền thật,
-// KHÔNG lưu DB, KHÔNG động logic/data/quyền.
+// Lì xì Tết — 3 phong bao nhỏ góc trên phải, chỉ hiện khi theme Tết bật.
+// Bấm vào 1 phong bao thì mở popup bốc lì xì. Mỗi phong bao chỉ bốc
+// được 1 lần (tổng 3 lượt / lần tải trang); bốc hết 3 cái thì tải lại
+// trang mới có lại 3 cái mới. Chỉ chơi cho vui trong app, KHÔNG phải
+// tiền thật, KHÔNG lưu DB, KHÔNG động logic/data/quyền.
 const PRIZES = [
   { label: 'Chúc may mắn lần sau', amount: 0, weight: 30 },
   { label: '1.000đ', amount: 1000, weight: 20 },
@@ -36,9 +37,15 @@ const ENVELOPES = [
 
 export default function TetLixi() {
   const [open, setOpen] = useState(false);
+  const [currentId, setCurrentId] = useState(null);
   const [picked, setPicked] = useState(null);
+  const [pickedIds, setPickedIds] = useState(() => new Set());
 
-  const openPopup = () => {
+  const remaining = ENVELOPES.length - pickedIds.size;
+
+  const openPopup = (id) => {
+    if (pickedIds.has(id)) return;
+    setCurrentId(id);
     setPicked(null);
     setOpen(true);
   };
@@ -46,27 +53,37 @@ export default function TetLixi() {
   const closePopup = () => setOpen(false);
 
   const handlePick = () => {
-    if (picked) return;
+    if (picked || currentId === null) return;
     setPicked(pickPrize());
+    setPickedIds((prev) => {
+      const next = new Set(prev);
+      next.add(currentId);
+      return next;
+    });
   };
 
-  const handleAgain = () => setPicked(null);
+  // Bốc tiếp: đóng popup để bấm phong bao khác còn lại.
+  const handleAgain = () => setOpen(false);
 
   return (
     <>
-      <div className="tet-lixi-corner fixed z-[300] bottom-4 left-4 max-sm:bottom-24 max-sm:left-3 flex items-end select-none" aria-label="Lì xì Tết">
-        {ENVELOPES.map((e) => (
-          <button
-            key={e.id}
-            type="button"
-            onClick={openPopup}
-            aria-label="Bốc lì xì"
-            className="tet-lixi"
-            style={{ transform: `rotate(${e.rotate}deg) translateY(${e.offset}px)` }}
-          >
-            <span className="tet-lixi-char">Lộc</span>
-          </button>
-        ))}
+      <div className="tet-lixi-corner fixed z-[300] top-14 right-4 max-sm:top-[76px] max-sm:right-3 flex items-end select-none" aria-label="Lì xì Tết">
+        {ENVELOPES.map((e) => {
+          const used = pickedIds.has(e.id);
+          return (
+            <button
+              key={e.id}
+              type="button"
+              onClick={() => openPopup(e.id)}
+              disabled={used}
+              aria-label={used ? 'Đã bốc rồi' : 'Bốc lì xì'}
+              className={`tet-lixi ${used ? 'tet-lixi-used' : ''}`}
+              style={{ transform: `rotate(${e.rotate}deg) translateY(${e.offset}px)` }}
+            >
+              <span className="tet-lixi-char">Lộc</span>
+            </button>
+          );
+        })}
       </div>
 
       {open && (
@@ -102,10 +119,17 @@ export default function TetLixi() {
                     <div className="tet-lixi-result-label">Bốc tiếp thử vận may nào!</div>
                   </>
                 )}
+                {remaining === 0 ? (
+                  <div className="tet-lixi-hint">Đã hết 3 lì xì! Tải lại trang để bốc tiếp.</div>
+                ) : (
+                  <div className="tet-lixi-hint">Còn lại {remaining} lì xì</div>
+                )}
                 <div className="tet-lixi-actions">
-                  <button type="button" onClick={handleAgain} className="tet-lixi-btn tet-lixi-btn-primary">
-                    Bốc tiếp
-                  </button>
+                  {remaining > 0 && (
+                    <button type="button" onClick={handleAgain} className="tet-lixi-btn tet-lixi-btn-primary">
+                      Bốc tiếp
+                    </button>
+                  )}
                   <button type="button" onClick={closePopup} className="tet-lixi-btn tet-lixi-btn-ghost">
                     Đóng
                   </button>
