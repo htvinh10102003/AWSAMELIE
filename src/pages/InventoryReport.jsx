@@ -67,20 +67,37 @@ const sizeOfName = (name) => {
   return SIZE_RE.test(tail) ? tail.toUpperCase() : '';
 };
 
-// Vị trí góc tem cho Số lệnh (dùng chung cho bản xem trước và bản in thật)
-const ORDER_CORNER_STYLE = {
-  'top-left': { top: '0.5mm', left: '1mm' },
-  'top-right': { top: '0.5mm', right: '1mm' },
-  'bottom-left': { bottom: '0.5mm', left: '1mm' },
-  'bottom-right': { bottom: '0.5mm', right: '1mm' },
+// Vị trí góc tem cho Số lệnh (dùng chung cho bản xem trước và bản in thật).
+// corner chọn góc nào, offsetV/offsetH là khoảng cách (mm) từ số lệnh tới
+// 2 mép của góc đó — để chỉnh tinh vị trí thay vì chỉ 4 góc cố định.
+const orderCornerStyle = (corner, offsetV, offsetH) => {
+  const v = `${offsetV ?? 0.5}mm`;
+  const h = `${offsetH ?? 1}mm`;
+  switch (corner) {
+    case 'top-left': return { top: v, left: h };
+    case 'bottom-left': return { bottom: v, left: h };
+    case 'bottom-right': return { bottom: v, right: h };
+    case 'top-right':
+    default: return { top: v, right: h };
+  }
 };
 
-// Một tem mẫu trong dải xem trước: cùng bố cục với bản in thật (35mm x 20mm),
+// 1mm = 3.7795px ở 96dpi; dải xem trước đang scale 0.9 nên 1mm trên màn
+// hình = 3.7795 * 0.9 px — dùng để đổi độ dịch chuột khi kéo thả ra mm.
+const PX_PER_MM = 3.7795;
+const PREVIEW_SCALE = 0.9;
+
+// Một tem mẫu trong dải xem trước: cùng bố cục với bản in thật (rộng x cao
+// theo cấu hình, tối thiểu cao tem — nội dung dài tự cao thêm, không cắt),
 // chỉ khác là vẽ mã vạch/QR bằng thư viện JS ngay trong trang để xem trực tiếp.
-function PreviewLabel({ item, config }) {
+// Kéo thả được: kéo tem nào thì tem đó dịch theo (đổi vị trí X/Y của cột đó);
+// ô nhập X/Y ở cài đặt chỉ là phụ, để gõ số chính xác.
+function PreviewLabel({ item, config, offset, onOffsetChange, draggable }) {
   const svgRef = useRef(null);
   const [qrUrl, setQrUrl] = useState('');
   const today = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const dragRef = useRef(null);
+  const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     if (config.codeType !== 'barcode' || !svgRef.current) return;
@@ -102,8 +119,34 @@ function PreviewLabel({ item, config }) {
   }, [item.barcode, config.codeType, config.qrSize]);
 
   const showOrder = config.showOrderNumber && config.orderNumber.trim() !== '';
+  const off = offset || { x: 0, y: 0 };
+  const handlePointerDown = (e) => {
+    if (!draggable || !onOffsetChange) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = { startX: e.clientX, startY: e.clientY, startOff: { ...off } };
+    setDragging(true);
+  };
+  const handlePointerMove = (e) => {
+    const d = dragRef.current;
+    if (!d || !onOffsetChange) return;
+    const pxPerMm = PX_PER_MM * PREVIEW_SCALE;
+    const roundHalf = (v) => Math.round(v * 2) / 2;
+    onOffsetChange({
+      x: roundHalf(d.startOff.x + (e.clientX - d.startX) / pxPerMm),
+      y: roundHalf(d.startOff.y + (e.clientY - d.startY) / pxPerMm),
+    });
+  };
+  const handlePointerUp = () => { dragRef.current = null; setDragging(false); };
   return (
-    <div style={{ position: 'relative', width: '35mm', height: '20mm', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', textAlign: 'center', boxSizing: 'border-box', padding: '0 1mm', background: 'white', border: '1px dashed #cbd5e1' }}>
+    <div
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      title={draggable ? 'Kéo để dịch vị trí tem này' : undefined}
+      style={{ position: 'relative', width: `${config.labelWidth}mm`, minHeight: `${config.labelHeight}mm`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', boxSizing: 'border-box', padding: `0 ${config.labelMargin}mm`, background: 'white', border: '1px dashed #cbd5e1', transform: `translate(${off.x}mm, ${off.y}mm)`, cursor: draggable ? (dragging ? 'grabbing' : 'grab') : 'default', touchAction: draggable ? 'none' : 'auto', userSelect: 'none', flexShrink: 0 }}
+    >
       {config.showShopName && <div style={{ fontSize: 7, fontWeight: 'bold', marginBottom: '0.5mm', textTransform: 'uppercase', overflowWrap: 'anywhere', width: '100%' }}>{config.shopName}</div>}
       <div style={{ transform: `scale(${config.codeScale / 100})`, transformOrigin: 'center center', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
         {config.codeType === 'barcode' ? (
@@ -120,7 +163,7 @@ function PreviewLabel({ item, config }) {
       </div>
       {config.showProductName && <div style={{ fontSize: 8.5, fontWeight: 'bold', lineHeight: 1.2, width: '100%', overflowWrap: 'anywhere', wordBreak: 'break-word', marginTop: '0.5mm' }}>{item.name}</div>}
       {config.showPrintDate && <div style={{ position: 'absolute', bottom: '0.5mm', right: '1mm', fontSize: 4, color: '#333' }}>{today}</div>}
-      {showOrder && <div style={{ position: 'absolute', fontWeight: 'bold', lineHeight: 1, zIndex: 2, fontSize: config.orderFontSize, ...ORDER_CORNER_STYLE[config.orderCorner] }}>{config.orderNumber}</div>}
+      {showOrder && <div style={{ position: 'absolute', fontWeight: 'bold', lineHeight: 1, zIndex: 2, fontSize: config.orderFontSize, ...orderCornerStyle(config.orderCorner, config.orderOffsetV, config.orderOffsetH) }}>{config.orderNumber}</div>}
     </div>
   );
 }
@@ -164,6 +207,15 @@ export default function InventoryReport() {
     showOrderNumber: true,
     orderCorner: 'top-right', // top-left | top-right | bottom-left | bottom-right
     orderFontSize: 7,    // Cỡ chữ số lệnh (px)
+    orderOffsetV: 0.5,   // Cách mép dọc của số lệnh (mm, theo góc đã chọn)
+    orderOffsetH: 1,     // Cách mép ngang của số lệnh (mm, theo góc đã chọn)
+    labelMargin: 1,      // Lề tem (mm): cách nội dung tới mép tem + cách giữa các hàng
+    labelWidth: 35,      // Rộng tem (mm)
+    labelHeight: 20,     // Cao tem (mm, tối thiểu — nội dung dài tự cao thêm)
+    labelsPerRow: 3,     // Số tem mỗi hàng
+    // Vị trí từng tem trong hàng (chỉnh từng cái 1): mỗi cột 1 cặp {x, y}
+    // tính bằng mm, kéo thả ở xem trước hoặc gõ số — mặc định 0.
+    labelOffsets: [{ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 0 }],
   });
 
   const searchInputRef = useRef(null);
@@ -721,6 +773,26 @@ export default function InventoryReport() {
     setPrintItems(prev => prev.filter((_, i) => i !== index));
   };
 
+  // Đổi vị trí 1 cột tem (dùng cho kéo thả ở xem trước và ô nhập X/Y phụ).
+  const setLabelOffset = (colIdx, next) => {
+    setPrintConfig((prev) => {
+      const offsets = (prev.labelOffsets || []).slice();
+      while (offsets.length <= colIdx) offsets.push({ x: 0, y: 0 });
+      offsets[colIdx] = { x: Number(next.x) || 0, y: Number(next.y) || 0 };
+      return { ...prev, labelOffsets: offsets };
+    });
+  };
+
+  // Đổi số tem mỗi hàng: giữ nguyên vị trí các cột cũ, cột mới về 0.
+  const handleLabelsPerRowChange = (n) => {
+    const count = Math.max(1, Math.min(6, Number(n) || 3));
+    setPrintConfig((prev) => {
+      const offsets = (prev.labelOffsets || []).slice(0, count);
+      while (offsets.length < count) offsets.push({ x: 0, y: 0 });
+      return { ...prev, labelsPerRow: count, labelOffsets: offsets };
+    });
+  };
+
   const generatePrintJob = () => {
     const validItems = printItems.filter(i => i.status === 'ok' && i.qty > 0);
     if (validItems.length === 0) {
@@ -735,9 +807,17 @@ export default function InventoryReport() {
       }
     });
 
+    // Khổ giấy theo cấu hình: rộng trang = rộng tem x số tem/hàng,
+    // cao hàng = cao tem + 2 lần lề (lề trên + lề dưới).
+    const labelW = Number(printConfig.labelWidth) || 35;
+    const labelH = Number(printConfig.labelHeight) || 20;
+    const perRow = Number(printConfig.labelsPerRow) || 3;
+    const marginMm = Number(printConfig.labelMargin) || 0;
+    const pageW = labelW * perRow;
+    const rowH = labelH + marginMm * 2;
     const chunks = [];
-    for (let i = 0; i < flatItems.length; i += 3) {
-      chunks.push(flatItems.slice(i, i + 3));
+    for (let i = 0; i < flatItems.length; i += perRow) {
+      chunks.push(flatItems.slice(i, i + perRow));
     }
 
     const printWindow = window.open('', '_blank');
@@ -753,36 +833,36 @@ export default function InventoryReport() {
         <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
         <style>
           @page {
-            size: 105mm 22mm;
+            size: ${pageW}mm auto;
             margin: 0;
           }
           body {
             margin: 0;
             padding: 0;
             font-family: Arial, sans-serif;
-            width: 105mm;
+            width: ${pageW}mm;
             background: white;
           }
           .row {
             display: flex;
-            width: 105mm;
-            height: 22mm;
+            width: ${pageW}mm;
+            min-height: ${rowH}mm;
             page-break-after: always;
             box-sizing: border-box;
-            padding: 1mm 0;
+            padding: ${marginMm}mm 0;
           }
           .label {
             position: relative;
-            width: 35mm;
-            height: 20mm;
+            width: ${labelW}mm;
+            min-height: ${labelH}mm;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
             text-align: center;
             box-sizing: border-box;
-            padding: 0 1mm;
+            padding: 0 ${marginMm}mm;
+            flex-shrink: 0;
           }
           .shop-name {
             font-size: 7px;
@@ -857,20 +937,26 @@ export default function InventoryReport() {
       <body>
     `;
 
-    // Vị trí góc tem cho Số lệnh (in HTML, cùng quy ước với bản xem trước)
+    // Vị trí góc tem cho Số lệnh (in HTML, cùng quy ước với bản xem trước):
+    // góc chọn hướng, offsetV/offsetH là khoảng cách (mm) tới 2 mép của góc.
+    const offV = printConfig.orderOffsetV ?? 0.5;
+    const offH = printConfig.orderOffsetH ?? 1;
     const orderCornerStyle = {
-      'top-left': 'top:0.5mm;left:1mm;',
-      'top-right': 'top:0.5mm;right:1mm;',
-      'bottom-left': 'bottom:0.5mm;left:1mm;',
-      'bottom-right': 'bottom:0.5mm;right:1mm;',
-    }[printConfig.orderCorner] || 'top:0.5mm;right:1mm;';
+      'top-left': `top:${offV}mm;left:${offH}mm;`,
+      'top-right': `top:${offV}mm;right:${offH}mm;`,
+      'bottom-left': `bottom:${offV}mm;left:${offH}mm;`,
+      'bottom-right': `bottom:${offV}mm;right:${offH}mm;`,
+    }[printConfig.orderCorner] || `top:${offV}mm;right:${offH}mm;`;
     const orderNumberHTML = (printConfig.showOrderNumber && printConfig.orderNumber.trim())
       ? `<div class="order-number" style="${orderCornerStyle}font-size:${printConfig.orderFontSize}px;">${escapeHtml(printConfig.orderNumber)}</div>`
       : '';
 
     chunks.forEach(chunk => {
       htmlContent += `<div class="row">`;
-      chunk.forEach(item => {
+      chunk.forEach((item, colIdx) => {
+        // Vị trí từng tem (cột colIdx): dịch theo X/Y đã kéo thả hoặc gõ số.
+        const colOff = (printConfig.labelOffsets || [])[colIdx] || { x: 0, y: 0 };
+        const labelShift = (colOff.x || colOff.y) ? ` style="transform: translate(${colOff.x || 0}mm, ${colOff.y || 0}mm);"` : '';
         let renderCodeHTML = '';
 
         if (printConfig.codeType === 'barcode') {
@@ -898,7 +984,7 @@ export default function InventoryReport() {
 
         // ️ SỬ DỤNG transform: scale ĐỂ PHÓNG TO/THU NHỎ TOÀN BỘ CODE
         htmlContent += `
-          <div class="label">
+          <div class="label"${labelShift}>
             ${printConfig.showShopName ? `<div class="shop-name">${escapeHtml(printConfig.shopName)}</div>` : ''}
 
             <div class="barcode-container" style="transform: scale(${printConfig.codeScale / 100}); transform-origin: center center;">
@@ -911,7 +997,7 @@ export default function InventoryReport() {
           </div>
         `;
       });
-      for(let i = chunk.length; i < 3; i++) {
+      for(let i = chunk.length; i < perRow; i++) {
         htmlContent += `<div class="label"></div>`;
       }
       htmlContent += `</div>`;
@@ -947,11 +1033,13 @@ export default function InventoryReport() {
     printWindow.document.close();
   };
 
-  // Hàng tem xem trước: 3 tem hợp lệ đầu tiên, chưa có thì dùng 1 tem mẫu + 2 ô trống
+  // Hàng tem xem trước: số tem hợp lệ đầu tiên theo số tem mỗi hàng, chưa có
+  // thì dùng 1 tem mẫu + các ô trống cho đủ hàng.
   const previewRow = (() => {
     const valid = printItems.filter(i => i.status === 'ok' && i.qty > 0);
-    const base = valid.length > 0 ? valid.slice(0, 3) : [{ name: 'SẢN PHẨM MẪU', barcode: '1234567890123' }];
-    while (base.length < 3) base.push({ name: '', barcode: '' });
+    const perRow = Number(printConfig.labelsPerRow) || 3;
+    const base = valid.length > 0 ? valid.slice(0, perRow) : [{ name: 'SẢN PHẨM MẪU', barcode: '1234567890123' }];
+    while (base.length < perRow) base.push({ name: '', barcode: '' });
     return base;
   })();
 
@@ -1629,6 +1717,26 @@ export default function InventoryReport() {
                             <option value="bottom-right">Phải dưới</option>
                           </select>
                         </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <label className="flex flex-col gap-1">
+                            <span className="text-xs font-bold text-slate-600">Cách mép dọc (mm)</span>
+                            <input
+                              type="number" min="0" max="10" step="0.5"
+                              value={printConfig.orderOffsetV}
+                              onChange={e => setPrintConfig({...printConfig, orderOffsetV: Number(e.target.value) || 0})}
+                              className="w-full text-xs font-bold px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-slate-700"
+                            />
+                          </label>
+                          <label className="flex flex-col gap-1">
+                            <span className="text-xs font-bold text-slate-600">Cách mép ngang (mm)</span>
+                            <input
+                              type="number" min="0" max="10" step="0.5"
+                              value={printConfig.orderOffsetH}
+                              onChange={e => setPrintConfig({...printConfig, orderOffsetH: Number(e.target.value) || 0})}
+                              className="w-full text-xs font-bold px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-slate-700"
+                            />
+                          </label>
+                        </div>
                         <div>
                           <div className="flex justify-between mb-1">
                             <label className="text-xs font-bold text-slate-600">Cỡ chữ số lệnh</label>
@@ -1645,22 +1753,111 @@ export default function InventoryReport() {
                       </>
                     )}
                   </div>
+
+                  {/* CẤU HÌNH LỀ TEM */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-700">Lề tem (mm)</span>
+                        <span className="text-xs text-slate-400 mt-0.5">Khoảng cách từ nội dung tới mép tem và giữa các hàng tem</span>
+                      </div>
+                      <input
+                        type="number" min="0" max="5" step="0.5"
+                        value={printConfig.labelMargin}
+                        onChange={e => setPrintConfig({...printConfig, labelMargin: Math.max(0, Number(e.target.value) || 0)})}
+                        className="w-20 text-xs font-bold px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-slate-700 text-center"
+                      />
+                    </div>
+                  </div>
+
+                  {/* CẤU HÌNH KHỔ GIẤY IN */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-slate-700">Khổ giấy in</span>
+                      <span className="text-xs text-slate-400 mt-0.5">Chỉnh theo đúng giấy tem đang dùng để khỏi bị cắt</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-bold text-slate-600">Rộng tem (mm)</span>
+                        <input
+                          type="number" min="20" max="100" step="1"
+                          value={printConfig.labelWidth}
+                          onChange={e => setPrintConfig({...printConfig, labelWidth: Math.max(20, Number(e.target.value) || 35)})}
+                          className="w-full text-xs font-bold px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-slate-700"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-bold text-slate-600">Cao tem (mm)</span>
+                        <input
+                          type="number" min="10" max="60" step="1"
+                          value={printConfig.labelHeight}
+                          onChange={e => setPrintConfig({...printConfig, labelHeight: Math.max(10, Number(e.target.value) || 20)})}
+                          className="w-full text-xs font-bold px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-slate-700"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-xs font-bold text-slate-600">Tem mỗi hàng</span>
+                        <input
+                          type="number" min="1" max="6" step="1"
+                          value={printConfig.labelsPerRow}
+                          onChange={e => handleLabelsPerRowChange(e.target.value)}
+                          className="w-full text-xs font-bold px-3 py-2 bg-white border border-slate-200 rounded-lg outline-none focus:border-slate-700"
+                        />
+                      </label>
+                    </div>
+                    <p className="text-xs text-slate-400">Khổ trang in = {printConfig.labelWidth * printConfig.labelsPerRow}mm rộng. Cao tem là tối thiểu — nội dung dài tự cao thêm, không cắt.</p>
+                  </div>
+
+                  {/* VỊ TRÍ TỪNG TEM (chỉnh từng cái 1) */}
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-3">
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-slate-700">Vị trí từng tem</span>
+                      <span className="text-xs text-slate-400 mt-0.5">Kéo thả trực tiếp ở xem trước bên dưới là chính — ô X/Y ở đây chỉ để gõ số chính xác. Tem nào bị cắt/lệch thì dịch riêng tem đó.</span>
+                    </div>
+                    {Array.from({ length: printConfig.labelsPerRow }, (_, colIdx) => {
+                      const off = (printConfig.labelOffsets || [])[colIdx] || { x: 0, y: 0 };
+                      return (
+                        <div key={colIdx} className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-600 w-12 shrink-0">Tem {colIdx + 1}</span>
+                          <label className="flex items-center gap-1 flex-1">
+                            <span className="text-xs font-bold text-slate-500">X</span>
+                            <input
+                              type="number" step="0.5"
+                              value={off.x}
+                              onChange={e => setLabelOffset(colIdx, { x: Number(e.target.value) || 0, y: off.y })}
+                              className="w-full text-xs font-bold px-2 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-slate-700"
+                            />
+                          </label>
+                          <label className="flex items-center gap-1 flex-1">
+                            <span className="text-xs font-bold text-slate-500">Y</span>
+                            <input
+                              type="number" step="0.5"
+                              value={off.y}
+                              onChange={e => setLabelOffset(colIdx, { x: off.x, y: Number(e.target.value) || 0 })}
+                              className="w-full text-xs font-bold px-2 py-1.5 bg-white border border-slate-200 rounded-lg outline-none focus:border-slate-700"
+                            />
+                          </label>
+                          <span className="text-xs text-slate-400">mm</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* XEM TRƯỚC TEM (cập nhật trực tiếp khi chỉnh cài đặt) */}
                 <div className="pt-6 mt-6 border-t border-slate-100">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-bold text-xs text-slate-700 uppercase tracking-wide">Xem trước tem</span>
-                    <span className="text-xs font-bold text-slate-400">{printItems.filter(i => i.status === 'ok' && i.qty > 0).length > 0 ? '3 tem đầu tiên' : 'Tem mẫu'}</span>
+                    <span className="text-xs font-bold text-slate-400">{printItems.filter(i => i.status === 'ok' && i.qty > 0).length > 0 ? `${printConfig.labelsPerRow} tem đầu tiên` : 'Tem mẫu'}</span>
                   </div>
-                  <p className="text-xs text-slate-400 mb-3">Chỉnh góc, cỡ chữ, cỡ mã ở trên — tem mẫu đổi theo ngay, chưa in gì cả.</p>
+                  <p className="text-xs text-slate-400 mb-3">Kéo thả trực tiếp từng tem để dịch vị trí — tem mẫu đổi theo ngay, chưa in gì cả. Ô X/Y ở trên chỉ để gõ số chính xác.</p>
                   <div className="overflow-x-auto bg-slate-100 rounded-xl p-3">
-                    <div style={{ width: '105mm', height: '18mm', transform: 'scale(0.9)', transformOrigin: 'top left' }}>
-                      <div style={{ display: 'flex', width: '105mm', height: '20mm' }}>
+                    <div style={{ width: `${printConfig.labelWidth * printConfig.labelsPerRow}mm`, transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top left' }}>
+                      <div style={{ display: 'flex', width: `${printConfig.labelWidth * printConfig.labelsPerRow}mm`, minHeight: `${printConfig.labelHeight}mm`, alignItems: 'flex-start' }}>
                         {previewRow.map((it, i) => it.barcode ? (
-                          <PreviewLabel key={i} item={it} config={printConfig} />
+                          <PreviewLabel key={i} item={it} config={printConfig} offset={(printConfig.labelOffsets || [])[i] || { x: 0, y: 0 }} onOffsetChange={(next) => setLabelOffset(i, next)} draggable />
                         ) : (
-                          <div key={i} style={{ width: '35mm', height: '20mm', background: 'white', border: '1px dashed #cbd5e1', boxSizing: 'border-box' }} />
+                          <div key={i} style={{ width: `${printConfig.labelWidth}mm`, minHeight: `${printConfig.labelHeight}mm`, background: 'white', border: '1px dashed #cbd5e1', boxSizing: 'border-box', flexShrink: 0 }} />
                         ))}
                       </div>
                     </div>
