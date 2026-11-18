@@ -11,7 +11,6 @@ import { getMaintenanceMode, setMaintenanceMode } from '../lib/maintenance';
 import { clearPermCache } from '../lib/permCache';
 import TetCountdown from '../components/TetCountdown';
 import TetPetals from '../components/TetPetals';
-import TetLixi from '../components/TetLixi';
 import { TET_IMG_LANTERN, TET_IMG_SILK } from '../themes/tet-2027/tetImages';
 
 // Giao diện điện thoại riêng, chỉ xem nhanh và thao tác gọn trên điện thoại.
@@ -871,7 +870,7 @@ export default function Mobile() {
 
     return (
         <div className={`mx-auto max-w-[480px] min-h-dvh bg-slate-100 font-sans ${tetEnabled ? 'tet-2027' : ''}`} style={{ paddingBottom: 'calc(76px + env(safe-area-inset-bottom))' }}>
-            {tetEnabled && (<><TetPetals /><TetCountdown /><TetLixi /></>)}
+            {tetEnabled && (<><TetPetals /><TetCountdown /></>)}
             <div className="sticky top-0 z-40">
                 <header
                     className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between"

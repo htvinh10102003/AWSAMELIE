@@ -9,7 +9,6 @@ import BootSplash from './BootSplash';
 import { reportPresence, recordLoginHistory } from '../lib/presence';
 import TetCountdown from './TetCountdown';
 import TetPetals from './TetPetals';
-import TetLixi from './TetLixi';
 import { TET_IMG_LANTERN, TET_IMG_SILK, TET_IMG_MAI } from '../themes/tet-2027/tetImages';
 import { 
   TrendingUp, Printer, Timer, Settings, PackageSearch, LogOut, Undo2, ScanLine, 
@@ -758,7 +757,7 @@ export default function Layout() {
         ${bannerNotif?.enabled ? 'pt-10' : ''}
         ${tetEnabled ? 'tet-2027' : ''}`}
       >
-        {tetEnabled && (<><TetPetals /><TetCountdown /><TetLixi /></>)}
+        {tetEnabled && (<><TetPetals /><TetCountdown /></>)}
         {activeTooltip && (
           <div 
             className="fixed z-[99999] px-3 py-1.5 bg-slate-800 text-white text-xs font-semibold rounded-lg whitespace-nowrap shadow-xl pointer-events-none animate-in fade-in zoom-in-95 duration-150"
