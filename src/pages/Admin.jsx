@@ -366,11 +366,15 @@ export default function Admin() {
 
   // --- CHI TIET USER / KICK / KHOA / NHAT KY (OWNER ONLY) ---
   const isUserBanned = (u) => u?.banned_until && new Date(u.banned_until).getTime() > Date.now();
-  const ACTION_LABELS = { send: 'Gửi đơn', edit: 'Sửa đơn', cancel: 'Hủy đơn', print: 'In đơn' };
-  const RESULT_LABELS = { ok: 'Thành công', failed: 'Thất bại', existed: 'Đã gửi rồi' };
+  const ACTION_LABELS = { send: 'Gửi đơn', ecom_send: 'Gửi đơn sàn', edit: 'Sửa đơn', cancel: 'Hủy đơn', print: 'In đơn' };
+  const RESULT_LABELS = { ok: 'Thành công', failed: 'Thất bại', existed: 'Đã gửi rồi', partial: 'Thành công một phần' };
   const isDeviceOnline = (lastSeen) => lastSeen && (Date.now() - new Date(lastSeen).getTime() <= 10 * 60 * 1000);
   const fmtLogDetail = (log) => {
     const d = log.details || {};
+    // Dòng log gộp theo lô (từ 18/11/2026): chi tiết là tóm tắt cả lô.
+    if ((log.action === 'send' || log.action === 'ecom_send') && typeof d.total_count === 'number') {
+      return `Gửi ${d.total_count} đơn: ${d.ok_count ?? 0} thành công, ${d.fail_count ?? 0} lỗi`;
+    }
     if (log.action === 'send') return d.carrier_code ? `Mã vận đơn: ${d.carrier_code}` : (d.message || '');
     if (log.action === 'edit') return d.fields ? `Đổi: ${(d.fields || []).join(', ')}` : '';
     if (log.action === 'cancel') return d.reason ? `Lý do: ${d.reason}` : (d.message || '');
@@ -1950,7 +1954,7 @@ export default function Admin() {
                           <td className="py-3.5 px-4">{l.user_email || '—'}</td>
                           <td className="py-3.5 px-4 font-bold">{ACTION_LABELS[l.action] || l.action}</td>
                           <td className="py-3.5 px-4">{l.target_id || '—'}</td>
-                          <td className="py-3.5 px-4"><span className={`px-2 py-0.5 rounded text-xs font-bold ${l.result === 'failed' ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}`}>{RESULT_LABELS[l.result] || l.result || '—'}</span></td>
+                          <td className="py-3.5 px-4"><span className={`px-2 py-0.5 rounded text-xs font-bold ${l.result === 'failed' ? 'bg-red-100 text-red-700' : l.result === 'partial' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>{RESULT_LABELS[l.result] || l.result || '—'}</span></td>
                           <td className="py-3.5 px-4 text-slate-500">{fmtLogDetail(l)}</td>
                         </tr>
                       ))}

@@ -257,18 +257,23 @@ serve(async (req) => {
           skipped_ids: skippedIds,
         });
       } catch { /* Bỏ qua lỗi ghi lịch sử */ }
-      await logOrderActions(results.map((r) => ({
+      // Ghi 1 dòng log cho cả lô (không ghi lẻ từng đơn): chi tiết giữ đủ
+      // danh sách mã đơn + kết quả từng đơn để vẫn tra cứu được.
+      const sendBatchResult = okCount === results.length ? 'ok' : (okCount === 0 ? 'failed' : 'partial');
+      await logOrderActions([{
         action: 'send',
         target_type: 'order',
-        target_id: String(r.id),
+        target_id: null,
         details: {
-          carrier_code: r.carrierCode || null,
-          existed: !!r.existed,
+          total_count: results.length,
+          ok_count: okCount,
+          fail_count: results.length - okCount,
           source: typeof payload.source === 'string' ? payload.source : null,
-          message: r.ok ? null : (r.message || null),
+          order_ids: results.map((r) => String(r.id)),
+          items: results,
         },
-        result: r.ok ? (r.existed ? 'existed' : 'ok') : 'failed',
-      })));
+        result: sendBatchResult,
+      }]);
       return json({ success: okCount > 0, results, okCount, failCount: results.length - okCount });
     }
 
@@ -476,20 +481,23 @@ serve(async (req) => {
           skipped_ids: [],
         });
       } catch { /* Bỏ qua lỗi ghi lịch sử */ }
-      await logOrderActions(results.map((r) => ({
+      // Ghi 1 dòng log cho cả lô (không ghi lẻ từng đơn): chi tiết giữ đủ
+      // danh sách mã đơn + kết quả từng đơn để vẫn tra cứu được.
+      const ecomBatchResult = okCount === results.length ? 'ok' : (okCount === 0 ? 'failed' : 'partial');
+      await logOrderActions([{
         action: 'ecom_send',
         target_type: 'order',
-        target_id: String(r.orderId),
+        target_id: null,
         details: {
+          total_count: results.length,
+          ok_count: okCount,
+          fail_count: results.length - okCount,
           pickupType,
-          trackingNumber: r.trackingNumber || null,
-          labelUrl: r.labelUrl || null,
-          appId: appIdByOrder.get(r.orderId) ?? null,
-          existed: !!r.existed,
-          message: r.ok ? null : (r.error || null),
+          order_ids: results.map((r) => String(r.orderId)),
+          items: results.map((r) => ({ ...r, appId: appIdByOrder.get(r.orderId) ?? null })),
         },
-        result: r.ok ? (r.existed ? 'existed' : 'ok') : 'failed',
-      })));
+        result: ecomBatchResult,
+      }]);
       return json({ success: okCount > 0, results, okCount, failCount: results.length - okCount });
     }
 
