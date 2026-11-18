@@ -136,6 +136,8 @@ export default function Admin() {
   const [printScanMessage, setPrintScanMessage] = useState('');
   // Log đơn in có trong sheet nhưng DB không tìm thấy — chỉ owner/super_admin thấy.
   const [printMissing, setPrintMissing] = useState([]);
+  // Log đơn đi có trong sheet nhưng DB không tìm thấy — chỉ owner/super_admin thấy.
+  const [dailyMissing, setDailyMissing] = useState([]);
 
   // --- EDGE FUNCTIONS SYNC ---
   const [syncDays, setSyncDays] = useState(1); 
@@ -718,6 +720,7 @@ export default function Admin() {
     const setSummary = isDaily ? setDailySummary : setPrintSummary;
     setLoading(true); setScanMessage(''); setSummary(null);
     if (!isDaily) setPrintMissing([]);
+    if (isDaily) setDailyMissing([]);
     try {
         // Gửi kèm JWT của người đang đăng nhập để backend biết có phải
         // owner/super_admin không — chỉ khi đó backend mới trả danh sách
@@ -737,6 +740,7 @@ export default function Admin() {
         } else {
           setScanMessage(`Đã quét xong: ${summary.total_rows_parsed ?? 0} dòng, khớp ${summary.matched ?? 0} đơn, cập nhật ${summary.final_unique_updated ?? 0} đơn.`);
           if (!isDaily && Array.isArray(summary.missing)) setPrintMissing(summary.missing);
+          if (isDaily && Array.isArray(summary.missing)) setDailyMissing(summary.missing);
           if (isDaily) setDailyLastScan(new Date().toISOString()); else setPrintLastScan(new Date().toISOString());
         }
     } catch (err) { setScanMessage('Lỗi kết nối: ' + err.message); }
@@ -761,6 +765,27 @@ export default function Admin() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `don-in-thieu-db-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  const downloadDailyMissingCsv = () => {
+    if (!dailyMissing.length) return;
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const rows = [['Dòng sheet', 'Mã gốc', 'Mã chuẩn hóa', 'Ngày trong sheet', 'Đã thử (theo thứ tự)']];
+    dailyMissing.forEach(m => {
+      rows.push([
+        m.sheet_row,
+        (m.codes || []).map(c => `${c.header}: ${c.raw}`).join(' | '),
+        (m.codes || []).map(c => c.cleaned).filter(Boolean).join(' | '),
+        m.date_raw || '',
+        (m.codes || []).map(c => c.db === 'id' ? 'ID đơn' : 'Mã vận đơn').join(' -> ')
+      ]);
+    });
+    const csv = '﻿' + rows.map(r => r.map(esc).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `don-di-thieu-db-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click(); URL.revokeObjectURL(url);
   };
 
@@ -1309,6 +1334,43 @@ export default function Admin() {
               <div className="p-4 mb-4 rounded-xl text-sm font-medium bg-slate-50 text-slate-700 border border-slate-200">
                 Kết quả quét đơn đi: {dailySummary.total_rows_parsed ?? 0} dòng dữ liệu, khớp {dailySummary.matched ?? 0} đơn (theo ID: {dailySummary.matched_by_id ?? 0}, theo mã vận đơn: {dailySummary.matched_by_carrier ?? 0}), cập nhật {dailySummary.final_unique_updated ?? 0} đơn, không tìm thấy {dailySummary.missing_count ?? dailySummary.skipped_not_found ?? 0} mã, ngày không hợp lệ {dailySummary.skipped_invalid_date ?? 0} dòng.
               </div>
+            )}
+            {canEditSensitiveConfig && dailySummary && !dailySummary.error && !dailySummary.skipped && dailyMissing.length > 0 && (
+              <div className="mb-4 bg-white p-5 rounded-2xl border border-amber-200">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <h3 className="text-base font-bold text-slate-800">Log đơn đi có trong sheet nhưng database không tìm thấy — {dailyMissing.length} dòng (chỉ Owner và Super Admin thấy)</h3>
+                  <button onClick={downloadDailyMissingCsv} className="px-4 py-2 bg-white border border-slate-300 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-50 transition-colors cursor-pointer whitespace-nowrap">Tải danh sách (CSV)</button>
+                </div>
+                <p className="text-sm text-slate-500 font-medium mb-3">Bảng hiển thị tối đa 500 dòng đầu, file CSV tải về đủ toàn bộ. Dòng sheet tính từ hàng 1 là tiêu đề.</p>
+                <div className="overflow-auto max-h-96 border border-slate-100 rounded-xl">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 sticky top-0 z-10">
+                      <tr className="text-left text-xs font-bold text-slate-500 uppercase border-b border-slate-200">
+                        <th className="px-4 py-3">Dòng sheet</th>
+                        <th className="px-4 py-3">Mã gốc trong sheet</th>
+                        <th className="px-4 py-3">Mã chuẩn hóa</th>
+                        <th className="px-4 py-3">Ngày trong sheet</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dailyMissing.slice(0, 500).map((m, i) => (
+                        <tr key={i} className="border-t border-slate-100 hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3 font-bold">{m.sheet_row}</td>
+                          <td className="px-4 py-3 font-medium">{(m.codes || []).map(c => `${c.header}: ${c.raw}`).join(' | ')}</td>
+                          <td className="px-4 py-3 font-medium">{(m.codes || []).map(c => c.cleaned).filter(Boolean).join(' | ')}</td>
+                          <td className="px-4 py-3">{m.date_raw}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {dailySummary.conflicts && dailySummary.conflicts.length > 0 && (
+                  <p className="mt-3 text-sm font-bold text-amber-700">Cảnh báo xung đột: {dailySummary.conflicts.length} dòng có 2 cột mã khớp 2 đơn khác nhau, hệ thống đã ưu tiên cột đứng trước. Kiểm tra lại các dòng này trong file CSV nếu cần — chi tiết xung đột nằm trong phản hồi quét.</p>
+                )}
+              </div>
+            )}
+            {canEditSensitiveConfig && dailySummary && !dailySummary.error && !dailySummary.skipped && (dailySummary.missing_count ?? 0) > 0 && dailyMissing.length === 0 && (
+              <div className="p-4 mb-4 rounded-xl font-bold text-sm bg-amber-50 text-amber-700 border border-amber-200">Có {dailySummary.missing_count} mã không tìm thấy, nhưng backend không trả danh sách chi tiết (có thể do phiên đăng nhập hết hạn hoặc quyền chưa phải Owner/Super Admin). Thử đăng nhập lại rồi quét lại.</div>
             )}
             {printScanMessage && <div className={`p-4 mb-4 rounded-xl font-bold text-sm shadow-sm flex gap-2 ${printScanMessage.includes('Lỗi') || printScanMessage.includes('Thất bại') ? 'bg-red-50 text-red-700 border-red-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'}`}><CheckCircle2 size={18}/> Đơn in: {printScanMessage}</div>}
             {printSummary && !printSummary.error && !printSummary.skipped && (
