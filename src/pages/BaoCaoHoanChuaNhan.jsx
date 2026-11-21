@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Search, ChevronLeft, ChevronRight, Loader2, Package, Copy, FileDown, Pencil, ScanLine, X, Volume2, VolumeX, RefreshCcw } from 'lucide-react';
 import { mapReturnProduct, buildInventoryIndex } from '../lib/tiktokProductMap';
+import { loadShopNames, shopDisplayName } from '../lib/shopNames';
 import { useFeatureLocks, isSubLocked } from '../components/FeatureGuard';
 
 const NHANH_STATUS_NAMES = {
@@ -719,6 +720,9 @@ export default function BaoCaoHoanChuaNhan() {
   const [search, setSearch] = useState('');
   const [applied, setApplied] = useState(null);
   const [shopOptions, setShopOptions] = useState([]);
+  // Tên shop sàn (id -> tên) lấy qua Nhanh ecom/shop, dùng chung cho
+  // dropdown, bảng, chi tiết và CSV. Chưa tải xong thì hiện ID như cũ.
+  const [shopNames, setShopNames] = useState(new Map());
   // Index kho (product_inventories) để map SP trả hàng về tên đầy đủ.
   const [inventoryIndex, setInventoryIndex] = useState(null);
   // --- Quyền sửa tay (chỉ owner) ---
@@ -1000,6 +1004,13 @@ export default function BaoCaoHoanChuaNhan() {
         setShopOptions([...seen.entries()].map(([id, platformName]) => ({ id, platformName })).sort((a, b) => a.id.localeCompare(b.id)));
       } catch (e) { console.error('Lỗi nạp danh sách shop:', e); }
     })();
+    return () => { alive = false; };
+  }, []);
+
+  // Nạp tên shop sàn 1 lần lúc mở trang (edge shopList).
+  useEffect(() => {
+    let alive = true;
+    loadShopNames().then((m) => { if (alive) setShopNames(m); });
     return () => { alive = false; };
   }, []);
 
@@ -1493,7 +1504,7 @@ export default function BaoCaoHoanChuaNhan() {
           'Mã đơn gốc': r.original_ecom_order_id || '',
           'ID đơn Nhanh': r.raw_data?.nhanhOrderId ?? '',
           'Sàn': r.platform_name || '',
-          'Shop': r.shop_id || '',
+          'Shop': shopDisplayName(shopNames, r.shop_id) || '',
           'Loại trả': RETURN_TYPE_NAMES[r.return_type] || '',
           'Lý do': r.reason_name || r.raw_data?.reasonInfor?.reasonDescription || r.raw_data?.reasonDescription || '',
           'Trạng thái Nhanh': r.nhanh_status_name || NHANH_STATUS_NAMES[r.nhanh_status_id] || '',
@@ -2563,6 +2574,8 @@ export default function BaoCaoHoanChuaNhan() {
     const m = manualChecks.get(r.return_id);
     const reasonDesc = r.raw_data?.reasonInfor?.reasonDescription || r.raw_data?.reasonDescription || '';
     const reasonFull = [r.reason_name || '', reasonDesc].filter(Boolean).join(' — ') || '—';
+    const shopLabel = shopDisplayName(shopNames, r.shop_id);
+    const shopHasName = !!shopLabel && shopLabel !== String(r.shop_id);
     return (
       <tr key={r.return_id} className="border-t border-slate-100 hover:bg-slate-50">
         {/* Mã vận đơn trả + ID đơn Nhanh */}
@@ -2578,10 +2591,10 @@ export default function BaoCaoHoanChuaNhan() {
           <div className="font-mono text-xs break-all leading-snug">{r.return_id || '—'}</div>
           <div className="font-mono text-xs text-slate-500 break-all leading-snug mt-0.5">{r.original_ecom_order_id || '—'}</div>
         </td>
-        {/* Sàn · Shop: tên sàn + mã shop đầy đủ (shop dài tự xuống dòng trong ô) */}
+        {/* Sàn · Shop: tên sàn + tên shop (chưa có tên thì hiện ID) */}
         <td className="px-3 py-3.5 min-w-0">
           <span className="font-bold whitespace-nowrap">{r.platform_name || '—'}</span>{' '}
-          <span className="font-mono text-xs text-slate-500 break-all">· {r.shop_id || '—'}</span>
+          <span className={shopHasName ? 'text-xs text-slate-500 break-all' : 'font-mono text-xs text-slate-500 break-all'} title={r.shop_id || ''}>· {shopLabel || '—'}</span>
         </td>
         {/* Loại trả: chữ ngắn, không xuống dòng */}
         <td className="px-2 py-3.5 whitespace-nowrap text-xs font-bold">{RETURN_TYPE_NAMES[r.return_type] || '—'}</td>
@@ -3023,7 +3036,7 @@ export default function BaoCaoHoanChuaNhan() {
             <select value={shop} onChange={(e) => setShop(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
               <option value="">Tất cả shop</option>
               {shopOptions.map((o) => (
-                <option key={o.id} value={o.id}>{o.platformName ? `${o.platformName} · Shop ${o.id}` : `Shop ${o.id}`}</option>
+                <option key={o.id} value={o.id}>{o.platformName ? `${o.platformName} · ${shopDisplayName(shopNames, o.id)}` : shopDisplayName(shopNames, o.id)}</option>
               ))}
             </select>
           </div>
@@ -3401,8 +3414,8 @@ export default function BaoCaoHoanChuaNhan() {
                             <span className="text-xs text-slate-500">
                               {it.returnRow ? `Trả ${it.returnRow.return_id}` : ''}{it.returnRow && it.orderRow ? ' · ' : ''}{it.orderRow ? `Đơn ${it.orderRow.id}` : ''}
                             </span>
-                            <span className="text-xs text-slate-500">
-                              {it.returnRow ? `${it.returnRow.platform_name || ''}${it.returnRow.shop_id ? ` · Shop ${it.returnRow.shop_id}` : ''}` : it.orderRow ? `Kênh ${CHANNEL_NAMES[String(it.orderRow.sale_channel)] || it.orderRow.sale_channel}` : ''}
+                            <span className="text-xs text-slate-500" title={it.returnRow?.shop_id || ''}>
+                              {it.returnRow ? `${it.returnRow.platform_name || ''}${it.returnRow.shop_id ? ` · ${shopDisplayName(shopNames, it.returnRow.shop_id)}` : ''}` : it.orderRow ? `Kênh ${CHANNEL_NAMES[String(it.orderRow.sale_channel)] || it.orderRow.sale_channel}` : ''}
                             </span>
                             <span className={`ml-auto text-xs font-bold px-2 py-1 rounded-full whitespace-nowrap ${done ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>{done ? 'Đã nhận hàng hoàn' : 'Chưa nhận hàng hoàn'}</span>
                           </div>

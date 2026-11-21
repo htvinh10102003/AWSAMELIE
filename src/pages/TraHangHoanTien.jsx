@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import { Search, X, Trash2, ChevronLeft, ChevronRight, Loader2, ScanLine, Package, DownloadCloud } from 'lucide-react';
 import { mapReturnProduct, buildInventoryIndex } from '../lib/tiktokProductMap';
+import { loadShopNames, shopDisplayName } from '../lib/shopNames';
 
 const NHANH_STATUS_NAMES = {
   1: 'Đã hoàn tiền',
@@ -98,6 +99,9 @@ export default function TraHangHoanTien() {
   const [ecomStatusOptions, setEcomStatusOptions] = useState([]);
   const [productOptions, setProductOptions] = useState([]);
   const [shopOptions, setShopOptions] = useState([]);
+  // Tên shop sàn (id -> tên) lấy qua Nhanh ecom/shop, dùng chung cho
+  // dropdown và popup chi tiết. Chưa tải xong thì hiện ID như cũ.
+  const [shopNames, setShopNames] = useState(new Map());
   // Index kho (product_inventories) để map SP trả hàng về tên đầy đủ.
   const [inventoryIndex, setInventoryIndex] = useState(null);
   // Tên kho -> danh sách matcher { k: 'name' | 'sku', v } để lọc phía server.
@@ -281,6 +285,13 @@ export default function TraHangHoanTien() {
         setShopOptions([...seen.entries()].map(([id, platformName]) => ({ id, platformName })).sort((a, b) => a.id.localeCompare(b.id)));
       } catch (e) { console.error('Lỗi nạp danh sách shop:', e); }
     })();
+    return () => { alive = false; };
+  }, []);
+
+  // Nạp tên shop sàn 1 lần lúc mở trang (edge shopList).
+  useEffect(() => {
+    let alive = true;
+    loadShopNames().then((m) => { if (alive) setShopNames(m); });
     return () => { alive = false; };
   }, []);
 
@@ -479,7 +490,7 @@ export default function TraHangHoanTien() {
             <select value={shop} onChange={(e) => setShop(e.target.value)} className="text-sm border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-slate-500/20 focus:border-slate-700 font-medium bg-white">
               <option value="">Tất cả shop</option>
               {shopOptions.map((o) => (
-                <option key={o.id} value={o.id}>{o.platformName ? `${o.platformName} · Shop ${o.id}` : `Shop ${o.id}`}</option>
+                <option key={o.id} value={o.id}>{o.platformName ? `${o.platformName} · ${shopDisplayName(shopNames, o.id)}` : shopDisplayName(shopNames, o.id)}</option>
               ))}
             </select>
           </div>
@@ -746,7 +757,7 @@ export default function TraHangHoanTien() {
 
             <div className="grid sm:grid-cols-2 gap-3 mt-4 text-sm">
               <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">Sàn</span><strong>{selected.platform_name || '—'}</strong></div>
-              <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">Shop</span><strong>{selected.shop_id || '—'}</strong></div>
+              <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">Shop</span><strong title={selected.shop_id || ''}>{shopDisplayName(shopNames, selected.shop_id) || '—'}</strong></div>
               <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">Mã đơn trả</span><strong>{returnCodeOf(selected) || 'Chưa có mã đơn trả'}</strong></div>
               <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">ID đơn gốc</span><strong>{selected.original_ecom_order_id || '—'}</strong></div>
               <div className="bg-slate-50 rounded-xl p-3"><span className="text-xs font-bold text-slate-500 block">Loại trả</span><strong>{RETURN_TYPE_NAMES[selected.return_type] || '—'}</strong></div>
