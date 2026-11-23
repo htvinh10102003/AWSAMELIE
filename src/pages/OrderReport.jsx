@@ -3527,6 +3527,7 @@ export default function OrderReport() {
                                                 <DetailRow label="Kho xuất" value={base.depot_id ? (DEPOT_NAMES[String(base.depot_id)] || String(base.depot_id)) : 'Chưa có'} />
                                                 <DetailRow label="Nhân viên tạo" value={info?.createdBy?.name || base.created_by_name || 'Hệ thống'} />
                                                 <DetailRow label="Ngày tạo" value={info?.createdAt ? fmtUnix(info.createdAt) : fmtDateStr(base.created_at)} />
+                                                <DetailRow label="Ngày đủ hàng" value={fmtDateStr(detailOrder?.printable_date)} />
                                                 <DetailRow label="Ngày cập nhật" value={info?.updatedAt ? fmtUnix(info.updatedAt) : fmtDateStr(base.updated_at)} />
                                                 <DetailRow label="Ngày đóng gói" value={info?.packedAt ? fmtUnix(info.packedAt) : (base.packed_at ? fmtDateStr(base.packed_at) : 'Chưa có')} />
                                                 <DetailRow label="Ngày in" value={base.printed_at ? fmtDateStr(base.printed_at) : 'Chưa in'} />
