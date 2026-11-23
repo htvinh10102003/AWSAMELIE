@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
 import { logOrderPrint } from '../lib/presence';
 import { useFeatureLocks, isSubLocked } from '../components/FeatureGuard';
@@ -98,6 +98,40 @@ const isGHNCarrier = (carrierName) => {
 };
 
 // Ô tìm kiếm debounce dùng chung cho báo cáo đặc biệt.
+// Tách danh sách ID đơn / mã vận đơn dán vào ô tìm danh sách (mỗi dòng
+// 1 mã; chấp nhận cả dấu phẩy / chấm phẩy / tab khi dán từ Excel), bỏ
+// dòng trống + mã trùng (không phân biệt hoa/thường), tối đa 200 mã,
+// giữ nguyên thứ tự dán. Trả { list: [{raw, upper}], total } với total
+// là số mã riêng biệt trước khi giới hạn.
+const MAX_ID_LIST = 200;
+const parseIdList = (text) => {
+    const seen = new Set();
+    const all = [];
+    String(text || '').split(/[\n\r\t,;]+/).forEach((part) => {
+        const raw = part.trim();
+        if (!raw) return;
+        const upper = raw.toUpperCase();
+        if (seen.has(upper)) return;
+        seen.add(upper);
+        all.push({ raw, upper });
+    });
+    return { list: all.slice(0, MAX_ID_LIST), total: all.length };
+};
+
+// Xếp các đơn khớp theo đúng thứ tự mã đã dán: đơn nào khớp mã dán
+// trước thì đứng trước (khớp theo mã vận đơn trước, rồi tới ID đơn).
+const sortRowsByPastedOrder = (rows, codes) => {
+    const codeIndex = new Map();
+    codes.forEach((c, idx) => { if (!codeIndex.has(c.upper)) codeIndex.set(c.upper, idx); });
+    const rowIndex = (o) => {
+        const byCarrier = o.carrier_code ? codeIndex.get(String(o.carrier_code).toUpperCase()) : undefined;
+        if (byCarrier !== undefined) return byCarrier;
+        const byId = codeIndex.get(String(o.id).toUpperCase());
+        return byId !== undefined ? byId : codes.length;
+    };
+    return [...rows].sort((a, b) => rowIndex(a) - rowIndex(b));
+};
+
 const useDebouncedValue = (value, delay) => {
     const [debounced, setDebounced] = useState(value);
     useEffect(() => {
@@ -444,6 +478,11 @@ export default function OrderReport() {
     const [searchProduct, setSearchProduct] = useState('');
     const [searchNote, setSearchNote] = useState('');
     const [searchCustomer, setSearchCustomer] = useState('');
+    // Ô tìm theo danh sách ID đơn / mã vận đơn (báo cáo đặc biệt): dán
+    // nhiều mã, mỗi dòng 1 mã. idListNotFound giữ các mã đã dán mà không
+    // tìm thấy đơn nào, để hiện ngay dưới ô nhập.
+    const [searchIdList, setSearchIdList] = useState('');
+    const [idListNotFound, setIdListNotFound] = useState([]);
     const [selectedStatus, setSelectedStatus] = useState([]);
     const [selectedCarrier, setSelectedCarrier] = useState([]);
     const [selectedChannel, setSelectedChannel] = useState([]);
@@ -465,6 +504,8 @@ export default function OrderReport() {
     const debouncedSearchProduct = useDebouncedValue(searchProduct, 400);
     const debouncedSearchNote = useDebouncedValue(searchNote, 400);
     const debouncedSearchCustomer = useDebouncedValue(searchCustomer, 400);
+    const debouncedSearchIdList = useDebouncedValue(searchIdList, 400);
+    const idListParsed = useMemo(() => parseIdList(debouncedSearchIdList), [debouncedSearchIdList]);
     
     // Action State
     const [isUpdatingWebhooks, setIsUpdatingWebhooks] = useState(false);
@@ -808,6 +849,67 @@ export default function OrderReport() {
         try {
             const asc = specialSortOrder === 'asc';
             const orderBy = (q) => q.order('created_at', { ascending: asc }).order('id', { ascending: asc });
+            if (idListParsed.list.length > 0) {
+                // Đường tìm theo danh sách ID đơn / mã vận đơn dán vào:
+                // khớp chính xác từng mã với id hoặc carrier_code, bỏ qua
+                // mọi bộ lọc khác (tab, ngày, trạng thái, hãng, kênh...)
+                // để tìm đúng danh sách đã dán. Kết quả xếp theo thứ tự
+                // dán; mã nào không tìm thấy đơn thì báo lại dưới ô nhập.
+                const codes = idListParsed.list;
+                const matched = [];
+                const seenOrder = new Set();
+                for (let i = 0; i < codes.length; i += 50) {
+                    const chunk = codes.slice(i, i + 50);
+                    const idVals = chunk.filter(c => /^\d+$/.test(c.raw)).map(c => c.raw);
+                    const carrierVals = chunk.map(c => c.upper);
+                    const ors = [];
+                    if (idVals.length) ors.push(`id.in.(${idVals.join(',')})`);
+                    if (carrierVals.length) ors.push(`carrier_code.in.(${carrierVals.join(',')})`);
+                    const { data: rows, error } = await supabase.from('orders')
+                        .select('id, status, carrier_name, carrier_code, created_at, sale_channel, ecom_order_id')
+                        .or(ors.join(','))
+                        .range(0, 999);
+                    if (error) throw error;
+                    (rows || []).forEach(r => { if (!seenOrder.has(String(r.id))) { seenOrder.add(String(r.id)); matched.push(r); } });
+                }
+                const ordered = sortRowsByPastedOrder(matched, codes);
+                const foundKeys = new Set();
+                ordered.forEach(o => { foundKeys.add(String(o.id).toUpperCase()); if (o.carrier_code) foundKeys.add(String(o.carrier_code).toUpperCase()); });
+                setIdListNotFound(codes.filter(c => !foundKeys.has(c.upper)).map(c => c.raw));
+                const isConfirm = (o) => SPECIAL_CONFIRM_STATUSES.includes(String(o.status)) && !hasRealCarrier(o);
+                const isPrint = (o) => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && hasRealCarrier(o);
+                const isTransit = (o) => SPECIAL_TRANSIT_STATUSES.includes(String(o.status));
+                const isMissing = (o) => SPECIAL_PRINT_STATUSES.includes(String(o.status)) && !hasRealCarrier(o);
+                const isDeleted = (o) => deletedOrderIds.has(String(o.id));
+                const counts = {
+                    all: ordered.length,
+                    confirm: ordered.filter(isConfirm).length,
+                    print: ordered.filter(isPrint).length,
+                    transit: ordered.filter(isTransit).length,
+                    deleted: ordered.filter(isDeleted).length,
+                };
+                const missingTotal = ordered.filter(isMissing).length;
+                // Lưu toàn bộ danh sách khớp (không chỉ trang đang mở) để
+                // nút Copy dùng khi không tick đơn nào.
+                setSpecialAllCopyRows(ordered.map(o => ({ id: o.id, sale_channel: o.sale_channel, ecom_order_id: o.ecom_order_id, carrier_code: o.carrier_code, carrier_name: o.carrier_name })));
+                const total = ordered.length;
+                const totalPages = Math.max(1, Math.ceil(total / specialPageSize));
+                const effectivePage = total > 0 ? Math.min(page, totalPages) : 1;
+                if (effectivePage !== page) setSpecialPage(effectivePage);
+                const pageIds = ordered.slice((effectivePage - 1) * specialPageSize, effectivePage * specialPageSize).map(o => o.id);
+                let rows = [];
+                if (pageIds.length) {
+                    const { data: full, error } = await supabase.from('orders').select(SPECIAL_COLUMNS).in('id', pageIds);
+                    if (error) throw error;
+                    const byId = new Map((full || []).map(o => [o.id, o]));
+                    rows = pageIds.map(id => byId.get(id)).filter(Boolean);
+                }
+                setSpecialCounts(counts);
+                setSpecialMissingTotal(missingTotal);
+                setSpecialTotal(total);
+                setSpecialPageOrders(rows);
+                return;
+            }
             if (selectedTags.length > 0 || selectedStock.length > 0 || specialAgingFilter || debouncedSearchCustomer.trim()) {
                 // Đường lọc theo id: nhãn và/hoặc tồn kho và/hoặc tên
                 // khách / SĐT. Nhãn chỉ có trong bảng order_tags cho đơn
@@ -1051,7 +1153,7 @@ export default function OrderReport() {
 
     // Đổi tab / ngày / bộ lọc / sắp xếp thì quay về trang 1 rồi mới tải,
     // để khỏi tải nhầm trang cũ với bộ lọc mới.
-    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), selectedTags.join(','), selectedStock.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0', specialAgingFilter ? '1' : '0', deletedOrderIds.size, specialPageSize].join('|');
+    const specialFilterSig = [specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchIdList, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus.join(','), selectedCarrier.join(','), selectedChannel.join(','), selectedCreator.join(','), selectedDepot.join(','), selectedTags.join(','), selectedStock.join(','), printedFilter, missingCarrierFilter ? '1' : '0', specialSortOrder, specialOnlyMissingPrint ? '1' : '0', specialAgingFilter ? '1' : '0', deletedOrderIds.size, specialPageSize].join('|');
     useEffect(() => {
         if (!specialMode) return;
         if (specialFilterSigRef.current !== specialFilterSig) {
@@ -1060,7 +1162,7 @@ export default function OrderReport() {
         }
         fetchSpecialData(specialPage);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, selectedTags, selectedStock, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialAgingFilter, specialPage, specialPageSize, specialReloadToken, deletedOrderIds, data]);
+    }, [specialMode, specialTab, specialStartDate, specialEndDate, debouncedSearchId, debouncedSearchIdList, debouncedSearchProduct, debouncedSearchNote, debouncedSearchCustomer, selectedStatus, selectedCarrier, selectedChannel, selectedCreator, selectedDepot, selectedTags, selectedStock, printedFilter, missingCarrierFilter, specialSortOrder, specialOnlyMissingPrint, specialAgingFilter, specialPage, specialPageSize, specialReloadToken, deletedOrderIds, data]);
 
     // Đổi trang / đổi số dòng trên trang thì bỏ chọn cũ (các đơn đã tick
     // chỉ thuộc trang cũ; nút Xuất vẫn tính trên trang mới, còn nút Copy
@@ -2766,6 +2868,29 @@ export default function OrderReport() {
                                 <input type="text" value={searchId} onChange={(e) => setSearchId(e.target.value)} placeholder="Tìm ID, Mã Sàn, Mã Vận Đơn..." className="w-full pl-10 pr-3 py-2.5 text-sm border border-slate-300 rounded-xl outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500 bg-white transition-colors" />
                                 <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
                             </div>
+                            {specialMode && (
+                                <div className="relative min-w-[260px] max-w-[380px] flex-1">
+                                    <textarea value={searchIdList} onChange={(e) => setSearchIdList(e.target.value)} rows={2} placeholder="Dán danh sách ID đơn / Mã vận đơn — mỗi dòng 1 mã (tối đa 200)" className="w-full px-3 py-2 text-sm border border-slate-300 rounded-xl outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500 bg-white transition-colors resize-y" />
+                                    {searchIdList && (
+                                        <button onClick={() => { setSearchIdList(''); setIdListNotFound([]); }} className="absolute right-2 top-2 text-xs font-bold text-slate-400 hover:text-slate-700 bg-white px-1.5 py-0.5 rounded">Xóa</button>
+                                    )}
+                                    {idListParsed.list.length > 0 && (
+                                        <div className="mt-1 text-xs leading-5">
+                                            {specialLoading ? (
+                                                <span className="font-bold text-slate-500">Đang tìm {idListParsed.list.length} mã...</span>
+                                            ) : (
+                                                <>
+                                                    <span className="font-bold text-slate-700">Tìm theo danh sách: {idListParsed.list.length - idListNotFound.length}/{idListParsed.list.length} mã{idListParsed.total > idListParsed.list.length ? ` (đã giới hạn 200/${idListParsed.total})` : ''}</span>
+                                                    {idListNotFound.length > 0 && (
+                                                        <span className="block text-red-600 font-medium">Không tìm thấy {idListNotFound.length} mã: {idListNotFound.slice(0, 20).join(', ')}{idListNotFound.length > 20 ? ` … +${idListNotFound.length - 20} mã` : ''}</span>
+                                                    )}
+                                                </>
+                                            )}
+                                            <span className="block text-slate-400">Đang tìm đúng danh sách đã dán — các bộ lọc khác tạm bỏ qua.</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                             {specialMode ? (
                                 <button onClick={() => setShowFilterPopup(true)} className="px-4 py-2.5 bg-emerald-600 border border-emerald-600 rounded-xl text-sm font-bold text-white hover:bg-emerald-700 flex items-center gap-2 shadow-sm">
                                     Bộ lọc
