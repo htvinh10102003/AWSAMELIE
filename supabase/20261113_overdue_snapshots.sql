@@ -6,6 +6,9 @@
 --   in trong ngay, chua ban giao (chua quet).
 -- 12h dem (17:00 UTC): chup don do buoi chieu — Shopee/TikTok, tao hom nay
 --   truoc 14h + don nhay do (tao hom qua con chua ban giao).
+-- Chu nhat khong tinh: ngay tham chieu la chu nhat thi khong luu gi ca
+--   (ca sang 12:00 chu nhat lan ca chieu 00:00 thu 2); don tao chu nhat
+--   (sang lan chieu) se duoc luu vao ca sang thu 2 lien ke.
 -- Don da quet ban giao (scanned_codes trong bien ban doi soat cua ngay do)
 --   thi khong luu. Mot don trong cung 1 ngay + 1 buoi chi luu 1 lan.
 -- Bang khong co RLS (giong order_carrier_checks); muc lich su tren app chi
@@ -52,6 +55,18 @@ begin
     ref_date := vn_now::date;
   else
     ref_date := vn_now::date - 1;
+  end if;
+
+  -- Chu nhat khong tinh don cham: ngay tham chieu la chu nhat thi
+  -- khong luu gi (ca sang 12:00 chu nhat lan ca chieu 00:00 thu 2).
+  -- Don tao chu nhat (sang lan chieu) se duoc luu o ca sang thu 2,
+  -- vi ca do co ref_date = thu 2, tao = ref_date - 1 = chu nhat.
+  if extract(dow from ref_date) = 0 then
+    return jsonb_build_object(
+      'session', p_session,
+      'snapshot_date', ref_date,
+      'inserted', 0
+    );
   end if;
 
   -- Ma da quet ban giao trong cac bien ban doi soat cua ngay tham chieu

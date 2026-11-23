@@ -95,6 +95,9 @@ const fmtVnCreated = (iso) => {
 // - Buổi sáng (giờ hiện tại < 12h): đơn tạo ngày hôm qua (giờ VN).
 // - Buổi chiều (giờ hiện tại >= 12h, kể cả đúng 12h): đơn tạo hôm nay trước 14h (giờ VN).
 // - Chỉ kênh Shopee (42) và TikTok (48); Admin và các kênh khác bỏ qua.
+// - Chủ nhật không tính: cả ngày chủ nhật không tô đỏ đơn nào; đơn tạo
+//   chủ nhật (sáng lẫn chiều) sẽ đỏ vào sáng thứ 2 liền kề (luật sáng
+//   "tạo hôm qua" vốn không giới hạn giờ nên đã bao hết đơn chủ nhật).
 // Không áp cho danh sách hay ngày khác.
 const isHandoverWarning = (order) => {
     const ch = String(order?.sale_channel);
@@ -103,6 +106,7 @@ const isHandoverWarning = (order) => {
     if (!created) return false;
     const nowVn = toVnDate(new Date().toISOString());
     if (!nowVn) return false;
+    if (nowVn.getUTCDay() === 0) return false;
     const sameVnDate = (a, b) => a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
     if (nowVn.getUTCHours() < 12) {
         const yest = new Date(Date.UTC(nowVn.getUTCFullYear(), nowVn.getUTCMonth(), nowVn.getUTCDate()));
@@ -115,7 +119,8 @@ const isHandoverWarning = (order) => {
 // VN) vẫn hiện nhưng NHẤP NHÁY đỏ, để phân biệt với đơn tô đỏ buổi
 // chiều (tạo hôm nay trước 14h, viền đỏ đứng yên). Buổi sáng hàm này
 // luôn false — đơn hôm qua lúc đó đang là viền đỏ đứng yên. Chỉ kênh
-// Shopee (42) và TikTok (48); Admin và các kênh khác bỏ qua.
+// Shopee (42) và TikTok (48); Admin và các kênh khác bỏ qua. Chủ nhật
+// không tính: cả ngày chủ nhật hàm này luôn false.
 const isHandoverWarningBlink = (order) => {
     const ch = String(order?.sale_channel);
     if (ch !== '42' && ch !== '48') return false;
@@ -123,6 +128,7 @@ const isHandoverWarningBlink = (order) => {
     if (!created) return false;
     const nowVn = toVnDate(new Date().toISOString());
     if (!nowVn || nowVn.getUTCHours() < 12) return false;
+    if (nowVn.getUTCDay() === 0) return false;
     const sameVnDate = (a, b) => a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth() && a.getUTCDate() === b.getUTCDate();
     const yest = new Date(Date.UTC(nowVn.getUTCFullYear(), nowVn.getUTCMonth(), nowVn.getUTCDate()));
     yest.setUTCDate(yest.getUTCDate() - 1);
