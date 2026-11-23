@@ -9,6 +9,7 @@ import DevtoolGuard from './components/DevtoolGuard';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Admin = lazy(() => import('./pages/Admin'));
 const OrderReport = lazy(() => import('./pages/OrderReport'));
+const OrderCheck = lazy(() => import('./pages/OrderCheck'));
 const PackingSpeed = lazy(() => import('./pages/PackingSpeed'));
 const Login = lazy(() => import('./pages/Login'));
 const UnderDevelopment = lazy(() => import('./pages/UnderDevelopment'));
@@ -83,6 +84,11 @@ export default function App() {
           <Route path="order-report" element={
             <FeatureGuard featureId="print_orders" subFeatureId="bao_cao_don">
               <OrderReport />
+            </FeatureGuard>
+          } />
+          <Route path="check-don" element={
+            <FeatureGuard featureId="print_orders" subFeatureId="check_don">
+              <OrderCheck />
             </FeatureGuard>
           } />
           <Route path="printed-today" element={

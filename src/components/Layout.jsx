@@ -29,6 +29,7 @@ const ROUTE_TO_FEATURE_MAP = {
   '/status-transitions': { parent: 'dashboard', sub: 'tra_cuu_luan_chuyen' },
   
   '/order-report': { parent: 'print_orders', sub: 'bao_cao_don' },
+  '/check-don': { parent: 'print_orders', sub: 'check_don' },
   '/printed-today': { parent: 'print_orders', sub: 'don_da_in' },
   '/filter-by-zone': { parent: 'print_orders', sub: 'loc_don_day_ke' },
   '/awb-locations': { parent: 'print_orders', sub: 'chen_vi_tri_awb' },
@@ -525,9 +526,10 @@ export default function Layout() {
         },
         {
           id: 'print_orders', label: 'Đơn in', icon: Printer,
-          matchRoutes: ['/order-report', '/printed-today', '/filter-by-zone', '/awb-locations', '/print-spx-orders'],
+          matchRoutes: ['/order-report', '/check-don', '/printed-today', '/filter-by-zone', '/awb-locations', '/print-spx-orders'],
           subItems: [
             { path: '/order-report', label: 'Đơn có thể in', icon: Printer },
+            { path: '/check-don', label: 'Check đơn', icon: ClipboardCheck },
             { path: '/printed-today', label: 'Đơn đã in hôm nay', icon: CheckCircle2 },
             { path: '/filter-by-zone', label: 'Lọc đơn chia theo dãy kệ', icon: Filter },
             { path: '/awb-locations', label: 'Chèn vị trí SP vào AWB', icon: FileEdit },

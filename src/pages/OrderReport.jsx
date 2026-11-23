@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
+import { parseIdList, sortRowsByPastedOrder } from '../lib/idListSearch';
 import { logOrderPrint } from '../lib/presence';
 import { useFeatureLocks, isSubLocked } from '../components/FeatureGuard';
 import { Search, CheckCircle, AlertTriangle, XCircle, RefreshCw, MessageSquare, Lock, User, ChevronDown, Printer, ChevronLeft, ChevronRight, Copy, Send, Settings2, PackageSearch, Pencil, Save, Download } from 'lucide-react';
@@ -98,40 +99,6 @@ const isGHNCarrier = (carrierName) => {
 };
 
 // Ô tìm kiếm debounce dùng chung cho báo cáo đặc biệt.
-// Tách danh sách ID đơn / mã vận đơn dán vào ô tìm danh sách (mỗi dòng
-// 1 mã; chấp nhận cả dấu phẩy / chấm phẩy / tab khi dán từ Excel), bỏ
-// dòng trống + mã trùng (không phân biệt hoa/thường), tối đa 200 mã,
-// giữ nguyên thứ tự dán. Trả { list: [{raw, upper}], total } với total
-// là số mã riêng biệt trước khi giới hạn.
-const MAX_ID_LIST = 200;
-const parseIdList = (text) => {
-    const seen = new Set();
-    const all = [];
-    String(text || '').split(/[\n\r\t,;]+/).forEach((part) => {
-        const raw = part.trim();
-        if (!raw) return;
-        const upper = raw.toUpperCase();
-        if (seen.has(upper)) return;
-        seen.add(upper);
-        all.push({ raw, upper });
-    });
-    return { list: all.slice(0, MAX_ID_LIST), total: all.length };
-};
-
-// Xếp các đơn khớp theo đúng thứ tự mã đã dán: đơn nào khớp mã dán
-// trước thì đứng trước (khớp theo mã vận đơn trước, rồi tới ID đơn).
-const sortRowsByPastedOrder = (rows, codes) => {
-    const codeIndex = new Map();
-    codes.forEach((c, idx) => { if (!codeIndex.has(c.upper)) codeIndex.set(c.upper, idx); });
-    const rowIndex = (o) => {
-        const byCarrier = o.carrier_code ? codeIndex.get(String(o.carrier_code).toUpperCase()) : undefined;
-        if (byCarrier !== undefined) return byCarrier;
-        const byId = codeIndex.get(String(o.id).toUpperCase());
-        return byId !== undefined ? byId : codes.length;
-    };
-    return [...rows].sort((a, b) => rowIndex(a) - rowIndex(b));
-};
-
 const useDebouncedValue = (value, delay) => {
     const [debounced, setDebounced] = useState(value);
     useEffect(() => {
