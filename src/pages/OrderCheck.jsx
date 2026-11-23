@@ -73,8 +73,24 @@ export const resolveOrderProducts = (order) => {
     }));
 };
 
+// Kiểu tra của trang Check đơn: tra theo đúng 1 cột, không gộp chung
+// nhiều cột (tra gộp bằng OR vừa chậm vừa dễ timeout khi tra nhiều).
+// 'id': ID đơn Nhanh; 'carrier': mã vận đơn; 'ecom': mã đơn sàn.
+export const SEARCH_TYPES = [
+    { id: 'id', label: 'ID đơn' },
+    { id: 'carrier', label: 'Mã vận đơn' },
+    { id: 'ecom', label: 'Mã đơn sàn' },
+];
+
+export const buildCheckQuery = (list, searchType) => {
+    if (searchType === 'carrier') return { column: 'carrier_code', values: list.map((c) => c.upper) };
+    if (searchType === 'ecom') return { column: 'ecom_order_id', values: list.map((c) => c.raw) };
+    return { column: 'id', values: list.map((c) => c.raw) };
+};
+
 export default function OrderCheck() {
     const [input, setInput] = useState('');
+    const [searchType, setSearchType] = useState('id');
     const [results, setResults] = useState([]);
     const [notFound, setNotFound] = useState([]);
     const [searchedCount, setSearchedCount] = useState(0);
@@ -106,7 +122,7 @@ export default function OrderCheck() {
     const handleCheck = async () => {
         const { list, total } = parseIdList(input, MAX_CHECK);
         if (list.length === 0) {
-            setError('Dán ít nhất 1 mã ID đơn / mã vận đơn để tra cứu.');
+            setError('Dán ít nhất 1 mã để tra cứu.');
             return;
         }
         setError('');
@@ -115,18 +131,15 @@ export default function OrderCheck() {
         setResults([]);
         setNotFound([]);
         try {
+            // Tra theo đúng 1 cột đã chọn (không OR gộp nhiều cột) để
+            // tránh timeout khi tra nhiều mã cùng lúc.
+            const { column, values } = buildCheckQuery(list, searchType);
             const matched = [];
             const seen = new Set();
-            for (let i = 0; i < list.length; i += 50) {
-                const chunk = list.slice(i, i + 50);
-                const idVals = chunk.filter((c) => /^\d+$/.test(c.raw)).map((c) => c.raw);
-                const carrierVals = chunk.map((c) => c.upper);
-                const ors = [];
-                if (idVals.length) ors.push(`id.in.(${idVals.join(',')})`);
-                if (carrierVals.length) ors.push(`carrier_code.in.(${carrierVals.join(',')})`);
+            for (let i = 0; i < values.length; i += 50) {
                 const { data: rows, error: qErr } = await supabase.from('orders')
                     .select('*, order_products(product_code, product_name, quantity, price)')
-                    .or(ors.join(','))
+                    .in(column, values.slice(i, i + 50))
                     .range(0, 999);
                 if (qErr) throw qErr;
                 (rows || []).forEach((r) => { if (!seen.has(String(r.id))) { seen.add(String(r.id)); matched.push(r); } });
@@ -136,6 +149,7 @@ export default function OrderCheck() {
             ordered.forEach((o) => {
                 foundKeys.add(String(o.id).toUpperCase());
                 if (o.carrier_code) foundKeys.add(String(o.carrier_code).toUpperCase());
+                if (o.ecom_order_id) foundKeys.add(String(o.ecom_order_id).toUpperCase());
             });
             setNotFound(list.filter((c) => !foundKeys.has(c.upper)).map((c) => c.raw));
             setSearchedCount(list.length);
@@ -202,15 +216,31 @@ export default function OrderCheck() {
         <div className="space-y-5">
             <div>
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900">Check đơn</h1>
-                <p className="text-sm text-slate-500 font-medium mt-1">Dán danh sách ID đơn / mã vận đơn để tra cứu nhanh sản phẩm, giá tiền, trạng thái, người tạo và kênh bán.</p>
+                <p className="text-sm text-slate-500 font-medium mt-1">Chọn kiểu tra rồi dán danh sách mã để tra cứu nhanh sản phẩm, giá tiền, trạng thái, người tạo và kênh bán.</p>
             </div>
 
             <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-bold text-slate-700">Tra bằng:</span>
+                    {SEARCH_TYPES.map((t) => (
+                        <button
+                            key={t.id}
+                            onClick={() => setSearchType(t.id)}
+                            className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${searchType === t.id ? 'bg-slate-900 text-white border-slate-900 shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                        >
+                            {t.label}
+                        </button>
+                    ))}
+                </div>
                 <textarea
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     rows={6}
-                    placeholder={'Dán danh sách ID đơn / Mã vận đơn — mỗi dòng 1 mã\n80808080\n82828228\nSPXVN069746907116B'}
+                    placeholder={searchType === 'carrier'
+                        ? 'Dán danh sách mã vận đơn — mỗi dòng 1 mã\nSPXVN069746907116B\nSPXVN061934296048'
+                        : searchType === 'ecom'
+                            ? 'Dán danh sách mã đơn sàn — mỗi dòng 1 mã (đơn Shopee / TikTok / Lazada)'
+                            : 'Dán danh sách ID đơn — mỗi dòng 1 mã\n80808080\n82828228'}
                     className="w-full px-3 py-2.5 text-sm border border-slate-300 rounded-xl outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500 bg-white transition-colors resize-y font-mono"
                 />
                 <div className="flex flex-wrap items-center gap-2">
@@ -228,7 +258,7 @@ export default function OrderCheck() {
                     >
                         <X size={15} /> Xóa
                     </button>
-                    <span className="text-xs text-slate-400 font-medium">Tối đa {MAX_CHECK} đơn/lần — mỗi dòng 1 mã.</span>
+                    <span className="text-xs text-slate-400 font-medium">Tối đa {MAX_CHECK} đơn/lần — mỗi dòng 1 mã, tra theo {searchType === 'carrier' ? 'mã vận đơn' : searchType === 'ecom' ? 'mã đơn sàn' : 'ID đơn'}.</span>
                 </div>
                 {error && (
                     <p className="text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>

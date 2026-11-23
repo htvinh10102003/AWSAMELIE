@@ -5,8 +5,8 @@
 //   dán. Trả { list: [{raw, upper}], total } với total là số mã riêng
 //   biệt trước khi giới hạn.
 // - sortRowsByPastedOrder: xếp các đơn khớp theo đúng thứ tự mã đã dán
-//   (khớp theo mã vận đơn trước, rồi tới ID đơn); đơn không khớp mã nào
-//   xếp cuối.
+//   (khớp theo mã vận đơn trước, rồi tới mã đơn sàn, rồi tới ID đơn);
+//   đơn không khớp mã nào xếp cuối.
 export const parseIdList = (text, max = 200) => {
     const seen = new Set();
     const all = [];
@@ -27,6 +27,8 @@ export const sortRowsByPastedOrder = (rows, codes) => {
     const rowIndex = (o) => {
         const byCarrier = o.carrier_code ? codeIndex.get(String(o.carrier_code).toUpperCase()) : undefined;
         if (byCarrier !== undefined) return byCarrier;
+        const byEcom = o.ecom_order_id ? codeIndex.get(String(o.ecom_order_id).toUpperCase()) : undefined;
+        if (byEcom !== undefined) return byEcom;
         const byId = codeIndex.get(String(o.id).toUpperCase());
         return byId !== undefined ? byId : codes.length;
     };
