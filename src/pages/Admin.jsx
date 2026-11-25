@@ -6,7 +6,7 @@ import { getMaintenanceMode, setMaintenanceMode } from '../lib/maintenance';
 import {
   Settings, DownloadCloud, Loader2, CheckCircle2, AlertCircle, PackageSearch,
   Users, UserPlus, UserX, Eye, EyeOff, KeyRound, Pencil, X, Zap, Lock, RefreshCcw, User, ShieldAlert,
-  Database, HardDrive, Trash2, AlertTriangle, Info,
+  Database, HardDrive, Trash2, AlertTriangle, Info, Copy, Check, ExternalLink,
   BellRing, Megaphone, MonitorPlay, Ban, History, LogOut, Printer, PartyPopper
 } from 'lucide-react';
 import { shortDeviceName } from '../lib/presence';
@@ -26,9 +26,15 @@ const formatBytes = (bytes, decimals = 2) => {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
 };
 
-// Mã verify cho flow cấp quyền Nhanh.vn kiểu mới (docs developers.nhanh.group):
-// random 12-64 ký tự [a-zA-Z0-9], tạo ở Admin, gắn vào link cấp quyền
-// (&service=pos&verifyCode=...) rồi gửi kèm lúc đổi access code lấy token.
+// Link cấp quyền Nhanh.vn kiểu mới (docs developers.nhanh.group):
+// https://nhanh.vn/oauth?appId={appId}&service=pos&verifyCode={verifyCode}&returnLink={returnLink}
+// - verifyCode: random 12-64 ký tự [a-zA-Z0-9], tạo ở Admin, gắn vào link
+//   rồi gửi kèm lúc đổi access code lấy token (chống CSRF, giống OAuth state).
+// - returnLink: domain chính của app, phải nằm trong Redirect URL của app
+//   trên open.nhanh.vn thì Nhanh mới chịu cấp quyền.
+// Hàm thuần (module-level) để test Node trích xuất được.
+const NHANH_AUTH_RETURN_LINK = 'https://www.ameliebaocaokho.site/';
+const buildNhanhAuthLink = (appId, verifyCode) => `https://nhanh.vn/oauth?appId=${appId || 'YOUR_APPID'}&service=pos&verifyCode=${verifyCode || 'YOUR_VERIFY_CODE'}&returnLink=${NHANH_AUTH_RETURN_LINK}`;
 const makeVerifyCode = (len = 32) => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let out = '';
@@ -95,6 +101,7 @@ export default function Admin() {
 
   // --- CONFIGS API ---
   const [apiConfigs, setApiConfigs] = useState(() => ({ nhanh_app_id: '', nhanh_business_id: '', nhanh_secret_key: '', nhanh_access_code: '', nhanh_verify_code: loadStoredVerifyCode() }));
+  const [authLinkCopied, setAuthLinkCopied] = useState(false);
   const [apiLoading, setApiLoading] = useState(false);
   const [apiMessage, setApiMessage] = useState('');
   const [nhanhDaysLeft, setNhanhDaysLeft] = useState(null);
@@ -559,6 +566,20 @@ export default function Admin() {
     const vc = makeVerifyCode();
     try { localStorage.setItem('nhanh_verify_code', vc); } catch (e) {}
     setApiConfigs(prev => ({ ...prev, nhanh_verify_code: vc }));
+  };
+
+  // Link cấp quyền đã ghép sẵn App ID + mã verify + returnLink cố định
+  // (đổi App ID hay bấm "Tạo mã mới" là link tự đổi theo).
+  const nhanhAuthLink = buildNhanhAuthLink(apiConfigs.nhanh_app_id, apiConfigs.nhanh_verify_code);
+  const isAuthLinkReady = Boolean(apiConfigs.nhanh_app_id && apiConfigs.nhanh_verify_code);
+
+  const handleCopyAuthLink = async () => {
+    if (!isAuthLinkReady) return;
+    try {
+      await navigator.clipboard.writeText(nhanhAuthLink);
+      setAuthLinkCopied(true);
+      setTimeout(() => setAuthLinkCopied(false), 3000);
+    } catch (e) { /* trình duyệt chặn copy thì người dùng tự bôi đen link */ }
   };
   
   const handleSaveApi = async (e) => {
@@ -1279,7 +1300,16 @@ export default function Admin() {
                       <input type="text" name="nhanh_verify_code" value={apiConfigs.nhanh_verify_code} readOnly className="flex-1 px-4 py-3 border border-amber-300/60 rounded-xl text-sm bg-white outline-none font-mono font-medium" />
                       <button type="button" onClick={handleRegenVerifyCode} className="px-4 py-3 bg-white border border-amber-300/60 text-amber-800 text-sm font-bold rounded-xl hover:bg-amber-100/60 transition whitespace-nowrap flex items-center justify-center gap-2"><RefreshCcw size={15} /> Tạo mã mới</button>
                     </div>
-                    <p className="text-xs text-amber-700/80 mt-2 leading-relaxed">Mở link cấp quyền Nhanh như mọi lần, thêm vào cuối link: <span className="font-mono font-bold">{`&service=pos&verifyCode=${apiConfigs.nhanh_verify_code || 'MÃ-TRÊN'}`}</span> rồi đăng nhập, tick đủ quyền (kể cả sàn TMĐT), copy Access Code về paste vào ô dưới rồi bấm Lưu Token mới.</p>
+                    <div className="mt-3">
+                      <label className="text-xs font-bold text-amber-800 uppercase tracking-wider mb-2 block">Link cấp quyền Nhanh.vn (đã ghép sẵn — bấm để copy)</label>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input type="text" value={nhanhAuthLink} readOnly className="flex-1 px-4 py-3 border border-amber-300/60 rounded-xl text-sm bg-white outline-none font-mono" />
+                        <button type="button" onClick={handleCopyAuthLink} disabled={!isAuthLinkReady} className="px-4 py-3 bg-amber-600 text-white text-sm font-bold rounded-xl hover:bg-amber-700 transition whitespace-nowrap flex items-center justify-center gap-2 disabled:opacity-50">{authLinkCopied ? <Check size={15} /> : <Copy size={15} />} {authLinkCopied ? 'Đã copy link' : 'Sao chép link'}</button>
+                        <a href={nhanhAuthLink} target="_blank" rel="noreferrer" className={`px-4 py-3 bg-white border border-amber-300/60 text-amber-800 text-sm font-bold rounded-xl hover:bg-amber-100/60 transition whitespace-nowrap flex items-center justify-center gap-2 ${!isAuthLinkReady ? 'opacity-50 pointer-events-none' : ''}`}><ExternalLink size={15} /> Mở link</a>
+                      </div>
+                      <p className="text-xs text-amber-700/80 mt-2 leading-relaxed">Mở link trên, đăng nhập, tick đủ quyền (kể cả sàn TMĐT), copy Access Code về paste vào ô dưới rồi bấm Lưu Token mới.</p>
+                      <p className="text-xs font-bold text-amber-800 mt-1 leading-relaxed">Chú ý: Cần đăng nhập Nhanh.vn đúng với Appid đang liên kết.</p>
+                    </div>
                   </div>
                   <div className="flex flex-col md:flex-row md:items-end gap-4">
                     <div className="flex-1">

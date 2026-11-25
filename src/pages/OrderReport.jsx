@@ -125,6 +125,25 @@ const isPrintableEcomOrder = (order) => {
     return hasRealCarrier(order);
 };
 
+// Chạy tối đa `limit` tác vụ cùng lúc (mặc định gọi với 6 cho luồng gửi
+// đơn sàn và lấy nhãn in). fn(item) trả về kết quả; mỗi kết quả xong thì
+// gọi onResult(result) ngay theo thứ tự hoàn thành (không theo thứ tự
+// gốc). Dừng nhận việc mới khi shouldStop() true — việc đang chạy vẫn
+// chạy xong. Hàm thuần (module-level) để test Node trích xuất được.
+const runPool = async (items, limit, fn, onResult, shouldStop) => {
+    const n = Math.max(1, Math.min(limit || 1, items.length));
+    let next = 0;
+    const workers = Array.from({ length: n }, async () => {
+        while (next < items.length) {
+            if (shouldStop && shouldStop()) return;
+            const item = items[next++];
+            const result = await fn(item);
+            onResult(result);
+        }
+    });
+    await Promise.all(workers);
+};
+
 // --- Helpers trình bày số thành chữ thuần cho popup chi tiết ---
 const fmtMoney = (v) => {
     if (v === null || v === undefined || v === '') return 'Chưa có';
@@ -1757,12 +1776,14 @@ export default function OrderReport() {
         setShowActionMenu(false);
         setShowBulkEcomModal(true);
     };
-    // Gửi đơn sàn hàng loạt: gọi ecomReadyToShip TUẦN TỰ từng đơn (1
-    // đơn/cuộc gọi, edge tự ghi 1 dòng send_history riêng cho mỗi đơn).
-    // Modal kết quả mở ngay khi bắt đầu gửi; sau mỗi đơn xong thì cập
-    // nhật tiến trình + append kết quả đơn đó vào bulkEcomLiveResults để
-    // hiện ngay trong modal. Nút Dừng chỉ dừng sau khi đơn hiện tại
-    // xong, giữ lại kết quả đã xong và hiện tổng kết như bình thường.
+    // Gửi đơn sàn hàng loạt: gọi ecomReadyToShip theo cụm SONG SONG tối
+    // đa 6 đơn/lúc (trước đây tuần tự 1 đơn/lần nên 129 đơn mất mấy phút;
+    // mỗi cuộc gọi vẫn 1 đơn, edge tự ghi 1 dòng send_history riêng cho
+    // mỗi đơn như cũ). Modal kết quả mở ngay khi bắt đầu gửi; sau mỗi
+    // đơn xong thì cập nhật tiến trình + append kết quả đơn đó vào
+    // bulkEcomLiveResults để hiện ngay trong modal. Nút Dừng chỉ dừng
+    // nhận đơn mới, đơn đang gửi vẫn chạy xong, giữ lại kết quả đã xong
+    // và hiện tổng kết như bình thường.
     const handleBulkEcom = async () => {
         if (selectedMarketplaceIds.length === 0 || bulkEcomRunning) return;
         const ids = [...selectedMarketplaceIds];
@@ -1776,11 +1797,10 @@ export default function OrderReport() {
         setBulkEcomRunning(true);
         setShowBulkEcomResultModal(true);
         const live = [];
+        const orderIndex = new Map(ids.map((id, i) => [String(id), i]));
         try {
-            for (let i = 0; i < ids.length; i++) {
-                if (bulkEcomStopRef.current) break;
-                const orderId = ids[i];
-                setBulkEcomProgress({ done: i, total: ids.length, currentId: orderId });
+            await runPool(ids, 6, async (orderId) => {
+                setBulkEcomProgress(prev => ({ ...prev, currentId: orderId }));
                 let one;
                 try {
                     const result = await callNhanhActionRaw('ecomReadyToShip', { orderIds: [orderId], orderPickupType: bulkEcomPickupType, source: 'toolbar' });
@@ -1790,12 +1810,19 @@ export default function OrderReport() {
                     one = { orderId, ok: false, error: `Lỗi hệ thống: ${err.message}` };
                 }
                 if (one.ok && one.trackingNumber) patchOrderEverywhere(one.orderId, { carrier_code: one.trackingNumber });
+                return one;
+            }, (one) => {
                 live.push(one);
                 setBulkEcomLiveResults([...live]);
-                setBulkEcomProgress({ done: i + 1, total: ids.length, currentId: ids[i + 1] ?? null });
-            }
+                setBulkEcomProgress(prev => ({ done: live.length, total: ids.length, currentId: prev.currentId }));
+            }, () => bulkEcomStopRef.current);
         } finally {
             const stopped = bulkEcomStopRef.current;
+            // Kết quả về theo thứ tự hoàn thành; xếp lại theo đúng thứ tự
+            // đã tick để danh sách hiện và file PDF gộp nhãn giữ đúng
+            // thứ tự đơn (nút gộp nhãn đọc từ danh sách live này).
+            live.sort((a, b) => (orderIndex.get(String(a.orderId)) ?? 999999) - (orderIndex.get(String(b.orderId)) ?? 999999));
+            setBulkEcomLiveResults([...live]);
             const okCount = live.filter(r => r.ok).length;
             const failCount = live.filter(r => !r.ok).length;
             setBulkEcomResult({
@@ -1812,11 +1839,12 @@ export default function OrderReport() {
         }
     };
     // In mã đơn sàn hàng loạt: lấy nhãn PDF sàn (ecom/getprintlabel)
-    // TUẦN TỰ từng đơn sàn đã có mã vận đơn thật — KHÔNG gửi lại đơn.
-    // Modal kết quả mở ngay khi bắt đầu; sau mỗi đơn xong thì cập nhật
-    // tiến trình + append kết quả đơn đó vào printLabelsLiveResults để
-    // hiện ngay trong modal. Nút Dừng chỉ dừng sau khi đơn hiện tại
-    // xong, giữ lại kết quả đã xong và hiện tổng kết như bình thường.
+    // SONG SONG tối đa 6 đơn/lúc cho các đơn sàn đã có mã vận đơn thật
+    // — KHÔNG gửi lại đơn. Modal kết quả mở ngay khi bắt đầu; sau mỗi
+    // đơn xong thì cập nhật tiến trình + append kết quả đơn đó vào
+    // printLabelsLiveResults để hiện ngay trong modal. Nút Dừng chỉ
+    // dừng nhận đơn mới, đơn đang lấy vẫn chạy xong, giữ lại kết quả đã
+    // xong và hiện tổng kết như bình thường.
     // Xong thì bấm "In tất cả phiếu (1 file PDF)" để gộp + mở tab in.
     const handlePrintLabels = async () => {
         if (selectedPrintableEcomIds.length === 0 || printLabelsRunning) return;
@@ -1831,11 +1859,10 @@ export default function OrderReport() {
         setPrintLabelsRunning(true);
         setShowPrintLabelsModal(true);
         const live = [];
+        const orderIndex = new Map(ids.map((id, i) => [String(id), i]));
         try {
-            for (let i = 0; i < ids.length; i++) {
-                if (printLabelsStopRef.current) break;
-                const orderId = ids[i];
-                setPrintLabelsProgress({ done: i, total: ids.length, currentId: orderId });
+            await runPool(ids, 6, async (orderId) => {
+                setPrintLabelsProgress(prev => ({ ...prev, currentId: orderId }));
                 let one;
                 try {
                     const labelUrl = await fetchEcomLabelWithRetry(orderId);
@@ -1844,12 +1871,19 @@ export default function OrderReport() {
                 } catch (err) {
                     one = { orderId, ok: false, error: err.message || 'Không lấy được nhãn PDF của đơn này.' };
                 }
+                return one;
+            }, (one) => {
                 live.push(one);
                 setPrintLabelsLiveResults([...live]);
-                setPrintLabelsProgress({ done: i + 1, total: ids.length, currentId: ids[i + 1] ?? null });
-            }
+                setPrintLabelsProgress(prev => ({ done: live.length, total: ids.length, currentId: prev.currentId }));
+            }, () => printLabelsStopRef.current);
         } finally {
             const stopped = printLabelsStopRef.current;
+            // Kết quả về theo thứ tự hoàn thành; xếp lại theo đúng thứ tự
+            // đã tick để danh sách hiện và file PDF gộp nhãn giữ đúng
+            // thứ tự đơn (nút gộp nhãn đọc từ danh sách live này).
+            live.sort((a, b) => (orderIndex.get(String(a.orderId)) ?? 999999) - (orderIndex.get(String(b.orderId)) ?? 999999));
+            setPrintLabelsLiveResults([...live]);
             const okCount = live.filter(r => r.ok).length;
             const failCount = live.filter(r => !r.ok).length;
             setPrintLabelsResult({

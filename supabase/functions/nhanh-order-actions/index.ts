@@ -12,6 +12,8 @@ import { PDFDocument } from 'https://esm.sh/pdf-lib@1.17.1';
 //   wms-allocation loại khỏi phân bổ (action syncDeleted, không cần ID đơn).
 // - Gửi đơn sàn (ecom/readytoship + ecom/getprintlabel): Shopee/TikTok/
 //   Lazada, lấy mã vận đơn sàn + URL nhãn PDF (action ecomReadyToShip).
+// - Danh sách gian hàng sàn (ecom/shop): Shopee/TikTok/Lazada, trả
+//   tên shop theo ID để hiện tên thay cho ID dài (action shopList).
 // - Gửi đơn sang hãng (order/sendcarrier) và hủy đơn (order/cancelcarrier):
 //   chạy được 1 đơn hoặc nhiều đơn (mảng orderIds, chạy tuần tự từng
 //   đơn). Đơn đã gửi rồi (ERR_ORDER_ALREADY_SENT_CARRIER) thì lấy lại
@@ -83,7 +85,7 @@ serve(async (req) => {
     // chỉ cần productId, syncDeleted không cần tham số nào — cả hai
     // cũng không mang orderIds nên phải miễn kiểm tra này, nếu không
     // sẽ luôn trả 400 'Thiếu ID đơn hàng.'
-    if (action !== 'tags' && action !== 'sendHistory' && action !== 'productDetail' && action !== 'syncDeleted' && action !== 'ecomGetLabel' && action !== 'ecomMergeLabels' && orderIds.length === 0) {
+    if (action !== 'tags' && action !== 'sendHistory' && action !== 'productDetail' && action !== 'syncDeleted' && action !== 'ecomGetLabel' && action !== 'ecomMergeLabels' && action !== 'shopList' && orderIds.length === 0) {
       return json({ success: false, message: 'Thiếu ID đơn hàng.' }, 400);
     }
 
@@ -586,29 +588,43 @@ serve(async (req) => {
 
     if (action === 'ecomMergeLabels') {
       // Gộp nhiều nhãn PDF sàn thành 1 file PDF duy nhất để in 1 lần.
-      // Body {labelUrls: string[]} (1..50 URL http(s)). URL nào fetch
-      // lỗi hoặc parse lỗi thì bỏ qua, tiếp tục các URL còn lại; tất cả
-      // đều lỗi thì trả 400. Trả về binary PDF, không dùng helper json().
+      // Body {labelUrls: string[]} (1..200 URL http(s)). Tải PDF song
+      // song theo cụm 10 URL/lượt, giữ đúng thứ tự URL trong file gộp;
+      // URL nào fetch lỗi hoặc parse lỗi thì bỏ qua, tiếp tục các URL
+      // còn lại; tất cả đều lỗi thì trả 400. Trả về binary PDF, không
+      // dùng helper json().
       const labelUrls: unknown = payload.labelUrls;
-      if (!Array.isArray(labelUrls) || labelUrls.length < 1 || labelUrls.length > 50) {
-        return json({ success: false, message: 'labelUrls phải là mảng gồm 1 đến 50 URL nhãn PDF.' }, 400);
+      if (!Array.isArray(labelUrls) || labelUrls.length < 1 || labelUrls.length > 200) {
+        return json({ success: false, message: 'labelUrls phải là mảng gồm 1 đến 200 URL nhãn PDF.' }, 400);
       }
       const hasBad = labelUrls.some((u: unknown) => typeof u !== 'string' || (!u.startsWith('http://') && !u.startsWith('https://')));
       if (hasBad) {
         return json({ success: false, message: 'Mỗi phần tử trong labelUrls phải là chuỗi URL bắt đầu bằng http:// hoặc https://.' }, 400);
       }
+      // Tải trước tất cả PDF (song song 10 URL/lượt), giữ đúng thứ tự.
+      const urls = labelUrls as string[];
+      const pdfBytesList: (ArrayBuffer | null)[] = new Array(urls.length).fill(null);
+      for (let start = 0; start < urls.length; start += 10) {
+        const batch = urls.slice(start, start + 10);
+        const fetched = await Promise.all(batch.map(async (url) => {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) return null;
+            return await res.arrayBuffer();
+          } catch { return null; }
+        }));
+        fetched.forEach((bytes, i) => { pdfBytesList[start + i] = bytes; });
+      }
       const merged = await PDFDocument.create();
       let mergedCount = 0;
-      for (const url of labelUrls as string[]) {
+      for (const bytes of pdfBytesList) {
+        if (!bytes) continue;
         try {
-          const res = await fetch(url);
-          if (!res.ok) continue;
-          const bytes = await res.arrayBuffer();
           const src = await PDFDocument.load(bytes);
           const pages = await merged.copyPages(src, src.getPageIndices());
           pages.forEach((p) => merged.addPage(p));
           mergedCount++;
-        } catch { /* Bỏ qua URL lỗi, tiếp tục các URL còn lại */ }
+        } catch { /* Bỏ qua PDF lỗi, tiếp tục các URL còn lại */ }
       }
       if (mergedCount === 0) {
         return json({ success: false, message: 'Không tải được nhãn PDF nào từ các URL đã cho.' }, 400);
@@ -625,6 +641,33 @@ serve(async (req) => {
           'Content-Disposition': `attachment; filename="phieu-gui-san-${stamp}.pdf"`,
         },
       });
+    }
+
+    if (action === 'shopList') {
+      // Danh sách gian hàng sàn TMĐT (docs ecom/shop): Shopee 8195,
+      // TikTok 8855, Lazada 8142. Trả về [{ id, name, appId }] để
+      // frontend hiện tên shop thay cho ID dài. Lật trang theo
+      // paginator.next (size 50/trang, tối đa 10 trang/sàn).
+      const ECOM_APP_IDS = [8195, 8855, 8142];
+      const shops: any[] = [];
+      for (const platformAppId of ECOM_APP_IDS) {
+        let next: any = null;
+        for (let page = 0; page < 10; page++) {
+          const body: any = { filters: { appIds: [platformAppId] }, paginator: { size: 50 } };
+          if (next !== null && next !== undefined && next !== '') body.paginator.next = next;
+          const r = await callPos('/ecom/shop', body);
+          if (r.code !== 1) {
+            return json({ success: false, message: nhanhErr(r) });
+          }
+          (r.data || []).forEach((s: any) => {
+            if (s?.shop?.id) shops.push({ id: String(s.shop.id), name: s.shop.name || '', appId: s.appId ?? platformAppId });
+          });
+          const rawNext = r.paginator?.next ?? null;
+          next = rawNext && typeof rawNext === 'object' ? (rawNext.id ?? null) : rawNext;
+          if (next === null || next === undefined || next === '') break;
+        }
+      }
+      return json({ success: true, shops });
     }
 
     return json({ success: false, message: 'Thao tác không hợp lệ.' }, 400);
