@@ -144,6 +144,24 @@ const runPool = async (items, limit, fn, onResult, shouldStop) => {
     await Promise.all(workers);
 };
 
+// Mã vận đơn để copy sau khi gửi: chỉ lấy mã của đơn gửi thành công, mỗi
+// mã một dòng, giữ đúng thứ tự kết quả. `codeKey` là 'trackingNumber' với
+// đơn sàn, 'carrierCode' với đơn thường. Hàm thuần (module-level) để test
+// Node trích xuất được.
+const collectTrackingCodes = (results, codeKey) => (results || []).filter(r => r.ok).map(r => r[codeKey]).filter(Boolean);
+const missingTrackingResults = (results, codeKey) => (results || []).filter(r => r.ok && !r[codeKey]);
+// Vá lại các trường (mã vận đơn / URL nhãn) cho những dòng đã có, khớp theo
+// id (`idKey` là 'orderId' với đơn sàn, 'id' với đơn thường). Chỉ ghi đè
+// những trường có trong patch, giữ nguyên các trường khác.
+const patchResultRows = (results, patches, idKey) => {
+    if (!patches.length) return results;
+    const byId = new Map(patches.map(p => [String(p[idKey]), p]));
+    return (results || []).map(r => {
+        const p = byId.get(String(r[idKey]));
+        return p ? { ...r, ...p } : r;
+    });
+};
+
 // --- Helpers trình bày số thành chữ thuần cho popup chi tiết ---
 const fmtMoney = (v) => {
     if (v === null || v === undefined || v === '') return 'Chưa có';
@@ -407,6 +425,8 @@ export default function OrderReport() {
     // Gửi / hủy hàng loạt từ nút Thao tác trên thanh công cụ.
     const [bulkSendResult, setBulkSendResult] = useState(null);
     const [showBulkSendModal, setShowBulkSendModal] = useState(false);
+    const [sendCopyMsg, setSendCopyMsg] = useState('');
+    const [sendRefetching, setSendRefetching] = useState(false);
     // Gửi đơn sàn (Shopee/TikTok/Lazada) trong popup chi tiết.
     const [ecomPickupType, setEcomPickupType] = useState(1); // 1: hãng tới lấy, 2: gửi tại bưu cục
     const [ecomSending, setEcomSending] = useState(false);
@@ -418,6 +438,8 @@ export default function OrderReport() {
     const [bulkEcomPickupType, setBulkEcomPickupType] = useState(1);
     const [bulkEcomRunning, setBulkEcomRunning] = useState(false);
     const [bulkEcomResult, setBulkEcomResult] = useState(null);
+    const [ecomCopyMsg, setEcomCopyMsg] = useState('');
+    const [ecomRefetching, setEcomRefetching] = useState(false);
     const [showBulkEcomResultModal, setShowBulkEcomResultModal] = useState(false);
     // Tiến trình gửi đơn sàn hàng loạt (gửi tuần tự từng đơn): done/total
     // + đơn đang gửi, và kết quả từng đơn append ngay khi xong.
@@ -1760,6 +1782,48 @@ export default function OrderReport() {
             setSendingOrder(false);
         }
     };
+    // Sao chép danh sách mã vận đơn vừa gửi xong (đơn thường): mỗi mã một
+    // dòng, chỉ lấy mã của đơn gửi thành công. Đơn chưa có mã thì báo rõ
+    // số lượng để bấm Kéo lại MVD.
+    const handleCopySendMvd = async () => {
+        const codes = collectTrackingCodes(bulkSendResult?.results || [], 'carrierCode');
+        const missing = missingTrackingResults(bulkSendResult?.results || [], 'carrierCode').length;
+        if (codes.length === 0) {
+            setSendCopyMsg('Chưa có mã vận đơn nào để copy.');
+            setTimeout(() => setSendCopyMsg(''), 5000);
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(codes.join('\n'));
+            setSendCopyMsg(`Đã copy ${codes.length} mã vận đơn${missing > 0 ? ` — còn ${missing} đơn chưa có mã, bấm Kéo lại MVD.` : '.'}`);
+        } catch (e) {
+            setSendCopyMsg('Không copy được — trình duyệt chặn, thử bôi đen từng mã.');
+        }
+        setTimeout(() => setSendCopyMsg(''), 5000);
+    };
+    // Kéo lại mã vận đơn cho đơn thường đã gửi nhưng chưa có mã: gọi lại
+    // gửi hãng, Nhanh trả về mã của đơn đã gửi rồi (không gửi trùng).
+    // Chỉ chạy với đơn thiếu mã; mã kéo về vá vào popup + bảng chính.
+    const handleRefetchSendMvd = async () => {
+        const missing = missingTrackingResults(bulkSendResult?.results || [], 'carrierCode');
+        if (missing.length === 0 || sendRefetching) return;
+        setSendRefetching(true);
+        setSendCopyMsg('');
+        try {
+            const result = await callNhanhActionRaw('send', { orderIds: missing.map(r => r.id), source: 'toolbar-refetch-mvd' });
+            const patches = (result.results || []).filter(o => o.ok && o.carrierCode).map(o => ({ id: o.id, carrierCode: o.carrierCode }));
+            patches.forEach(p => patchOrderEverywhere(p.id, { carrier_code: p.carrierCode }));
+            if (patches.length > 0) {
+                setBulkSendResult(prev => prev ? { ...prev, results: patchResultRows(prev.results || [], patches, 'id') } : prev);
+            }
+            setSendCopyMsg(patches.length > 0 ? `Đã kéo lại được ${patches.length}/${missing.length} mã vận đơn.` : 'Không kéo lại được mã nào — thử lại sau.');
+        } catch (err) {
+            setSendCopyMsg(`Lỗi hệ thống: ${err.message}`);
+        } finally {
+            setSendRefetching(false);
+            setTimeout(() => setSendCopyMsg(''), 5000);
+        }
+    };
     // Gửi đơn sàn hàng loạt từ nút Thao tác: chỉ gửi đơn sàn trong list
     // đã tick, các đơn khác bỏ qua và báo rõ trong popup kết quả (giống
     // gửi sang hãng). Mã vận đơn vá thẳng vào bảng hiển thị qua
@@ -1837,6 +1901,59 @@ export default function OrderReport() {
             setBulkEcomRunning(false);
             setBulkEcomProgress(prev => ({ ...prev, currentId: null }));
         }
+    };
+    // Sao chép danh sách mã vận đơn vừa gửi xong (đơn sàn): mỗi mã một dòng.
+    const handleCopyEcomMvd = async () => {
+        const codes = collectTrackingCodes(bulkEcomDisplayResults, 'trackingNumber');
+        const missing = missingTrackingResults(bulkEcomDisplayResults, 'trackingNumber').length;
+        if (codes.length === 0) {
+            setEcomCopyMsg('Chưa có mã vận đơn nào để copy.');
+            setTimeout(() => setEcomCopyMsg(''), 5000);
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(codes.join('\n'));
+            setEcomCopyMsg(`Đã copy ${codes.length} mã vận đơn${missing > 0 ? ` — còn ${missing} đơn chưa có mã, bấm Kéo lại MVD.` : '.'}`);
+        } catch (e) {
+            setEcomCopyMsg('Không copy được — trình duyệt chặn, thử bôi đen từng mã.');
+        }
+        setTimeout(() => setEcomCopyMsg(''), 5000);
+    };
+    // Kéo lại mã vận đơn cho đơn sàn đã gửi nhưng chưa có mã: gọi lại gửi
+    // sàn, Nhanh trả về mã đã có sẵn (kèm nhãn nếu lấy được). Chạy song
+    // song 6 luồng; mã kéo về vá vào popup + bảng chính.
+    const handleRefetchEcomMvd = async () => {
+        const missing = missingTrackingResults(bulkEcomDisplayResults, 'trackingNumber');
+        if (missing.length === 0 || ecomRefetching || bulkEcomRunning) return;
+        setEcomRefetching(true);
+        setEcomCopyMsg('');
+        const patches = [];
+        await runPool(missing, 6, async (row) => {
+            const orderId = row.orderId;
+            try {
+                const result = await callNhanhActionRaw('ecomReadyToShip', { orderIds: [orderId], orderPickupType: bulkEcomPickupType, source: 'toolbar-refetch-mvd' });
+                const one = result.results?.[0];
+                if (one?.ok) {
+                    const patch = { orderId };
+                    if (one.trackingNumber) patch.trackingNumber = one.trackingNumber;
+                    if (one.labelUrl) patch.labelUrl = one.labelUrl;
+                    if (patch.trackingNumber) {
+                        patches.push(patch);
+                        patchOrderEverywhere(orderId, { carrier_code: one.trackingNumber });
+                    } else if (patch.labelUrl) {
+                        patches.push(patch);
+                    }
+                }
+            } catch (e) { /* giữ nguyên dòng cũ */ }
+        }, () => {});
+        const withCode = patches.filter(p => p.trackingNumber).length;
+        if (patches.length > 0) {
+            setBulkEcomLiveResults(prev => patchResultRows(prev, patches, 'orderId'));
+            setBulkEcomResult(prev => prev ? { ...prev, results: patchResultRows(prev.results || [], patches, 'orderId') } : prev);
+        }
+        setEcomCopyMsg(withCode > 0 ? `Đã kéo lại được ${withCode}/${missing.length} mã vận đơn.` : 'Không kéo lại được mã nào — thử lại sau.');
+        setTimeout(() => setEcomCopyMsg(''), 5000);
+        setEcomRefetching(false);
     };
     // In mã đơn sàn hàng loạt: lấy nhãn PDF sàn (ecom/getprintlabel)
     // SONG SONG tối đa 6 đơn/lúc cho các đơn sàn đã có mã vận đơn thật
@@ -2594,6 +2711,12 @@ export default function OrderReport() {
         ? bulkEcomLiveResults.filter(r => !r.ok).length
         : (bulkEcomResult?.failCount ?? bulkEcomLiveResults.filter(r => !r.ok).length);
     const bulkEcomDisplayLabelUrls = bulkEcomDisplayResults.filter(r => r.ok && r.labelUrl).map(r => r.labelUrl);
+    // Số mã vận đơn copy được / số đơn thiếu mã trong modal kết quả gửi sàn.
+    const ecomMvdCodes = collectTrackingCodes(bulkEcomDisplayResults, 'trackingNumber');
+    const ecomMvdMissingCount = missingTrackingResults(bulkEcomDisplayResults, 'trackingNumber').length;
+    // Số mã vận đơn copy được / số đơn thiếu mã trong modal kết quả gửi thường.
+    const sendMvdCodes = collectTrackingCodes(bulkSendResult?.results || [], 'carrierCode');
+    const sendMvdMissingCount = missingTrackingResults(bulkSendResult?.results || [], 'carrierCode').length;
     // Kết quả hiển thị trong modal in mã đơn sàn: lúc đang chạy thì lấy từ
     // printLabelsLiveResults (append từng đơn khi xong), lúc xong thì lấy
     // từ printLabelsResult (đã gồm toàn bộ kết quả đã xong).
@@ -3807,6 +3930,15 @@ export default function OrderReport() {
                                 <BillPrintButtons items={(bulkSendResult.results || []).filter(r => r.ok).map(r => ({ id: r.id, carrier_code: r.carrierCode || '' }))} />
                                 </>
                             )}
+                            {(bulkSendResult.results || []).filter(r => r.ok).length > 0 && (
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                    <button onClick={handleCopySendMvd} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Copy size={15} /> Sao chép danh sách MVD ({sendMvdCodes.length})</button>
+                                    {sendMvdMissingCount > 0 && (
+                                        <button onClick={handleRefetchSendMvd} disabled={sendRefetching} className="px-4 py-2 bg-white border border-amber-300 text-amber-700 text-sm font-bold rounded-lg hover:bg-amber-50 disabled:opacity-50 flex items-center gap-2">{sendRefetching ? <RefreshCw size={15} className="animate-spin" /> : <RefreshCw size={15} />} {sendRefetching ? 'Đang kéo lại...' : `Kéo lại MVD (${sendMvdMissingCount})`}</button>
+                                    )}
+                                </div>
+                            )}
+                            {sendCopyMsg && <p className="text-sm text-slate-600">{sendCopyMsg}</p>}
                             <button onClick={() => { setShowBulkSendModal(false); handleOpenSendHistory(); }} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 self-start">Xem lịch sử gửi</button>
                             <p className="text-xs text-slate-500">Mã vận đơn sẽ hiện trong bảng sau khi hệ thống đồng bộ đơn từ Nhanh về.</p>
                         </div>
@@ -3885,6 +4017,15 @@ export default function OrderReport() {
                                 </button>
                             )}
                             {mergeLabelsMsg && <p className="text-sm text-red-600">{mergeLabelsMsg}</p>}
+                            {bulkEcomDisplayResults.filter(r => r.ok).length > 0 && (
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                    <button onClick={handleCopyEcomMvd} className="px-4 py-2 bg-white border border-slate-300 text-sm font-bold rounded-lg hover:bg-slate-50 flex items-center gap-2"><Copy size={15} /> Sao chép danh sách MVD ({ecomMvdCodes.length})</button>
+                                    {ecomMvdMissingCount > 0 && (
+                                        <button onClick={handleRefetchEcomMvd} disabled={ecomRefetching || bulkEcomRunning} className="px-4 py-2 bg-white border border-amber-300 text-amber-700 text-sm font-bold rounded-lg hover:bg-amber-50 disabled:opacity-50 flex items-center gap-2">{ecomRefetching ? <RefreshCw size={15} className="animate-spin" /> : <RefreshCw size={15} />} {ecomRefetching ? 'Đang kéo lại...' : `Kéo lại MVD (${ecomMvdMissingCount})`}</button>
+                                    )}
+                                </div>
+                            )}
+                            {ecomCopyMsg && <p className="text-sm text-slate-600">{ecomCopyMsg}</p>}
                             <p className="text-xs text-slate-500">Mã vận đơn đã cập nhật ngay trong bảng; nhãn PDF mở trong tab mới.</p>
                         </div>
                     </div>
