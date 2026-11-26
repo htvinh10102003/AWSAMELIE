@@ -72,6 +72,20 @@ const fmtVnCreated = (iso) => {
   return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 };
 
+// Dữ liệu xuất Excel cho lịch sử đơn quá hạn: 1 dòng/đơn, đúng cột hiển thị
+// trên màn hình (Ngày, Buổi, ID đơn, Kênh bán, Mã vận đơn, Trạng thái,
+// Lưu lúc). ID ép sang chuỗi để Excel không làm tròn mã đơn sàn 18 chữ số.
+// Hàm thuần (module-level) để test Node trích xuất được.
+const buildOverdueHistoryRows = (rows) => (rows || []).map(r => ({
+    'Ngày': r.snapshot_date || '',
+    'Buổi': r.session === 'morning' ? 'Buổi sáng' : 'Buổi chiều',
+    'ID đơn': String(r.order_id ?? ''),
+    'Kênh bán': r.sale_channel ? (SALE_CHANNEL_MAP[r.sale_channel]?.name || `Kênh ${r.sale_channel}`) : '---',
+    'Mã vận đơn': r.carrier_code || '---',
+    'Trạng thái': STATUS_MAP[r.status] || (r.status != null ? String(r.status) : '---'),
+    'Lưu lúc': fmtVnCreated(r.created_at),
+}));
+
 // Cảnh báo viền đỏ cho đơn cần bàn giao lại, theo giờ VN hiện tại:
 // - Buổi sáng (giờ hiện tại < 12h): đơn tạo ngày hôm qua (giờ VN).
 // - Buổi chiều (giờ hiện tại >= 12h, kể cả đúng 12h): đơn tạo hôm nay trước 14h (giờ VN).
@@ -285,6 +299,18 @@ export default function OrderReconciliation() {
     if (view === 'list') fetchOverdueHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, histDate, histSession, currentUserMeta.is_owner]);
+
+  // Xuất Excel lịch sử đơn quá hạn đang hiển thị (theo ngày + buổi đã
+  // chọn). Dùng đúng histRows đã tải, không tải lại.
+  const handleExportOverdueHistory = async () => {
+    if (histRows.length === 0) return;
+    const XLSX = await import('xlsx');
+    const ws = XLSX.utils.json_to_sheet(buildOverdueHistoryRows(histRows));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'DonQuaHan');
+    const sessionPart = histSession === 'all' ? 'ca-2-buoi' : (histSession === 'morning' ? 'buoi-sang' : 'buoi-chieu');
+    XLSX.writeFile(wb, `don-qua-han_${histDate}_${sessionPart}.xlsx`);
+  };
 
   const handleCreateSession = async () => {
     const sessionName = `Biên bản - ${currentUserMeta.displayName || 'Hệ thống'} - ${new Date().toLocaleString('vi-VN')}`;
@@ -907,6 +933,7 @@ export default function OrderReconciliation() {
                   <option value="morning">Buổi sáng (12h trưa)</option>
                   <option value="afternoon">Buổi chiều (12h đêm)</option>
                 </select>
+                <button onClick={handleExportOverdueHistory} disabled={histRows.length === 0 || histLoading} className="px-3 py-1.5 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap"><Download size={14} /> Xuất Excel</button>
               </div>
             </div>
             <p className="text-xs text-slate-500 font-medium">Đơn đỏ buổi sáng được lưu lúc 12h trưa, đơn đỏ buổi chiều được lưu lúc 12h đêm. Chọn ngày + buổi để xem lại các đơn đã quá hạn.</p>
