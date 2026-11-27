@@ -844,7 +844,7 @@ export default function Mobile() {
     // Tính thẳng mỗi lần render (vài trăm đơn, không đáng kể) để tên trạng
     // thái luôn mới nhất sau khi bảng trạng thái tải xong.
     const printStatusOptions = countByKey(data.printable, 'status').map(({ code, count }) => ({ code, label: statusName(code), count }));
-    const printChannelOptions = countByKey(data.printable, 'sale_channel').map(({ code, count }) => ({ code, label: SALE_CHANNEL_MAP[code]?.name || `Kênh ${code}`, count }));
+    const printChannelOptions = countByKey(data.printable, 'sale_channel').map(({ code, count }) => ({ code, label: CHANNEL_NAMES[code] || `Kênh ${code}`, count }));
     // Tab Đơn in: 2 nút lọc tick + 2 ô lọc dropdown + ô tìm kiếm (đã lọc
     // trong printOrders). Bật nhiều lọc thì lấy giao nhau.
     const currentList = applyPrintFilters(printOrders, { stale: printOnlyStale, overdue: printOnlyOverdue, status: printStatusFilter, channel: printChannelFilter });
@@ -967,10 +967,10 @@ export default function Mobile() {
                         </div>
                         <div className="flex gap-2">
                             <button onClick={() => { setPrintOnlyStale(v => !v); setVisibleCount(30); }} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-sm font-bold border transition ${printOnlyStale ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-amber-300 text-amber-700 hover:bg-amber-50'}`}>
-                                {printOnlyStale ? <Check size={15} /> : <Clock size={15} />} Đơn tồn &gt; 2 ngày <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${printOnlyStale ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'}`}>{printStaleCount}</span>
+                                {printOnlyStale ? <Check size={15} /> : <Clock size={15} />} Tồn &gt; 2 ngày <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${printOnlyStale ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'}`}>{printStaleCount}</span>
                             </button>
                             <button onClick={() => { setPrintOnlyOverdue(v => !v); setVisibleCount(30); }} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-sm font-bold border transition ${printOnlyOverdue ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}>
-                                {printOnlyOverdue ? <Check size={15} /> : <AlertTriangle size={15} />} Đơn quá hạn <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${printOnlyOverdue ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700'}`}>{printOverdueCount}</span>
+                                {printOnlyOverdue ? <Check size={15} /> : <AlertTriangle size={15} />} Quá hạn <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${printOnlyOverdue ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700'}`}>{printOverdueCount}</span>
                             </button>
                         </div>
                         <div className="grid grid-cols-2 gap-2">
