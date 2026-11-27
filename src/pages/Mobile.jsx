@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import { Printer, AlertTriangle, MapPin, Search, ScanLine, Settings, ClipboardList, RefreshCw, Package, Pencil, X, LogOut, Save, Lock, Bell, FileSpreadsheet, User } from 'lucide-react';
+import { Printer, AlertTriangle, MapPin, Search, ScanLine, Settings, ClipboardList, RefreshCw, Package, Pencil, X, LogOut, Save, Lock, Bell, FileSpreadsheet, User, Clock, Check } from 'lucide-react';
 import { readBarcodesFromImageData, setZXingModuleOverrides } from 'zxing-wasm/reader';
 import zxingReaderWasmUrl from 'zxing-wasm/reader/zxing_reader.wasm?url';
 import { supabase } from '../lib/supabase';
@@ -149,6 +149,22 @@ const isStaleOver2Days = (order) => {
     const startOf = (d) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
     return (startOf(nowVn) - startOf(created)) / 86400000 > 2;
 };
+// Đếm lựa chọn cho ô lọc trạng thái/kênh bán từ danh sách đơn: [{code,
+// count}], xếp theo số đơn giảm dần. Hàm thuần (module-level) để test
+// Node trích xuất được.
+const countByKey = (orders, key) => {
+    const counts = new Map();
+    (orders || []).forEach(o => { const k = String(o?.[key] ?? ''); counts.set(k, (counts.get(k) || 0) + 1); });
+    return [...counts.entries()].map(([code, count]) => ({ code, count })).sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+};
+// Áp bộ lọc tab Đơn in: tồn > 2 ngày, quá hạn, trạng thái, kênh bán.
+// Hàm thuần (module-level) để test Node trích xuất được.
+const applyPrintFilters = (orders, { stale, overdue, status, channel }) => (orders || []).filter(o =>
+    (!stale || isStaleOver2Days(o)) &&
+    (!overdue || isHandoverWarningAny(o)) &&
+    (status === 'all' || String(o.status ?? '') === status) &&
+    (channel === 'all' || String(o.sale_channel ?? '') === channel)
+);
 const FEATURE_PARENTS = [
     { id: 'dashboard', name: 'Dashboard' }, { id: 'print_orders', name: 'Đơn in' },
     { id: 'packing', name: 'Đóng gói' }, { id: 'return_orders', name: 'Báo cáo đơn hoàn' },
@@ -217,6 +233,9 @@ export default function Mobile() {
     // Tab Đơn in: 2 nút lọc tick — đơn tồn > 2 ngày và đơn quá hạn.
     const [printOnlyStale, setPrintOnlyStale] = useState(false);
     const [printOnlyOverdue, setPrintOnlyOverdue] = useState(false);
+    // Tab Đơn in: 2 ô lọc dropdown — trạng thái và kênh bán.
+    const [printStatusFilter, setPrintStatusFilter] = useState('all');
+    const [printChannelFilter, setPrintChannelFilter] = useState('all');
     const [searchMode, setSearchMode] = useState('carrier');
     const [dbSearchResults, setDbSearchResults] = useState([]);
     const [dbSearching, setDbSearching] = useState(false);
@@ -820,13 +839,15 @@ export default function Mobile() {
 
     const printStaleCount = printOrders.filter(isStaleOver2Days).length;
     const printOverdueCount = printOrders.filter(isHandoverWarningAny).length;
-    // Tab Đơn in: 2 nút lọc tick — đơn tồn > 2 ngày và đơn quá hạn (logic
-    // viền đỏ đối soát). Bật cả 2 thì lấy giao nhau; vẫn lọc chung với ô
-    // tìm kiếm vì printOrders đã lọc search.
-    const currentList = printOrders.filter(o =>
-        (!printOnlyStale || isStaleOver2Days(o)) &&
-        (!printOnlyOverdue || isHandoverWarningAny(o))
-    );
+    // Lựa chọn cho 2 ô lọc trạng thái + kênh bán: lấy từ trạng thái/kênh
+    // thực tế có trong đơn in (data.printable, chưa lọc), kèm số đơn.
+    // Tính thẳng mỗi lần render (vài trăm đơn, không đáng kể) để tên trạng
+    // thái luôn mới nhất sau khi bảng trạng thái tải xong.
+    const printStatusOptions = countByKey(data.printable, 'status').map(({ code, count }) => ({ code, label: statusName(code), count }));
+    const printChannelOptions = countByKey(data.printable, 'sale_channel').map(({ code, count }) => ({ code, label: SALE_CHANNEL_MAP[code]?.name || `Kênh ${code}`, count }));
+    // Tab Đơn in: 2 nút lọc tick + 2 ô lọc dropdown + ô tìm kiếm (đã lọc
+    // trong printOrders). Bật nhiều lọc thì lấy giao nhau.
+    const currentList = applyPrintFilters(printOrders, { stale: printOnlyStale, overdue: printOnlyOverdue, status: printStatusFilter, channel: printChannelFilter });
     const visibleList = currentList.slice(0, visibleCount);
     // Danh sách đơn cần trả, lọc chỉ viền đỏ khi bật nút lọc.
     const reconFilteredHandover = reconOnlyWarning
@@ -945,8 +966,22 @@ export default function Mobile() {
                             <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
                         </div>
                         <div className="flex gap-2">
-                            <button onClick={() => { setPrintOnlyStale(v => !v); setVisibleCount(30); }} className={`flex-1 py-2.5 rounded-xl text-sm font-bold border ${printOnlyStale ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-amber-300 text-amber-700'}`}>Lọc đơn tồn &gt; 2 ngày ({printStaleCount})</button>
-                            <button onClick={() => { setPrintOnlyOverdue(v => !v); setVisibleCount(30); }} className={`flex-1 py-2.5 rounded-xl text-sm font-bold border ${printOnlyOverdue ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-red-300 text-red-700'}`}>Lọc đơn quá hạn ({printOverdueCount})</button>
+                            <button onClick={() => { setPrintOnlyStale(v => !v); setVisibleCount(30); }} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-sm font-bold border transition ${printOnlyStale ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-amber-300 text-amber-700 hover:bg-amber-50'}`}>
+                                {printOnlyStale ? <Check size={15} /> : <Clock size={15} />} Đơn tồn &gt; 2 ngày <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${printOnlyStale ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-700'}`}>{printStaleCount}</span>
+                            </button>
+                            <button onClick={() => { setPrintOnlyOverdue(v => !v); setVisibleCount(30); }} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-full text-sm font-bold border transition ${printOnlyOverdue ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-red-300 text-red-700 hover:bg-red-50'}`}>
+                                {printOnlyOverdue ? <Check size={15} /> : <AlertTriangle size={15} />} Đơn quá hạn <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${printOnlyOverdue ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700'}`}>{printOverdueCount}</span>
+                            </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <select value={printStatusFilter} onChange={(e) => { setPrintStatusFilter(e.target.value); setVisibleCount(30); }} className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-bold bg-white outline-none focus:border-slate-700">
+                                <option value="all">Tất cả trạng thái ({data.printable.length})</option>
+                                {printStatusOptions.map(opt => <option key={opt.code} value={opt.code}>{opt.label} ({opt.count})</option>)}
+                            </select>
+                            <select value={printChannelFilter} onChange={(e) => { setPrintChannelFilter(e.target.value); setVisibleCount(30); }} className="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-sm font-bold bg-white outline-none focus:border-slate-700">
+                                <option value="all">Tất cả kênh ({data.printable.length})</option>
+                                {printChannelOptions.map(opt => <option key={opt.code} value={opt.code}>{opt.label} ({opt.count})</option>)}
+                            </select>
                         </div>
                     </div>
                 )}
