@@ -138,6 +138,17 @@ const isHandoverWarningBlink = (order) => {
 // Dùng cho nút lọc + số đếm — đơn hôm qua chưa bàn giao buổi chiều
 // vẫn là đơn cần đi gấp, không được rớt khỏi bộ lọc.
 const isHandoverWarningAny = (order) => isHandoverWarning(order) || isHandoverWarningBlink(order);
+// Đơn tồn lâu trong tab Đơn in (điện thoại): đơn tạo cách hôm nay trên 2
+// ngày (tính theo ngày dương lịch giờ VN, tức tạo từ 3 hôm trước trở về
+// trước), mọi kênh. Hàm thuần (module-level) để test Node trích xuất được.
+const isStaleOver2Days = (order) => {
+    const created = order?.created_at ? toVnDate(order.created_at) : null;
+    if (!created) return false;
+    const nowVn = toVnDate(new Date().toISOString());
+    if (!nowVn) return false;
+    const startOf = (d) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    return (startOf(nowVn) - startOf(created)) / 86400000 > 2;
+};
 const FEATURE_PARENTS = [
     { id: 'dashboard', name: 'Dashboard' }, { id: 'print_orders', name: 'Đơn in' },
     { id: 'packing', name: 'Đóng gói' }, { id: 'return_orders', name: 'Báo cáo đơn hoàn' },
@@ -203,6 +214,9 @@ export default function Mobile() {
     // Chỉ hiện đơn viền đỏ (cần đi gấp tránh quá hạn): Shopee/TikTok tạo
     // hôm qua (sáng) hoặc hôm nay trước 14h (chiều) — theo isHandoverWarning.
     const [reconOnlyWarning, setReconOnlyWarning] = useState(false);
+    // Tab Đơn in: 2 nút lọc tick — đơn tồn > 2 ngày và đơn quá hạn.
+    const [printOnlyStale, setPrintOnlyStale] = useState(false);
+    const [printOnlyOverdue, setPrintOnlyOverdue] = useState(false);
     const [searchMode, setSearchMode] = useState('carrier');
     const [dbSearchResults, setDbSearchResults] = useState([]);
     const [dbSearching, setDbSearching] = useState(false);
@@ -804,7 +818,15 @@ export default function Mobile() {
     }
     if (!session) return <Navigate to="/login" replace state={{ from: '/mobile' }} />;
 
-    const currentList = printOrders;
+    const printStaleCount = printOrders.filter(isStaleOver2Days).length;
+    const printOverdueCount = printOrders.filter(isHandoverWarningAny).length;
+    // Tab Đơn in: 2 nút lọc tick — đơn tồn > 2 ngày và đơn quá hạn (logic
+    // viền đỏ đối soát). Bật cả 2 thì lấy giao nhau; vẫn lọc chung với ô
+    // tìm kiếm vì printOrders đã lọc search.
+    const currentList = printOrders.filter(o =>
+        (!printOnlyStale || isStaleOver2Days(o)) &&
+        (!printOnlyOverdue || isHandoverWarningAny(o))
+    );
     const visibleList = currentList.slice(0, visibleCount);
     // Danh sách đơn cần trả, lọc chỉ viền đỏ khi bật nút lọc.
     const reconFilteredHandover = reconOnlyWarning
@@ -921,6 +943,10 @@ export default function Mobile() {
                         <div className="relative">
                             <input type="text" value={search} onChange={(e) => { setSearch(e.target.value); setVisibleCount(30); }} placeholder="Tìm đơn, sản phẩm..." className="w-full pl-10 pr-3 py-3 text-base border border-slate-300 rounded-xl outline-none focus:border-slate-700 bg-white" />
                             <Search className="absolute left-3 top-3.5 text-slate-400" size={18} />
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => { setPrintOnlyStale(v => !v); setVisibleCount(30); }} className={`flex-1 py-2.5 rounded-xl text-sm font-bold border ${printOnlyStale ? 'bg-amber-600 border-amber-600 text-white shadow-md' : 'bg-white border-amber-300 text-amber-700'}`}>Lọc đơn tồn &gt; 2 ngày ({printStaleCount})</button>
+                            <button onClick={() => { setPrintOnlyOverdue(v => !v); setVisibleCount(30); }} className={`flex-1 py-2.5 rounded-xl text-sm font-bold border ${printOnlyOverdue ? 'bg-red-600 border-red-600 text-white shadow-md' : 'bg-white border-red-300 text-red-700'}`}>Lọc đơn quá hạn ({printOverdueCount})</button>
                         </div>
                     </div>
                 )}
