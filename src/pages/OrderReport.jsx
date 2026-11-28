@@ -2340,7 +2340,7 @@ export default function OrderReport() {
             for (let i = 0; i < chunk.length; i++) {
                 const orderId = chunk[i];
                 try {
-                    await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
+                    await fetch(`https://pos.nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
                 } catch (err) { console.error(`Lỗi kích hoạt webhook đơn ${orderId}:`, err); }
                 completed += 1;
                 setUpdateProgress(completed);
@@ -2368,7 +2368,7 @@ export default function OrderReport() {
             for (let i = 0; i < chunk.length; i++) {
                 const orderId = chunk[i];
                 try {
-                    await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
+                    await fetch(`https://pos.nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
                 } catch (err) {}
                 // Tránh gọi quá dày đặc, delay nhẹ trong vòng lặp của chunk
                 await new Promise(resolve => setTimeout(resolve, 200)); 
@@ -2406,7 +2406,7 @@ export default function OrderReport() {
             for (let i = 0; i < chunk.length; i++) {
                 const orderId = chunk[i];
                 try {
-                    await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
+                    await fetch(`https://pos.nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
                 } catch (err) {
                     console.error(`Lỗi kích hoạt webhook đơn ${orderId}:`, err);
                 }
@@ -2476,7 +2476,7 @@ export default function OrderReport() {
             const processChunk = async (chunk) => {
                 for (let i = 0; i < chunk.length; i++) {
                     try {
-                        await fetch(`https://nhanh.vn/auto/posevent/orderupdate?id=${chunk[i]}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
+                        await fetch(`https://pos.nhanh.vn/auto/posevent/orderupdate?id=${chunk[i]}&businessId=176023`, { method: 'GET', mode: 'no-cors' });
                     } catch (err) {}
                     completed += 1;
                     setMissingCarrierProgress(completed);
@@ -2739,9 +2739,9 @@ export default function OrderReport() {
         const idString = orderIds.join(',');
         let printUrl = "";
         if (orderIds.length === 1) {
-            printUrl = `https://nhanh.vn/order/manage/pickup?storeId=${businessId}&businessId=${businessId}&ids=${idString}&emptyLayout=true&printDialogMode=manual&format=print${printSize === 'K80' ? '&typePrint=k80' : ''}`;
+            printUrl = `https://pos.nhanh.vn/order/manage/pickup?storeId=${businessId}&businessId=${businessId}&ids=${idString}&emptyLayout=true&printDialogMode=manual&format=print${printSize === 'K80' ? '&typePrint=k80' : ''}`;
         } else {
-            printUrl = `https://nhanh.vn/order/manage/pickup?ids=${idString}&storeId=${businessId}&format=print&printDialogMode=manual&noclose=1${printSize === 'K80' ? '&typePrint=k80' : ''}`;
+            printUrl = `https://pos.nhanh.vn/order/manage/pickup?ids=${idString}&storeId=${businessId}&format=print&printDialogMode=manual&noclose=1${printSize === 'K80' ? '&typePrint=k80' : ''}`;
         }
         window.open(printUrl, '_blank');
         // Ghi log in don (best-effort, khong anh huong viec in).

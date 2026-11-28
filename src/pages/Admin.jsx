@@ -27,14 +27,14 @@ const formatBytes = (bytes, decimals = 2) => {
 };
 
 // Link cấp quyền Nhanh.vn kiểu mới (docs developers.nhanh.group):
-// https://nhanh.vn/oauth?appId={appId}&service=pos&verifyCode={verifyCode}&returnLink={returnLink}
+// https://pos.nhanh.vn/oauth?appId={appId}&service=pos&verifyCode={verifyCode}&returnLink={returnLink}
 // - verifyCode: random 12-64 ký tự [a-zA-Z0-9], tạo ở Admin, gắn vào link
 //   rồi gửi kèm lúc đổi access code lấy token (chống CSRF, giống OAuth state).
 // - returnLink: domain chính của app, phải nằm trong Redirect URL của app
 //   trên open.nhanh.vn thì Nhanh mới chịu cấp quyền.
 // Hàm thuần (module-level) để test Node trích xuất được.
 const NHANH_AUTH_RETURN_LINK = 'https://www.ameliebaocaokho.site/';
-const buildNhanhAuthLink = (appId, verifyCode) => `https://nhanh.vn/oauth?appId=${appId || 'YOUR_APPID'}&service=pos&verifyCode=${verifyCode || 'YOUR_VERIFY_CODE'}&returnLink=${NHANH_AUTH_RETURN_LINK}`;
+const buildNhanhAuthLink = (appId, verifyCode) => `https://pos.nhanh.vn/oauth?appId=${appId || 'YOUR_APPID'}&service=pos&verifyCode=${verifyCode || 'YOUR_VERIFY_CODE'}&returnLink=${NHANH_AUTH_RETURN_LINK}`;
 const makeVerifyCode = (len = 32) => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   let out = '';

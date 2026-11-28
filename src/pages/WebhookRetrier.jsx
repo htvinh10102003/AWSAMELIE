@@ -68,7 +68,7 @@ export default function WebhookRetrier() {
     const processChunk = async (chunk) => {
       for (let i = 0; i < chunk.length; i++) {
         const orderId = chunk[i];
-        const targetUrl = `https://nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`;
+        const targetUrl = `https://pos.nhanh.vn/auto/posevent/orderupdate?id=${orderId}&businessId=176023`;
 
         try {
           await fetch(targetUrl, {
